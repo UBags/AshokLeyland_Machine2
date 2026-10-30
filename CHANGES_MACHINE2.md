@@ -156,7 +156,7 @@ Each key was traced to its `Configuration.py` getter and then to that getter's c
   - font multipliers, `terminal.debug`, `polling.time.for.disc.signal`, `report.include.invalidresults`, `consolelogging.date.format`, `qrcode.number.of.characters.to.check` and `consecutive.connect.retries`.
 
   Commented-out leftovers were removed as well (`wsdl.dir`, `qrcode.extractdata.N`, old queue names).
-- **Moved, unchanged, into a "TO REVIEW" block at the end of the file (35 keys):** live code does not read them, but they may still matter.
+- **Moved, unchanged, into a "TO REVIEW" block (35 keys); on 2026-10-31 Uddi decided to delete the camera picture-delay, recording and audit keys (8). The 27 vision-check keys remain under review:** live code does not read them, but they may still matter.
   - Camera picture-delay tuning, used only by `PhotoCamera.py` and a Geltec test.
   - Video/picture recording settings, used only by `CameraRecorderServer.py`, which MainProgram does not start.
   - `audit.report.basedir`: the audit trail is commented out.
