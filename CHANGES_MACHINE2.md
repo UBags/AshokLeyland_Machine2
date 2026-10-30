@@ -127,8 +127,21 @@ Every program's docstring says what it tests and how to run it: `python -m test.
 ### Superseded copies (not updated; recommend deleting)
 `test/MockPLCTest.py`, `test/wip/` (MockPLCServer.py, TestIOServer.py, TestIOServerResponses.py, TestIOServerWithMockPLC.py), `test/StartMasterLoggersInACommandShell.py` + `test/E.py` (the logger launcher it starts). They reimplement or duplicate the programs above, and the IOServer ones use the removed Machine 1 state 13.
 
-### Issues found, not changed
-- `DBServer` polls `fe2db.q` every 5 s and the reader keeps only the latest message, so two records arriving within one poll lose the earlier one (silent data loss; unlikely at manual cycle times).
-- A rejected QR leaves IOServer waiting in `WRITE_QR_CODE` without telling the PLC (same as Machine 1).
-- `camera/CheckTopBearing.py` swallows an import failure of `utils.ImageNormalisationWithMask` (needs scipy/matplotlib). Every top-bearing check would then fail with a `NameError` instead of the app failing at start-up.
-- `frontend/AshokLeylandFrontEnd.py`: the picture worker class is declared as `GetQRCodeWorker` and works only through a later rebinding of the name.
+### Issues found
+- **Fixed (round 3):** `DBServer` lost records. The `fe2db.q` reader kept only the newest message and deleted on read. It now reads oldest-first and deletes only after a successful insert. A failed insert is retried 3 times, then written to `<images>/<mode>/FailedRecords/*.json`. The queue is drained before stopping, and the poll interval is 1 s instead of 5 s. Dry run: `test/machine2_dryrun/DryRun_DBServer_No_Record_Loss.py`.
+- **Fixed (round 3):** `camera/CheckTopBearing.py` swallowed an import failure of `utils.ImageNormalisationWithMask`, which needs scipy. The import is now required, and the unused matplotlib import is removed. In addition, `CameraProcessorServer` now verifies at start-up the segmentation engines, `mobile_sam` and the model weights, and loads the models up front. If anything is missing it exits with a clear list instead of every check silently returning NOT OK.
+- `frontend/AshokLeylandFrontEnd.py`: the picture worker class is declared as `GetQRCodeWorker` and works only through a later rebinding of the name. Not changed.
+
+## 9. TO DECIDE LATER: QR code rejection (QR server left as is, by decision of 2026-10-31)
+Current behaviour:
+- **Unreadable or wrong-format scan:** the QR server silently keeps waiting. Neither the PLC nor the operator is told.
+- **Valid format but unknown part number:** IOServer writes QR **OK + Done** to the PLC *before* trying to write side and model. That write then fails, and the PLC carries on with missing or stale settings.
+- **Duplicate QR:** allowed. It is only labelled on screen and in the DB.
+
+Fix proposed but not approved:
+- The QR server sends a reject for a bad format or an unknown model/side.
+- In state 2, IOServer writes the settings first and only then QR OK + Done. On a reject or a failed write it sends OK=False + Done=True and returns to state 1, the same handshake as a vision NOT OK. It clears QR OK/Done before each new read.
+- The frontend shows the reason in red.
+- The PLC handles Done with OK=False as "re-scan".
+
+Open questions: allow or reject duplicates; how to treat serial noise versus a genuine bad scan.
