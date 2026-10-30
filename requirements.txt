@@ -78,7 +78,6 @@ networkx==3.4.2
 Nuitka==2.7.10
 numpy==1.26.4
 onvif2-zeep==0.3.4
-opencv-contrib-python==4.13.0.90
 opencv-python==4.11.0.86
 ordered-set==4.1.0
 packaging==25.0
