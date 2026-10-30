@@ -105,9 +105,6 @@ class MockPLC:
             config.getPlcPcStation2TorqueValueSetTagName(): False,
             config.getPlcPcStation2TorqueValueTagName(): 0.0,
 
-            # Station 3 Rotation Done (Step 6)
-            config.getPlcPcStation3RotationDoneTagName(): False,
-
             # No Cap Bung (Step 7)
             config.getPlcPcCheckNoCapBunkTagName(): False,
             config.getPcPlcNoCapBunkCheckOKTagName(): False,
@@ -142,6 +139,14 @@ class MockPLC:
             # Station 3 Torque (Step 15)
             config.getPlcPcStation3TorqueValueSetTagName(): False,
             config.getPlcPcStation3TorqueValueTagName(): 0.0,
+
+            # Machine 2 cycle settings written by the PC in state 2
+            config.getPcPlcLHRHSelectionTagName(): 0,
+            config.getPcPlcModelSelectionTagName(): 0,
+            config.getPcPlcTighteningTorque1SetpointTagName(): 0.0,
+            config.getPcPlcTighteningTorque2SetpointTagName(): 0.0,
+            config.getPcPlcRotation1RPMTagName(): 0,
+            config.getPcPlcRotation2RPMTagName(): 0,
 
             # System tags
             config.getPlcPcEmergencyAbortTagName(): False,

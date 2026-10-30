@@ -69,7 +69,7 @@ from frontend.SimplePopups import (
     changePasswordForSelf, createAccount, changePassword, changeRole, activateUser, inactivateUser,
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
-    getConfirmation, updateMachineSettingsDialog)
+    getConfirmation)
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
@@ -731,13 +731,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         info_menu.addAction(help_act)
         info_menu.addAction(info_act)
 
-        # Create Machine Settings menu and add actions
-        machine_settings_act = QAction(' Update Machine Settings ', self)
-        machine_settings_act.setShortcut(' Ctrl+Alt+U ')
-        machine_settings_act.triggered.connect(lambda: updateMachineSettingsDialog())
-
-        machine_settings_menu = menu_bar.addMenu(' Machine Settings ')
-        machine_settings_menu.addAction(machine_settings_act)
+        # Machine 2: no Machine Settings menu. Tightening/rotation setpoints come from ApplicationConfiguration.properties.
 
         if self.role == "Operator":
             addnewuser_act.setDisabled(True)
@@ -745,7 +739,6 @@ class AshokLeylandFrontEnd(QMainWindow):
             changerole_act.setDisabled(True)
             activateuser_act.setDisabled(True)
             inactivateuser_act.setDisabled(True)
-            machine_settings_act.setDisabled(True)
         self.update()
 
     @Slot()

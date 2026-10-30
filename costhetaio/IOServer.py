@@ -839,7 +839,7 @@ class IOServer:
 
             # Use MockPLC if mockInstance is True
             if self.mockInstance:
-                from MockPLC import MockPLC
+                from costhetaio.MockPLC import MockPLC
                 self.clientForReads = MockPLC()
                 self.clientForReads.open()
                 printBoldGreen(f"Connected to MockPLC for Reads")
