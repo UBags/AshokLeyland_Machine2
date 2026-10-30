@@ -1770,8 +1770,17 @@ class IOServer:
         tag_values[IOServer.PLC_PC_EmergencyAbort] = self.read_bool(IOServer.PLC_PC_EmergencyAbort, debug=False)
         tag_values[IOServer.PLC_PC_WatchTag] = self.read_int(IOServer.PLC_PC_WatchTag, debug=False)
 
-        # Add current machine state
-        tag_values["_currentMachineState"] = str(self.machineState.getCurrentState())
+        # Machine 2 cycle settings written by the PC in state 2
+        tag_values[IOServer.PC_PLC_LH_RH_Selection] = self.read_int(IOServer.PC_PLC_LH_RH_Selection, debug=False)
+        tag_values[IOServer.PC_PLC_ModelSelection] = self.read_int(IOServer.PC_PLC_ModelSelection, debug=False)
+        tag_values[IOServer.PC_PLC_TighteningTorque1Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque1Setpoint, debug=False)
+        tag_values[IOServer.PC_PLC_TighteningTorque2Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque2Setpoint, debug=False)
+        tag_values[IOServer.PC_PLC_RotationRPM1] = self.read_int(IOServer.PC_PLC_RotationRPM1, debug=False)
+        tag_values[IOServer.PC_PLC_RotationRPM2] = self.read_int(IOServer.PC_PLC_RotationRPM2, debug=False)
+        tag_values[IOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(IOServer.PC_PLC_ConnectionStatusTag, debug=False)
+
+        # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)
+        tag_values["_currentMachineState"] = self.machineState.getCurrentState().name
 
         return tag_values
 

@@ -1,41 +1,54 @@
 """
-IOServer Test Script - For use with REAL PLC
+Test_IOServer_With_Real_PLC_UI - drives a REAL IOServer (costhetaio/IOServer.py, Machine 2, 28 states) that is connected
+to the REAL PLC: this Tk window plays the QR-code server and the camera server, and shows PLC tag values.
+
+Run from the project root, alongside the IOServer (which must already be running and connected to the PLC):
+    Terminal 1: start the IOServer as usual (e.g. via MainProgram.py, or costhetaio.IOServer.startIOServer())
+    Terminal 2: python test/Test_IOServer_With_Real_PLC_UI.py
+                (or)  python -m test.Test_IOServer_With_Real_PLC_UI
+NOTE: on start-up this script FLUSHES the Redis database (as before), and "Clear Redis" flushes it again.
 
 This script tests the IOServer with actual PLC hardware by:
 1. Sending QRCode/Camera server responses via Redis (including QR code strings)
 2. Providing a GUI to step through the entire process
-3. Requesting PLC tag values from IOServer via Redis queues
-4. Properly waiting for signal steps (torque, press, etc.) to complete
+3. Requesting PLC tag values from IOServer via the Redis lists publishTags / receiveTags
+4. Properly waiting for PLC-driven steps (torque, press) to complete, by polling IOServer's state
 
-Run this ALONGSIDE IOServer.py which is connected to the real PLC.
+Machine 2 process steps (15) and IOServer states (28):
+- Step 0:  QR Code                   (States 1-2)   - QR server (this GUI)
+- Step 1:  Knuckle                   (States 3-4)   - Vision
+- Step 2:  Hub (with bottom bearing) (States 5-6)   - Vision
+- Step 3:  Top Bearing               (States 7-8)   - Vision
+- Step 4:  Nut + Plate Washer        (States 9-10)  - Vision
+- Step 5:  Tightening Torque 1       (States 11-12) - Signal (PLC sets Station 2 torque, IOServer reads it)
+- Step 6:  Bunk for Component Press  (States 13-14) - Vision
+- Step 7:  Component Press Done      (State 15)     - Signal (PLC only)
+- Step 8:  No Bunk                   (States 16-17) - Vision
+- Step 9:  Tightening Torque 2       (States 18-19) - Signal (PLC sets Station 2 torque, IOServer reads it)
+- Step 10: Split Pin + Washer        (States 20-21) - Vision
+- Step 11: Cap                       (States 22-23) - Vision
+- Step 12: Bunk for Cap Press        (States 24-25) - Vision
+- Step 13: Cap Press Done            (State 26)     - Signal (PLC only)
+- Step 14: Free Rotation Torque      (States 27-28) - Signal (PLC sets Station 3 torque, IOServer reads it; last state,
+                                                      IOServer then wraps to state 1)
+There is no separate free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
-Process Steps (16 total, 29 states):
-- Step 0: QR Code (States 1-2) - Vision
-- Step 1: Knuckle (States 3-4) - Vision
-- Step 2: Hub (States 5-6) - Vision
-- Step 3: Hub + 2nd Bearing (States 7-8) - Vision
-- Step 4: Nut + Plate Washer (States 9-10) - Vision
-- Step 5: Tightening Torque 1 (States 11-12) - Signal (PLC sets torque value, IOServer reads it)
-- Step 6: Free Rotation Done (State 13) - Signal (PLC only)
-- Step 7: No Cap Bunk (States 14-15) - Vision
-- Step 8: Component Press Done (State 16) - Signal (PLC only)
-- Step 9: No Bunk (States 17-18) - Vision
-- Step 10: Tightening Torque 2 (States 19-20) - Signal (PLC sets torque value, IOServer reads it)
-- Step 11: Split Pin + Washer (States 21-22) - Vision
-- Step 12: Cap (States 23-24) - Vision
-- Step 13: Bunk (States 25-26) - Vision
-- Step 14: Cap Press Done (State 27) - Signal (PLC only)
-- Step 15: Free Rotation Torque (States 28-29) - Signal (PLC sets torque value, IOServer reads it)
+In state 2 (WRITE_QR_CODE) IOServer writes the cycle settings to the PLC: LH_RH_Selection (1=LHS, 2=RHS),
+ModelSelection (1=DOST, 2=DOSTPLUS), TighteningTorque1/2Setpoint (REAL Nm) and RotationRPM1/2 (INT; not written when
+configured as -1). They are shown in the tag panel when IOServer's tag dump includes them.
 
-Torque Step Workflow (Steps 5, 10, 15):
-- State X_DONE: IOServer waits for PLC signal that torque operation is complete
-- State X_VALUE: IOServer reads the torque value from PLC tags, then resets the tags
-- PLC must write the torque value BETWEEN these two states
-
-Usage:
-    Terminal 1: python IOServer.py              (with real PLC connected)
-    Terminal 2: python TestIOServerWithPLC.py   (this script)
+Torque Step Workflow (Steps 5, 9, 14):
+- State X_DONE: IOServer waits for the PLC's "torque value set" signal
+- State X:      IOServer reads the torque value from the PLC, sends it to the frontend, then resets the tags
+- The PLC must write the torque value before (or together with) the "value set" signal
 """
+
+import os
+import sys
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 import tkinter as tk
 from tkinter import ttk, scrolledtext
@@ -58,14 +71,80 @@ testRedisConnection = Redis(
     retry_on_timeout=True
 )
 
-# Clear Redis on startup
-testRedisConnection.flushdb()
+MS = MachineState
+_cfg = CosThetaConfigurator.getInstance()
+
+# PLC tag names (same configuration source that IOServer uses), grouped per Machine 2 process step
+CYCLE_SETTING_TAGS = [
+    _cfg.getPcPlcLHRHSelectionTagName(), _cfg.getPcPlcModelSelectionTagName(),
+    _cfg.getPcPlcTighteningTorque1SetpointTagName(), _cfg.getPcPlcTighteningTorque2SetpointTagName(),
+    _cfg.getPcPlcRotation1RPMTagName(), _cfg.getPcPlcRotation2RPMTagName(),
+]
+TAG_GROUPS = [
+    ("Step 0: QR Code", [_cfg.getPlcPcCheckQRCodeTagName(), _cfg.getPcPlcQRCodeOKTagName(),
+                         _cfg.getPcPlcQRCodeDoneTagName()]),
+    ("Cycle Settings (written in state 2)", CYCLE_SETTING_TAGS),
+    ("Step 1: Knuckle", [_cfg.getPlcPcCheckKnuckleTagName(), _cfg.getPcPlcKnuckleCheckOKTagName(),
+                         _cfg.getPcPlcKnuckleCheckDoneTagName()]),
+    ("Step 2: Hub", [_cfg.getPlcPcCheckHubTagName(), _cfg.getPcPlcHubCheckOKTagName(),
+                     _cfg.getPcPlcHubCheckDoneTagName()]),
+    ("Step 3: Top Bearing", [_cfg.getPlcPcCheckHubAndSecondBearingTagName(),
+                             _cfg.getPcPlcHubAndSecondBearingCheckOKTagName(),
+                             _cfg.getPcPlcHubAndSecondBearingCheckDoneTagName()]),
+    ("Step 4: Nut+Plate Washer", [_cfg.getPlcPcCheckNutAndPlateWasherTagName(),
+                                  _cfg.getPcPlcNutAndPlateWasherOKTagName(),
+                                  _cfg.getPcPlcNutAndPlateWasherDoneTagName()]),
+    ("Step 5 & 9: Station2 Torque", [_cfg.getPlcPcStation2TorqueValueSetTagName(),
+                                     _cfg.getPlcPcStation2TorqueValueTagName()]),
+    ("Step 6: Bunk for Comp. Press", [_cfg.getPlcPcCheckNoCapBunkTagName(), _cfg.getPcPlcNoCapBunkCheckOKTagName(),
+                                      _cfg.getPcPlcNoCapBunkCheckDoneTagName()]),
+    ("Step 7: Component Press", [_cfg.getPlcPcComponentPressDoneTagName()]),
+    ("Step 8: No Bunk", [_cfg.getPlcPcCheckNoBunkTagName(), _cfg.getPcPlcNoBunkCheckOKTagName(),
+                         _cfg.getPcPlcNoBunkCheckDoneTagName()]),
+    ("Step 10: Split Pin+Washer", [_cfg.getPlcPcCheckSplitPinAndWasherTagName(),
+                                   _cfg.getPcPlcSplitPinAndWasherCheckOKTagName(),
+                                   _cfg.getPcPlcSplitPinAndWasherCheckDoneTagName()]),
+    ("Step 11: Cap", [_cfg.getPlcPcCheckCapTagName(), _cfg.getPcPlcCapCheckOKTagName(),
+                      _cfg.getPcPlcCapCheckDoneTagName()]),
+    ("Step 12: Bunk for Cap Press", [_cfg.getPlcPcCheckBunkTagName(), _cfg.getPcPlcBunkCheckOKTagName(),
+                                     _cfg.getPcPlcBunkCheckDoneTagName()]),
+    ("Step 13: Cap Press", [_cfg.getPlcPcCapPressDoneTagName()]),
+    ("Step 14: Station3 Torque", [_cfg.getPlcPcStation3TorqueValueSetTagName(),
+                                  _cfg.getPlcPcStation3TorqueValueTagName()]),
+    ("System", [_cfg.getPlcPcEmergencyAbortTagName(), _cfg.getPlcPcWatchTagName(),
+                _cfg.getPcPlcConnectionStatusTagName()]),
+]
+
+# QR codes per model/side (part numbers from qrcode.partmapping.* in ApplicationConfiguration.properties)
+QR_CODES = {
+    ("DOST", "LHS"): "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
+    ("DOST", "RHS"): "7204838$400102VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$",
+    ("DOSTPLUS", "LHS"): "8201206$400112VA1C$11770$09.03.2025$C5211701$MEK$40Cr4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
+    ("DOSTPLUS", "RHS"): "8201206$400102VA1C$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$",
+}
+
+
+def _format_value(value) -> str:
+    if isinstance(value, bool):
+        return "TRUE ●" if value else "False ○"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    if value is None:
+        return "None"
+    return str(value)
+
+
+def _parse_machine_state(state_str) -> MachineState:
+    """IOServer reports str(state): 'MachineState.X' on Python <= 3.10, the plain number on 3.11+."""
+    if state_str is None:
+        return MachineState.INVALID_STATE
+    return MachineState.getMachineStateFromString(str(state_str))
 
 
 class IOServerTestApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("IOServer Test - Real PLC (29 State Process)")
+        self.root.title("IOServer Test - Real PLC (Machine 2, 28 States)")
         self.root.geometry("1400x850")
 
         self.current_step = 0
@@ -73,10 +152,12 @@ class IOServerTestApp:
         self.tag_request_pending = False
         self.signal_monitor_active = False  # Flag to track if signal monitoring is active
         self.stop_signal_monitor = False  # Flag to stop signal monitoring thread
+        self.stop_full_cycle = False  # Flag to stop a running "Run Full Cycle"
+        self.full_cycle_running = False
 
-        # QR Code strings for LHS and RHS
-        self.qr_lhs = "8201206$400112VA1C$11770$09.03.2025$C5211701$MEK$40Cr4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
-        self.qr_rhs = "8201206$400102VA1C$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"
+        # Model used for the QR code buttons (side is chosen by the button)
+        self.model_var = tk.StringVar(value="DOSTPLUS")
+        self.cycle_complete = False   # set when a "Run Full Cycle" has seen IOServer wrap back to state 1
 
         self._build_ui()
         self._start_heartbeat()
@@ -115,8 +196,14 @@ class IOServerTestApp:
         self.status_text.pack(fill=tk.X)
         self._update_status("Ready. Click buttons to send responses to IOServer.")
 
+        model_frame = ttk.Frame(status_frame)
+        model_frame.pack(fill=tk.X, pady=(5, 0))
+        ttk.Label(model_frame, text="Model for QR code:").pack(side=tk.LEFT)
+        ttk.Combobox(model_frame, textvariable=self.model_var, values=["DOST", "DOSTPLUS"], width=10,
+                     state="readonly").pack(side=tk.LEFT, padx=4)
+
         # Process steps frame with scrollbar
-        steps_frame = ttk.LabelFrame(parent, text="Process Steps (29 States)", padding="10")
+        steps_frame = ttk.LabelFrame(parent, text="Process Steps (15 Steps, 28 States)", padding="10")
         steps_frame.pack(fill=tk.BOTH, expand=True, pady=5, padx=5)
 
         # Add canvas with scrollbar for steps
@@ -135,51 +222,63 @@ class IOServerTestApp:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # Define all steps
+        # Define all steps (index in this list == step index)
         self.steps = [
             ("Step 0", "QR Code", "States 1-2", "vision", 0),
             ("Step 1", "Knuckle", "States 3-4", "vision", 1),
             ("Step 2", "Hub", "States 5-6", "vision", 2),
-            ("Step 3", "Hub + 2nd Bearing", "States 7-8", "vision", 3),
+            ("Step 3", "Top Bearing", "States 7-8", "vision", 3),
             ("Step 4", "Nut + Plate Washer", "States 9-10", "vision", 4),
             ("Step 5", "Tightening Torque 1", "States 11-12", "signal", 5),
-            ("Step 6", "Free Rotation Done", "State 13", "signal", 6),
-            ("Step 7", "No Cap Bunk", "States 14-15", "vision", 7),
-            ("Step 8", "Component Press Done", "State 16", "signal", 8),
-            ("Step 9", "No Bunk", "States 17-18", "vision", 9),
-            ("Step 10", "Tightening Torque 2", "States 19-20", "signal", 10),
-            ("Step 11", "Split Pin + Washer", "States 21-22", "vision", 11),
-            ("Step 12", "Cap", "States 23-24", "vision", 12),
-            ("Step 13", "Bunk", "States 25-26", "vision", 13),
-            ("Step 14", "Cap Press Done", "State 27", "signal", 14),
-            ("Step 15", "Free Rotation Torque", "States 28-29", "signal", 15),
+            ("Step 6", "Bunk for Comp. Press", "States 13-14", "vision", 6),
+            ("Step 7", "Component Press Done", "State 15", "signal", 7),
+            ("Step 8", "No Bunk", "States 16-17", "vision", 8),
+            ("Step 9", "Tightening Torque 2", "States 18-19", "signal", 9),
+            ("Step 10", "Split Pin + Washer", "States 20-21", "vision", 10),
+            ("Step 11", "Cap", "States 22-23", "vision", 11),
+            ("Step 12", "Bunk for Cap Press", "States 24-25", "vision", 12),
+            ("Step 13", "Cap Press Done", "State 26", "signal", 13),
+            ("Step 14", "Free Rotation Torque", "States 27-28", "signal", 14),
         ]
+        self.final_step = len(self.steps) - 1
 
         # Map step index to MachineState for camera responses
         self.vision_state_map = {
-            1: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE,
-            2: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
-            3: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING,
-            4: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-            7: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-            9: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
-            11: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
-            12: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
-            13: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS,
+            1: MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE,
+            2: MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
+            3: MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING,
+            4: MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
+            6: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
+            8: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
+            10: MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
+            11: MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
+            12: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS,
+        }
+        # WRITE state in which IOServer consumes the QR / camera response of each step
+        self.write_state_map = {
+            0: MS.WRITE_QR_CODE,
+            1: MS.WRITE_RESULT_OF_CHECKING_KNUCKLE,
+            2: MS.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING,
+            3: MS.WRITE_RESULT_OF_CHECKING_TOP_BEARING,
+            4: MS.WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER,
+            6: MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS,
+            8: MS.WRITE_RESULT_OF_CHECKING_NO_BUNK,
+            10: MS.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER,
+            11: MS.WRITE_RESULT_OF_CHECKING_CAP,
+            12: MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS,
         }
 
         # Map signal step index to the MachineState that indicates completion
-        # For torque steps (5, 10, 15): IOServer goes through TWO states:
-        #   1. DONE state: Waits for PLC signal that operation is complete
+        # For torque steps (5, 9, 14): IOServer goes through TWO states:
+        #   1. DONE state: Waits for PLC signal that the torque value is set
         #   2. VALUE state: Reads torque value from PLC, resets tags, transitions
         # Signal step is marked complete when IOServer has passed the VALUE state
         self.signal_completion_state_map = {
-            5: MachineState.READ_FREE_ROTATIONS_DONE,  # Step 5 (Torque 1): States 11→12→13
-            6: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,  # Step 6: State 13→14
-            8: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,  # Step 8 (Component Press): State 16→17
-            10: MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,  # Step 10 (Torque 2): States 19→20→21
-            14: MachineState.READ_FREE_ROTATION_TORQUE_1_DONE,  # Step 14 (Cap Press): State 27→28
-            15: MachineState.READ_QR_CODE,  # Step 15 (Final torque): States 28→29→1
+            5: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,  # Torque 1: states 11 -> 12 -> 13
+            7: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,                   # Component Press: state 15 -> 16
+            9: MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,       # Torque 2: states 18 -> 19 -> 20
+            13: MS.READ_FREE_ROTATION_TORQUE_1_DONE,                        # Cap Press: state 26 -> 27
+            14: MS.READ_QR_CODE,                                            # Free rotation torque: 27 -> 28 -> 1
         }
 
         # Build step rows
@@ -189,7 +288,9 @@ class IOServerTestApp:
 
             # Step label
             label_text = f"{step_name}: {description}"
-            label = ttk.Label(row, text=label_text, width=26, anchor="w")
+            label = ttk.Label(row, text=label_text, width=30, anchor="w")
+            label.pack(side=tk.LEFT)
+            label = ttk.Label(row, text=f"[{states}]", width=13, anchor="w", foreground="gray")
             label.pack(side=tk.LEFT)
 
             # Type indicator
@@ -307,7 +408,8 @@ step for easy reading.
 
         def fetch_tags():
             try:
-                # Send request
+                # Send request (drop any late reply to an earlier request first)
+                testRedisConnection.delete(RECEIVE_TAGS_QUEUE)
                 testRedisConnection.lpush(PUBLISH_TAGS_QUEUE, "getTagValues")
 
                 # Wait for response with timeout
@@ -345,7 +447,7 @@ step for easy reading.
         self.tag_display.insert(tk.END, text)
 
     def _format_tags_grouped(self, tags: dict) -> str:
-        """Format tags grouped by state for display."""
+        """Format tags grouped by process step for display (exact tag names from the configuration)."""
         lines = []
         lines.append("PLC TAG VALUES")
         lines.append("═" * 40)
@@ -353,67 +455,35 @@ step for easy reading.
 
         # Show current machine state if available
         if "_currentMachineState" in tags:
-            state_str = tags["_currentMachineState"]
-            # Shorten state name for display
-            short_state = state_str.replace("MachineState.", "")
-            lines.append(f"State: {short_state}")
+            state = _parse_machine_state(tags["_currentMachineState"])
+            lines.append(f"State: {state.value} {state.name}")
 
         lines.append("═" * 40)
         lines.append("")
 
-        # Group definitions with partial tag name matches
-        groups = [
-            ("Step 0: QR Code", ["CheckQRCode", "QRCodeCheckOK", "QRCodeCheckDone"]),
-            ("Rotation Settings", ["NoOfRotation1CCW", "NoOfRotation1CW", "NoOfRotation2CCW", "NoOfRotation2CW", "LH_RH_Selection", "RotationUnitRPM"]),
-            ("Step 1: Knuckle", ["CheckKnuckle", "KnuckleCheckOK", "KnuckleCheckDone"]),
-            ("Step 2: Hub", ["CheckHub", "HubCheckOK", "HubCheckDone"]),
-            ("Step 3: Hub+2nd Bearing", ["CheckHubAndSecond", "HubAndSecondBearingCheckOK", "HubAndSecondBearingCheckDone"]),
-            ("Step 4: Nut+Plate Washer", ["CheckNutAndPlate", "NutAndPlateWasherCheckOK", "NutAndPlateWasherCheckDone"]),
-            ("Step 5 & 10: Station2 Torque", ["Station2TorqueValueSet", "Station2TorqueValue"]),
-            ("Step 6: Free Rotation", ["Station3RotationDone"]),
-            ("Step 7: No Cap Bunk", ["CheckNoCapBung", "NoCapBungCheckOK", "NoCapBungCheckDone"]),
-            ("Step 8: Component Press", ["ComponentPressDone"]),
-            ("Step 9: No Bung", ["CheckNoBung", "NoBungCheckOK", "NoBungCheckDone"]),
-            ("Step 11: Split Pin+Washer", ["CheckSplitPin", "SplitPinAndWasherCheckOK", "SplitPinAndWasherCheckDone"]),
-            ("Step 12: Cap", ["CheckCap", "CapCheckOK", "CapCheckDone"]),
-            ("Step 13: Bung", ["CheckBunk", "BungCheckOK", "BungCheckDone"]),
-            ("Step 14: Cap Press", ["CapPressDone"]),
-            ("Step 15: Station3 Torque", ["Station3TorqueValueSet", "Station3TorqueValue"]),
-            ("System", ["EmergencyAbort", "WatchTag"]),
-        ]
-
-        for group_name, patterns in groups:
+        listed = set()
+        for group_name, group_tags in TAG_GROUPS:
             lines.append(f"▶ {group_name}")
             lines.append("─" * 38)
+            for full_tag in group_tags:
+                listed.add(full_tag)
+                short_tag = full_tag.split(".")[-1] if "." in full_tag else full_tag
+                if len(short_tag) > 30:
+                    short_tag = "..." + short_tag[-27:]
+                lines.append(f"  {short_tag}:")
+                if full_tag in tags:
+                    lines.append(f"    {_format_value(tags[full_tag])}")
+                else:
+                    lines.append("    (not in IOServer tag dump)")
+            lines.append("")
 
-            found_any = False
-            for full_tag, value in sorted(tags.items()):
-                if full_tag.startswith("_"):
-                    continue  # Skip internal keys
-                for pattern in patterns:
-                    if pattern in full_tag:
-                        found_any = True
-                        # Format value
-                        if isinstance(value, bool):
-                            val_str = "TRUE ●" if value else "False ○"
-                        elif isinstance(value, float):
-                            val_str = f"{value:.2f}"
-                        elif value is None:
-                            val_str = "None"
-                        else:
-                            val_str = str(value)
-
-                        # Shorten tag name for display
-                        short_tag = full_tag.split(".")[-1] if "." in full_tag else full_tag
-                        # Further shorten if needed
-                        if len(short_tag) > 30:
-                            short_tag = "..." + short_tag[-27:]
-                        lines.append(f"  {short_tag}:")
-                        lines.append(f"    {val_str}")
-                        break
-
-            if not found_any:
-                lines.append("  (no data)")
+        others = [t for t in sorted(tags) if not t.startswith("_") and t not in listed]
+        if others:
+            lines.append("▶ Other")
+            lines.append("─" * 38)
+            for t in others:
+                lines.append(f"  {t}:")
+                lines.append(f"    {_format_value(tags[t])}")
             lines.append("")
 
         return "\n".join(lines)
@@ -425,52 +495,23 @@ step for easy reading.
         print("=" * 70)
 
         if "_currentMachineState" in tags:
-            print(f"Current State: {tags['_currentMachineState']}")
+            state = _parse_machine_state(tags["_currentMachineState"])
+            print(f"Current State: {state.value} {state.name}")
             print("-" * 70)
 
-        # Print grouped
-        groups = [
-            ("Step 0: QR Code", ["QRCode"]),
-            ("Rotation Settings", ["Rotation", "LH_RH", "RPM"]),
-            ("Step 1: Knuckle", ["Knuckle"]),
-            ("Step 2: Hub", ["CheckHub", "HubCheck"]),
-            ("Step 3: Hub+2nd Bearing", ["HubAndSecondBearing"]),
-            ("Step 4: Nut+Plate Washer", ["NutAndPlateWasher"]),
-            ("Step 5 & 10: Station2 Torque", ["Station2Torque"]),
-            ("Step 6: Free Rotation", ["Station3RotationDone"]),
-            ("Step 7: No Cap Bung", ["NoCapBung"]),
-            ("Step 8: Component Press", ["ComponentPressDone"]),
-            ("Step 9: No Bung", ["NoBung"]),
-            ("Step 11: Split Pin+Washer", ["SplitPinAndWasher"]),
-            ("Step 12: Cap", ["CheckCap", "CapCheck"]),
-            ("Step 13: Bung", ["CheckBunk", "BungCheck"]),
-            ("Step 14: Cap Press", ["CapPressDone"]),
-            ("Step 15: Station3 Torque", ["Station3Torque"]),
-            ("System", ["Emergency", "Watch"]),
-        ]
-
-        for group_name, patterns in groups:
+        for group_name, group_tags in TAG_GROUPS:
             print(f"\n▶ {group_name}")
             print("-" * 50)
-            for tag, value in sorted(tags.items()):
-                if tag.startswith("_"):
-                    continue
-                for pattern in patterns:
-                    if pattern in tag:
-                        if isinstance(value, bool):
-                            val_str = "TRUE ●" if value else "False ○"
-                        elif isinstance(value, float):
-                            val_str = f"{value:.2f}"
-                        else:
-                            val_str = str(value)
-                        short_tag = tag.split(".")[-1] if "." in tag else tag
-                        print(f"  {short_tag}: {val_str}")
-                        break
+            for tag in group_tags:
+                print(f"  {tag}: {_format_value(tags[tag]) if tag in tags else '(not in IOServer tag dump)'}")
 
         print("\n" + "=" * 70)
 
     def _update_status(self, message):
-        """Update the status text area."""
+        """Update the status text area (safe to call from worker threads)."""
+        if threading.current_thread() is not threading.main_thread():
+            self.root.after(0, lambda m=message: self._update_status(m))
+            return
         timestamp = time.strftime("%H:%M:%S")
         self.status_text.insert(tk.END, f"[{timestamp}] {message}\n")
         self.status_text.see(tk.END)
@@ -527,7 +568,8 @@ step for easy reading.
     def _get_ioserver_current_state(self) -> MachineState:
         """Request current machine state from IOServer via Redis."""
         try:
-            # Send request
+            # Send request (drop any late reply to an earlier request first)
+            testRedisConnection.delete(RECEIVE_TAGS_QUEUE)
             testRedisConnection.lpush(PUBLISH_TAGS_QUEUE, "getTagValues")
 
             # Wait for response with timeout
@@ -538,14 +580,7 @@ step for easy reading.
                 tags = json.loads(data)
 
                 if "_currentMachineState" in tags:
-                    state_str = tags["_currentMachineState"]
-                    # Parse the state string to get the MachineState enum
-                    # Format is like "MachineState.READ_QR_CODE" or just the enum name
-                    state_name = state_str.replace("MachineState.", "")
-                    try:
-                        return MachineState[state_name]
-                    except KeyError:
-                        pass
+                    return _parse_machine_state(tags["_currentMachineState"])
         except Exception as e:
             self._update_status(f"Error getting IOServer state: {e}")
 
@@ -597,14 +632,19 @@ step for easy reading.
                 current_io_state_int = MachineState.getMachineStateAsInt(current_io_state)
                 completion_state_int = MachineState.getMachineStateAsInt(completion_state)
 
-                # Special handling for cycle wrap-around (Step 15 -> Step 0)
-                if current_signal_step == 15:
-                    # Cycle complete when we're back at READ_QR_CODE (state 1)
-                    if current_io_state == MachineState.READ_QR_CODE:
+                # Special handling for cycle wrap-around (last step -> Step 0)
+                if current_signal_step == self.final_step:
+                    # Cycle complete when IOServer is back at READ_QR_CODE (state 1). IOServer re-arms the QR check
+                    # itself at the end of a cycle, so it may already have moved on to WRITE_QR_CODE (state 2).
+                    if current_io_state in (MS.READ_QR_CODE, MS.WRITE_QR_CODE):
+                        self.cycle_complete = True
                         break
                 else:
-                    # Normal case: signal step complete when IOServer state >= completion state
-                    if current_io_state_int >= completion_state_int:
+                    # Normal case: signal step complete when IOServer state >= completion state.
+                    # Signal steps are only monitored after a vision step (state >= 3), so state 1/2 here means
+                    # IOServer already finished the cycle between two polls (e.g. Cap Press -> final torque -> wrap).
+                    if current_io_state_int >= completion_state_int or \
+                            current_io_state in (MS.READ_QR_CODE, MS.WRITE_QR_CODE):
                         break
 
                 # Update status with current IOServer state (less frequently to reduce spam)
@@ -641,15 +681,17 @@ step for easy reading.
         """Send QR code to IOServer mimicking QRCodeServer."""
         widgets = self.step_widgets[0]
 
-        # Select the appropriate QR code based on type
-        qr_code = self.qr_lhs if qr_type == "LHS" else self.qr_rhs
+        # Select the QR code for the chosen model and side
+        model = self.model_var.get()
+        qr_code = QR_CODES[(model, qr_type)]
+        self.cycle_complete = False
 
         # Send to IOServer
         sendDataFromQRCodeServerToIOServer(testRedisConnection, qrCodeStatus=ok, qrCode=qr_code)
 
         # Update status
-        widgets['status'].config(text=f"Sent {qr_type} QR code → IOServer processing...", foreground="green")
-        self._update_status(f"Step 0: QR Code - Sent {qr_type} QR code: {qr_code[:50]}...")
+        widgets['status'].config(text=f"Sent {model} {qr_type} QR code → IOServer processing...", foreground="green")
+        self._update_status(f"Step 0: QR Code - Sent {model} {qr_type} QR code: {qr_code[:50]}...")
 
         # Move to next step
         next_step_idx = 1
@@ -779,6 +821,7 @@ step for easy reading.
     def _reset_to_start(self):
         """Reset tracking to Step 0."""
         self.stop_signal_monitor = True  # Stop any active monitoring
+        self.stop_full_cycle = True  # Stop a running full cycle
         self.signal_monitor_active = False
         self.current_step = 0
         for idx, widgets in self.step_widgets.items():
@@ -786,10 +829,20 @@ step for easy reading.
         self._update_button_states()
         self._update_status("Reset to Step 0 - Ready")
 
+    def _wait_for_ioserver_state(self, wanted, leave: bool = False) -> bool:
+        """Poll IOServer (via the tag dump) until it is in / has left state `wanted`; False if the cycle is stopped."""
+        while not self.stop_full_cycle:
+            state = self._get_ioserver_current_state()
+            if state != MS.INVALID_STATE and ((state != wanted) if leave else (state == wanted)):
+                return True
+            time.sleep(0.3)
+        return False
+
     def _run_full_cycle(self):
-        """Run through all vision steps with OK responses."""
-        if self.signal_monitor_active:
-            self._update_status("Cannot run full cycle while waiting for signal steps")
+        """Send OK responses for every QR / vision step of one cycle, each once IOServer is waiting for it.
+        The PLC (real machine) drives the triggers, torques and presses; this waits for IOServer to get there."""
+        if self.signal_monitor_active or self.full_cycle_running:
+            self._update_status("Cannot run full cycle while a cycle or signal monitoring is in progress")
             return
 
         def cycle():
@@ -797,34 +850,52 @@ step for easy reading.
                 (0, "QR Code", "qr"),
                 (1, "Knuckle", "vision"),
                 (2, "Hub", "vision"),
-                (3, "Hub + 2nd Bearing", "vision"),
+                (3, "Top Bearing", "vision"),
                 (4, "Nut + Plate Washer", "vision"),
-                (7, "No Cap Bung", "vision"),
-                (9, "No Bung", "vision"),
-                (11, "Split Pin + Washer", "vision"),
-                (12, "Cap", "vision"),
-                (13, "Bung", "vision"),
+                (6, "Bunk for Comp. Press", "vision"),
+                (8, "No Bunk", "vision"),
+                (10, "Split Pin + Washer", "vision"),
+                (11, "Cap", "vision"),
+                (12, "Bunk for Cap Press", "vision"),
             ]
+            self.full_cycle_running = True
+            self.stop_full_cycle = False
+            self.cycle_complete = False
+            try:
+                for idx, name, step_category in vision_steps:
+                    # Wait if signal monitoring is active
+                    while self.signal_monitor_active and not self.stop_full_cycle:
+                        time.sleep(0.5)
 
-            for idx, name, step_category in vision_steps:
-                # Wait if signal monitoring is active
-                while self.signal_monitor_active:
-                    time.sleep(0.5)
+                    # Camera / QR responses are consumed only in the step's WRITE state, and IOServer keeps just the
+                    # latest message, so send each one only when IOServer is waiting for it
+                    write_state = self.write_state_map[idx]
+                    self._update_status(f"Waiting for IOServer to reach {write_state.name} ({name})...")
+                    if not self._wait_for_ioserver_state(write_state):
+                        self._update_status("Full cycle stopped.")
+                        return
 
-                self._update_status(f"Sending response for: {name}...")
+                    self._update_status(f"Sending response for: {name}...")
+                    if step_category == "qr":
+                        # Send LHS QR code for auto cycle
+                        self.root.after(0, lambda: self._send_qr_code("LHS"))
+                    else:
+                        self.root.after(0, lambda i=idx: self._send_ok(i))
 
-                if step_category == "qr":
-                    # Send LHS QR code for auto cycle
-                    self.root.after(0, lambda: self._send_qr_code("LHS"))
+                    # Wait for IOServer to consume it, then for any signal steps that follow to complete
+                    if not self._wait_for_ioserver_state(write_state, leave=True):
+                        self._update_status("Full cycle stopped.")
+                        return
+                    time.sleep(1.0)
+                    while self.signal_monitor_active:
+                        time.sleep(0.5)
+
+                if self.cycle_complete:
+                    self._update_status("Full cycle complete! All OK responses sent; IOServer is back at the start.")
                 else:
-                    self.root.after(0, lambda i=idx: self._send_ok(i))
-
-                # Wait for this step and any signal steps to complete
-                time.sleep(1.0)
-                while self.signal_monitor_active:
-                    time.sleep(0.5)
-
-            self._update_status("Full cycle complete! All OK responses sent.")
+                    self._update_status("Full cycle stopped before IOServer returned to the start.")
+            finally:
+                self.full_cycle_running = False
 
         thread = threading.Thread(target=cycle, daemon=True)
         thread.start()
@@ -835,8 +906,11 @@ step for easy reading.
 # =============================================================================
 
 def main():
+    # Clear Redis on startup
+    testRedisConnection.flushdb()
+
     print("=" * 60)
-    print("IOServer Test Script - Real PLC Mode")
+    print("IOServer Test Script - Real PLC Mode (Machine 2, 28 states)")
     print("=" * 60)
     print("\nThis script works WITH IOServer connected to real PLC.")
     print("It sends OK/NotOK responses and properly waits for signal steps.")
