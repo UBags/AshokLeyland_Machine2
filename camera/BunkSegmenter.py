@@ -31,6 +31,7 @@ import os
 
 from BaseUtils import get_project_root
 from camera.ModelManager import ModelManager
+from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -50,24 +51,30 @@ PRINT_BATCH_PROCESSING = False
 # =============================================================================
 
 # Two-stage cropping parameters
-OUTER_DISC_CENTER = (630, 350)  # Center in full image
-OUTER_DISC_RADIUS = 250
+OUTER_DISC_CENTER = vTuple("vision.bunk.outer.disc.center", (630, 350))  # Center in full image
+OUTER_DISC_RADIUS = vInt("vision.bunk.outer.disc.radius", 250)
 
-INNER_DISC_RADIUS = 110  # Radius from center of outer disc
+INNER_DISC_RADIUS = vInt("vision.bunk.inner.disc.radius", 110)  # Radius from center of outer disc
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
-MIN_MASK_AREA = 325
-MAX_MASK_AREA = 1200
+MIN_MASK_AREA = vInt("vision.bunk.min.mask.area", 325)
+MAX_MASK_AREA = vInt("vision.bunk.max.mask.area", 1200)
 
 # Geometric validation thresholds (retained from v1)
 EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation
 MINIMUM_INTERIOR_ANGLE = 65.0  # degrees
 ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees
 # Expected radius of hole for morphological filtering
-EXPECTED_RADIUS_OF_HOLE = 30
+EXPECTED_RADIUS_OF_HOLE = vInt("vision.bunk.expected.radius.of.hole", 30)
+SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bunk.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
+SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bunk.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
+SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bunk.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
+SQUARE_MAX_ANGLE_STD = vFloat("vision.bunk.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
+DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.bunk.dostplus.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
+DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.bunk.dostplus.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """
@@ -364,10 +371,10 @@ def find_best_equidistant_subset_euclidean_robust(
         points: List[Tuple[float, float]],
         n: int,
         center: Tuple[float, float],  # Still provided but only for angular spacing check
-        tolerance: float = 0.2,
-        min_interior_angle: float = 65.0,
-        max_interior_angle: float = 115.0,
-        allowed_angle_std: float = 20.0
+        tolerance: float = SQUARE_SIDE_LENGTH_TOLERANCE,
+        min_interior_angle: float = SQUARE_MIN_INTERIOR_ANGLE,
+        max_interior_angle: float = SQUARE_MAX_INTERIOR_ANGLE,
+        allowed_angle_std: float = SQUARE_MAX_ANGLE_STD
 ) -> Tuple[Optional[List[int]], float, dict]:
     """
     ROBUST VERSION: Find best subset forming regular polygon.
@@ -1295,7 +1302,7 @@ class BunkSegmenter:
                     print(f"  Required range: [75, 100] pixels")
 
                 # Check if distance is in range [75, 100]
-                if 75 <= distance <= 100:
+                if DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
                     found_definitive_pattern = True
                     if PRINT_GEOMETRIC_VALIDATION:
                         print(f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!")

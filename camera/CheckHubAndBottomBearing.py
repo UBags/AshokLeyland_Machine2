@@ -25,6 +25,7 @@ from BaseUtils import *
 from logutils.SlaveLoggers import *
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
+from camera.VisionConfig import vInt
 from utils.CosThetaPrintUtils import *
 from concurrent.futures import ThreadPoolExecutor
 
@@ -41,6 +42,13 @@ except ImportError as e:
     print(f"Warning: HubAndBearingSegmenter not available: {e}")
     SAM_AVAILABLE = False
     HubAndBearingSegmenter = None  # Prevents NameError
+
+# "No bearing in centre" check: annulus (full-image pixels) whose mean gray value (after gamma 3.0) must stay below the limit
+HUB_CENTRE_CHECK_X = vInt("vision.hub.centre.check.x", 635)
+HUB_CENTRE_CHECK_Y = vInt("vision.hub.centre.check.y", 350)
+HUB_CENTRE_CHECK_OUTER_RADIUS = vInt("vision.hub.centre.check.outer.radius", 60)
+HUB_CENTRE_CHECK_INNER_RADIUS = vInt("vision.hub.centre.check.inner.radius", 20)
+HUB_CENTRE_CHECK_MAX_MEAN = vInt("vision.hub.centre.check.max.mean", 144)
 
 
 def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
@@ -149,8 +157,8 @@ class CheckHubAndBottomBearing:
         # Create annular mask (center: 635, 350; inner: 20; outer: 60)
         h, w = gray.shape
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.circle(mask, (635, 350), 60, 255, -1)  # Outer circle
-        cv2.circle(mask, (635, 350), 20, 0, -1)  # Inner circle (hole)
+        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_OUTER_RADIUS, 255, -1)  # Outer circle
+        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_INNER_RADIUS, 0, -1)  # Inner circle (hole)
 
         # Extract pixels within mask
         masked_pixels = gray[mask > 0]
@@ -161,7 +169,7 @@ class CheckHubAndBottomBearing:
         printBoldBlue(f"[ensureNoBearingInCentre] Average pixel value: {average:.2f}")
 
         # Return True if average < 144 (no bearing present)
-        return average < 144
+        return average < HUB_CENTRE_CHECK_MAX_MEAN
 
     @staticmethod
     def checkHubAndBottomBearing(
