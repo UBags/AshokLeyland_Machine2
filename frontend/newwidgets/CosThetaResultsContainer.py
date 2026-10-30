@@ -44,10 +44,7 @@ class CosThetaResultsContainer(QFrame):
         self.tightening_torque1_check_container = CosThetaOutcomeContainer(title = "Tightening Torque 1",imageHint="Tightening\nTorque 1",
                                                                            bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.free_rotations_check_container = CosThetaOutcomeContainer(title = "Free Rotations", imageHint="Free\nRotations\nto settle\nBearing",
-                                                                       bg_color = Qt.GlobalColor.black,
-                                                                       fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bunk_for_component_press_check_container = CosThetaOutcomeContainer(title ="Bunk - Component Press", imageHint="Place\nBunk for\n Component Press",
+        self.bunk_for_component_press_check_container = CosThetaOutcomeContainer(title ="Bunk - Comp Press", imageHint="Place\nBunk for\n Component Press",
                                                                                  bg_color = Qt.GlobalColor.black,
                                                                                  fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.component_press_check_container = CosThetaOutcomeContainer(title ="Component Press", imageHint="Component\nPress",
@@ -68,6 +65,9 @@ class CosThetaResultsContainer(QFrame):
                                                              fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.cap_press_result_container = CosThetaOutcomeContainer(title = "Cap Press Result", bg_color = Qt.GlobalColor.black, imageHint="Cap\nPress\nResult",
                                                                    fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
+        # Machine 2: final free-rotation torque at station 3 gets its own tile (M1 wrote it into Cap Press Result)
+        self.free_rotation_torque_container = CosThetaOutcomeContainer(title = "Free Rotation Torque", bg_color = Qt.GlobalColor.black, imageHint="Free\nRotation\nTorque",
+                                                                       fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers)
 
         self.labelHeight = CosThetaConfigurator.getInstance().getLabelInitialHeight()
 
@@ -84,21 +84,22 @@ class CosThetaResultsContainer(QFrame):
         grid_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setLayout(grid_layout)
 
+        # Machine 2 tile order follows the 28-state sequence
         grid_layout.addWidget(self.knuckle_check_container, 0, 0, 1, 1)
         grid_layout.addWidget(self.hub_and_bottom_bearing_check_container, 0, 1, 1, 1)
         grid_layout.addWidget(self.top_bearing_check_container, 0, 2, 1, 1)
         grid_layout.addWidget(self.nut_and_plate_washer_check_container, 0, 3, 1, 1)
         grid_layout.addWidget(self.tightening_torque1_check_container, 0, 4, 1, 1)
-        grid_layout.addWidget(self.free_rotations_check_container, 0, 5, 1, 1)
-        grid_layout.addWidget(self.bunk_for_component_press_check_container, 0, 6, 1, 1)
+        grid_layout.addWidget(self.bunk_for_component_press_check_container, 0, 5, 1, 1)
+        grid_layout.addWidget(self.component_press_check_container, 0, 6, 1, 1)
 
-        grid_layout.addWidget(self.component_press_check_container, 1, 0, 1, 1)
-        grid_layout.addWidget(self.no_bunk_after_component_press_check_container, 1, 1, 1, 1)
-        grid_layout.addWidget(self.tightening_torque2_check_container, 1, 2, 1, 1)
-        grid_layout.addWidget(self.splitpin_and_washer_check_container, 1, 3, 1, 1)
-        grid_layout.addWidget(self.cap_check_container, 1, 4, 1, 1)
-        grid_layout.addWidget(self.bunk_check_container, 1, 5, 1, 1)
-        grid_layout.addWidget(self.cap_press_result_container, 1, 6, 1, 1)
+        grid_layout.addWidget(self.no_bunk_after_component_press_check_container, 1, 0, 1, 1)
+        grid_layout.addWidget(self.tightening_torque2_check_container, 1, 1, 1, 1)
+        grid_layout.addWidget(self.splitpin_and_washer_check_container, 1, 2, 1, 1)
+        grid_layout.addWidget(self.cap_check_container, 1, 3, 1, 1)
+        grid_layout.addWidget(self.bunk_check_container, 1, 4, 1, 1)
+        grid_layout.addWidget(self.cap_press_result_container, 1, 5, 1, 1)
+        grid_layout.addWidget(self.free_rotation_torque_container, 1, 6, 1, 1)
 
         grid_layout.addWidget(self.instructionLabel, 2, 0, 1, 7)
 
@@ -178,13 +179,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.tightening_torque1_check_container.setDefault()
 
-    def setFreeRotationsData(self, value, result):
+    def setFreeRotationTorqueData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
-            self.free_rotations_check_container.setTextAndResult(f"{value}", result)
+            self.free_rotation_torque_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
-            self.free_rotations_check_container.setImageAndResult(value, result)
+            self.free_rotation_torque_container.setImageAndResult(value, result)
         else:
-            self.free_rotations_check_container.setDefault()
+            self.free_rotation_torque_container.setDefault()
 
     def setBunkForComponentPressData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
@@ -270,8 +271,8 @@ class CosThetaResultsContainer(QFrame):
     def setTighteningTorque1Default(self):
         self.tightening_torque1_check_container.setDefault()
 
-    def setFreeRotationDefault(self):
-        self.free_rotations_check_container.setDefault()
+    def setFreeRotationTorqueDefault(self):
+        self.free_rotation_torque_container.setDefault()
 
     def setBunkForComponentPressDefault(self):
         self.bunk_for_component_press_check_container.setDefault()
@@ -308,7 +309,6 @@ class CosThetaResultsContainer(QFrame):
         self.setTopBearingCheckDefault()
         self.setNutAndPlateWasherCheckDefault()
         self.setTighteningTorque1Default()
-        self.setFreeRotationDefault()
         self.setBunkForComponentPressDefault()
         self.setComponentPressDefault()
         self.setNoBunkAfterComponentPressDefault()
@@ -317,6 +317,7 @@ class CosThetaResultsContainer(QFrame):
         self.setCapCheckDefault()
         self.setBunkForCapPressCheckDefault()
         self.setCapPressResultDefault()
+        self.setFreeRotationTorqueDefault()
         self.setInstructionDefault()
 
     def setInProcessDefaultDisplay(self):
@@ -326,7 +327,6 @@ class CosThetaResultsContainer(QFrame):
         self.setTopBearingCheckDefault()
         self.setNutAndPlateWasherCheckDefault()
         self.setTighteningTorque1Default()
-        self.setFreeRotationDefault()
         self.setBunkForComponentPressDefault()
         self.setComponentPressDefault()
         self.setNoBunkAfterComponentPressDefault()
@@ -335,6 +335,7 @@ class CosThetaResultsContainer(QFrame):
         self.setCapCheckDefault()
         self.setBunkForCapPressCheckDefault()
         self.setCapPressResultDefault()
+        self.setFreeRotationTorqueDefault()
 
     def displayDefault(self):
         self.setInitialDefaultDisplay()

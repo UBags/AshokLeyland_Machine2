@@ -78,8 +78,6 @@ nutAndPlateWasherDatetimeKeyString : str = "nutAndPlateWasherDatetime"
 tighteningTorque1ValueKeyString : str = "tight1Value"
 tighteningTorque1ResultKeyString : str = "tight1Result"
 tighteningTorque1DatetimeKeyString : str = "tighteningTorque1Datetime"
-freeRotationDoneKeyString : str = "freeRotationDone"
-freeRotationDatetimeKeyString : str = "freeRotationDatetime"
 componentPressBunkPictureKeyString : str = "componentPressBunkPicture"
 componentPressBunkCheckResultKeyString : str = "componentPressBunkCheckResult"
 componentPressBunkCheckDatetimeKeyString : str = "componentPressBunkCheckDatetime"
@@ -942,7 +940,6 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
                                          topBearingPicture : Union[np.ndarray, None], topBearingResult : ResultType, topBearingDatetime : str,
                                          nutAndPlateWasherPicture : Union[np.ndarray, None], nutAndPlateWasherResult : ResultType, nutAndPlateWasherDatetime : str,
                                          tighteningTorque1 : Union[str, float], tighteningTorque1Result : ResultType, tighteningTorque1Datetime : str,
-                                         freeRotationDone :  ResultType, freeRotationDatetime : str,
                                          componentPressBunkCheckingPicture: Union[np.ndarray, None], componentPressBunkCheckingResult : ResultType, componentPressBunkCheckDatetime : str,
                                          componentPressDone :  ResultType, componentPressDoneDatetime : str,
                                          noBunkCheckingPicture: Union[np.ndarray, None], noBunkCheckingResult : ResultType, noBunkCheckDatetime : str,
@@ -1075,8 +1072,6 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
         nutAndPlateWasherDatetimeKeyString : nutAndPlateWasherDatetime,
         tighteningTorque1ValueKeyString : str(tighteningTorque1), tighteningTorque1ResultKeyString : tighteningTorque1Result,
         tighteningTorque1DatetimeKeyString : tighteningTorque1Datetime,
-        freeRotationDoneKeyString : freeRotationDone,
-        freeRotationDatetimeKeyString : freeRotationDatetime,
         componentPressBunkPictureKeyString: componentPressBunkCheckingPictureAsMessage, componentPressBunkCheckResultKeyString: componentPressBunkCheckingResult,
         componentPressBunkCheckDatetimeKeyString : componentPressBunkCheckDatetime,
         componentPressDoneResultKeyString : componentPressDone,
@@ -1878,8 +1873,6 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     tighteningTorque1: float = 0.
     tighteningTorque1Result: str = notok
     tighteningTorque1Datetime : str = '1970-01-01 00:00:00'
-    freeRotationDone : str = notok
-    freeRotationDatetime : str = '1970-01-01 00:00:00'
     componentPressBunkPicture: Union[np.ndarray, None] = None
     componentPressBunkCheckResult : str = notok
     componentPressBunkCheckDatetime : str = '1970-01-01 00:00:00'
@@ -1918,7 +1911,6 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
                     nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
                     tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-                    freeRotationDone, freeRotationDatetime,
                     componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
                     componentPressDone, componentPressDoneDatetime,
                     noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
@@ -2051,17 +2043,6 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             except:
                 printBoldRed(f"Couldn't get tighteningTorque1CheckDatetime")
                 tighteningTorque1Datetime = '1970-01-01 00:00:00'
-
-            try:
-                freeRotationDone = str(newData[freeRotationDoneKeyString].decode('utf-8'))
-            except:
-                freeRotationDone = notok
-
-            try:
-                freeRotationDatetime = str(newData[freeRotationDatetimeKeyString].decode('utf-8'))
-            except:
-                printBoldRed(f"Couldn't get freeRotationCheckDatetime")
-                freeRotationDatetime = '1970-01-01 00:00:00'
 
             try:
                 componentPressBunkPicture = cv2.imdecode(np.frombuffer(newData[componentPressBunkPictureKeyString], np.uint8), 1)
@@ -2228,7 +2209,6 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
                     nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
                     tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-                    freeRotationDone, freeRotationDatetime,
                     componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
                     componentPressDone, componentPressDoneDatetime,
                     noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
@@ -2246,7 +2226,6 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
             nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
             tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-            freeRotationDone, freeRotationDatetime,
             componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
             componentPressDone, componentPressDoneDatetime,
             noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,

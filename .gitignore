@@ -40,3 +40,6 @@ desktop.ini
 # Build / recording output
 nuitka-crash-report*.xml
 recorders/output-*.mp4
+
+# Dry-run outputs
+test/machine2_dryrun/*_end_of_cycle.png

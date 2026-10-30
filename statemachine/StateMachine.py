@@ -5,6 +5,8 @@ from Configuration import *
 class MachineState(IntEnum):
 
     INVALID_STATE = -1
+    # Machine 2 sequence (28 states). Machine 1's READ_FREE_ROTATIONS_DONE (M1 state 13) is removed:
+    # on Machine 2 the free rotation happens during tightening at station 2. M1 states 14-29 are now 13-28.
     READ_QR_CODE = 1
     WRITE_QR_CODE = 2
     READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE = 3
@@ -17,25 +19,22 @@ class MachineState(IntEnum):
     WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER = 10
     READ_TIGHTENING_TORQUE_1_DONE = 11
     READ_TIGHTENING_TORQUE_1 = 12
-    READ_FREE_ROTATIONS_DONE = 13
-    READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS = 14
-    WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS = 15
-    READ_COMPONENT_PRESS_DONE = 16
-    READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK = 17
-    WRITE_RESULT_OF_CHECKING_NO_BUNK = 18
-    READ_TIGHTENING_TORQUE_2_DONE = 19
-    READ_TIGHTENING_TORQUE_2 = 20
-    READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER = 21
-    WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER = 22
-    READ_TAKE_PICTURE_FOR_CHECKING_CAP = 23
-    WRITE_RESULT_OF_CHECKING_CAP = 24
-    READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS = 25
-    WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS = 26
-    READ_CAP_PRESS_DONE = 27
-    READ_FREE_ROTATION_TORQUE_1_DONE = 28
-    READ_FREE_ROTATION_TORQUE_1 = 29
-
-    MAX_SECONDS_TO_WAIT_FOR_CAMERA_FEEDBACK : float = CosThetaConfigurator.getInstance().getMaxSecondsToWaitForCameraFeedback()
+    READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS = 13
+    WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS = 14
+    READ_COMPONENT_PRESS_DONE = 15
+    READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK = 16
+    WRITE_RESULT_OF_CHECKING_NO_BUNK = 17
+    READ_TIGHTENING_TORQUE_2_DONE = 18
+    READ_TIGHTENING_TORQUE_2 = 19
+    READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER = 20
+    WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER = 21
+    READ_TAKE_PICTURE_FOR_CHECKING_CAP = 22
+    WRITE_RESULT_OF_CHECKING_CAP = 23
+    READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS = 24
+    WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS = 25
+    READ_CAP_PRESS_DONE = 26
+    READ_FREE_ROTATION_TORQUE_1_DONE = 27
+    READ_FREE_ROTATION_TORQUE_1 = 28
 
     @classmethod
     def getMachineStateFromString(cls, state_str: Union[str,'MachineState']) -> 'MachineState':
@@ -87,39 +86,17 @@ class MachineState(IntEnum):
 
         return givenState.value
 
+# Previously declared inside MachineState, where IntEnum silently turned it into an alias of state 5.
+MAX_SECONDS_TO_WAIT_FOR_CAMERA_FEEDBACK: float = CosThetaConfigurator.getInstance().getMaxSecondsToWaitForCameraFeedback()
+
+
 class MachineStateMachine:
     def __init__(self):
         self.currentState: MachineState = MachineState.READ_QR_CODE
+        # Instruction text comes from properties key state.<N>.instruction, N = the state's integer value
         self._instructions: Dict[MachineState, str] = {
-            MachineState.READ_QR_CODE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=1),
-            MachineState.WRITE_QR_CODE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=2),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=3),
-            MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=4),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=5),
-            MachineState.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=6),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=7),
-            MachineState.WRITE_RESULT_OF_CHECKING_TOP_BEARING: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=8),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=9),
-            MachineState.WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=10),
-            MachineState.READ_TIGHTENING_TORQUE_1_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=11),
-            MachineState.READ_TIGHTENING_TORQUE_1: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=12),
-            MachineState.READ_FREE_ROTATIONS_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=13),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=14),
-            MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=15),
-            MachineState.READ_COMPONENT_PRESS_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=16),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=17),
-            MachineState.WRITE_RESULT_OF_CHECKING_NO_BUNK: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=18),
-            MachineState.READ_TIGHTENING_TORQUE_2_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=19),
-            MachineState.READ_TIGHTENING_TORQUE_2: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=20),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=21),
-            MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=22),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=23),
-            MachineState.WRITE_RESULT_OF_CHECKING_CAP: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=24),
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=25),
-            MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=26),
-            MachineState.READ_CAP_PRESS_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=27),
-            MachineState.READ_FREE_ROTATION_TORQUE_1_DONE: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=28),
-            MachineState.READ_FREE_ROTATION_TORQUE_1: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=29)
+            aState: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=aState.value)
+            for aState in MachineState if aState != MachineState.INVALID_STATE
         }
 
     def incrementState(self, stateJumps : int = 1) -> None:

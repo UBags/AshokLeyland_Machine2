@@ -479,8 +479,6 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     nut_tightening_torque_1 float DEFAULT -1.0 NOT NULL,
     nut_tightening_torque_1_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     nut_tightening_torque_1_datetime timestamp without time zone,
-    free_rotations_done character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
-    free_rotations_datetime timestamp without time zone,
     check_bunk_for_component_press_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
     check_bunk_for_component_press_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     check_bunk_for_component_press_datetime timestamp without time zone,
@@ -522,6 +520,11 @@ CREATE INDEX IF NOT EXISTS idx_model_name ON al_hub_and_disc_assembly_schema.hub
 CREATE INDEX IF NOT EXISTS idx_qr_code ON al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data (qr_code);
 
 CREATE INDEX IF NOT EXISTS idx_created_on ON al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data(created_on);
+
+-- Machine 2: the separate free-rotation step (M1 state 13) no longer exists.
+-- Drop its columns from databases created by earlier versions (no-op on new databases).
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data DROP COLUMN IF EXISTS free_rotations_done;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data DROP COLUMN IF EXISTS free_rotations_datetime;
 
 -- Create the machine_settings table
 CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.machine_settings
@@ -1065,7 +1068,6 @@ insert_table_data = '''INSERT INTO {}.hub_and_disc_assembly_data (
     check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
     check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
     nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-    free_rotations_done, free_rotations_datetime,
     check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
     component_press_done, component_press_datetime,
     check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
@@ -1334,8 +1336,6 @@ def insertData(
         nut_tightening_torque_1_result: str = "Not Checked",
         nut_tightening_torque_1_datetime: str = "",
 
-        free_rotations_done: str = "Not Checked",
-        free_rotations_datetime: str = "",
 
         check_bunk_for_component_press_imagefile: str = "Not Populated",
         check_bunk_for_component_press_result: str = "Not Checked",
@@ -1394,7 +1394,6 @@ def insertData(
         check_top_bearing_result,
         check_nut_and_platewasher_result,
         nut_tightening_torque_1_result,
-        free_rotations_done,
         check_bunk_for_component_press_result,
         component_press_done,
         check_no_bunk_result,
@@ -1417,7 +1416,6 @@ def insertData(
         check_top_bearing_result,
         check_nut_and_platewasher_result,
         nut_tightening_torque_1_result,
-        free_rotations_done,
         check_bunk_for_component_press_result,
         component_press_done,
         check_no_bunk_result,
@@ -1500,14 +1498,10 @@ def insertData(
             (check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime),
             (check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime),
             (nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime),
-            # result + datetime pairs (must match INSERT order)
-            (free_rotations_done, free_rotations_datetime),
-            # back to image/result/datetime triples
             (check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result,
              check_bunk_for_component_press_datetime),
             # result + datetime pair
             (component_press_done, component_press_datetime),
-            # back to image/result/datetime triples
             (check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime),
             (nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime),
             (check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime),
@@ -1554,7 +1548,6 @@ def insertData(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                free_rotations_done, free_rotations_datetime,
                 check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
                 component_press_done, component_press_datetime,
                 check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
@@ -1610,8 +1603,6 @@ all_columns_record_header = [
     "nut_tightening_torque_1",
     "nut_tightening_torque_1_result",
     "nut_tightening_torque_1_datetime",
-    "free_rotations_done",
-    "free_rotations_datetime",
     "check_bunk_for_component_press_imagefile",
     "check_bunk_for_component_press_result",
     "check_bunk_for_component_press_datetime",
@@ -1666,8 +1657,6 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    free_rotations_done,
-    free_rotations_datetime,
     check_bunk_for_component_press_imagefile,
     check_bunk_for_component_press_result,
     check_bunk_for_component_press_datetime,
@@ -1820,8 +1809,6 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    free_rotations_done,
-    free_rotations_datetime,
     check_bunk_for_component_press_imagefile,
     check_bunk_for_component_press_result,
     check_bunk_for_component_press_datetime,
@@ -1942,7 +1929,6 @@ def getDataByModelNameAndDateLimits(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                free_rotations_done, free_rotations_datetime,
                 check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
                 component_press_done, component_press_datetime,
                 check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
@@ -2205,8 +2191,6 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    free_rotations_done,
-    free_rotations_datetime,
     check_bunk_for_component_press_imagefile,
     check_bunk_for_component_press_result,
     check_bunk_for_component_press_datetime,
@@ -2317,7 +2301,6 @@ def getDataByDateLimits(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                free_rotations_done, free_rotations_datetime,
                 check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
                 component_press_done, component_press_datetime,
                 check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,

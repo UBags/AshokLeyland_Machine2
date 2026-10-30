@@ -2849,6 +2849,65 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_LH_RH_SELECTION_KEY,
                                              default="PC_PLC_LH_RH_Selection")
 
+    # ******************** Machine 2: cycle settings written to PLC in state 2 ********************
+
+    PC_PLC_MODEL_SELECTION_KEY = "pc.plc.model.selection.tagname"
+    PC_PLC_TIGHTENING_TORQUE1_SETPOINT_KEY = "pc.plc.tightening.torque1.setpoint.tagname"
+    PC_PLC_TIGHTENING_TORQUE2_SETPOINT_KEY = "pc.plc.tightening.torque2.setpoint.tagname"
+    PC_PLC_ROTATION1_RPM_KEY = "pc.plc.rotation1.rpm.tagname"
+    PC_PLC_ROTATION2_RPM_KEY = "pc.plc.rotation2.rpm.tagname"
+    TIGHTENING_TORQUE1_SETPOINT_KEY = "tightening.torque1.setpoint.nm"
+    TIGHTENING_TORQUE2_SETPOINT_KEY = "tightening.torque2.setpoint.nm"
+    ROTATION1_RPM_KEY = "rotation1.rpm"
+    ROTATION2_RPM_KEY = "rotation2.rpm"
+    SETPOINT_NOT_TO_BE_WRITTEN: float = -1
+
+    @classmethod
+    def getPcPlcModelSelectionTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_MODEL_SELECTION_KEY, default="ModelSelection")
+
+    @classmethod
+    def getPcPlcTighteningTorque1SetpointTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_TIGHTENING_TORQUE1_SETPOINT_KEY,
+                                             default="TighteningTorque1Setpoint")
+
+    @classmethod
+    def getPcPlcTighteningTorque2SetpointTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_TIGHTENING_TORQUE2_SETPOINT_KEY,
+                                             default="TighteningTorque2Setpoint")
+
+    @classmethod
+    def getPcPlcRotation1RPMTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION1_RPM_KEY, default="RotationRPM1")
+
+    @classmethod
+    def getPcPlcRotation2RPMTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION2_RPM_KEY, default="RotationRPM2")
+
+    @classmethod
+    def _getNumericSetpoint(cls, key: str) -> float:
+        """Setpoint from properties; -1 (also used when missing/invalid) means 'do not write to PLC'."""
+        try:
+            return float(CosThetaConfigurator.getValue(key, default="-1"))
+        except (TypeError, ValueError):
+            return CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
+
+    @classmethod
+    def getTighteningTorque1Setpoint(cls) -> float:
+        return cls._getNumericSetpoint(CosThetaConfigurator.TIGHTENING_TORQUE1_SETPOINT_KEY)
+
+    @classmethod
+    def getTighteningTorque2Setpoint(cls) -> float:
+        return cls._getNumericSetpoint(CosThetaConfigurator.TIGHTENING_TORQUE2_SETPOINT_KEY)
+
+    @classmethod
+    def getRotation1RPM(cls) -> int:
+        return int(cls._getNumericSetpoint(CosThetaConfigurator.ROTATION1_RPM_KEY))
+
+    @classmethod
+    def getRotation2RPM(cls) -> int:
+        return int(cls._getNumericSetpoint(CosThetaConfigurator.ROTATION2_RPM_KEY))
+
     @classmethod
     def getPcPlcRotationUnitRPMTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION_UNIT_RPM_KEY,
@@ -2868,20 +2927,20 @@ class CosThetaConfigurator():
     MACHINE_STATE_9_TARGET_WIDTH_KEY: str = "machine.state.9.target.width"
     MACHINE_STATE_9_TARGET_HEIGHT_KEY: str = "machine.state.9.target.height"
 
-    MACHINE_STATE_14_TARGET_WIDTH_KEY: str = "machine.state.14.target.width"
-    MACHINE_STATE_14_TARGET_HEIGHT_KEY: str = "machine.state.14.target.height"
+    MACHINE_STATE_13_TARGET_WIDTH_KEY: str = "machine.state.13.target.width"
+    MACHINE_STATE_13_TARGET_HEIGHT_KEY: str = "machine.state.13.target.height"
 
-    MACHINE_STATE_17_TARGET_WIDTH_KEY: str = "machine.state.17.target.width"
-    MACHINE_STATE_17_TARGET_HEIGHT_KEY: str = "machine.state.17.target.height"
+    MACHINE_STATE_16_TARGET_WIDTH_KEY: str = "machine.state.16.target.width"
+    MACHINE_STATE_16_TARGET_HEIGHT_KEY: str = "machine.state.16.target.height"
 
-    MACHINE_STATE_21_TARGET_WIDTH_KEY: str = "machine.state.21.target.width"
-    MACHINE_STATE_21_TARGET_HEIGHT_KEY: str = "machine.state.21.target.height"
+    MACHINE_STATE_20_TARGET_WIDTH_KEY: str = "machine.state.20.target.width"
+    MACHINE_STATE_20_TARGET_HEIGHT_KEY: str = "machine.state.20.target.height"
 
-    MACHINE_STATE_23_TARGET_WIDTH_KEY: str = "machine.state.23.target.width"
-    MACHINE_STATE_23_TARGET_HEIGHT_KEY: str = "machine.state.23.target.height"
+    MACHINE_STATE_22_TARGET_WIDTH_KEY: str = "machine.state.22.target.width"
+    MACHINE_STATE_22_TARGET_HEIGHT_KEY: str = "machine.state.22.target.height"
 
-    MACHINE_STATE_25_TARGET_WIDTH_KEY: str = "machine.state.25.target.width"
-    MACHINE_STATE_25_TARGET_HEIGHT_KEY: str = "machine.state.25.target.height"
+    MACHINE_STATE_24_TARGET_WIDTH_KEY: str = "machine.state.24.target.width"
+    MACHINE_STATE_24_TARGET_HEIGHT_KEY: str = "machine.state.24.target.height"
 
     @classmethod
     def getTargetWidthAndHeight(cls, currentMachineState: int) -> Tuple[int, int]:

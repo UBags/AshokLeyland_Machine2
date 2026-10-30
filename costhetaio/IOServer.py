@@ -18,7 +18,7 @@ from Configuration import CosThetaConfigurator
 from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
-from persistence.Persistence import getMachineSettings, getDatabaseName, setDatabaseName
+from persistence.Persistence import getDatabaseName, setDatabaseName
 
 TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM: float = 1.5
 TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM: float = 2.0
@@ -249,9 +249,6 @@ class IOServer:
     PLC_PC_Station2TorqueValueSet: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueSetTagName()
     PLC_PC_Station2TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueTagName()
 
-    # ==================== Station 3 Free Rotation Done Tag (Step 6) ====================
-    PLC_PC_Station3RotationDone: str = CosThetaConfigurator.getInstance().getPlcPcStation3RotationDoneTagName()
-
     # ==================== No Cap Bunk Tags (Step 7) ====================
     PLC_PC_CheckNoCapBunk: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoCapBunkTagName()
     PC_PLC_NoCapBunkCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcNoCapBunkCheckOKTagName()
@@ -287,13 +284,17 @@ class IOServer:
     PLC_PC_Station3TorqueValueSet: str = CosThetaConfigurator.getInstance().getPlcPcStation3TorqueValueSetTagName()
     PLC_PC_Station3TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation3TorqueValueTagName()
 
-    # ==================== Rotation Settings Tags (PC writes to PLC) ====================
-    PC_PLC_NoOfRotation1CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CCWTagName()
-    PC_PLC_NoOfRotation1CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CWTagName()
-    PC_PLC_NoOfRotation2CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation2CCWTagName()
-    PC_PLC_NoOfRotation2CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation2CWTagName()
-    PC_PLC_LH_RH_Selection: str = CosThetaConfigurator.getInstance().getPcPlcLHRHSelectionTagName()
-    PC_PLC_RotationUnitRPM: str = CosThetaConfigurator.getInstance().getPcPlcRotationUnitRPMTagName()
+    # ==================== Machine 2 cycle settings (PC writes to PLC in state 2) ====================
+    PC_PLC_LH_RH_Selection: str = CosThetaConfigurator.getInstance().getPcPlcLHRHSelectionTagName()      # INT 1=LHS, 2=RHS
+    PC_PLC_ModelSelection: str = CosThetaConfigurator.getInstance().getPcPlcModelSelectionTagName()       # INT 1=DOST, 2=DOSTPLUS
+    PC_PLC_TighteningTorque1Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque1SetpointTagName()  # REAL Nm
+    PC_PLC_TighteningTorque2Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque2SetpointTagName()  # REAL Nm
+    PC_PLC_RotationRPM1: str = CosThetaConfigurator.getInstance().getPcPlcRotation1RPMTagName()           # INT rpm
+    PC_PLC_RotationRPM2: str = CosThetaConfigurator.getInstance().getPcPlcRotation2RPMTagName()           # INT rpm
+
+    LHS_CODE: int = 1
+    RHS_CODE: int = 2
+    MODEL_CODES: Dict[str, int] = {"DOST": 1, "DOSTPLUS": 2}
 
     # ==================== System Tags ====================
     PLC_PC_EmergencyAbort: str = CosThetaConfigurator.getInstance().getPlcPcEmergencyAbortTagName()
@@ -498,78 +499,67 @@ class IOServer:
             printBoldRed(f"Failed to initialize database connection pool: {e}")
             self.dbConnectionPool = None
 
-    def writeRotationSettingsToPLC(self, qrCode: str) -> bool:
+    def writeCycleSettingsToPLC(self, qrCode: str) -> bool:
         """
-        Write rotation settings to PLC based on QR code (LHS vs RHS).
+        Machine 2, state 2 (WRITE_QR_CODE): write side, model and the tightening/rotation setpoints to the PLC.
 
-        Args:
-            qrCode: The scanned QR code string
+          LH_RH_Selection   INT   1 = LHS, 2 = RHS          (from QR)
+          ModelSelection    INT   1 = DOST, 2 = DOSTPLUS    (from QR)
+          Torque1/2 setpt   REAL  Nm                         (properties; -1 = do not write)
+          RotationRPM1/2    INT   rpm                        (properties; -1 = do not write)
 
-        Returns:
-            True if settings were written successfully, False otherwise
+        Machine 1's rotation counts (NoOfRotation*) and DB-held machine settings are not used on Machine 2.
+        Returns True only if every tag that had to be written was written.
         """
         if not qrCode:
-            printBoldRed("Cannot write rotation settings: QR code is empty")
+            printBoldRed("Cannot write cycle settings: QR code is empty")
             return False
 
         try:
-            # Parse QR code to get LHS/RHS designation
             modelName, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(qrCode)
+            side = (lhs_rhs or "").strip().upper()
+            model = (modelName or "").strip().upper()
 
-            if lhs_rhs == "UNKNOWN":
+            if side == "LHS":
+                sideCode = IOServer.LHS_CODE
+            elif side == "RHS":
+                sideCode = IOServer.RHS_CODE
+            else:
                 printBoldRed(f"Cannot determine LHS/RHS from QR code: {qrCode}")
                 return False
 
-            # Get machine settings from database
-            settings = getMachineSettings(getDatabaseName())
-            if not settings:
-                printBoldRed("Failed to get machine settings from database")
+            modelCode = IOServer.MODEL_CODES.get(model)
+            if modelCode is None:
+                printBoldRed(f"Unknown model '{modelName}' from QR code: {qrCode}")
                 return False
 
-            noOfRotation1CCW_db = settings.get('NoOfRotation1CCW', 5)
-            noOfRotation1CW_db = settings.get('NoOfRotation1CW', 5)
-            noOfRotation2CCW_db = settings.get('NoOfRotation2CCW', 5)
-            noOfRotation2CW_db = settings.get('NoOfRotation2CW', 5)
-            rotationUnitRPM = settings.get('RotationUnitRPM', 60)
+            config = CosThetaConfigurator.getInstance()
+            skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
 
-            # Determine values based on LHS/RHS
-            if lhs_rhs.upper() == "LHS":
-                noOfRotation1CCW = 0
-                noOfRotation1CW = noOfRotation1CW_db
-                noOfRotation2CCW = 0
-                noOfRotation2CW = noOfRotation2CW_db
-                lhRhSelection = 1
-                printBoldGreen(f"LHS detected - Setting CW rotations: R1CW={noOfRotation1CW}, R2CW={noOfRotation2CW}, lhRhSelection={lhRhSelection}")
-            elif lhs_rhs.upper() == "RHS":
-                noOfRotation1CCW = noOfRotation1CCW_db
-                noOfRotation1CW = 0
-                noOfRotation2CCW = noOfRotation2CCW_db
-                noOfRotation2CW = 0
-                lhRhSelection = 2
-                printBoldGreen(
-                    f"RHS detected - Setting CCW rotations: R1CCW={noOfRotation1CCW}, R2CCW={noOfRotation2CCW}, lhRhSelection={lhRhSelection}")
-            else:
-                printBoldRed(f"Unknown LHS/RHS value: {lhs_rhs}")
-                return False
-
-            # Write all values to PLC
             success = True
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation1CCW, noOfRotation1CCW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation1CW, noOfRotation1CW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation2CCW, noOfRotation2CCW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation2CW, noOfRotation2CW)
-            success = success and self.write_int(IOServer.PC_PLC_LH_RH_Selection, lhRhSelection)
-            success = success and self.write_int(IOServer.PC_PLC_RotationUnitRPM, rotationUnitRPM)
+            success = self.write_int(IOServer.PC_PLC_LH_RH_Selection, sideCode) and success
+            success = self.write_int(IOServer.PC_PLC_ModelSelection, modelCode) and success
+
+            written = [f"side={sideCode}", f"model={modelCode}"]
+            for tag, value in ((IOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint()),
+                               (IOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint())):
+                if value != skip:
+                    success = self.write_float(tag, float(value), debug=False) and success
+                    written.append(f"{tag}={value}")
+            for tag, value in ((IOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
+                               (IOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
+                if value != skip:
+                    success = self.write_int(tag, int(value)) and success
+                    written.append(f"{tag}={value}")
 
             if success:
-                printBoldGreen(f"Successfully wrote rotation settings to PLC for {lhs_rhs}")
+                printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {', '.join(written)}")
             else:
-                printBoldRed("Failed to write some rotation settings to PLC")
-
+                printBoldRed(f"Failed to write some cycle settings to PLC ({', '.join(written)})")
             return success
 
         except Exception as e:
-            printBoldRed(f"Exception writing rotation settings to PLC: {e}")
+            printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
 
     # ==================== Cycle Time Tracking ====================
@@ -588,7 +578,7 @@ class IOServer:
     OP_KNUCKLE        = "T1_Knuckle"
     OP_HUB_BEARING    = "T2_HubAndBottomBearing"
     OP_TOP_BEARING    = "T3_TopBearing"
-    OP_NUT_WASHER     = "T4_NutAndPlateWasher_to_FreeRotations"
+    OP_NUT_WASHER     = "T4_NutAndPlateWasher_to_Torque1Read"
     OP_NOCAP_BUNK     = "T5_NoCapBunk"
     OP_TORQUE2        = "T6_NoCapBunkStart_to_Torque2Done"
     OP_SPLITPIN       = "T7_SplitPinAndWasher"
@@ -657,7 +647,7 @@ class IOServer:
             f"T1  (Knuckle check           : PLC trigger → KnuckleCheckDone)          : {T1:.3f} sec\n"
             f"T2  (Hub & bottom bearing    : PLC trigger → HubCheckDone)               : {T2:.3f} sec\n"
             f"T3  (Top bearing             : PLC trigger → HubAndSecondBearingDone)    : {T3:.3f} sec\n"
-            f"T4  (Nut & plate washer      : PLC trigger → Station3RotationDone)       : {T4:.3f} sec\n"
+            f"T4  (Nut & plate washer      : PLC trigger → Torque 1 read)              : {T4:.3f} sec\n"
             f"T5  (No-cap bunk             : PLC trigger → NoCapBunkCheckDone)         : {T5:.3f} sec\n"
             f"T6  (No-cap bunk → Torque2   : PLC trigger → Station2TorqueValueSet)     : {T6:.3f} sec\n"
             f"T7  (Split pin & washer      : PLC trigger → SplitPinAndWasherDone)      : {T7:.3f} sec\n"
@@ -682,23 +672,22 @@ class IOServer:
         """
         Get the PLC tags to be read based on current machine state.
 
-        State to Excel Step Mapping:
-        - States 1-2: QR Code (Step 0)
-        - States 3-4: Knuckle (Step 1)
-        - States 5-6: Hub (Step 2) - uses PLC_PC_CheckHub
-        - States 7-8: Hub and Second Bearing (Step 3) - uses PLC_PC_CheckHubAndSecondBearing
-        - States 9-10: Nut and Plate Washer (Step 4)
-        - States 11-12: Tightening Torque 1 (Step 5) - uses PLC_PC_Station2TorqueValueSet
-        - State 13: Free Rotations Done (Step 6)
-        - States 14-15: Bunk for Component Press (Step 7) - uses PLC_PC_CheckBunk
-        - State 16: Component Press Done (Step 8)
-        - States 17-18: No Bunk (Step 9)
-        - States 19-20: Tightening Torque 2 (Step 10) - uses PLC_PC_Station2TorqueValueSet (reused)
-        - States 21-22: Split Pin and Washer (Step 11)
-        - States 23-24: Cap (Step 12)
-        - States 25-26: Bunk for Cap Press (Step 13) - uses PLC_PC_CheckBunk (reused)
-        - State 27: Cap Press Done (Step 14)
-        - States 28-29: Free Rotation Torque (Step 15)
+        Machine 2 state mapping (28 states; M1's READ_FREE_ROTATIONS_DONE removed):
+        - States 1-2:   QR Code
+        - States 3-4:   Knuckle
+        - States 5-6:   Hub (with bottom bearing) - uses PLC_PC_CheckHub
+        - States 7-8:   Top bearing - uses PLC_PC_CheckHubAndSecondBearing
+        - States 9-10:  Nut and Plate Washer
+        - States 11-12: Tightening Torque 1 - PLC_PC_Station2TorqueValueSet / PLC_PC_Station2TorqueValue
+        - States 13-14: Bunk for Component Press - uses PLC_PC_CheckNoCapBunk
+        - State 15:     Component Press Done
+        - States 16-17: No Bunk
+        - States 18-19: Tightening Torque 2 - Station 2 torque tags (reused)
+        - States 20-21: Split Pin and Washer
+        - States 22-23: Cap
+        - States 24-25: Bunk for Cap Press - uses PLC_PC_CheckBunk
+        - State 26:     Cap Press Done
+        - States 27-28: Free Rotation Torque - PLC_PC_Station3TorqueValueSet / PLC_PC_Station3TorqueValue
         """
         currentState = self.machineState.getCurrentState()
 
@@ -727,10 +716,6 @@ class IOServer:
             return [IOServer.PLC_PC_Station2TorqueValueSet], [bool]
         if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
             return [IOServer.PLC_PC_Station2TorqueValue], [float]
-
-        # Step 6: Free Rotations Done (Station 3)
-        if currentState == MachineState.READ_FREE_ROTATIONS_DONE:
-            return [IOServer.PLC_PC_Station3RotationDone], [bool]
 
         # Step 7: No Cap Bunk for Component Press
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
@@ -1129,8 +1114,8 @@ class IOServer:
                                 objRef.currentQRCode = qrCode  # Store the QR code for this cycle
                                 printBoldGreen(f"Received QR Code: {qrCode}")
                                 objRef.perform_write_state_action(tags=tagsToBeWritten, result=True)
-                                # Write rotation settings to PLC based on LHS/RHS
-                                objRef.writeRotationSettingsToPLC(qrCode)
+                                # Write side, model and tightening/rotation setpoints to PLC
+                                objRef.writeCycleSettingsToPLC(qrCode)
                                 printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                 objRef.machineState.incrementState()
                                 printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
@@ -1221,21 +1206,6 @@ class IOServer:
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_1_DONE:
                         successfullySent = True
 
-                    # Step 6: Free Rotations Done — END of T4
-                    elif currentState == MachineState.READ_FREE_ROTATIONS_DONE:
-                        successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
-                                                                          currentMachineState=MachineState.READ_FREE_ROTATIONS_DONE)
-                        if successfullySent:
-                            self._recordOpEnd(IOServer.OP_NUT_WASHER)
-                        # Reset Station 3 tags - prepare for eventual use in State 29
-                        updateRequest: dict = {
-                            "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM,
-                            "tag1": {"tag": IOServer.PLC_PC_Station3TorqueValueSet, "type": "bool", "value": False},
-                            "tag2": {"tag": IOServer.PLC_PC_Station3TorqueValue, "type": "float", "value": 0.0},
-                        }
-                        print(f"Sending request {updateRequest} to UpdateTagsProcessor")
-                        addTagUpdateRequest(updateRequest)
-
                     # Step 7: Bunk for Component Press — START of T5 and T6
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
@@ -1315,6 +1285,8 @@ class IOServer:
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_1,
                                                                           value=valueRead)
+                        if successfullySent:
+                            self._recordOpEnd(IOServer.OP_NUT_WASHER)   # END of T4 (M2: no separate free-rotation step)
                         # Reset Station 2 torque tags after reading (so Step 10 doesn't auto-trigger)
                         if successfullySent:
                             updateRequest : dict = {
@@ -1651,9 +1623,6 @@ class IOServer:
         self.resetTagToFalse(IOServer.PLC_PC_Station2TorqueValueSet)
         self.resetTagToZero(IOServer.PLC_PC_Station2TorqueValue)
 
-        # Step 6: Station 3 Rotation Done
-        self.resetTagToFalse(IOServer.PLC_PC_Station3RotationDone)
-
         # Step 7: No Cap Bunk
         self.resetTagToFalse(IOServer.PLC_PC_CheckNoCapBunk)
         self.resetTagToFalse(IOServer.PC_PLC_NoCapBunkCheckOK)
@@ -1755,10 +1724,6 @@ class IOServer:
         tag_values[IOServer.PLC_PC_Station2TorqueValueSet] = self.read_bool(IOServer.PLC_PC_Station2TorqueValueSet,
                                                                             debug=False)
         tag_values[IOServer.PLC_PC_Station2TorqueValue] = self.read_float(IOServer.PLC_PC_Station2TorqueValue,
-                                                                          debug=False)
-
-        # Step 6: Station 3 Rotation Done
-        tag_values[IOServer.PLC_PC_Station3RotationDone] = self.read_bool(IOServer.PLC_PC_Station3RotationDone,
                                                                           debug=False)
 
         # Step 7: No Cap Bunk
