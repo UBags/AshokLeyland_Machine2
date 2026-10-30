@@ -145,3 +145,23 @@ Fix proposed but not approved:
 - The PLC handles Done with OK=False as "re-scan".
 
 Open questions: allow or reject duplicates; how to treat serial noise versus a genuine bad scan.
+
+## 10. `ApplicationConfiguration.properties` clean-up (2026-10-31)
+
+Each key was traced to its `Configuration.py` getter and then to that getter's callers.
+
+- **Removed (29 keys):** nothing anywhere in the repo reads them, or only deleted legacy files did. They include:
+  - old Geltec/KEMS camera, recording and Google Drive settings;
+  - unused queue names (`read.qrcodeQ`, `send.qrcodeQ.*`, `recording1/2.queue`);
+  - font multipliers, `terminal.debug`, `polling.time.for.disc.signal`, `report.include.invalidresults`, `consolelogging.date.format`, `qrcode.number.of.characters.to.check` and `consecutive.connect.retries`.
+
+  Commented-out leftovers were removed as well (`wsdl.dir`, `qrcode.extractdata.N`, old queue names).
+- **Moved, unchanged, into a "TO REVIEW" block at the end of the file (35 keys):** live code does not read them, but they may still matter.
+  - Camera picture-delay tuning, used only by `PhotoCamera.py` and a Geltec test.
+  - Video/picture recording settings, used only by `CameraRecorderServer.py`, which MainProgram does not start.
+  - `audit.report.basedir`: the audit trail is commented out.
+  - The bunk, nut/washer, no-cap-bunk and no-bunk check parameters, read only by superseded `camera/*_v0.x` files. The live checks hard-code these values.
+- **Verification:**
+  - No value of any remaining key changed; 258 keys remain.
+  - Every key outside the review block is read by live code.
+  - The integrated dry run, with all servers, passes.
