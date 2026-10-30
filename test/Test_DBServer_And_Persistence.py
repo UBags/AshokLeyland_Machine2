@@ -1,17 +1,22 @@
 """
-Comprehensive Test Script for DBServer and Persistence - FIXED VERSION
+Tests persistence.Persistence + persistence.DBServer against the local PostgreSQL TEST database
+(ashok_leyland_test) and Redis. Run from the project root:  python -m test.Test_DBServer_And_Persistence
+(or: python test/Test_DBServer_And_Persistence.py). Needs PostgreSQL on 127.0.0.1:5432 (postgres/postgres)
+and Redis on the configured host/port. Images are written under the configured base image folder, relative
+to the current working directory on non-Windows hosts, so run it from a scratch directory if you do not want them there.
 
-This script tests:
-1. Database connection and schema creation
+This script tests (Machine 2 record layout - no free-rotations-done fields):
+1. Database connection, schema/table creation, test role + user
 2. Direct insertions using Persistence.insertData()
-3. Redis-based insertions using sendDataFromFEServerToDatabaseServer()
-4. Data validation and retrieval
-5. Error handling for duplicates
-6. Image file creation and storage
+3. Duplicate QR code handling
+4. Redis connection
+5. Starting DBServer (DataPersistence) in Test mode
+6. Redis-based insertions using sendDataFromFEServerToDatabaseServer() -> fe2db.q -> DBServer -> PostgreSQL
 7. DateTime handling
-
-Author: Test Suite - Fixed for actual code
-Date: 2024
+8. Data retrieval and validation
+9. Torque value storage (tightening torque 1/2, free rotation torque 1)
+10. Image file creation and storage (files written by DBServer for Redis records)
+11. Cleanup of test records
 """
 
 import sys
@@ -20,21 +25,25 @@ import time
 import threading
 from datetime import datetime
 from typing import Optional, List, Dict, Tuple
+
+# Make the project root importable regardless of how this file is launched
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 import numpy as np
 import cv2
-# Import the functions at the top of the file (add to existing imports around line 33):
-from Persistence import insertRole, insertNewUser
-
-# Add project root to path if needed
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import redis
 import psycopg2
 
-from DBServer import DataPersistence
-from Persistence import (
+from persistence.DBServer import DataPersistence
+from persistence.Persistence import (
+    insertRole,
+    insertNewUser,
     insertData,
     checkIfRecordExists,
+    checkIfQRCodeExists,
     getDatabaseName,
     setDatabaseName,
     createSchema,
@@ -46,6 +55,7 @@ from utils.RedisUtils import (
     readDataInDatabaseServerFromFEServer,
     clearQueues
 )
+from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from BaseUtils import getCurrentTime, getPostgresDatetimeFromString
 from utils.CosThetaPrintUtils import *
 from Configuration import CosThetaConfigurator
@@ -61,16 +71,22 @@ class TestConfig:
         self.test_db_name = "test_database"
         self.test_mode = "Test"
         self.test_username = "test_user"
-        self.redis_host = "localhost"
-        self.redis_port = 6379
+        self.redis_host = CosThetaConfigurator.getInstance().getRedisHost()
+        self.redis_port = CosThetaConfigurator.getInstance().getRedisPort()
+        # QR codes start with the real part-number prefixes (qrcode.partmapping.N in ApplicationConfiguration.properties)
+        # so that utils.QRCodeHelper.getModel_LHSRHS_AndTonnage() resolves model / side / tonnage; the
+        # "$TESTQR..." suffix keeps them unique and recognisable for cleanup.
         self.test_qr_codes = [
-            "TEST_QR_001_DOST_LHS_14T",
-            "TEST_QR_002_DOSTPLUS_RHS_14T",
-            "TEST_QR_003_DOST_LHS_16T",
-            "TEST_QR_004_GARUDA_RHS_16T",
-            "TEST_QR_005_DOST_LHS_14T",  # For Redis test
-            "TEST_QR_006_DOSTPLUS_RHS_16T"  # For Redis test
+            "7204838$400112VA1D$TESTQR001$",     # DOST     LHS 2.0T
+            "7204838$400102VA1D$TESTQR002$",     # DOST     RHS 2.0T
+            "8201206$400112VA1C$TESTQR003$",     # DOSTPLUS LHS 2.5T
+            "8201206$400102VA1C$TESTQR004$",     # DOSTPLUS RHS 2.5T
+            "7204838$400112VA1D$TESTQR005$",     # For Redis test
+            "8201206$400102VA1C$TESTQR006$"      # For Redis test
         ]
+        self.expected_models = {
+            qr: getModel_LHSRHS_AndTonnage(qr) for qr in self.test_qr_codes
+        }
         self.db_server = None
         self.redis_connection = None
         self.test_results = {
@@ -189,9 +205,17 @@ def get_record_from_database(qr_code: str, db_name: str) -> Optional[Dict]:
             SELECT qr_code, model_name, lhs_rhs, model_tonnage,
                    check_knuckle_result, check_hub_and_bottom_bearing_result,
                    nut_tightening_torque_1, ok_notok_result, created_on,
-                   component_assembly_start_datetime
+                   component_assembly_start_datetime,
+                   nut_tightening_torque_2, free_rotation_torque_1, free_rotation_torque_1_result,
+                   remarks,
+                   check_knuckle_imagefile, check_hub_and_bottom_bearing_imagefile, check_top_bearing_imagefile,
+                   check_nut_and_platewasher_imagefile, check_bunk_for_component_press_imagefile,
+                   check_no_bunk_imagefile, check_splitpin_and_washer_imagefile, check_cap_imagefile,
+                   check_bunk_cap_press_imagefile
             FROM al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
             WHERE qr_code = %s
+            ORDER BY record_id ASC
+            LIMIT 1
         """
         cur.execute(query, [qr_code])
         row = cur.fetchone()
@@ -207,7 +231,16 @@ def get_record_from_database(qr_code: str, db_name: str) -> Optional[Dict]:
                 'nut_tightening_torque_1': row[6],
                 'ok_notok_result': row[7],
                 'created_on': row[8],
-                'component_assembly_start_datetime': row[9]
+                'component_assembly_start_datetime': row[9],
+                'nut_tightening_torque_2': row[10],
+                'free_rotation_torque_1': row[11],
+                'free_rotation_torque_1_result': row[12],
+                'remarks': row[13],
+                'imagefiles': {
+                    'knuckle': row[14], 'hub_and_bottom_bearing': row[15], 'top_bearing': row[16],
+                    'nut_and_platewasher': row[17], 'bunk_for_component_press': row[18], 'no_bunk': row[19],
+                    'splitpin_and_washer': row[20], 'cap': row[21], 'bunk_for_cap_press': row[22],
+                }
             }
 
         return None
@@ -221,6 +254,37 @@ def get_record_from_database(qr_code: str, db_name: str) -> Optional[Dict]:
             cur.close()
         if conn:
             conn.close()
+
+
+def count_records_in_database(qr_code: str, db_name: str) -> Tuple[int, List[str]]:
+    """Return (number of rows, list of remarks) for a QR code (qr_code is NOT unique in the schema)."""
+    conn = None
+    try:
+        conn = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", port="5432", database=db_name)
+        cur = conn.cursor()
+        cur.execute("SELECT remarks FROM al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data "
+                    "WHERE qr_code = %s ORDER BY record_id", [qr_code])
+        rows = cur.fetchall()
+        cur.close()
+        return len(rows), [r[0] for r in rows]
+    except Exception as e:
+        printBoldRed(f"Error counting records: {e}")
+        return -1, []
+    finally:
+        if conn:
+            conn.close()
+
+
+def wait_for_record_count(qr_code: str, db_name: str, expected: int, timeout_s: float = 15.0) -> int:
+    """Poll until the QR code has `expected` rows (DBServer polls fe2db.q only every 5 s)."""
+    t0 = time.time()
+    n = 0
+    while time.time() - t0 < timeout_s:
+        n, _ = count_records_in_database(qr_code, db_name)
+        if n >= expected:
+            return n
+        time.sleep(0.5)
+    return n
 
 
 def clean_test_data(qr_codes: List[str], db_name: str) -> None:
@@ -292,6 +356,8 @@ def test_01_database_connection(config: TestConfig) -> bool:
         printBoldGreen(f"✓ Schema created")
 
         createAllTables(db_name)
+        # Remove leftovers of an earlier, aborted run so that counts below are exact
+        clean_test_data(config.test_qr_codes, db_name)
         # Add test role and user
         insertRole(role_name="Operator", db_name=db_name, module_access="")
         insertNewUser(
@@ -372,11 +438,8 @@ def test_02_direct_insertions(config: TestConfig) -> bool:
         printBoldBlue(f"\nInserting record {i+1}/4: {data['qr_code']}")
 
         try:
-            # Parse QR code to get model, lhs_rhs, tonnage
-            parts = data['qr_code'].split('_')
-            model_name = parts[2] if len(parts) > 2 else "DOST"
-            lhs_rhs = parts[3] if len(parts) > 3 else "LHS"
-            tonnage = parts[4] if len(parts) > 4 else "14T"
+            # Parse QR code to get model, lhs_rhs, tonnage (same helper DBServer uses)
+            model_name, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(data['qr_code'])
 
             # FIXED: db_name is now the FIRST parameter!
             success = insertData(
@@ -464,44 +527,47 @@ def test_02_direct_insertions(config: TestConfig) -> bool:
 
 
 def test_03_duplicate_qr_handling(config: TestConfig) -> bool:
-    """Test 3: Duplicate QR Code Handling."""
+    """Test 3: Duplicate QR Code Handling.
+
+    qr_code is deliberately NOT unique in hub_and_disc_assembly_data: a re-worked component is stored again.
+    checkIfQRCodeExists() must report the existing record, and insertData() must store the second row
+    (DBServer additionally sets remarks='DUPLICATE' - verified in the Redis test).
+    """
     print_test_header("Duplicate QR Code Handling")
 
     db_name = getDatabaseName()
     duplicate_qr = config.test_qr_codes[0]  # Use first QR code again
 
     try:
-        printBoldBlue(f"Attempting to insert duplicate QR: {duplicate_qr}")
+        exists = checkIfQRCodeExists(qr_code=duplicate_qr, db_name=db_name)
+        printBoldBlue(f"checkIfQRCodeExists({duplicate_qr}) -> {exists}")
+        before, _ = count_records_in_database(duplicate_qr, db_name)
 
-        # FIXED: db_name is first parameter
+        printBoldBlue(f"Attempting to insert duplicate QR: {duplicate_qr}")
+        model_name, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(duplicate_qr)
         success = insertData(
             db_name=db_name,
             qr_code=duplicate_qr,
-            model_name="DOST",
-            lhs_rhs="LHS",
-            model_tonnage="14T",
+            model_name=model_name,
+            lhs_rhs=lhs_rhs,
+            model_tonnage=tonnage,
             component_assembly_start_datetime=getCurrentTime(),
             check_knuckle_imagefile='',
             check_knuckle_result='OK',
             check_knuckle_datetime=getCurrentTime(),
             ok_notok_result='OK',
             username='test_user',
-            remarks='Duplicate test'
+            remarks='DUPLICATE'
         )
+        after, remarks = count_records_in_database(duplicate_qr, db_name)
+        printBoldBlue(f"insertData -> {success}; rows for QR before={before}, after={after}; remarks={remarks}")
 
-        # Should return False for duplicate
-        if not success:
-            printBoldGreen(f"✓ Correctly rejected duplicate QR code")
-            print_test_result("Duplicate QR Code Handling", True,
-                            "Duplicate correctly rejected")
-            config.test_results['passed'] += 1
-            return True
-        else:
-            printBoldRed(f"✗ Duplicate was inserted (should have been rejected)")
-            print_test_result("Duplicate QR Code Handling", False,
-                            "Duplicate was incorrectly accepted")
-            config.test_results['failed'] += 1
-            return False
+        passed = exists and success and (after == before + 1)
+        print_test_result("Duplicate QR Code Handling", passed,
+                          "Existing QR detected and re-worked component stored as a second row" if passed
+                          else f"exists={exists}, inserted={success}, rows {before}->{after}")
+        config.test_results['passed' if passed else 'failed'] += 1
+        return passed
 
     except Exception as e:
         printBoldRed(f"Error in duplicate test: {e}")
@@ -659,48 +725,29 @@ def test_06_redis_insertions(config: TestConfig) -> bool:
             if success:
                 printBoldGreen(f"✓ Sent to Redis: {qr_code}")
 
-                # Wait for DBServer to process
+                # Wait for DBServer to process. DBServer polls fe2db.q every 5 s and trims the queue to the
+                # latest message, so each record must be consumed before the next one is sent.
                 printBoldBlue("Waiting for DBServer to process...")
-                # time.sleep(3)
-                #
-                # # Verify in database
-                # if verify_record_in_database(qr_code, db_name):
-                #     printBoldGreen(f"✓ Verified in database: {qr_code}")
-                #     inserted_count += 1
-                #
-                #     # Retrieve and display some data
-                #     record = get_record_from_database(qr_code, db_name)
-                #     if record:
-                #         printBoldBlue(f"  Model: {record['model_name']}")
-                #         printBoldBlue(f"  LHS/RHS: {record['lhs_rhs']}")
-                #         printBoldBlue(f"  Torque: {record['nut_tightening_torque_1']}")
-                #         printBoldBlue(f"  Result: {record['ok_notok_result']}")
-                # else:
-                #     printBoldYellow(f"⚠ Not found in database yet: {qr_code}")
-                #     failed_count += 1
-                # Change to polling with timeout:
-                max_attempts = 10
-                attempt = 0
-                found = False
+                n = wait_for_record_count(qr_code, db_name, expected=1, timeout_s=15.0)
 
-                while attempt < max_attempts and not found:
-                    time.sleep(0.5)  # Check every 500ms
-                    found = verify_record_in_database(qr_code, db_name)
-                    attempt += 1
-
-                if found:
+                if n >= 1:
                     printBoldGreen(f"✓ Verified in database: {qr_code}")
-                    inserted_count += 1
-
-                    # Retrieve and display some data
                     record = get_record_from_database(qr_code, db_name)
+                    expected = config.expected_models[qr_code]
                     if record:
-                        printBoldBlue(f"  Model: {record['model_name']}")
-                        printBoldBlue(f"  LHS/RHS: {record['lhs_rhs']}")
-                        printBoldBlue(f"  Torque: {record['nut_tightening_torque_1']}")
+                        printBoldBlue(f"  Model: {record['model_name']}, LHS/RHS: {record['lhs_rhs']}, "
+                                      f"Tonnage: {record['model_tonnage']}")
+                        printBoldBlue(f"  Torque1: {record['nut_tightening_torque_1']}, "
+                                      f"Torque2: {record['nut_tightening_torque_2']}, "
+                                      f"FreeRotationTorque1: {record['free_rotation_torque_1']}")
                         printBoldBlue(f"  Result: {record['ok_notok_result']}")
+                    if record and (record['model_name'], record['lhs_rhs'], record['model_tonnage']) == expected:
+                        inserted_count += 1
+                    else:
+                        printBoldRed(f"✗ Model/side/tonnage mismatch for {qr_code}: expected {expected}")
+                        failed_count += 1
                 else:
-                    printBoldYellow(f"⚠ Not found in database after {max_attempts * 0.5} seconds: {qr_code}")
+                    printBoldYellow(f"⚠ Not found in database after 15 seconds: {qr_code}")
                     failed_count += 1
             else:
                 printBoldRed(f"✗ Failed to send to Redis: {qr_code}")
@@ -712,10 +759,38 @@ def test_06_redis_insertions(config: TestConfig) -> bool:
             traceback.print_exc()
             failed_count += 1
 
+    # Re-send the first Redis QR code: DBServer must store a second row marked remarks='DUPLICATE'
+    dup_qr = config.test_qr_codes[4]
+    printBoldBlue(f"\nRe-sending {dup_qr} via Redis (duplicate)")
+    sendDataFromFEServerToDatabaseServer(
+        redisConnection=config.redis_connection, qrCode=dup_qr,
+        knucklePicture=None, knuckleResult='OK', knuckleDatetime=getCurrentTime(),
+        hubAndBottomBearingPicture=None, hubAndBottomBearingResult='OK', hubAndBottomBearingDatetime=getCurrentTime(),
+        topBearingPicture=None, topBearingResult='OK', topBearingDatetime=getCurrentTime(),
+        nutAndPlateWasherPicture=None, nutAndPlateWasherResult='OK', nutAndPlateWasherDatetime=getCurrentTime(),
+        tighteningTorque1=47.0, tighteningTorque1Result='OK', tighteningTorque1Datetime=getCurrentTime(),
+        componentPressBunkCheckingPicture=None, componentPressBunkCheckingResult='OK', componentPressBunkCheckDatetime=getCurrentTime(),
+        componentPressDone='Done', componentPressDoneDatetime=getCurrentTime(),
+        noBunkCheckingPicture=None, noBunkCheckingResult='OK', noBunkCheckDatetime=getCurrentTime(),
+        tighteningTorque2=51.0, tighteningTorque2Result='OK', tighteningTorque2Datetime=getCurrentTime(),
+        splitPinAndWasherPicture=None, splitPinAndWasherResult='OK', splitPinAndWasherDatetime=getCurrentTime(),
+        capCheckingPicture=None, capCheckingResult='OK', capCheckingDatetime=getCurrentTime(),
+        bunkCheckingPicture=None, capPressBunkCheckingResult='OK', capPressBunkCheckDatetime=getCurrentTime(),
+        pressDone='Done', capPressDoneDatetime=getCurrentTime(),
+        freeRotationTorque1=6.0, freeRotationTorque1Result='OK', freeRotationTorque1Datetime=getCurrentTime(),
+        overallResult='OK', aProducer='TestScript')
+    n = wait_for_record_count(dup_qr, db_name, expected=2, timeout_s=15.0)
+    _, remarks = count_records_in_database(dup_qr, db_name)
+    if n == 2 and remarks[-1] == 'DUPLICATE':
+        printBoldGreen(f"✓ Duplicate stored as second row with remarks={remarks}")
+    else:
+        printBoldRed(f"✗ Duplicate handling via DBServer: rows={n}, remarks={remarks}")
+        failed_count += 1
+
     # Test result
     success = (inserted_count == 2 and failed_count == 0)
     print_test_result("Redis Insertions", success,
-                     f"Inserted: {inserted_count}/2, Failed: {failed_count}")
+                     f"Inserted: {inserted_count}/2 (+1 duplicate), Failed: {failed_count}")
 
     if success:
         config.test_results['passed'] += 1
@@ -842,11 +917,15 @@ def test_09_torque_values(config: TestConfig) -> bool:
             return False
 
         torque = record['nut_tightening_torque_1']
-        printBoldBlue(f"Torque value: {torque}")
+        torque2 = record['nut_tightening_torque_2']
+        free_rotation = record['free_rotation_torque_1']
+        printBoldBlue(f"Torque value: {torque}, torque 2: {torque2}, free rotation torque 1: {free_rotation} "
+                      f"({record['free_rotation_torque_1_result']})")
 
-        # Verify it's a float and in expected range
+        # Verify floats and values exactly as inserted by test 02 (record 1: 45.5 / 50.0 / 5.5)
         if isinstance(torque, (int, float)):
-            if 40.0 <= torque <= 60.0:
+            if (40.0 <= torque <= 60.0 and abs(torque - 45.5) < 1e-6 and abs(torque2 - 50.0) < 1e-6
+                    and abs(free_rotation - 5.5) < 1e-6):
                 printBoldGreen(f"✓ Torque value valid: {torque}")
                 print_test_result("Torque Values", True, f"Torque: {torque}")
                 config.test_results['passed'] += 1
@@ -871,8 +950,40 @@ def test_09_torque_values(config: TestConfig) -> bool:
         return False
 
 
-def test_10_cleanup(config: TestConfig) -> bool:
-    """Test 10: Cleanup Test Data."""
+def test_10_image_files(config: TestConfig) -> bool:
+    """Test 10: Image files written by DBServer for the Redis records (9 inspection pictures each)."""
+    print_test_header("Image File Creation and Storage")
+
+    db_name = getDatabaseName()
+    try:
+        missing, found = [], 0
+        for qr_code in config.test_qr_codes[4:6]:
+            record = get_record_from_database(qr_code, db_name)
+            if not record:
+                missing.append(f"{qr_code}: record not found")
+                continue
+            for name, path in record['imagefiles'].items():
+                if path and os.path.isfile(path) and cv2.imread(path) is not None:
+                    found += 1
+                else:
+                    missing.append(f"{qr_code}/{name}: '{path}'")
+        for m in missing:
+            printBoldRed(f"✗ Missing image: {m}")
+        passed = (found == 18 and not missing)
+        print_test_result("Image Files", passed, f"{found}/18 image files present and readable "
+                          f"(base folder: {os.path.abspath(CosThetaConfigurator.getInstance().getBaseFolderForImages())})")
+        config.test_results['passed' if passed else 'failed'] += 1
+        return passed
+    except Exception as e:
+        print_test_result("Image Files", False, str(e))
+        config.test_results['failed'] += 1
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def test_11_cleanup(config: TestConfig) -> bool:
+    """Test 11: Cleanup Test Data."""
     print_test_header("Cleanup Test Data")
 
     try:
@@ -933,7 +1044,8 @@ def run_all_tests() -> None:
         test_07_datetime_handling,
         test_08_data_retrieval,
         test_09_torque_values,
-        # NOTE: test_10_cleanup runs AFTER DBServer is stopped
+        test_10_image_files,
+        # NOTE: test_11_cleanup runs AFTER DBServer is stopped
     ]
 
     for test_func in tests:
@@ -977,23 +1089,28 @@ def run_all_tests() -> None:
 
     # Clear any remaining items in Redis
     try:
-        clearQueues()
-        printBoldBlue("Redis queues cleared")
+        if config.redis_connection is not None:
+            clearQueues(config.redis_connection)
+            printBoldBlue("Redis queues cleared")
     except:
         pass
 
     # NOW run cleanup after everything has stopped
     try:
-        test_10_cleanup(config)
+        test_11_cleanup(config)
     except Exception as e:
         printBoldRed(f"Error in cleanup: {e}")
 
     printBoldBlue(f"End Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     printBoldBlue("=" * 80)
+    return config.test_results['failed']
 
 if __name__ == '__main__':
     try:
-        run_all_tests()
+        failures = run_all_tests()
+        # os._exit: DBServer's logger threads are non-daemon and would keep the process alive
+        sys.stdout.flush(); sys.stderr.flush()
+        os._exit(1 if failures else 0)
     except KeyboardInterrupt:
         printBoldRed("\n\nTests interrupted by user")
         sys.exit(1)
