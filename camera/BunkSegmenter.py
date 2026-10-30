@@ -64,9 +64,9 @@ MIN_MASK_AREA = vInt("vision.bunk.min.mask.area", 325)
 MAX_MASK_AREA = vInt("vision.bunk.max.mask.area", 1200)
 
 # Geometric validation thresholds (retained from v1)
-EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation
-MINIMUM_INTERIOR_ANGLE = 65.0  # degrees
-ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees
+EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bunk.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code
+MINIMUM_INTERIOR_ANGLE = vFloat("vision.unused.bunk.minimum.interior.angle", 65.0)  # degrees  # UNUSED by live code
+ALLOWED_STD_DEVIATION_IN_ANGLES = vFloat("vision.unused.bunk.allowed.std.deviation.in.angles", 20.0)  # degrees  # UNUSED by live code
 # Expected radius of hole for morphological filtering
 EXPECTED_RADIUS_OF_HOLE = vInt("vision.bunk.expected.radius.of.hole", 30)
 SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bunk.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)

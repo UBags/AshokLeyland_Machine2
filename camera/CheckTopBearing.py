@@ -72,7 +72,7 @@ from camera.VisionConfig import vInt, vFloat, vList, vPoints
 # =============================================================================
 
 # Detection parameters from TopBearingSegmentation
-MAX_ALLOWED_CENTER_PERCENT_DEVIATION = vFloat("vision.topbearing.max.allowed.center.percent.deviation", 25.0)
+MAX_ALLOWED_CENTER_PERCENT_DEVIATION = vFloat("vision.unused.topbearing.max.allowed.center.percent.deviation", 25.0)
 PERCENTILE_CUT_OFF_FOR_BLACK_PIXELS = vInt("vision.topbearing.percentile.cut.off.for.black.pixels", 25)
 
 # Branch acceptance: a branch is valid only if min(score_A, score_B) > LOWER_SCORE_THRESHOLD AND average_G > AVERAGE_G_THRESHOLD

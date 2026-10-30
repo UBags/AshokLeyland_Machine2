@@ -94,17 +94,17 @@ EQUISPACING_RELAXED_TOLERANCE = vFloat("vision.hub.equispacing.relaxed.tolerance
 # =============================================================================
 
 # Tolerance for angular deviation (as fraction of expected angle)
-POLYGON_ANGULAR_TOLERANCE = 0.15  # 15%
+POLYGON_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.polygon.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Tolerance for radial deviation (as fraction of mean radius)
-POLYGON_RADIAL_TOLERANCE = 0.20  # 20%
+POLYGON_RADIAL_TOLERANCE = vFloat("vision.unused.hub.polygon.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
 
 # Quality thresholds for polygon fit
-GOOD_FIT_THRESHOLD_K4 = 0.25  # Good square fit
-GOOD_FIT_THRESHOLD_K5 = 0.30  # Good pentagon fit
+GOOD_FIT_THRESHOLD_K4 = vFloat("vision.unused.hub.good.fit.threshold.k4", 0.25)  # Good square fit  # UNUSED by live code
+GOOD_FIT_THRESHOLD_K5 = vFloat("vision.unused.hub.good.fit.threshold.k5", 0.30)  # Good pentagon fit  # UNUSED by live code
 
 # Dominance ratio: winner must be this much better than loser
-DOMINANCE_RATIO = 0.70  # Winner score must be < 70% of loser score
+DOMINANCE_RATIO = vFloat("vision.unused.hub.dominance.ratio", 0.70)  # Winner score must be < 70% of loser score  # UNUSED by live code
 
 # =============================================================================
 # STRICT REGULARITY VALIDATION THRESHOLDS (v2.1)
@@ -114,13 +114,13 @@ DOMINANCE_RATIO = 0.70  # Winner score must be < 70% of loser score
 # Angular tolerance: how much each angle can deviate from expected (360/K)
 # For K=4: expected 90°, tolerance ±15% means 76.5° to 103.5°
 # For K=5: expected 72°, tolerance ±15% means 61.2° to 82.8°
-REGULARITY_ANGULAR_TOLERANCE = 0.15  # 15%
+REGULARITY_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.regularity.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Side length tolerance: how much each side can deviate from mean side length
-REGULARITY_SIDE_TOLERANCE = 0.15  # 15%
+REGULARITY_SIDE_TOLERANCE = vFloat("vision.unused.hub.regularity.side.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Radial tolerance: how much each vertex distance from center can deviate from mean
-REGULARITY_RADIAL_TOLERANCE = 0.20  # 20%
+REGULARITY_RADIAL_TOLERANCE = vFloat("vision.unused.hub.regularity.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
 
 # =============================================================================
 # HUB CHECK ROI / ACCEPTANCE PARAMETERS (configurable via ApplicationConfiguration.properties)
