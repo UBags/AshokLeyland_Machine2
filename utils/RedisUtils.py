@@ -1851,11 +1851,18 @@ def readAlarmInHeartbeatServer(redisConnection: redis.client.Redis, block : int 
 
 # ********************************** COMMUNICATION INWARD INTO DATABASE SERVER *************************
 
-def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False):
+def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False,
+                                         deleteAfterRead : bool = True, returnMessageId : bool = False):
+    # Reads the OLDEST pending cycle record on fe2db.q (FIFO). The queue is never trimmed here, so records that arrive
+    # while the DB server is busy are kept, not discarded.
+    #   deleteAfterRead=False + returnMessageId=True: the caller deletes the record with
+    #   acknowledgeRecordInDatabaseServer() only after it has been stored, so a failed insert is retried, not lost.
+    #   With returnMessageId=True the message id (or None) is appended as the last element of the returned tuple.
 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
 
+    messageId = None
     genuineDataReceived : bool = False
     qrCode : str = ""
     knucklePicture: Union[np.ndarray, None] = None
@@ -1905,7 +1912,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     if redisConnection is None:
         printBoldRed(f"Redis connection is None in readDataInDatabaseServerFromFEServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
-        return     (genuineDataReceived, timeOfMessage, qrCode,
+        _result = (genuineDataReceived, timeOfMessage, qrCode,
                     knucklePicture, knuckleCheckResult, knuckleCheckDatetime,
                     hubAndBottomBearingPicture, hubAndBottomBearingCheckResult, hubAndBottomBearingCheckDatetime,
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
@@ -1921,11 +1928,11 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
+        return (_result + (messageId,)) if returnMessageId else _result
 
     last_id = 0
 
     try:
-        redisConnection.xtrim(fe2dbq, 1)
         resp = redisConnection.xread(
             {fe2dbq: last_id}, count=1, block=block
         )
@@ -2198,12 +2205,13 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             except:
                 overallResult = notok
 
-            redisConnection.xdel(fe2dbq, last_id)
-            redisConnection.xtrim(fe2dbq, 0)
+            if deleteAfterRead:
+                redisConnection.xdel(fe2dbq, last_id)
+            messageId = last_id
 
     except ConnectionError as e1:
         printBoldRed(f"There was a connection error - {e1}")
-        return     (genuineDataReceived, timeOfMessage, qrCode,
+        _result = (genuineDataReceived, timeOfMessage, qrCode,
                     knucklePicture, knuckleCheckResult, knuckleCheckDatetime,
                     hubAndBottomBearingPicture, hubAndBottomBearingCheckResult, hubAndBottomBearingCheckDatetime,
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
@@ -2219,8 +2227,9 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
+        return (_result + (messageId,)) if returnMessageId else _result
 
-    return (genuineDataReceived, timeOfMessage, qrCode,
+    _result = (genuineDataReceived, timeOfMessage, qrCode,
             knucklePicture, knuckleCheckResult, knuckleCheckDatetime,
             hubAndBottomBearingPicture, hubAndBottomBearingCheckResult, hubAndBottomBearingCheckDatetime,
             topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
@@ -2236,7 +2245,17 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             capPressDone, capPressDoneDatetime,
             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
             overallResult)
+    return (_result + (messageId,)) if returnMessageId else _result
 
+
+def acknowledgeRecordInDatabaseServer(redisConnection: redis.client.Redis, messageId) -> bool:
+    """Delete a cycle record from fe2db.q once it has been stored in the database."""
+    try:
+        redisConnection.xdel(fe2dbq, messageId)
+        return True
+    except Exception as e:
+        printBoldRed(f"Could not acknowledge record {messageId} on {fe2dbq}: {e}")
+        return False
 
 # ********************************** COMMUNICATION OUTWARD FROM DB SERVER *************************
 

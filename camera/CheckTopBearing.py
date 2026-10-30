@@ -53,18 +53,17 @@ except ImportError:
     def saveImage(img, name):
         pass
 
-# Import image normalization methods from shared module
-try:
-    from utils.ImageNormalisationWithMask import (
-        rgb2gray,
-        ensure_float32,
-        create_annular_mask,
-        extract_annular_region,
-        pixBackgroundNorm_masked,
-        pixContrastNorm_masked,
-        relative_gamma_masked)
-except ImportError:
-    printBoldRed("Warning: Could not import ImageNormalisationWithMask utilities")
+# Image normalisation methods from the shared module. This import is REQUIRED (it needs scipy): it used to be wrapped in
+# try/except, so a missing dependency only printed a warning and every top-bearing check then failed at run time with a
+# NameError. Now a missing dependency stops the camera server at start-up.
+from utils.ImageNormalisationWithMask import (
+    rgb2gray,
+    ensure_float32,
+    create_annular_mask,
+    extract_annular_region,
+    pixBackgroundNorm_masked,
+    pixContrastNorm_masked,
+    relative_gamma_masked)
 
 
 # =============================================================================

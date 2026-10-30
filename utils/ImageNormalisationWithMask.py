@@ -12,7 +12,7 @@ from scipy.ndimage import (
 )
 from scipy.interpolate import RectBivariateSpline
 import cv2
-import matplotlib.pyplot as plt
+# matplotlib is only used by the commented-out plotting code at the end of this file; import it there if re-enabled
 
 
 def rgb2gray(rgb: np.ndarray) -> np.ndarray:

@@ -47,6 +47,8 @@ from utils.CosThetaFileUtils import (
 )
 from utils.RedisUtils import (
     readDataInDatabaseServerFromFEServer,
+    acknowledgeRecordInDatabaseServer,
+    fe2dbq,
     sendHeartbeatFromDBServerToHeartbeatServer,
     getStopCommandFromQueue,
     validate_image,
@@ -81,6 +83,8 @@ CosThetaConfigurator.getInstance()  # needs to be called to ensure that configur
 
 class DataPersistence():
     logSource = getFullyQualifiedName(__file__)
+    IDLE_POLL_SECS : float = 1.0          # was a fixed 5 s sleep between single reads
+    MAX_INSERT_ATTEMPTS : int = 3         # after this, the record is written to disk (FailedRecords/) and removed from the queue
 
     def __init__(self, mode: str, username: str | None, **kwargs) -> None:
         super().__init__()
@@ -93,6 +97,8 @@ class DataPersistence():
         # print(f"{getFolderForKnuckleImages() = }")
         self.kwargs = kwargs
         self.stopped : bool = False
+        self.stopRequested : bool = False
+        self.failedAttempts : dict = {}
         self.hostname : str = CosThetaConfigurator.getInstance().getRedisHost()
         self.port : int = CosThetaConfigurator.getInstance().getRedisPort()
         # printBoldYellow(f"Reached 1 in DataPersistence")
@@ -303,12 +309,20 @@ class DataPersistence():
                                                      Logger.SUCCESS)
         # printBoldYellow(f"Starting doWork() in DataPersistence")
         savedRecords : int = 0
+        hadData : bool = False
         while not self.stopped:
-            # time.sleep(0.5)
-            time.sleep(5)
+            # Pending records are processed back-to-back (FIFO); the loop only idles when fe2db.q is empty.
+            if not hadData:
+                if self.stopRequested:
+                    printBoldRed("DBServer: fe2db.q drained after stop command; stopping")
+                    self.stopped = True
+                    break
+                time.sleep(DataPersistence.IDLE_POLL_SECS)
             if self.stopped:
                 print("DEBUG: doWork detected stop flag, exiting")
                 break
+            hadData = False
+            messageId = None
             try:
                 genuineDataReceived = False
                 try:
@@ -327,13 +341,15 @@ class DataPersistence():
                             capPressBunkPicture, capPressBunkCheckResult, capPressBunkCheckDatetime,
                             capPressDone, capPressDoneDatetime,
                             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
-                            overallResult) = readDataInDatabaseServerFromFEServer(redisConnection=self.redisConnection)
+                            overallResult, messageId) = readDataInDatabaseServerFromFEServer(
+                                redisConnection=self.redisConnection, deleteAfterRead=False, returnMessageId=True)
                 except Exception as e:
                     printBoldYellow(f"Encountered exception {e} in readDataInDatabaseServerFromFEServer()")
 
                 # printBoldYellow(f"Read data in doWork() of DataPersistence")
 
                 if genuineDataReceived:
+                    hadData = True
                     model, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(qrCode)
                     self.currentModelName = model
                     # printBoldGreen(f"Successfully fetched data from the queue in doWork()")
@@ -415,18 +431,22 @@ class DataPersistence():
                             username = self.username,
                             remarks = "DUPLICATE" if qrCodeExists else "")
                         if success:
+                            acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
+                            self.failedAttempts.pop(messageId, None)
                             savedRecords += 1
                             printBoldGreen(f"Inserted record number {savedRecords} successfully in database")
                             SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
                                                                   f"Inserted record number {savedRecords} successfully in database",
                                                                   Logger.SUCCESS)
                         else:
-                            printBoldYellow(f"Record not inserted for QR code {qrCode} - likely duplicate")
+                            printBoldYellow(f"Record not inserted for QR code {qrCode}")
                             SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                                   f"Failed to insert record in database",
                                                                   Logger.ISSUE)
+                            self.handleFailedInsert(messageId, qrCode, "insertData() returned False")
                         self.currentModelName = None
                     except (Exception, Error) as error:
+                        self.handleFailedInsert(messageId, qrCode, f"{error}")
                         printBoldRed(f"Error {error} while inserting data in data_table {id} in scheme {getSchemaName()} in database {getDatabaseName()} due to {error}")
                         SlaveFileLogger.getInstance().logTakeNote(DataPersistence.logSource,
                                                                   f"Error {error} while inserting data in data_table {id} in scheme {getSchemaName()} in database {getDatabaseName()} due to {error}",
@@ -456,14 +476,52 @@ class DataPersistence():
                                                                Logger.PROBLEM)
             try:
                 _, shallStop = getStopCommandFromQueue(self.redisConnection)
-                if shallStop:
-                    printBoldRed(f"Got stop command in process {os.getpid()} in DBServer{id}")
-                    printBoldRed("Got stop command")
-                    self.stop()
+                if shallStop and not self.stopRequested:
+                    printBoldRed(f"Got stop command in process {os.getpid()} in DBServer; draining fe2db.q first")
+                    self.stopRequested = True
             except:
                 self.connectToRedis(True)
         printBoldRed(f"In DBServer, stopping doWork")
         print("DEBUG: Exiting doWork loop")
+
+    def handleFailedInsert(self, messageId, qrCode: str, reason: str) -> None:
+        """A failed insert leaves the record on fe2db.q to be retried. After MAX_INSERT_ATTEMPTS it is written as JSON to
+        <basefolder><Test|Production>/FailedRecords/ (images are already on disk) and removed, so one bad record cannot
+        block the queue and nothing is silently lost."""
+        if messageId is None:
+            return
+        attempts = self.failedAttempts.get(messageId, 0) + 1
+        self.failedAttempts[messageId] = attempts
+        if attempts < DataPersistence.MAX_INSERT_ATTEMPTS:
+            printBoldYellow(f"Insert attempt {attempts} failed for QR {qrCode}; will retry ({reason})")
+            return
+        try:
+            import json
+            folder = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}FailedRecords/"
+            os.makedirs(folder, exist_ok=True)
+            entries = self.redisConnection.xrange(fe2dbq, min=messageId, max=messageId, count=1)
+            record = {}
+            if entries:
+                for k, v in entries[0][1].items():
+                    key = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+                    if isinstance(v, bytes) and v[:4] == b"\x89PNG":
+                        record[key] = f"<png image, {len(v)} bytes - saved with the cycle images>"
+                    else:
+                        record[key] = v.decode("utf-8", errors="replace") if isinstance(v, bytes) else str(v)
+            record["_failureReason"] = reason
+            record["_attempts"] = attempts
+            safeQR = "".join(ch if ch.isalnum() else "_" for ch in (qrCode or "noQR"))[:60]
+            fileName = f"{folder}{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{safeQR}.json"
+            with open(fileName, "w", encoding="utf-8") as f:
+                json.dump(record, f, indent=2)
+            acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
+            self.failedAttempts.pop(messageId, None)
+            msg = f"Record for QR {qrCode} could not be stored after {attempts} attempts; written to {fileName}"
+            printBoldRed(msg)
+            SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource, msg, Logger.PROBLEM)
+            SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource, msg, Logger.PROBLEM)
+        except Exception as e:
+            printBoldRed(f"Could not write failed record for QR {qrCode} to disk: {e}; it stays on {fe2dbq}")
 
     def sendHeartbeat(self) -> None:
         sleepTime = CosThetaConfigurator.getInstance().getDatabaseConnectionStatusSleepInterval()
@@ -492,10 +550,10 @@ class DataPersistence():
                 printBoldRed(f"Could not send heartbeat from DBServer")
             try:
                 _, shallStop = getStopCommandFromQueue(self.heartbeatRedisConnection)
-                if shallStop:
-                    printBoldRed(f"Got stop command in process {os.getpid()} in DBServer{id}")
-                    printBoldRed("Got stop command")
-                    self.stop()
+                if shallStop and not self.stopRequested:
+                    # Do not stop here: the main work thread drains fe2db.q first, then sets self.stopped
+                    printBoldRed(f"Got stop command in process {os.getpid()} in DBServer (heartbeat thread)")
+                    self.stopRequested = True
             except:
                 self.connectToRedis(True)
             # time.sleep(sleepTime)

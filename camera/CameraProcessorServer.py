@@ -1203,7 +1203,44 @@ class ImageProcessor():
 
 # **************************************************************************************************
 
+def verifyVisionDependencies() -> list:
+    """Start-up check for everything the visual checks need. Several check modules guard their ML imports with
+    try/except (so they can also run standalone); in production that turned a missing dependency or model file into
+    "every check of that type fails" with no clear error. Returns a list of problems (empty = all good) and also
+    loads the models, so the first cycle is not slowed by lazy loading."""
+    problems = []
+    import camera.CheckHubAndBottomBearing as _hub
+    import camera.CheckNoCapBunk as _noCapBunk
+    import camera.CheckBunk as _bunk
+    for name, module in (("Hub & bottom bearing check (HubAndBearingSegmenter)", _hub),
+                         ("Bunk-for-component-press check (BunkSegmenter)", _noCapBunk),
+                         ("Bunk-for-cap-press check (BunkSegmenter)", _bunk)):
+        if not getattr(module, "SAM_AVAILABLE", False):
+            problems.append(f"{name}: segmentation engine could not be imported")
+    try:
+        import camera.ModelManager as _mm
+        if not getattr(_mm, "MOBILESAM_AVAILABLE", False):
+            problems.append("mobile_sam package could not be imported (is models/MobileSAM present?)")
+        manager = _mm.ModelManager.get_instance()
+        for label, path in (("MobileSAM weights", manager.mobile_sam_path), ("ObjectAwareModel (YOLO) weights", manager.yolo_path)):
+            if not os.path.isfile(path):
+                problems.append(f"{label} not found at {path}")
+        if not problems:
+            manager.load_models()
+    except Exception as e:
+        problems.append(f"Model manager / model loading failed: {e}")
+    return problems
+
+
 def CameraServer(mode : str = "Test"):
+    problems = verifyVisionDependencies()
+    if problems:
+        message = "Camera server NOT started - missing vision dependencies:\n  - " + "\n  - ".join(problems)
+        printBoldRed(message)
+        SlaveConsoleLogger.getInstance().logTakeAction(logSource, message, Logger.PROBLEM)
+        SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.PROBLEM)
+        # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
+        sys.exit(1)
 
     # imageWriter : GenericQueueProcessor = None
     # if mode.upper() == "TEST":

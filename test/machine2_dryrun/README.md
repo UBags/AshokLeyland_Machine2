@@ -11,3 +11,4 @@ Run from a scratch directory: image files are written under `C:/AshokLeylandImag
 | `DryRun_All_Servers_Integrated_Cycle.py` | Everything together: simulated PLC/camera/QR + real IOServer, Frontend (PySide6), DBServer and HeartbeatAndAlarmServer; one cycle, saves `integrated_end_of_cycle.png` and prints the stored DB row. |
 
 `m1_frontend_sample.png` (a Machine 1 screenshot) supplies the inspection pictures shown in the frontend.
+| `DryRun_DBServer_No_Record_Loss.py` | DBServer FIFO/no-loss behaviour: burst of records, repeatedly failing insert (retry then `FailedRecords/` JSON), drain on stop. |
