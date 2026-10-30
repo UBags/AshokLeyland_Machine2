@@ -1,7 +1,7 @@
 """
 Integrated tester that plays the IOServer's role while all the OTHER servers are running (QRCodeServer,
 CameraProcessorServer, Frontend, DBServer, Heartbeat server) - run from the project root with
-`python -m test.Test_Integrated_All_Servers_Running_UI` (or `python test/Test_Integrated_All_Servers_Running_UI.py`).
+`python -m test.machine2_dryrun.Test_Integrated_All_Servers_Running_UI` (or `python test/machine2_dryrun/Test_Integrated_All_Servers_Running_UI.py`).
 Do NOT run the real IOServer at the same time: this program replaces it (no PLC needed).
 
 A Tk window walks through the Machine 2 (28-state) cycle as the 15 operator process steps. Each step sends exactly
@@ -30,7 +30,7 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # <root>/test/<dry-run folder>/this file
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

@@ -3,8 +3,8 @@ Test_IOServer_With_Mock_PLC_UI - tests the REAL costhetaio/allenbradley/IOServer
 MockPLC, with a Tk window to raise PLC signals and send QR-code / camera responses.
 
 Run from the project root (Redis must be running; PostgreSQL is optional):
-    python test/Test_IOServer_With_Mock_PLC_UI.py
-    (or)  python -m test.Test_IOServer_With_Mock_PLC_UI
+    python test/machine2_dryrun/Test_IOServer_With_Mock_PLC_UI.py
+    (or)  python -m test.machine2_dryrun.Test_IOServer_With_Mock_PLC_UI
 
 What it does:
 1. Starts the REAL IOServer with mockInstance=True (it uses the costhetaio.allenbradley.MockPLC singleton instead of a PLC).
@@ -41,7 +41,7 @@ import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # <root>/test/<dry-run folder>/this file
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
@@ -743,5 +743,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nError starting IOServer: {e}")
         print("\nCheck that Redis is running and that you started this from the project root:")
-        print("  python test/Test_IOServer_With_Mock_PLC_UI.py")
+        print("  python test/machine2_dryrun/Test_IOServer_With_Mock_PLC_UI.py")
         sys.exit(1)

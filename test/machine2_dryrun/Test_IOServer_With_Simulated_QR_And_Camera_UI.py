@@ -1,8 +1,8 @@
 """
 Tests a running IOServer by playing the QRCodeServer and CameraProcessorServer towards it (results only) - run from
-the project root with `python -m test.Test_IOServer_With_Simulated_QR_And_Camera_UI`
-(or `python test/Test_IOServer_With_Simulated_QR_And_Camera_UI.py`).
-Run it alongside an IOServer (real PLC, or e.g. test/Test_IOServer_With_Mock_PLC_UI.py), with NO real QRCodeServer or
+the project root with `python -m test.machine2_dryrun.Test_IOServer_With_Simulated_QR_And_Camera_UI`
+(or `python test/machine2_dryrun/Test_IOServer_With_Simulated_QR_And_Camera_UI.py`).
+Run it alongside an IOServer (real PLC, or e.g. Test_IOServer_With_Mock_PLC_UI.py in this folder), with NO real QRCodeServer or
 CameraProcessorServer running.
 
 A Tk window steps through the 10 results the IOServer waits for in a Machine 2 (28-state) cycle:
@@ -26,7 +26,7 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # <root>/test/<dry-run folder>/this file
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

@@ -27,7 +27,7 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      PLC_PC_CheckQRCode=True (so it moves straight on to WRITE_QR_CODE and asks the QR server for a code).
      A full normal cycle must then complete.
 
-Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
+Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
 import pathlib

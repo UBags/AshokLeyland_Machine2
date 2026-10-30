@@ -1,5 +1,5 @@
 """
-Tests the real frontend (FE server) over a full Machine 2 cycle using image files you pick, running the real camera checks locally; run from project root: python -m test.Test_FEServer_Mock_With_Image_Files_UI
+Tests the real frontend (FE server) over a full Machine 2 cycle using image files you pick, running the real camera checks locally; run from project root: python -m test.machine2_dryrun.Test_FEServer_Mock_With_Image_Files_UI
 
 Start the frontend first. This Tk UI plays the QR server, the camera server and the IO server:
   - QR step: sends the QR code to the FE (qrcode2fe) and to the camera server (qrcode2camera).
@@ -10,13 +10,13 @@ Start the frontend first. This Tk UI plays the QR server, the camera server and 
 There is no free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
 Every frontend reader trims its queue to the latest message, so after each message the UI disables its buttons
-until the FE has consumed it. For the live-camera variant see test/Test_FEServer_With_Live_Camera_UI.py.
+until the FE has consumed it. For the live-camera variant see Test_FEServer_With_Live_Camera_UI.py in this folder.
 """
 
 import sys
 import pathlib
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]  # <root>/test/<dry-run folder>/this file
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

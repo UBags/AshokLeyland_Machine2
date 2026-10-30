@@ -18,7 +18,7 @@ with field-by-field checks:
 
 Needs Redis on localhost:6379 and PostgreSQL on 127.0.0.1:5432 (postgres/postgres). Run from a scratch directory
 (image files are written under C:/AshokLeylandImages/Test/... relative to it on non-Windows hosts):
-    python <project>/test/machine2_dryrun/DryRun_DBServer_And_Persistence.py
+    python <project>/test/machine1_dryrun/DryRun_DBServer_And_Persistence.py
 """
 import os, sys, time, threading, uuid
 import pathlib

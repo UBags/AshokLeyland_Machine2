@@ -278,3 +278,31 @@ Both are in `test/machine2_dryrun/` and copied to `test/machine1_dryrun/`. Each 
   - **Emergency abort:** a partial record is sent with overall NOT OK, the abort screen appears, and the next cycle runs normally.
   - **Final free-rotation torque NOT OK:** the record says NOT OK, but **the success screen is shown. This check FAILS on purpose: it exposes architecture finding R8.** `setInProcessDefaultDisplay()` tests `elif AshokLeylandFrontEnd.finalResult:`, and the string "NotOK" counts as true. The IOServer always sends torque results as OK, so today this only shows up when the frontend itself records a NOT OK final result.
 - **Still manual:** running the real `camera/Check*.py` algorithms on image files, and the live camera, need real pictures, the models or the hardware. The `Test_FEServer_*_UI.py` programs remain for those.
+
+## 15. Tkinter test windows checked and moved into the dry-run folders (2026-10-31)
+
+The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`, `Test_Integrated_All_Servers_Running_UI.py`) were moved with `git mv` from `test/` to `test/machine2_dryrun/`, and copied to `test/machine1_dryrun/`. Their project-root path was adjusted for the deeper folder, and their run instructions were updated. Before the move, they were checked as follows.
+
+- **Static check (all 7, in both folders):**
+  - Every `MachineState`, `IOServer` tag and configuration getter they reference exists.
+  - Every RedisUtils call matches the function's current signature, and every camera-check call matches the check method's parameters.
+  - All project imports resolve.
+  - None uses a hard-coded state number or a Machine 1-only name (free-rotations-done, Station3RotationDone, rotation counts, 29 states, the old `costhetaio` module paths).
+- **Run headless and driven through their own buttons and methods:**
+  - **Mock PLC window, 12/12:**
+    - an auto cycle that walks states 1→28 and wraps, for DOSTPLUS LHS and RHS, with the correct side and model written in state 2;
+    - a rejected QR followed by an accepted one;
+    - knuckle NOT OK, then a retry;
+    - Reset All, followed by another auto cycle;
+    - the tag monitor.
+  - **Simulated QR and camera window, 14/14:** run against the real IOServer with an automatic PLC. It covers all 10 results in Machine 2 order, a NOT OK followed by a retake, the cycle wrap, and the window returning to the QR step.
+  - **Real PLC window, 5/5:** run against the real IOServer with an automatic PLC standing in for the PLC. It covers the tag request through `publishTags`/`receiveTags`, Run Full Cycle walking states 1→28 and wrapping, the state-2 settings, and the grouped tag display.
+  - **Frontend simulated-inputs window, 24/24:** run with the real frontend. A manual cycle with a NOT OK on the knuckle sends all 15 messages, each consumed, followed by an Auto Run cycle. Each cycle's record reached `fe2db.q` with all 14 results OK.
+  - **Frontend image-files window and live-camera window, 18/18 each:**
+    - file mode in both windows, and live mode with a simulated camera server answering the take-picture commands;
+    - all 15 steps go through in order, and the record has all results OK.
+
+    The vision algorithms themselves were stubbed, because they need torch and real pictures.
+  - **Integrated window, 19/19:** with the real frontend and simulated QR and camera servers, all 15 steps are delivered and consumed, and the record is all OK.
+- **Usability note:** "Auto Run All OK" in the frontend simulated-inputs window always starts at the QR step. Pressed in the middle of a cycle, it waits for a QR code the frontend is not asking for. Use it at the start of a cycle.
+- **Not moved:** `test/MockPLCTest.py` is an old Machine 1 GUI. It re-implements the IOServer with Machine 1's free-rotations state and Station3RotationDone tag, so it cannot run against the current code. `Test_IOServer_With_Mock_PLC_UI.py` replaces it. Delete it.

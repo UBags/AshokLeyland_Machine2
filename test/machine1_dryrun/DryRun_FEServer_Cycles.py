@@ -22,7 +22,7 @@ Not covered here (needs real pictures, the models or the camera): running the re
 image files and the live camera - use the Test_FEServer_*_UI.py programs for that.
 
 Needs Redis and PostgreSQL (the frontend's counters read the TEST database). Headless:
-    QT_QPA_PLATFORM=offscreen python <project>/test/machine2_dryrun/DryRun_FEServer_Cycles.py
+    QT_QPA_PLATFORM=offscreen python <project>/test/machine1_dryrun/DryRun_FEServer_Cycles.py
 """
 import os, sys, time, threading, types
 import pathlib

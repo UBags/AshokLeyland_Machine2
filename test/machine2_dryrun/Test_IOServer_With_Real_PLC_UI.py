@@ -4,8 +4,8 @@ to the REAL PLC: this Tk window plays the QR-code server and the camera server, 
 
 Run from the project root, alongside the IOServer (which must already be running and connected to the PLC):
     Terminal 1: start the IOServer as usual (e.g. via MainProgram.py, or costhetaio.allenbradley.IOServer.startIOServer())
-    Terminal 2: python test/Test_IOServer_With_Real_PLC_UI.py
-                (or)  python -m test.Test_IOServer_With_Real_PLC_UI
+    Terminal 2: python test/machine2_dryrun/Test_IOServer_With_Real_PLC_UI.py
+                (or)  python -m test.machine2_dryrun.Test_IOServer_With_Real_PLC_UI
 NOTE: on start-up this script FLUSHES the Redis database (as before), and "Clear Redis" flushes it again.
 
 This script tests the IOServer with actual PLC hardware by:
@@ -46,7 +46,7 @@ Torque Step Workflow (Steps 5, 9, 14):
 import os
 import sys
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # <root>/test/<dry-run folder>/this file
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 

@@ -1,5 +1,5 @@
 """
-Tests the real frontend (FE server) by simulating QRCodeServer, CameraServer and IOServer inputs over one or more full Machine 2 cycles, using fixed image paths; run from project root: python -m test.Test_FEServer_Simulated_Inputs_UI
+Tests the real frontend (FE server) by simulating QRCodeServer, CameraServer and IOServer inputs over one or more full Machine 2 cycles, using fixed image paths; run from project root: python -m test.machine2_dryrun.Test_FEServer_Simulated_Inputs_UI
 
 Start the frontend first (e.g. python frontend/AshokLeylandFrontEnd.py, or the full application without the
 IO/QR/camera servers). This Tk window then plays the QR, camera and IO servers on their Redis queues.
@@ -36,7 +36,7 @@ import sys
 import datetime
 import pathlib
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[2]  # <root>/test/<dry-run folder>/this file
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

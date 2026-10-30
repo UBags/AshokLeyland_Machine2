@@ -11,7 +11,7 @@ call in the live vision modules it verifies:
 Exit code 0 = all equivalent.
 
 Usage (from the project root):
-    python test/machine2_dryrun/Verify_Vision_Config_Equivalence.py
+    python test/machine1_dryrun/Verify_Vision_Config_Equivalence.py
 options: --baseline <commit>  --files camera/X.py ...  --manifest extra.json ...  --props extra.properties ...
 """
 import argparse, ast, json, pathlib, subprocess, sys

@@ -1,4 +1,4 @@
-# Machine 2 synthetic dry-runs
+# Machine 2 synthetic dry-runs and interactive test windows
 
 Harnesses used to verify the Machine 2 (28-state) changes without a PLC, camera or QR scanner.
 All need Redis on localhost:6379; the DB ones need PostgreSQL on 127.0.0.1:5432 (postgres/postgres).
@@ -17,3 +17,18 @@ Run from a scratch directory: image files are written under `C:/AshokLeylandImag
 
 `m1_frontend_sample.png` (a Machine 1 screenshot) supplies the inspection pictures shown in the frontend.
 
+
+## Interactive Tkinter test windows
+
+Moved here from `test/` on 2026-10-31, after checking they match the current 28-state sequence and its tags. Run them
+from the project root, e.g. `python test/machine1_dryrun/Test_IOServer_With_Mock_PLC_UI.py`.
+
+| Window | Plays | Needs |
+|---|---|---|
+| `Test_IOServer_With_Mock_PLC_UI.py` | the PLC (in-memory MockPLC), QR and camera servers against the REAL IOServer; buttons per step, OK / NOT OK, QR accept / reject, auto cycle, tag monitor | Redis |
+| `Test_IOServer_With_Real_PLC_UI.py` | the QR and camera servers against an IOServer connected to the real PLC; waits for the PLC-driven steps; shows live PLC tags | Redis, running IOServer + PLC |
+| `Test_IOServer_With_Simulated_QR_And_Camera_UI.py` | the QR and camera results only, in order, towards a running IOServer | Redis, running IOServer |
+| `Test_FEServer_Simulated_Inputs_UI.py` | the QR, camera and IO servers towards the running frontend; step by step or auto-run | Redis, running frontend |
+| `Test_FEServer_Mock_With_Image_Files_UI.py` | as above, running the real camera checks on image files you pick | + the models (torch) |
+| `Test_FEServer_With_Live_Camera_UI.py` | as above, or with the live camera through a running CameraProcessorServer | + camera / CameraProcessorServer |
+| `Test_Integrated_All_Servers_Running_UI.py` | the IOServer, with every other server running | all other servers |
