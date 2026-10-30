@@ -2214,7 +2214,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
             aspect_ratio = float(w) / h if h > 0 else 0
 
             if DEBUG_HEXAGON_DETECTION:
-                print(f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need 0.7-1.3)")
+                print(f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need {NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO})")
 
             if PRINT_DETAIL:
                 print(f"    Aspect ratio: {aspect_ratio:.2f}")
@@ -2274,7 +2274,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'disc_intersection',
-                        'detail': 'Center disc (r=25) intersects hexagon boundary or covers entire nut',
+                        'detail': f'Center disc (r={NUT_CENTER_DISC_RADIUS}) intersects hexagon boundary or covers entire nut',
                         'original_area': original_mask_area,
                         'disc_area': disc_area,
                         'com': (com_x, com_y)
@@ -2288,11 +2288,11 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'mask_too_small',
-                        'detail': 'After disc exclusion, mask <30% of original',
+                        'detail': f'After disc exclusion, mask <{NUT_MIN_REMAINING_AREA_FRACTION:.0%} of original',
                         'actual_area': actual_mask_area,
                         'original_area': original_mask_area,
                         'percentage': actual_mask_area / original_mask_area * 100,
-                        'required': '≥30%'
+                        'required': f'≥{NUT_MIN_REMAINING_AREA_FRACTION:.0%}'
                     })
                     continue
 
@@ -2318,13 +2318,13 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 if len(approx_check) < NUT_MIN_VERTICES_AFTER_DISC:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= 4)")
+                        print(f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= {NUT_MIN_VERTICES_AFTER_DISC})")
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'insufficient_vertices_after_disc',
                         'detail': 'Hexagon boundary destroyed by disc exclusion',
                         'vertices_remaining': len(approx_check),
-                        'required': '≥4',
+                        'required': f'≥{NUT_MIN_VERTICES_AFTER_DISC}',
                         'actual_area': actual_mask_area
                     })
                     continue
@@ -2333,21 +2333,21 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 # a) Check if actual_nut_mask area > 2000
                 if actual_mask_area <= NUT_MIN_ACTUAL_AREA:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= 2000")
+                        print(f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= {NUT_MIN_ACTUAL_AREA}")
                     # Track this failure
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'area_threshold',
                         'detail': 'actual_nut_mask area too small',
                         'actual_area': actual_mask_area,
-                        'required': '>2000',
+                        'required': f'>{NUT_MIN_ACTUAL_AREA}',
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio
                     })
                     # Return with specific failure metrics (best attempt so far)
                     failure_metrics = {
                         'reason': 'area_threshold',
-                        'detail': 'Hexagon found but actual_nut_mask area ≤ 2000 pixels',
+                        'detail': f'Hexagon found but actual_nut_mask area ≤ {NUT_MIN_ACTUAL_AREA} pixels',
                         'area': actual_mask_area,
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio,
@@ -2436,13 +2436,13 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 reject_reason = None
 
                 if composite_score < NUT_MIN_SYMMETRY_SCORE:
-                    reject_reason = f"low_symmetry (score={composite_score:.1f} < 55)"
+                    reject_reason = f"low_symmetry (score={composite_score:.1f} < {NUT_MIN_SYMMETRY_SCORE})"
                 elif thickness_symmetry_score < NUT_MIN_THICKNESS_SCORE:
-                    reject_reason = f"low_thickness (score={thickness_symmetry_score:.1f} < 45)"
+                    reject_reason = f"low_thickness (score={thickness_symmetry_score:.1f} < {NUT_MIN_THICKNESS_SCORE})"
                 elif original_edges_count == 0 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>=28)"
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES})"
                 elif original_edges_count == 1 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>=35)"
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE})"
 
                 if reject_reason:
                     if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
@@ -2549,13 +2549,13 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     'aspect_ratio': aspect_ratio,
                     'vertices': num_vertices,
                     'area': mask_area,
-                    'required_range': '0.7-1.3'
+                    'required_range': f'{NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO}'
                 })
         else:
             if DEBUG_HEXAGON_DETECTION:
-                print(f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need 5-8)")
+                print(f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})")
             if PRINT_DETAIL:
-                print(f"  ✗ Mask {idx} has {num_vertices} vertices (need 5-8)")
+                print(f"  ✗ Mask {idx} has {num_vertices} vertices (need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})")
             failed_attempts.append({
                 'mask_idx': idx,
                 'reason': 'wrong_vertex_count',

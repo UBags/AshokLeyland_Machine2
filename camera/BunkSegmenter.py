@@ -1299,7 +1299,7 @@ class BunkSegmenter:
                     print(f"  Center 1: ({c1[0]:.1f}, {c1[1]:.1f})")
                     print(f"  Center 2: ({c2[0]:.1f}, {c2[1]:.1f})")
                     print(f"  Distance between centers: {distance:.1f} pixels")
-                    print(f"  Required range: [75, 100] pixels")
+                    print(f"  Required range: [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}] pixels")
 
                 # Check if distance is in range [75, 100]
                 if DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
@@ -1308,7 +1308,7 @@ class BunkSegmenter:
                         print(f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!")
                 else:
                     if PRINT_GEOMETRIC_VALIDATION:
-                        print(f"[Cascade] ✗ Distance {distance:.1f} outside range [75, 100]")
+                        print(f"[Cascade] ✗ Distance {distance:.1f} outside range [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}]")
                         print(f"[Cascade] Will try next gamma")
                     count = 0
                     valid_components = []

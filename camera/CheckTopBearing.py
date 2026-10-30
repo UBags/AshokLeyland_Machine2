@@ -725,11 +725,11 @@ class CheckTopBearing:
             validation_reason = "Basic geometry check failed"
         elif not validation_passed:
             if lower_score <= LOWER_SCORE_THRESHOLD and average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65 AND avg_G={average_G:.1f}<=77"
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD} AND avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
             elif lower_score <= LOWER_SCORE_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65"
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD}"
             elif average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: avg_G={average_G:.1f}<=77"
+                validation_reason = f"Failed: avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
 
         if PRINT_THICKNESS_DETERMINATION_DETAILS:
             printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Final: anchor={anchor_edge}, "

@@ -158,6 +158,29 @@ class _Normalise(ast.NodeTransformer):
             return ast.copy_location(ast.parse(repr(self.consts[node.attr]), mode="eval").body, node)
         return node
 
+    def visit_JoinedStr(self, node):
+        """Messages that now print a configurable value (f'... {NUT_MIN_ACTUAL_AREA}') are folded with the default
+        substituted, exactly as Python would format it, so they must reproduce the baseline text character for character."""
+        self.generic_visit(node)
+        parts = []
+        for v in node.values:
+            if isinstance(v, ast.FormattedValue) and isinstance(v.value, ast.Constant) and v.conversion == -1:
+                spec = v.format_spec            # already folded by generic_visit: None, a Constant, or a JoinedStr
+                if isinstance(spec, ast.JoinedStr) and all(isinstance(x, ast.Constant) for x in spec.values):
+                    spec = ast.Constant("".join(x.value for x in spec.values))
+                if spec is not None and not isinstance(spec, ast.Constant):
+                    parts.append(v); continue
+                spec_text = "" if spec is None else spec.value
+                v = ast.Constant(format(v.value.value, spec_text))
+            if isinstance(v, ast.Constant) and parts and isinstance(parts[-1], ast.Constant):
+                parts[-1] = ast.Constant(parts[-1].value + v.value)
+            else:
+                parts.append(v)
+        if all(isinstance(p, ast.Constant) for p in parts):
+            return ast.copy_location(ast.Constant("".join(p.value for p in parts)), node)
+        node.values = parts
+        return node
+
 
 def ast_equivalent(rel, old_src, new_src, extracted):
     consts = {}
@@ -168,7 +191,7 @@ def ast_equivalent(rel, old_src, new_src, extracted):
                 {n.attr for n in ast.walk(ast.parse(old_src)) if isinstance(n, ast.Attribute)}
     clash = [c for c in consts if c in old_names]
     norm_new = ast.fix_missing_locations(_Normalise(consts).visit(ast.parse(new_src)))
-    norm_old = ast.parse(old_src)
+    norm_old = ast.fix_missing_locations(_Normalise({}).visit(ast.parse(old_src)))   # same f-string folding on both sides
     a, b = ast.dump(norm_old), ast.dump(norm_new)
     if a == b:
         return clash, None
