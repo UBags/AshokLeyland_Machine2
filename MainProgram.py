@@ -105,11 +105,11 @@ def startTheDBServer(mode : str, username : str):
     startDBServer(mode=mode, username=username)
 
 def startTheQRCodeServer(mode : str):
-    from costhetaio.QRCodeScanningServer import startQRCodeServer
+    from costhetaio.qrcodescanner.QRCodeScanningServer import startQRCodeServer
     startQRCodeServer(mode=mode)
 
 def startTheIOServer(mode : str):
-    from costhetaio.IOServer import startIOServer
+    from costhetaio.allenbradley.IOServer import startIOServer
     startIOServer(mode = mode)
 
 def startTheCameraServer(mode : str):

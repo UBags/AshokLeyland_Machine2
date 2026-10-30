@@ -60,7 +60,7 @@ rotation1.rpm=-1                         # -1 = do not write  <-- set the real v
 rotation2.rpm=-1                         # -1 = do not write  <-- set the real value (5..30)
 ```
 
-## 4. IOServer, Allen-Bradley: `costhetaio/IOServer.py`
+## 4. IOServer, Allen-Bradley: `costhetaio/allenbradley/IOServer.py` (formerly `costhetaio/IOServer.py`)
 
 - **State 13 removed.** The `READ_FREE_ROTATIONS_DONE` branches are gone from `getCurrentTagsToBeRead()` and `process_current_read_state()`. The class attribute `PLC_PC_Station3RotationDone` and its entries in `resetAll()` and `getAllTagValues()` are removed as well. As a result, the station-3 tag (`PLC_PC_Station3ValueSet`) is now used only in state 27, and the old shared-tag hazard between states 13 and 28 disappears.
 - **State 2 writes**: `writeRotationSettingsToPLC()` is replaced by `writeCycleSettingsToPLC()`.
@@ -207,3 +207,26 @@ The goal was that a site engineer can re-tune a check from `ApplicationConfigura
   - The torch-based checks (hub, nut, bunk) cannot be run in the sandbox, so they rely on the structural proof above.
 
 `ApplicationConfiguration.Machine1.properties` is a byte-identical copy of `ApplicationConfiguration.properties` as of this step (347 keys, 124 of them `vision.*`). It was made at Uddi's request, and nothing in the code reads it.
+
+## 12. Package layout for the PLC and QR code servers (2026-10-31)
+
+| Before | After |
+|---|---|
+| `costhetaio/IOServer.py`, `IOServer_ModbusTCP.py`, `MockPLC.py` | `costhetaio/allenbradley/` |
+| `costhetaio/QRCodeScanningServer.py` | `costhetaio/qrcodescanner/` |
+| `siemens/` (IOServer, plc_backend, s7_smoke_test, IOServerProperties.yaml) | `costhetaio/siemens/` |
+
+- **Moved with `git mv`,** so each file keeps its history. `costhetaio/QRCodeServer.py`, the older QR server that MainProgram does not start, stays where it is.
+- **References updated:**
+  - MainProgram's lazy imports for the QR and IO server processes;
+  - the IOServer's `mockInstance` import of MockPLC, and the usage note in MockPLC's docstring;
+  - the IOServer test programs, the dry-run harnesses and their README.
+- **Siemens IOServer:**
+  - It imports `plc_backend` package-qualified, falling back to the sibling import when run from its own folder.
+  - `IOServerProperties.yaml` is now found next to the module instead of in the current directory. Before, it was only found when the program was started from inside `siemens/`.
+- **`ApplicationConfiguration.Machine2.properties`** is a copy of `ApplicationConfiguration.properties` as of this step. Like the Machine 1 copy, nothing in the code reads it.
+- **Verified:**
+  - All moved modules import from their new paths.
+  - The IOServer dry run gives the same two-cycle state trace as before.
+  - The integrated all-servers dry run passes, and its DB row is unchanged.
+- **Already broken before the move, not fixed:** `costhetaio/siemens/IOServer.py` imports `logBoth` from `logutils.SlaveLoggers`, and that function doesn't exist. It will be dealt with in the Siemens S7-1515 port.

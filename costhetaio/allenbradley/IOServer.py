@@ -1,17 +1,16 @@
-# Copyright (c) 2025 Uddipan Bagchi. All rights reserved.
-# See LICENSE in the project root for license information.package com.costheta.cortexa.action
-
 import random
 import sys
 import threading
 import time
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
-from plc_backend import PyS7PLCBackend
+from pycomm3 import LogixDriver
+from pycomm3 import DINT, SHORT_STRING, Struct, STRING, REAL
+from pycomm3.logger import configure_default_logger, LOG_VERBOSE
 from psycopg2.pool import ThreadedConnectionPool
 
 from logutils import Logger
-from logutils.SlaveLoggers import logBoth
+from logutils.SlaveLoggers import SlaveConsoleLogger, SlaveFileLogger
 from utils.CosThetaPrintUtils import *
 from utils.RedisUtils import *
 
@@ -19,7 +18,7 @@ from Configuration import CosThetaConfigurator
 from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
-from persistence.Persistence import getMachineSettings, getDatabaseName, setDatabaseName
+from persistence.Persistence import getDatabaseName, setDatabaseName
 
 TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM: float = 1.5
 TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM: float = 2.0
@@ -84,7 +83,7 @@ def addTagUpdateRequest(request: Dict[str, Any]) -> bool:
     global _updateTagsProcessor
     if _updateTagsProcessor is not None:
         result = _updateTagsProcessor.addItem(request)
-        logBoth('logDebug', UpdateTagsToDefaultProcessor.logSource, f"Added item {request} in UpdateTagsToDefaultProcessor", Logger.GENERAL)
+        print(f"Added item {request} in " )
         return result is not None
     return False
 
@@ -167,7 +166,7 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
         try:
             # Get the sleep delay time
             sleepTimeForDelay = item.get("sleepTimeForDelay", 0.0)
-            logBoth('logDebug', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagProcessor sleeping for {sleepTimeForDelay} secs", Logger.GENERAL)
+            printLight(f"UpdateTagProcessor sleeping for {sleepTimeForDelay} secs")
             if sleepTimeForDelay > 0:
                 time.sleep(sleepTimeForDelay)
 
@@ -185,33 +184,38 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
                 tagType = tagInfo.get("type")
                 tagValue = tagInfo.get("value")
 
-                logBoth('logDebug', UpdateTagsToDefaultProcessor.logSource, f"Got tag as {tagName}, which is of type {tagType}, which needs to be assigned value {tagValue}", Logger.GENERAL)
+                print(f"Got tag as {tagName}, which is of type {tagType}, which needs to assigned value {tagValue}")
                 if tagName is None or tagType is None or tagValue is None:
-                    logBoth('logWarning', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagsToDefaultProcessor: Invalid tag entry {key}: {tagInfo}", Logger.ISSUE)
+                    printBoldRed(f"UpdateTagsToDefaultProcessor: Invalid tag entry {key}: {tagInfo}")
                     allSuccess = False
                     continue
 
                 success = False
-                logBoth('logDebug', UpdateTagsToDefaultProcessor.logSource, f"About to call write_bool() or write_float() for tag {tagName}", Logger.GENERAL)
+                print(f"About to call write_bool() or write_float()")
                 if tagType == "bool":
                     success = self.ioServer.write_bool(tagName, bool(tagValue))
                 elif tagType == "float":
                     success = self.ioServer.write_float(tagName, float(tagValue))
                 else:
-                    logBoth('logWarning', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagsToDefaultProcessor: Unknown type '{tagType}' for tag '{tagName}'", Logger.ISSUE)
+                    printBoldRed(f"UpdateTagsToDefaultProcessor: Unknown type '{tagType}' for tag '{tagName}'")
                     allSuccess = False
                     continue
 
                 if success:
-                    logBoth('logDebug', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagsToDefaultProcessor: Wrote {tagValue} to {tagName}", Logger.SUCCESS)
+                    printLight(f"UpdateTagsToDefaultProcessor: Wrote {tagValue} to {tagName}")
                 else:
-                    logBoth('logWarning', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagsToDefaultProcessor: Failed to write {tagValue} to {tagName}", Logger.PROBLEM)
+                    printBoldRed(f"UpdateTagsToDefaultProcessor: Failed to write {tagValue} to {tagName}")
                     allSuccess = False
 
             return allSuccess
 
         except Exception as e:
-            logBoth('logCritical', UpdateTagsToDefaultProcessor.logSource, f"UpdateTagsToDefaultProcessor: Exception processing item: {e}", Logger.PROBLEM)
+            printBoldRed(f"UpdateTagsToDefaultProcessor: Exception processing item: {e}")
+            SlaveFileLogger.getInstance().logTakeAction(
+                UpdateTagsToDefaultProcessor.logSource,
+                f"Exception processing tag update request: {e}",
+                Logger.PROBLEM
+            )
             return False
 
 
@@ -244,9 +248,6 @@ class IOServer:
     # ==================== Station 2 Torque (Tightening) Tags (Step 5 and 10) ====================
     PLC_PC_Station2TorqueValueSet: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueSetTagName()
     PLC_PC_Station2TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueTagName()
-
-    # ==================== Station 3 Free Rotation Done Tag (Step 6) ====================
-    PLC_PC_Station3RotationDone: str = CosThetaConfigurator.getInstance().getPlcPcStation3RotationDoneTagName()
 
     # ==================== No Cap Bunk Tags (Step 7) ====================
     PLC_PC_CheckNoCapBunk: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoCapBunkTagName()
@@ -283,13 +284,17 @@ class IOServer:
     PLC_PC_Station3TorqueValueSet: str = CosThetaConfigurator.getInstance().getPlcPcStation3TorqueValueSetTagName()
     PLC_PC_Station3TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation3TorqueValueTagName()
 
-    # ==================== Rotation Settings Tags (PC writes to PLC) ====================
-    PC_PLC_NoOfRotation1CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CCWTagName()
-    PC_PLC_NoOfRotation1CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CWTagName()
-    PC_PLC_NoOfRotation2CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation2CCWTagName()
-    PC_PLC_NoOfRotation2CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation2CWTagName()
-    PC_PLC_LH_RH_Selection: str = CosThetaConfigurator.getInstance().getPcPlcLHRHSelectionTagName()
-    PC_PLC_RotationUnitRPM: str = CosThetaConfigurator.getInstance().getPcPlcRotationUnitRPMTagName()
+    # ==================== Machine 2 cycle settings (PC writes to PLC in state 2) ====================
+    PC_PLC_LH_RH_Selection: str = CosThetaConfigurator.getInstance().getPcPlcLHRHSelectionTagName()      # INT 1=LHS, 2=RHS
+    PC_PLC_ModelSelection: str = CosThetaConfigurator.getInstance().getPcPlcModelSelectionTagName()       # INT 1=DOST, 2=DOSTPLUS
+    PC_PLC_TighteningTorque1Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque1SetpointTagName()  # REAL Nm
+    PC_PLC_TighteningTorque2Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque2SetpointTagName()  # REAL Nm
+    PC_PLC_RotationRPM1: str = CosThetaConfigurator.getInstance().getPcPlcRotation1RPMTagName()           # INT rpm
+    PC_PLC_RotationRPM2: str = CosThetaConfigurator.getInstance().getPcPlcRotation2RPMTagName()           # INT rpm
+
+    LHS_CODE: int = 1
+    RHS_CODE: int = 2
+    MODEL_CODES: Dict[str, int] = {"DOST": 1, "DOSTPLUS": 2}
 
     # ==================== System Tags ====================
     PLC_PC_EmergencyAbort: str = CosThetaConfigurator.getInstance().getPlcPcEmergencyAbortTagName()
@@ -300,10 +305,6 @@ class IOServer:
     PLC_IP: str = CosThetaConfigurator.getInstance().getPlcIP()
     PLC_DEBUG: bool = CosThetaConfigurator.getInstance().getPlcDebug()
     PLC_SLEEPTIME_BETWEEN_OK_AND_DONE: float = CosThetaConfigurator.getInstance().getPlcSleepTimeBetweenOKAndDone()
-
-    # ==================== Properties / Tag Map ====================
-    # Path to the tag -> S7 address map consumed by PyS7PLCBackend.
-    PROPERTIES_PATH: str = "IOServerProperties.yaml"
 
     # ==================== Constants ====================
     FALSE_FLOAT_VALUE: float = -1234.
@@ -349,10 +350,11 @@ class IOServer:
         self.plc_ip = plc_ip if plc_ip is not None else IOServer.PLC_IP
         self.mockInstance = mockInstance
 
-        # PLC I/O backend (pyS7): owns the two S7Client sockets, the tag->address
-        # map, and its own reading/writing locks. Logger is wired in below, once
-        # self.logger exists.
-        self.plc = PyS7PLCBackend(IOServer.PROPERTIES_PATH)
+        self.clientForReads: Union[LogixDriver, None] = None
+        self.clientForWrites: Union[LogixDriver, None] = None
+
+        self.readingLock = threading.Lock()
+        self.writingLock = threading.Lock()
 
         # Database connection pool for reading machine settings
         self.dbConnectionPool: Union[ThreadedConnectionPool, None] = None
@@ -371,15 +373,6 @@ class IOServer:
         # Initialize logging
         self.logger = logging.getLogger("pycomm3")
         self.logger.setLevel(logging.CRITICAL)
-
-        # Surface backend read/write failures through the same logBoth pipeline the
-        # original primitives used. (self.logger is CRITICAL-level, so the old
-        # self.logger.error calls were suppressed anyway; logBoth is what showed.)
-        class _LogBothAdapter:
-            def warning(self, msg: str) -> None:
-                logBoth('logWarning', IOServer.logSource, msg, Logger.ISSUE)
-
-        self.plc.logger = _LogBothAdapter()
 
         # Start PLC connection and threads
         self.connectionInProgress: bool = False
@@ -404,20 +397,27 @@ class IOServer:
                 self.redisConnectionForReads = Redis(self.redisHostname, self.redisPort,
                                                      retry_on_timeout=True)
                 self.clientRedisConnectedForReads = True
-                logBoth('logInfo', IOServer.logSource, 'Redis connection established for Reads', Logger.SUCCESS)
             except:
                 self.clientRedisConnectedForReads = False
-                logBoth('logCritical', IOServer.logSource, f'Could not get Redis Connection for Reads', Logger.PROBLEM)
+                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                               f'Could not get Redis Connection for Reads',
+                                                               Logger.PROBLEM)
+                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                            f'Could not get Redis Connection for Reads', Logger.PROBLEM)
 
         if not self.clientRedisConnectedForWrites:
             try:
                 self.redisConnectionForWrites = Redis(self.redisHostname, self.redisPort,
                                                       retry_on_timeout=True)
                 self.clientRedisConnectedForWrites = True
-                logBoth('logInfo', IOServer.logSource, 'Redis connection established for Writes', Logger.SUCCESS)
             except:
                 self.clientRedisConnectedForWrites = False
-                logBoth('logCritical', IOServer.logSource, f'Could not get Redis Connection for Writes', Logger.PROBLEM)
+                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                               f'Could not get Redis Connection for Writes',
+                                                               Logger.PROBLEM)
+                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                            f'Could not get Redis Connection for Writes',
+                                                            Logger.PROBLEM)
 
     def connectToRedisForHeartbeatAndEmergencyMonitoring(self, forceRenew=False):
         if forceRenew:
@@ -432,28 +432,55 @@ class IOServer:
             try:
                 self.heartbeatRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.heartbeatRedisConnected = True
-                logBoth('logInfo', IOServer.logSource, 'Heartbeat Redis connection established', Logger.SUCCESS)
+                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                                                          f'Heartbeat Redis Connection is {self.heartbeatRedisConnection}',
+                                                          Logger.SUCCESS)
+                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                                                       f'Heartbeat Redis Connection is {self.heartbeatRedisConnection}',
+                                                       Logger.SUCCESS)
             except:
                 self.heartbeatRedisConnected = False
-                logBoth('logCritical', IOServer.logSource, f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
+                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                               f'Could not get Heartbeat Redis Connection',
+                                                               Logger.PROBLEM)
+                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                            f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.combinedHeartbeatRedisConnected:
             try:
                 self.combinedHeartbeatRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.combinedHeartbeatRedisConnected = True
-                logBoth('logInfo', IOServer.logSource, 'Combined Heartbeat Redis connection established', Logger.SUCCESS)
+                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                                                          f'Combined Heartbeat Redis Connection is {self.combinedHeartbeatRedisConnection}',
+                                                          Logger.SUCCESS)
+                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                                                       f'Combined Heartbeat Redis Connection is {self.combinedHeartbeatRedisConnection}',
+                                                       Logger.SUCCESS)
             except:
                 self.combinedHeartbeatRedisConnected = False
-                logBoth('logCritical', IOServer.logSource, f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
+                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                               f'Could not get Heartbeat Redis Connection',
+                                                               Logger.PROBLEM)
+                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                            f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.emergencyRedisConnected:
             try:
                 self.emergencyRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.emergencyRedisConnected = True
-                logBoth('logInfo', IOServer.logSource, 'Emergency Redis connection established', Logger.SUCCESS)
+                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                                                          f'Emergency Redis Connection is {self.emergencyRedisConnection}',
+                                                          Logger.SUCCESS)
+                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                                                       f'Emergency Redis Connection is {self.emergencyRedisConnection}',
+                                                       Logger.SUCCESS)
             except:
                 self.emergencyRedisConnected = False
-                logBoth('logCritical', IOServer.logSource, f'Could not get Emergency Redis Connection', Logger.PROBLEM)
+                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                               f'Could not get Emergency Redis Connection',
+                                                               Logger.PROBLEM)
+                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                                                            f'Could not get Emergency Redis Connection', Logger.PROBLEM)
 
     def _initDatabaseConnectionPool(self):
         """Initialize a connection pool for database reads."""
@@ -467,82 +494,72 @@ class IOServer:
                 port="5432",
                 database=getDatabaseName()
             )
-            logBoth('logInfo', IOServer.logSource, f"Database connection pool initialized for {getDatabaseName()}", Logger.SUCCESS)
+            printBoldGreen(f"Database connection pool initialized for {getDatabaseName()}")
         except Exception as e:
-            logBoth('logCritical', IOServer.logSource, f"Failed to initialize database connection pool: {e}", Logger.PROBLEM)
+            printBoldRed(f"Failed to initialize database connection pool: {e}")
             self.dbConnectionPool = None
 
-    def writeRotationSettingsToPLC(self, qrCode: str) -> bool:
+    def writeCycleSettingsToPLC(self, qrCode: str) -> bool:
         """
-        Write rotation settings to PLC based on QR code (LHS vs RHS).
+        Machine 2, state 2 (WRITE_QR_CODE): write side, model and the tightening/rotation setpoints to the PLC.
 
-        Args:
-            qrCode: The scanned QR code string
+          LH_RH_Selection   INT   1 = LHS, 2 = RHS          (from QR)
+          ModelSelection    INT   1 = DOST, 2 = DOSTPLUS    (from QR)
+          Torque1/2 setpt   REAL  Nm                         (properties; -1 = do not write)
+          RotationRPM1/2    INT   rpm                        (properties; -1 = do not write)
 
-        Returns:
-            True if settings were written successfully, False otherwise
+        Machine 1's rotation counts (NoOfRotation*) and DB-held machine settings are not used on Machine 2.
+        Returns True only if every tag that had to be written was written.
         """
         if not qrCode:
-            logBoth('logWarning', IOServer.logSource, "Cannot write rotation settings: QR code is empty", Logger.ISSUE)
+            printBoldRed("Cannot write cycle settings: QR code is empty")
             return False
 
         try:
-            # Parse QR code to get LHS/RHS designation
             modelName, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(qrCode)
+            side = (lhs_rhs or "").strip().upper()
+            model = (modelName or "").strip().upper()
 
-            if lhs_rhs == "UNKNOWN":
-                logBoth('logWarning', IOServer.logSource, f"Cannot determine LHS/RHS from QR code: {qrCode}", Logger.ISSUE)
-                return False
-
-            # Get machine settings from database
-            settings = getMachineSettings(getDatabaseName())
-            if not settings:
-                logBoth('logCritical', IOServer.logSource, "Failed to get machine settings from database", Logger.PROBLEM)
-                return False
-
-            noOfRotation1CCW_db = settings.get('NoOfRotation1CCW', 5)
-            noOfRotation1CW_db = settings.get('NoOfRotation1CW', 5)
-            noOfRotation2CCW_db = settings.get('NoOfRotation2CCW', 5)
-            noOfRotation2CW_db = settings.get('NoOfRotation2CW', 5)
-            rotationUnitRPM = settings.get('RotationUnitRPM', 60)
-
-            # Determine values based on LHS/RHS
-            if lhs_rhs.upper() == "LHS":
-                noOfRotation1CCW = 0
-                noOfRotation1CW = noOfRotation1CW_db
-                noOfRotation2CCW = 0
-                noOfRotation2CW = noOfRotation2CW_db
-                lhRhSelection = 1
-                logBoth('logInfo', IOServer.logSource, f"LHS detected - Setting CW rotations: R1CW={noOfRotation1CW}, R2CW={noOfRotation2CW}, lhRhSelection={lhRhSelection}", Logger.SUCCESS)
-            elif lhs_rhs.upper() == "RHS":
-                noOfRotation1CCW = noOfRotation1CCW_db
-                noOfRotation1CW = 0
-                noOfRotation2CCW = noOfRotation2CCW_db
-                noOfRotation2CW = 0
-                lhRhSelection = 2
-                logBoth('logInfo', IOServer.logSource, f"RHS detected - Setting CCW rotations: R1CCW={noOfRotation1CCW}, R2CCW={noOfRotation2CCW}, lhRhSelection={lhRhSelection}", Logger.SUCCESS)
+            if side == "LHS":
+                sideCode = IOServer.LHS_CODE
+            elif side == "RHS":
+                sideCode = IOServer.RHS_CODE
             else:
-                logBoth('logWarning', IOServer.logSource, f"Unknown LHS/RHS value: {lhs_rhs}", Logger.ISSUE)
+                printBoldRed(f"Cannot determine LHS/RHS from QR code: {qrCode}")
                 return False
 
-            # Write all values to PLC
+            modelCode = IOServer.MODEL_CODES.get(model)
+            if modelCode is None:
+                printBoldRed(f"Unknown model '{modelName}' from QR code: {qrCode}")
+                return False
+
+            config = CosThetaConfigurator.getInstance()
+            skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
+
             success = True
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation1CCW, noOfRotation1CCW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation1CW, noOfRotation1CW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation2CCW, noOfRotation2CCW)
-            success = success and self.write_int(IOServer.PC_PLC_NoOfRotation2CW, noOfRotation2CW)
-            success = success and self.write_int(IOServer.PC_PLC_LH_RH_Selection, lhRhSelection)
-            success = success and self.write_int(IOServer.PC_PLC_RotationUnitRPM, rotationUnitRPM)
+            success = self.write_int(IOServer.PC_PLC_LH_RH_Selection, sideCode) and success
+            success = self.write_int(IOServer.PC_PLC_ModelSelection, modelCode) and success
+
+            written = [f"side={sideCode}", f"model={modelCode}"]
+            for tag, value in ((IOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint()),
+                               (IOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint())):
+                if value != skip:
+                    success = self.write_float(tag, float(value), debug=False) and success
+                    written.append(f"{tag}={value}")
+            for tag, value in ((IOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
+                               (IOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
+                if value != skip:
+                    success = self.write_int(tag, int(value)) and success
+                    written.append(f"{tag}={value}")
 
             if success:
-                logBoth('logInfo', IOServer.logSource, f"Successfully wrote rotation settings to PLC for {lhs_rhs}", Logger.SUCCESS)
+                printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {', '.join(written)}")
             else:
-                logBoth('logWarning', IOServer.logSource, "Failed to write some rotation settings to PLC", Logger.PROBLEM)
-
+                printBoldRed(f"Failed to write some cycle settings to PLC ({', '.join(written)})")
             return success
 
         except Exception as e:
-            logBoth('logCritical', IOServer.logSource, f"Exception writing rotation settings to PLC: {e}", Logger.PROBLEM)
+            printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
 
     # ==================== Cycle Time Tracking ====================
@@ -561,7 +578,7 @@ class IOServer:
     OP_KNUCKLE        = "T1_Knuckle"
     OP_HUB_BEARING    = "T2_HubAndBottomBearing"
     OP_TOP_BEARING    = "T3_TopBearing"
-    OP_NUT_WASHER     = "T4_NutAndPlateWasher_to_FreeRotations"
+    OP_NUT_WASHER     = "T4_NutAndPlateWasher_to_Torque1Read"
     OP_NOCAP_BUNK     = "T5_NoCapBunk"
     OP_TORQUE2        = "T6_NoCapBunkStart_to_Torque2Done"
     OP_SPLITPIN       = "T7_SplitPinAndWasher"
@@ -584,14 +601,14 @@ class IOServer:
             self._opTimestamps[key][0] = time.time()
             self._cycleInProgress = True
         except Exception as e:
-            logBoth('logWarning', IOServer.logSource, f"_recordOpStart({key}) error: {e}", Logger.ISSUE)
+            printBoldRed(f"_recordOpStart({key}) error: {e}")
 
     def _recordOpEnd(self, key: str) -> None:
         """Record the end wall-clock time for the given operation key."""
         try:
             self._opTimestamps[key][1] = time.time()
         except Exception as e:
-            logBoth('logWarning', IOServer.logSource, f"_recordOpEnd({key}) error: {e}", Logger.ISSUE)
+            printBoldRed(f"_recordOpEnd({key}) error: {e}")
 
     def _computeAndLogCycleTimes(self) -> None:
         """
@@ -630,7 +647,7 @@ class IOServer:
             f"T1  (Knuckle check           : PLC trigger → KnuckleCheckDone)          : {T1:.3f} sec\n"
             f"T2  (Hub & bottom bearing    : PLC trigger → HubCheckDone)               : {T2:.3f} sec\n"
             f"T3  (Top bearing             : PLC trigger → HubAndSecondBearingDone)    : {T3:.3f} sec\n"
-            f"T4  (Nut & plate washer      : PLC trigger → Station3RotationDone)       : {T4:.3f} sec\n"
+            f"T4  (Nut & plate washer      : PLC trigger → Torque 1 read)              : {T4:.3f} sec\n"
             f"T5  (No-cap bunk             : PLC trigger → NoCapBunkCheckDone)         : {T5:.3f} sec\n"
             f"T6  (No-cap bunk → Torque2   : PLC trigger → Station2TorqueValueSet)     : {T6:.3f} sec\n"
             f"T7  (Split pin & washer      : PLC trigger → SplitPinAndWasherDone)      : {T7:.3f} sec\n"
@@ -648,29 +665,29 @@ class IOServer:
         printBoldYellow(cycleTimeMsg)
 
         # Log at PROBLEM level → guaranteed to appear in both console and file logs
-        logBoth('logCritical', IOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
+        SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
+        SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
 
     def getCurrentTagsToBeRead(self) -> Tuple[list[str] | None, list[Type[bool | float] | None] | None]:
         """
         Get the PLC tags to be read based on current machine state.
 
-        State to Excel Step Mapping:
-        - States 1-2: QR Code (Step 0)
-        - States 3-4: Knuckle (Step 1)
-        - States 5-6: Hub (Step 2) - uses PLC_PC_CheckHub
-        - States 7-8: Hub and Second Bearing (Step 3) - uses PLC_PC_CheckHubAndSecondBearing
-        - States 9-10: Nut and Plate Washer (Step 4)
-        - States 11-12: Tightening Torque 1 (Step 5) - uses PLC_PC_Station2TorqueValueSet
-        - State 13: Free Rotations Done (Step 6)
-        - States 14-15: Bunk for Component Press (Step 7) - uses PLC_PC_CheckBunk
-        - State 16: Component Press Done (Step 8)
-        - States 17-18: No Bunk (Step 9)
-        - States 19-20: Tightening Torque 2 (Step 10) - uses PLC_PC_Station2TorqueValueSet (reused)
-        - States 21-22: Split Pin and Washer (Step 11)
-        - States 23-24: Cap (Step 12)
-        - States 25-26: Bunk for Cap Press (Step 13) - uses PLC_PC_CheckBunk (reused)
-        - State 27: Cap Press Done (Step 14)
-        - States 28-29: Free Rotation Torque (Step 15)
+        Machine 2 state mapping (28 states; M1's READ_FREE_ROTATIONS_DONE removed):
+        - States 1-2:   QR Code
+        - States 3-4:   Knuckle
+        - States 5-6:   Hub (with bottom bearing) - uses PLC_PC_CheckHub
+        - States 7-8:   Top bearing - uses PLC_PC_CheckHubAndSecondBearing
+        - States 9-10:  Nut and Plate Washer
+        - States 11-12: Tightening Torque 1 - PLC_PC_Station2TorqueValueSet / PLC_PC_Station2TorqueValue
+        - States 13-14: Bunk for Component Press - uses PLC_PC_CheckNoCapBunk
+        - State 15:     Component Press Done
+        - States 16-17: No Bunk
+        - States 18-19: Tightening Torque 2 - Station 2 torque tags (reused)
+        - States 20-21: Split Pin and Washer
+        - States 22-23: Cap
+        - States 24-25: Bunk for Cap Press - uses PLC_PC_CheckBunk
+        - State 26:     Cap Press Done
+        - States 27-28: Free Rotation Torque - PLC_PC_Station3TorqueValueSet / PLC_PC_Station3TorqueValue
         """
         currentState = self.machineState.getCurrentState()
 
@@ -699,10 +716,6 @@ class IOServer:
             return [IOServer.PLC_PC_Station2TorqueValueSet], [bool]
         if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
             return [IOServer.PLC_PC_Station2TorqueValue], [float]
-
-        # Step 6: Free Rotations Done (Station 3)
-        if currentState == MachineState.READ_FREE_ROTATIONS_DONE:
-            return [IOServer.PLC_PC_Station3RotationDone], [bool]
 
         # Step 7: No Cap Bunk for Component Press
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
@@ -803,34 +816,62 @@ class IOServer:
         return None
 
     def connectPLC(self, forceRenew=False) -> bool | None:
-        """Connect to the PLC via the pyS7 backend (both S7Client sockets)."""
+        """Connect to the PLC using pycomm3 or MockPLC."""
         if self.connectionInProgress:
             return None
         self.connectionInProgress = True
         self.connectionAttempts += 1
+
         try:
+            if forceRenew:
+                if self.clientForReads is not None:
+                    try:
+                        self.clientForReads.close()
+                    except:
+                        pass
+                if self.clientForWrites is not None:
+                    try:
+                        self.clientForWrites.close()
+                    except:
+                        pass
+                self.clientForReads = None
+                self.clientForWrites = None
+
+            # Use MockPLC if mockInstance is True
             if self.mockInstance:
-                # NOTE: MockPLC was a pycomm3-shaped stand-in and is NOT wired into
-                # the pyS7 backend. Add a mock backend if TEST mode needs offline runs.
-                logBoth('logWarning', IOServer.logSource,
-                        "mockInstance=True but pyS7 backend has no mock; attempting real connect",
-                        Logger.RISK)
-            ok = self.plc.connect(forceRenew=forceRenew, ip=self.plc_ip)
-            if ok:
-                self.connectionAttempts = 0
-                logBoth('logInfo', IOServer.logSource, f"Connected to PLC at {self.plc_ip}", Logger.SUCCESS)
+                from costhetaio.allenbradley.MockPLC import MockPLC
+                self.clientForReads = MockPLC()
+                self.clientForReads.open()
+                printBoldGreen(f"Connected to MockPLC for Reads")
+                self.clientForWrites = self.clientForReads  # Share same instance
+                printBoldGreen(f"Connected to MockPLC for Writes (shared instance)")
             else:
-                if (self.connectionAttempts == 1) or (
-                        (self.connectionAttempts % IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
-                    logBoth('logCritical', IOServer.logSource, "PLC connection failed", Logger.PROBLEM)
-            return ok
+                self.clientForReads = LogixDriver(f"{self.plc_ip}")
+                self.clientForReads.open()
+                printBoldGreen(f"Connected to PLC for Reads at {self.plc_ip}")
+                self.clientForWrites = LogixDriver(f"{self.plc_ip}")
+                self.clientForWrites.open()
+                printBoldGreen(f"Connected to PLC for Writes at {self.plc_ip}")
+
+            self.connectionInProgress = False
+            self.connectionAttempts = 0
+            return True
         except Exception as e:
             if (self.connectionAttempts == 1) or (
                     (self.connectionAttempts % IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
-                logBoth('logCritical', IOServer.logSource, f"PLC connection error: {e}", Logger.PROBLEM)
-            return False
-        finally:
+                printBoldRed(f"PLC connection error: {e}")
+            try:
+                self.clientForReads.close()
+            except:
+                pass
+            try:
+                self.clientForWrites.close()
+            except:
+                pass
+            self.clientForReads = None
+            self.clientForWrites = None
             self.connectionInProgress = False
+            return False
 
     def launchConnectionMonitoringThread(self):
         objRef = self
@@ -841,7 +882,8 @@ class IOServer:
                 time.sleep(objRef.CONNECTION_CHECK_INTERVAL)
 
                 tryToConnect: bool = False
-                if not objRef.plc.is_connected:
+                if ((not objRef.clientForReads) or (not objRef.clientForReads.connected) or
+                        (not objRef.clientForWrites) or (not objRef.clientForWrites.connected)):
                     tryToConnect = True
                 else:
                     try:
@@ -853,7 +895,7 @@ class IOServer:
                         if (objRef.connectionAttempts == 1) or (
                                 (objRef.connectionAttempts % IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
                             objRef.logger.fatal(f"PLC connection test failed")
-                            logBoth('logCritical', IOServer.logSource, f"PLC connection test failed. Reconnecting...", Logger.PROBLEM)
+                            printBoldRed(f"PLC connection test failed. Reconnecting...")
                         tryToConnect = True
 
                 if tryToConnect:
@@ -871,14 +913,17 @@ class IOServer:
             ioHeartbeatGap = CosThetaConfigurator.getInstance().getIOConnectionStatusSleepInterval()
             while not objRef.shutdown:
                 try:
-                    if not objRef.plc.is_connected:
+                    if objRef.clientForReads is None or objRef.clientForWrites is None:
+                        sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
+                                                                   status=DEAD)
+                    elif not objRef.clientForReads.connected or not objRef.clientForWrites.connected:
                         sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
                                                                    status=DEAD)
                     else:
                         sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
                                                                    status=ALIVE)
                 except Exception as e:
-                    logBoth('logCritical', IOServer.logSource, f"Exception {e} encountered in IO heartbeat", Logger.PROBLEM)
+                    printBoldRed(f"Exception {e} encountered in heartbeat")
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 try:
                     time.sleep(ioHeartbeatGap)
@@ -911,14 +956,15 @@ class IOServer:
                     else:
                         IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT += 1
                         if (IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT == 2):
-                            logBoth('logCritical', IOServer.logSource, f"Combined Heartbeat - connection problem somewhere : sendEmergencyAbortFromIOServerToFEServer", Logger.PROBLEM)
+                            printBoldRed(
+                                f"Combined Heartbeat - connection problem somewhere : sendEmergencyAbortFromIOServerToFEServer")
                             sendEmergencyAbortFromIOServerToFEServer(objRef.emergencyRedisConnection)
                             objRef.resetAll()
                             objRef._resetOpTimestamps()  # Clear cycle timing on abort
                             objRef.machineState.setCurrentState(MachineState.READ_QR_CODE)
                             objRef.write_bool(IOServer.PLC_PC_CheckQRCode, True)
                 except Exception as e:
-                    logBoth('logCritical', IOServer.logSource, f"Exception {e} encountered in combined heartbeat", Logger.PROBLEM)
+                    printBoldRed(f"Exception {e} encountered in heartbeat")
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 try:
                     time.sleep(heartbeatGap)
@@ -935,15 +981,16 @@ class IOServer:
         def monitorEmergency():
             while not objRef.shutdown:
                 emergencyActivated: bool = False
-                if objRef.plc.clientForReads is not None:
-                    if objRef.plc.is_connected:
+                if (objRef.clientForReads is not None):
+                    if objRef.clientForReads.connected:
                         try:
                             emergencyActivated = objRef.read_bool(IOServer.PLC_PC_EmergencyAbort)
                         except Exception as e:
-                            logBoth('logCritical', IOServer.logSource, f"Exception {e} encountered in emergency monitoring", Logger.PROBLEM)
+                            printBoldRed(f"Exception {e} encountered in emergency monitoring")
                             objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 if emergencyActivated:
-                    logBoth('logCritical', IOServer.logSource, f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer", Logger.PROBLEM)
+                    printBoldRed(
+                        f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
                     sendAbortFromIOServerToQRCodeServer(objRef.emergencyRedisConnection)
                     time.sleep(0.5)
                     clearKeyCommunicationQueuesOnAbort()
@@ -1002,7 +1049,8 @@ class IOServer:
                     typeOfValues: str = "nothing"
                     finalValue: float = IOServer.FALSE_FLOAT_VALUE
 
-                    if (objRef.plc.is_connected and not objRef.connectionInProgress):
+                    if ((objRef.clientForReads is not None) and objRef.clientForReads.connected
+                            and not objRef.connectionInProgress):
                         tagsToBeRead, valueTypes = objRef.getCurrentTagsToBeRead()
                         if tagsToBeRead is not None:
                             # if (writeCounter % 3) == 0:
@@ -1038,7 +1086,7 @@ class IOServer:
                                 written_TagsToBeRead = 0
 
                 except Exception as e:
-                    logBoth('logCritical', IOServer.logSource, f"Encountered exception {e}", Logger.PROBLEM)
+                    printBoldRed(f"Encountered exception {e}")
 
                 time.sleep(objRef.read_interval)
 
@@ -1055,7 +1103,8 @@ class IOServer:
             written_TagsToBeWritten: int = 0
             while not objRef.shutdown:
                 tagsToBeWritten = objRef.getCurrentTagsToBeWritten()
-                if objRef.plc.is_connected and not objRef.connectionInProgress:
+                if (
+                        objRef.clientForWrites is not None) and objRef.clientForWrites.connected and not objRef.connectionInProgress:
                     if tagsToBeWritten is not None and len(tagsToBeWritten) > 0:
                         if written_TagsToBeWritten == 0:
                             written_TagsToBeWritten += 1
@@ -1063,13 +1112,13 @@ class IOServer:
                             success, qrCode = readDataInIOServerFromQRCodeServer(self.redisConnectionForWrites)
                             if success:
                                 objRef.currentQRCode = qrCode  # Store the QR code for this cycle
-                                logBoth('logInfo', IOServer.logSource, f"Received QR Code: {qrCode}", Logger.SUCCESS)
+                                printBoldGreen(f"Received QR Code: {qrCode}")
                                 objRef.perform_write_state_action(tags=tagsToBeWritten, result=True)
-                                # Write rotation settings to PLC based on LHS/RHS
-                                objRef.writeRotationSettingsToPLC(qrCode)
-                                logBoth('logDebug', IOServer.logSource, f"Transition from state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                # Write side, model and tightening/rotation setpoints to PLC
+                                objRef.writeCycleSettingsToPLC(qrCode)
+                                printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                 objRef.machineState.incrementState()
-                                logBoth('logDebug', IOServer.logSource, f"        ...to state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                         else:
                             # Capture the WRITE state we are about to act on, BEFORE incrementing
                             stateBeforeWrite = objRef.machineState.getCurrentState()
@@ -1090,16 +1139,17 @@ class IOServer:
                                     objRef._recordOpEnd(IOServer.OP_SPLITPIN)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
                                     objRef._recordOpEnd(IOServer.OP_CAP)
-                                logBoth('logDebug', IOServer.logSource, f"Transition from state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                 objRef.machineState.incrementState()
-                                logBoth('logDebug', IOServer.logSource, f"        ...to state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                             else:
                                 if previousMachineState != MachineState.INVALID_STATE:
                                     objRef.perform_write_state_action(tags=tagsToBeWritten, result=False)
-                                    logBoth('logWarning', IOServer.logSource, f"Did not move ahead from state {objRef.machineState.getCurrentState().name}", Logger.ISSUE)
-                                    logBoth('logDebug', IOServer.logSource, f"Transition from state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                    printBoldRed(
+                                        f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
+                                    printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                     objRef.machineState.decrementState()
-                                    logBoth('logDebug', IOServer.logSource, f"        ...to state {objRef.machineState.getCurrentState().name}", Logger.GENERAL)
+                                    printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                 time.sleep(objRef.write_loop_interval)
 
         self.continuousDoLoop = threading.Thread(name=f'Continuous Do Loop in IOServer',
@@ -1156,21 +1206,7 @@ class IOServer:
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_1_DONE:
                         successfullySent = True
 
-                    # Step 6: Free Rotations Done — END of T4
-                    elif currentState == MachineState.READ_FREE_ROTATIONS_DONE:
-                        successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
-                                                                          currentMachineState=MachineState.READ_FREE_ROTATIONS_DONE)
-                        if successfullySent:
-                            self._recordOpEnd(IOServer.OP_NUT_WASHER)
-                        # Reset Station 3 tags - prepare for eventual use in State 29
-                        updateRequest: dict = {
-                            "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM,
-                            "tag1": {"tag": IOServer.PLC_PC_Station3TorqueValueSet, "type": "bool", "value": False},
-                            "tag2": {"tag": IOServer.PLC_PC_Station3TorqueValue, "type": "float", "value": 0.0},
-                        }
-                        logBoth('logDebug', IOServer.logSource, f"Sending request to UpdateTagsProcessor: Station 3 reset after free rotations", Logger.GENERAL)
-                        addTagUpdateRequest(updateRequest)
-                        # Step 7: Bunk for Component Press — START of T5 and T6
+                    # Step 7: Bunk for Component Press — START of T5 and T6
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
@@ -1225,12 +1261,12 @@ class IOServer:
                         self._recordOpEnd(IOServer.OP_BUNK_CAP_PRESS)
 
                     if successfullySent:
-                        logBoth('logDebug', IOServer.logSource, f"Transition from state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                        printBold(f"Transition from state {self.machineState.getCurrentState().name}")
                         self.machineState.incrementState()
-                        logBoth('logDebug', IOServer.logSource, f"        ...to state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                        printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                 except Exception as e:
-                    logBoth('logCritical', IOServer.logSource, f"Exception {e} encountered in current_read_state - 1", Logger.PROBLEM)
+                    printBoldRed(f"Exception {e} encountered in current_read_state - 1")
 
                 returnValue = valueRead
             else:
@@ -1238,17 +1274,19 @@ class IOServer:
 
         elif type(valueRead) == float:
             if valueRead == IOServer.FALSE_FLOAT_VALUE:
-                logBoth('logDebug', IOServer.logSource, f"Failed to read proper value of float in state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                printBold(f"Failed to read proper value of float in state {self.machineState.getCurrentState().name}")
                 returnValue = False
             else:
                 successfullySent: bool = False
                 try:
                     # Step 5B: Tightening Torque 1 Value
                     if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
-                        logBoth('logInfo', IOServer.logSource, f"Read Station 2 Torque Value (1st time): {valueRead}", Logger.SUCCESS)
+                        printBoldGreen(f"Read Station 2 Torque Value (1st time): {valueRead}")
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_1,
                                                                           value=valueRead)
+                        if successfullySent:
+                            self._recordOpEnd(IOServer.OP_NUT_WASHER)   # END of T4 (M2: no separate free-rotation step)
                         # Reset Station 2 torque tags after reading (so Step 10 doesn't auto-trigger)
                         if successfullySent:
                             updateRequest : dict = {
@@ -1256,15 +1294,15 @@ class IOServer:
                                 "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
                                 "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
-                            logBoth('logDebug', IOServer.logSource, f"Sending request to UpdateTagsProcessor: Station 2 reset after torque 1", Logger.GENERAL)
+                            print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
-                            logBoth('logDebug', IOServer.logSource, f"Transition from state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"Transition from state {self.machineState.getCurrentState().name}")
                             self.machineState.incrementState()
-                            logBoth('logDebug', IOServer.logSource, f"        ...to state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"        ...to state {self.machineState.getCurrentState().name}")
                     # Step 10B: Tightening Torque 2 Value
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2:
-                        logBoth('logInfo', IOServer.logSource, f"Read Station 2 Torque Value (2nd time): {valueRead}", Logger.SUCCESS)
+                        printBoldGreen(f"Read Station 2 Torque Value (2nd time): {valueRead}")
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_2,
                                                                           value=valueRead)
@@ -1274,16 +1312,16 @@ class IOServer:
                                 "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
                                 "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
-                            logBoth('logDebug', IOServer.logSource, f"Sending request to UpdateTagsProcessor: Station 2 reset after torque 2", Logger.GENERAL)
+                            print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
-                            logBoth('logDebug', IOServer.logSource, f"Transition from state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"Transition from state {self.machineState.getCurrentState().name}")
                             self.machineState.incrementState()
-                            logBoth('logDebug', IOServer.logSource, f"        ...to state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                     # Step 15B: Free Rotation Torque 1 Value - FINAL STATE — END of T9
                     elif currentState == MachineState.READ_FREE_ROTATION_TORQUE_1:
-                        logBoth('logInfo', IOServer.logSource, f"Read Station 3 Torque Value: {valueRead}", Logger.SUCCESS)
+                        printBoldGreen(f"Read Station 3 Torque Value: {valueRead}")
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_FREE_ROTATION_TORQUE_1,
                                                                           value=valueRead,
@@ -1296,14 +1334,14 @@ class IOServer:
                                 "tag1": {"tag": IOServer.PLC_PC_Station3TorqueValueSet, "type": "bool", "value": False},
                                 "tag2": {"tag": IOServer.PLC_PC_Station3TorqueValue, "type": "float", "value": 0.0},
                             }
-                            logBoth('logDebug', IOServer.logSource, f"Sending request to UpdateTagsProcessor: Station 3 reset after free rotation torque", Logger.GENERAL)
+                            print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
-                            logBoth('logDebug', IOServer.logSource, f"Transition from state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"Transition from state {self.machineState.getCurrentState().name}")
                             self.machineState.incrementState()
-                            logBoth('logDebug', IOServer.logSource, f"        ...to state {self.machineState.getCurrentState().name}", Logger.GENERAL)
+                            printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                 except Exception as e:
-                    logBoth('logCritical', IOServer.logSource, f"Exception {e} encountered in current_read_state - 3", Logger.PROBLEM)
+                    printBoldRed(f"Exception {e} encountered in current_read_state - 3")
 
                 returnValue = successfullySent
 
@@ -1319,18 +1357,18 @@ class IOServer:
 
     def perform_write_state_action(self, tags: list[str], result: bool = True) -> bool:
         """Perform the write action to PLC tags."""
-        logBoth('logDebug', IOServer.logSource, "Entered perform_write_state_action()", Logger.GENERAL)
+        print("Entered perform_write_state_action()")
         success1 = self.write_bool(tags[0], result)
-        logBoth('logDebug', IOServer.logSource, f"Wrote {result} to {tags[0]}", Logger.GENERAL)
+        printBoldYellow(f"Wrote {result} to {tags[0]}")
         time.sleep(IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
         success2 = self.write_bool(tags[1], True)
-        logBoth('logDebug', IOServer.logSource, f"Wrote True to {tags[1]}", Logger.GENERAL)
+        printBoldYellow(f"Wrote True to {tags[1]}")
 
         if success1 and success2:
             self.logger.info(f"Performed action for, and wrote to tags {tags}")
         else:
             self.logger.info(f"Could not write to tags {tags}")
-            logBoth('logWarning', IOServer.logSource, f"Could not write to tags {tags}", Logger.ISSUE)
+            printBoldRed(f"Could not write to tags {tags}")
 
         return result
 
@@ -1338,88 +1376,209 @@ class IOServer:
         """Start the read and connection check threads."""
         global _updateTagsProcessor
 
-        logBoth('logInfo', IOServer.logSource, "Starting read, connection, and do threads in IO Server", Logger.GENERAL)
+        printLight("Starting read, connection, and do threads in IO Server")
 
         self.launchConnectionMonitoringThread()
-        logBoth('logInfo', IOServer.logSource, "Started connection monitoring thread in IOServer", Logger.SUCCESS)
+        printLight("Started connection monitoring thread in IOServer")
 
         self.launchReadLoopThread()
-        logBoth('logInfo', IOServer.logSource, "Started read loop thread in IOServer", Logger.SUCCESS)
+        printLight("Started read loop thread in IOServer")
 
         self.launchWriteTagsLoopThread()
-        logBoth('logInfo', IOServer.logSource, "Started do loop thread in IOServer", Logger.SUCCESS)
+        printLight("Started do loop thread in IOServer")
 
         self.launchHeartbeatThread()
-        logBoth('logInfo', IOServer.logSource, "Started heartbeat thread in IOServer", Logger.SUCCESS)
+        printLight("Started heartbeat thread in IOServer")
 
         self.launchEmergencyMonitoringThread()
-        logBoth('logInfo', IOServer.logSource, "Started emergency monitoring thread in IOServer", Logger.SUCCESS)
+        printLight("Started emergency monitoring thread in IOServer")
 
         self.launchMonitorStopCommandThread()
-        logBoth('logInfo', IOServer.logSource, "Started monitorStop thread in IOServer", Logger.SUCCESS)
+        printLight("Started monitorStop thread in IOServer")
 
         self.launchThreadForUpdatingCombinedHeartbeat()
-        logBoth('logInfo', IOServer.logSource, "Started combinedHeartbeat update thread in IOServer", Logger.SUCCESS)
+        printLight("Started combinedHeartbeat update thread in IOServer")
 
         self.launchTagRequestListenerThread()
-        logBoth('logInfo', IOServer.logSource, "Started tag request listener thread in IOServer", Logger.SUCCESS)
+        printLight("Started tag request listener thread in IOServer")
 
         # Start UpdateTagsToDefaultProcessor
         self.updateTagsProcessor = UpdateTagsToDefaultProcessor(ioServerInstance=self)
         self.updateTagsProcessor.start()
         _updateTagsProcessor = self.updateTagsProcessor  # Set global reference
-        logBoth('logInfo', IOServer.logSource, "Started UpdateTagsToDefaultProcessor thread in IOServer", Logger.SUCCESS)
+        printLight("Started UpdateTagsToDefaultProcessor thread in IOServer")
 
-        logBoth('logInfo', IOServer.logSource, "Started read tag, connection monitoring, write tag and update tag threads", Logger.SUCCESS)
+        printLight("Started read tag, connection monitoring, write tag and update tag threads")
 
     # ==================== Read functions ====================
 
     def read_bool(self, tag: str, expected_value: bool = True, debug: bool = False) -> Optional[bool]:
-        """Read a boolean tag from the PLC (delegates to the pyS7 backend)."""
-        return self.plc.read_bool(tag, expected_value=expected_value, debug=debug)
+        """Read a boolean tag from the PLC."""
+        if tag is None or tag == "":
+            return False
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return False
+        try:
+            value: bool = False
+            with self.readingLock:
+                value = self.clientForReads.read(tag).value
+            if value is None:
+                self.logger.error("Error reading bool tag %s", tag)
+                printBoldRed(f"Error reading bool tag {tag}")
+                return not expected_value
+            if debug and value == expected_value:
+                self.logger.info("Read bool tag %s: %s", tag, value)
+            return value
+        except Exception as e:
+            self.logger.error("Error reading bool tag %s: %s", tag, e)
+            printBoldRed(f"Error reading bool tag {tag}: {e}")
+            return not expected_value
 
     def read_float(self, tag: str, debug: bool = False) -> Optional[float]:
-        """Read a float tag from the PLC (delegates to the pyS7 backend)."""
-        return self.plc.read_float(tag, debug=debug)
+        """Read a float tag from the PLC."""
+        if tag is None or tag == "":
+            return IOServer.FALSE_FLOAT_VALUE
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return IOServer.FALSE_FLOAT_VALUE
+        try:
+            value: float = IOServer.FALSE_FLOAT_VALUE
+            with self.readingLock:
+                value = self.clientForReads.read(tag).value
+            if value is None:
+                printBoldRed(f"Error reading float tag {tag}")
+                return IOServer.FALSE_FLOAT_VALUE
+            return value
+        except Exception as e:
+            printBoldRed(f"Error reading float tag {tag}: {e}")
+            return IOServer.FALSE_FLOAT_VALUE
 
     def read_int(self, tag: str, debug: bool = False) -> Optional[int]:
-        """Read an integer tag from the PLC (delegates to the pyS7 backend).
-
-        Unlike the original, the backend returns the value unconditionally; the
-        original only returned inside `if debug:` and thus yielded None by default,
-        which made the watchdog check (read_int(WatchTag) != 1234) fire spuriously.
-        """
-        return self.plc.read_int(tag, debug=debug)
-
-    # --- The read helpers below are UNUSED by the state machine and relied on
-    #     pycomm3 symbolic/array reads that pyS7 does not provide. Kept as loud
-    #     stubs so any stray call fails visibly rather than hitting a dead driver.
+        """Read an integer tag from the PLC."""
+        if tag is None or tag == "":
+            return IOServer.FALSE_INT_VALUE
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return IOServer.FALSE_INT_VALUE
+        try:
+            value: int = IOServer.FALSE_INT_VALUE
+            with self.readingLock:
+                value = self.clientForReads.read(tag).value
+            if value is None:
+                self.logger.error("Error reading integer tag %s: value is None", tag)
+                printBoldRed(f"Error reading integer tag {tag}: value is None")
+                return IOServer.FALSE_INT_VALUE
+            if debug:
+                self.logger.info("Read integer tag %s: %d", tag, value)
+                printBoldGreen(f"Read integer tag {tag}: {value}")
+            return int(value)
+        except Exception as e:
+            self.logger.error("Error reading integer tag %s: %s", tag, e)
+            printBoldRed(f"Error reading integer tag {tag}: {e}")
+            return IOServer.FALSE_INT_VALUE
 
     def read_single(self, aTag: str) -> Any:
-        raise NotImplementedError("read_single is not supported by the pyS7 backend")
+        if aTag is None or aTag == "":
+            return IOServer.FALSE_FLOAT_VALUE
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return IOServer.FALSE_FLOAT_VALUE
+        value = ""
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(aTag).value
+        except:
+            pass
+        return value
 
     def read_multiple(self, listOfTags: list) -> Any:
-        raise NotImplementedError("read_multiple is not supported by the pyS7 backend")
+        if listOfTags is None or len(listOfTags) == 0:
+            return None
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return None
+        value = []
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(*listOfTags)
+        except:
+            pass
+        return value
 
     def read_array(self, arrayName: str, numberOfElements: int) -> Any:
-        raise NotImplementedError("read_array is not supported by the pyS7 backend")
+        if numberOfElements == 0:
+            return None
+        if (self.clientForReads is None) or (not self.clientForReads.connected):
+            return None
+        value = []
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(f"{arrayName}" + "{" + f"{numberOfElements}" + "}")
+        except:
+            pass
+        return value
 
     def read_array_slice(self, arrayName: str, index: int, numberOfElements: int) -> Any:
-        raise NotImplementedError("read_array_slice is not supported by the pyS7 backend")
+        value = []
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(f"{arrayName}[{index}]" + "{" + f"{numberOfElements}" + "}")
+        except:
+            pass
+        return value
 
     # ==================== Write functions ====================
 
     def write_bool(self, tag: str, value: bool, debug: bool = True) -> bool:
-        """Write a boolean to a tag to the PLC (delegates to the pyS7 backend)."""
-        return self.plc.write_bool(tag, value, debug=debug)
+        """Write a boolean to a tag to the PLC."""
+        if tag is None:
+            return False
+        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+            return False
+        try:
+            with self.writingLock:
+                self.clientForWrites.write(tag, value)
+            if debug:
+                printBoldYellow(f"Wrote to bool tag {tag}: {value} in write_bool()")
+            return True
+        except Exception as e:
+            printBoldRed(f"Error writing bool tag {tag}: {e}")
+            return False
 
     def write_float(self, tag: str, value: float, debug: bool = True) -> bool:
-        """Write a float to a tag to the PLC (delegates to the pyS7 backend)."""
-        return self.plc.write_float(tag, value, debug=debug)
+        """Write a float to a tag to the PLC."""
+        if tag is None:
+            return False
+        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+            return False
+        try:
+            with self.writingLock:
+                self.clientForWrites.write(tag, value)
+            if debug:
+                self.logger.info(f"Wrote float tag {tag}: {value}")
+                printBoldYellow(f"Wrote to float tag {tag}: {value} in write_float()")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error writing float tag {tag}: {e}")
+            printBoldRed(f"Error writing float tag {tag}: {e}")
+            return False
 
     def write_int(self, tag: str, value: int, debug: bool = False) -> bool:
-        """Write an integer to a tag to the PLC (delegates to the pyS7 backend)."""
-        return self.plc.write_int(tag, value, debug=debug)
+        """Write an integer to a tag to the PLC."""
+        if tag is None or not isinstance(value, int):
+            if debug:
+                self.logger.error(f"Invalid input for tag {tag}: value {value} must be an integer")
+                printBoldRed(f"Invalid input for tag {tag}: value {value} must be an integer")
+            return False
+        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+            return False
+        try:
+            with self.writingLock:
+                self.clientForWrites.write(tag, value)
+            if debug:
+                self.logger.info(f"Wrote integer tag {tag}: {value}")
+                printBoldGreen(f"Wrote integer tag {tag}: {value}")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error writing integer tag {tag}: {e}")
+            printBoldRed(f"Error writing integer tag {tag}: {e}")
+            return False
 
     def resetTagToFalse(self, tag: str, debug: bool = False) -> bool:
         """Reset a tag to False."""
@@ -1464,9 +1623,6 @@ class IOServer:
         self.resetTagToFalse(IOServer.PLC_PC_Station2TorqueValueSet)
         self.resetTagToZero(IOServer.PLC_PC_Station2TorqueValue)
 
-        # Step 6: Station 3 Rotation Done
-        self.resetTagToFalse(IOServer.PLC_PC_Station3RotationDone)
-
         # Step 7: No Cap Bunk
         self.resetTagToFalse(IOServer.PLC_PC_CheckNoCapBunk)
         self.resetTagToFalse(IOServer.PC_PLC_NoCapBunkCheckOK)
@@ -1509,21 +1665,26 @@ class IOServer:
         """Get the current QR code for this cycle."""
         return self.currentQRCode
 
-    def get_tag_address(self, tag: str) -> str:
-        """Resolve a logical tag name to its absolute S7 address (or '' if unmapped)."""
-        return self.plc.address_for(tag) or ""
+    def get_tag_address(self, tag: str) -> int:
+        """Placeholder for mapping tags to addresses (not needed for pycomm3)."""
+        return 0
 
     def find_pids(self):
-        """Unsupported on pyS7 (relied on pycomm3 tag/type introspection)."""
-        raise NotImplementedError("find_pids is not supported by the pyS7 backend")
+        pid_tags = [
+            tag
+            for tag, _def in self.clientForReads.tags.items()
+            if _def['data_type_name'] == 'PID'
+        ]
+        return pid_tags
 
     def find_attributes(self):
-        """Unsupported on pyS7 (relied on pycomm3 tag/type introspection)."""
-        raise NotImplementedError("find_attributes is not supported by the pyS7 backend")
+        for typ in self.clientForReads.data_types:
+            with self.readingLock:
+                print(f'{typ} attributes: ', self.clientForReads.data_types[typ]['attributes'])
 
     def getAllTagValues(self) -> dict:
         """Read all PLC tags and return as a dictionary."""
-        if not self.plc.is_connected:
+        if self.clientForReads is None or not self.clientForReads.connected:
             return {}
 
         tag_values = {}
@@ -1563,10 +1724,6 @@ class IOServer:
         tag_values[IOServer.PLC_PC_Station2TorqueValueSet] = self.read_bool(IOServer.PLC_PC_Station2TorqueValueSet,
                                                                             debug=False)
         tag_values[IOServer.PLC_PC_Station2TorqueValue] = self.read_float(IOServer.PLC_PC_Station2TorqueValue,
-                                                                          debug=False)
-
-        # Step 6: Station 3 Rotation Done
-        tag_values[IOServer.PLC_PC_Station3RotationDone] = self.read_bool(IOServer.PLC_PC_Station3RotationDone,
                                                                           debug=False)
 
         # Step 7: No Cap Bunk
@@ -1613,8 +1770,17 @@ class IOServer:
         tag_values[IOServer.PLC_PC_EmergencyAbort] = self.read_bool(IOServer.PLC_PC_EmergencyAbort, debug=False)
         tag_values[IOServer.PLC_PC_WatchTag] = self.read_int(IOServer.PLC_PC_WatchTag, debug=False)
 
-        # Add current machine state
-        tag_values["_currentMachineState"] = str(self.machineState.getCurrentState())
+        # Machine 2 cycle settings written by the PC in state 2
+        tag_values[IOServer.PC_PLC_LH_RH_Selection] = self.read_int(IOServer.PC_PLC_LH_RH_Selection, debug=False)
+        tag_values[IOServer.PC_PLC_ModelSelection] = self.read_int(IOServer.PC_PLC_ModelSelection, debug=False)
+        tag_values[IOServer.PC_PLC_TighteningTorque1Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque1Setpoint, debug=False)
+        tag_values[IOServer.PC_PLC_TighteningTorque2Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque2Setpoint, debug=False)
+        tag_values[IOServer.PC_PLC_RotationRPM1] = self.read_int(IOServer.PC_PLC_RotationRPM1, debug=False)
+        tag_values[IOServer.PC_PLC_RotationRPM2] = self.read_int(IOServer.PC_PLC_RotationRPM2, debug=False)
+        tag_values[IOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(IOServer.PC_PLC_ConnectionStatusTag, debug=False)
+
+        # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)
+        tag_values["_currentMachineState"] = self.machineState.getCurrentState().name
 
         return tag_values
 
@@ -1660,20 +1826,26 @@ class IOServer:
                 self.updateTagsProcessor.stop()
             except:
                 pass
-        try:
-            self.plc.close()
-        except:
-            pass
-        logBoth('logInfo', IOServer.logSource, f"IOServer shutdown", Logger.CRITICAL)
+        if self.clientForReads and self.clientForReads.connected:
+            try:
+                self.clientForReads.close()
+            except:
+                pass
+            try:
+                self.clientForWrites.close()
+            except:
+                pass
+        self.logger.info(f"IOServer shutdown")
+        printBoldRed(f"IOServer shutdown")
 
 
 # *********************************************************************
 
 def startIOServer(mode : str = "TEST"):
     io = IOServer(mode = mode)
-    logBoth('logCritical', IOServer.logSource, "*****************", Logger.SUCCESS)
-    logBoth('logCritical', IOServer.logSource, "Started IO Server", Logger.SUCCESS)
-    logBoth('logCritical', IOServer.logSource, "*****************", Logger.SUCCESS)
+    printBoldBlue(f"*****************")
+    printBlue(f"Started IO Server")
+    printBoldBlue(f"*****************")
     io.heartbeatThread.join()
     io.monitorStopThread.join()
     sys.exit(0)

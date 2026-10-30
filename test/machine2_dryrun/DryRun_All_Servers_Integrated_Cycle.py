@@ -22,9 +22,9 @@ class FakeLogix:
         with LOCK: return _V(TAGS[t[0]])
     def write(self, t, v):
         with LOCK: TAGS[t] = v; WRITES.append((t, v))
-import costhetaio.IOServer as IOS
+import costhetaio.allenbradley.IOServer as IOS
 IOS.LogixDriver = FakeLogix
-from costhetaio.IOServer import IOServer
+from costhetaio.allenbradley.IOServer import IOServer
 from statemachine.StateMachine import MachineState as MS
 from utils.RedisUtils import *
 import persistence.Persistence as P
