@@ -1,3 +1,4 @@
+import os
 import pathlib
 import platform
 import threading
@@ -230,6 +231,23 @@ class CosThetaConfigurator():
     # HELPER METHODS FOR TYPE-SAFE VALUE RETRIEVAL
     # =============================================================================
 
+    PLC_VENDOR_KEY = "plc.vendor"
+    PLC_VENDORS = ("allenbradley", "siemens")
+
+    @classmethod
+    def getPlcVendor(cls) -> str:
+        """Which IOServer MainProgram starts: 'allenbradley' (default) or 'siemens' (plc.vendor). The environment
+        variable COSTHETA_PLC_VENDOR, if set, takes precedence (used by the dry runs to test either IOServer)."""
+        vendor = os.environ.get("COSTHETA_PLC_VENDOR")
+        if not vendor:
+            try:
+                l, r, c = CosThetaConfigurator._getConfig()
+                vendor = c[CosThetaConfigurator.PLC_VENDOR_KEY]
+            except Exception:
+                vendor = None
+        vendor = str(vendor or "allenbradley").strip().lower()
+        return vendor if vendor in CosThetaConfigurator.PLC_VENDORS else "allenbradley"
+
     @classmethod
     def getValue(cls, key: str, default: str = '') -> Any:
         """
@@ -244,10 +262,20 @@ class CosThetaConfigurator():
         """
         key = str(key)
         l, r, c = CosThetaConfigurator._getConfig()
-        try:
-            value = c[key]
-        except Exception:
-            value = None
+        value = None
+        # PLC vendor overrides: when the Siemens IOServer is selected (plc.vendor=siemens), a key "siemens.<key>"
+        # replaces "<key>" (e.g. its own tag names and PLC IP). The Allen-Bradley values stay the plain keys.
+        if key != CosThetaConfigurator.PLC_VENDOR_KEY and not key.startswith("siemens."):
+            if CosThetaConfigurator.getPlcVendor() == "siemens":
+                try:
+                    value = c[f"siemens.{key}"]
+                except Exception:
+                    value = None
+        if value is None:
+            try:
+                value = c[key]
+            except Exception:
+                value = None
 
         if value is None:
             return default
@@ -2513,6 +2541,8 @@ class CosThetaConfigurator():
 
     # ==================== Component Press Done Tag (Step 8) ====================
     PLC_PC_COMPONENT_PRESS_DONE_KEY = "plc.pc.component.press.done.tagname"
+    # Read together with the Station 2 torque value (Siemens PLC); empty = not provided by the PLC
+    PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY = "plc.pc.station2.rotation.during.tightening.done.tagname"
 
     # ==================== No Bunk Tags (Step 9) ====================
     PLC_PC_CHECK_NO_BUNK_KEY = "plc.pc.check.no.bunk.tagname"
@@ -2680,6 +2710,11 @@ class CosThetaConfigurator():
     def getPlcPcComponentPressDoneTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_COMPONENT_PRESS_DONE_KEY,
                                              default="PLC_PC_ComponentPressDone")
+
+    @classmethod
+    def getPlcPcStation2RotationDuringTighteningDoneTagName(cls) -> str:
+        return str(CosThetaConfigurator.getValue(
+            CosThetaConfigurator.PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY, default="") or "").strip()
 
     # ==================== No Bunk Methods (Step 9) ====================
     @classmethod

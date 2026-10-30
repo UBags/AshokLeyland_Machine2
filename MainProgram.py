@@ -109,7 +109,12 @@ def startTheQRCodeServer(mode : str):
     startQRCodeServer(mode=mode)
 
 def startTheIOServer(mode : str):
-    from costhetaio.allenbradley.IOServer import startIOServer
+    # plc.vendor in ApplicationConfiguration.properties: allenbradley (pycomm3) or siemens (pyS7, S7-1515)
+    from Configuration import CosThetaConfigurator
+    if CosThetaConfigurator.getPlcVendor() == "siemens":
+        from costhetaio.siemens.IOServer import startIOServer
+    else:
+        from costhetaio.allenbradley.IOServer import startIOServer
     startIOServer(mode = mode)
 
 def startTheCameraServer(mode : str):
@@ -130,19 +135,19 @@ def startTheFrontendServer(mode : str, username : str, role : str):
 
 def checkIPs():
     cameraIP = CosThetaConfigurator.getInstance().getCameraIP()
-    allenBradleyPLC_IP = CosThetaConfigurator.getInstance().getPlcIP()
+    plcIP = CosThetaConfigurator.getInstance().getPlcIP()
     cameraReachable = checkIP(cameraIP)
-    allenBradleyPLC_Reachable = checkIP(allenBradleyPLC_IP)
+    plcReachable = checkIP(plcIP)
 
     if cameraReachable:
         printBoldGreen(f"Camera is reachable at IP {cameraIP}. OK.")
     else:
         printBoldRed(f"Camera is not reachable at IP {cameraIP}. Please check power to the camera and RJ45 connection from the camera to the system.")
 
-    if allenBradleyPLC_Reachable:
-        printBoldGreen(f"I/O Module - PLC is reachable at IP {allenBradleyPLC_IP}. OK.")
+    if plcReachable:
+        printBoldGreen(f"I/O Module - PLC is reachable at IP {plcIP}. OK.")
     else:
-        printBoldRed(f"I/O Module - PLC is not reachable at IP {allenBradleyPLC_IP}. Please check power to the PLC and RJ45 connection from the PLc to the system.")
+        printBoldRed(f"I/O Module - PLC is not reachable at IP {plcIP}. Please check power to the PLC and RJ45 connection from the PLc to the system.")
         # raise Exception("IOModule not reachable")
 
 # printBoldBlue(f"MainProgram process is {os.getpid()}")

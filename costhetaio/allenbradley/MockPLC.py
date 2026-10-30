@@ -154,6 +154,11 @@ class MockPLC:
             config.getPcPlcConnectionStatusTagName(): False,
         }
 
+        # Station 2 rotation-during-tightening done: only when the PLC provides it (Siemens)
+        rotationDone = config.getPlcPcStation2RotationDuringTighteningDoneTagName()
+        if rotationDone:
+            default_tags[rotationDone] = False
+
         with self._tag_lock:
             self._tags = default_tags.copy()
 

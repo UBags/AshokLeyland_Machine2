@@ -95,7 +95,9 @@ TAG_GROUPS = [
                                   _cfg.getPcPlcNutAndPlateWasherOKTagName(),
                                   _cfg.getPcPlcNutAndPlateWasherDoneTagName()]),
     ("Step 5 & 9: Station2 Torque", [_cfg.getPlcPcStation2TorqueValueSetTagName(),
-                                     _cfg.getPlcPcStation2TorqueValueTagName()]),
+                                     _cfg.getPlcPcStation2TorqueValueTagName()]
+                                    + ([_cfg.getPlcPcStation2RotationDuringTighteningDoneTagName()]   # Siemens only
+                                       if _cfg.getPlcPcStation2RotationDuringTighteningDoneTagName() else [])),
     ("Step 6: Bunk for Comp. Press", [_cfg.getPlcPcCheckNoCapBunkTagName(), _cfg.getPcPlcNoCapBunkCheckOKTagName(),
                                       _cfg.getPcPlcNoCapBunkCheckDoneTagName()]),
     ("Step 7: Component Press", [_cfg.getPlcPcComponentPressDoneTagName()]),

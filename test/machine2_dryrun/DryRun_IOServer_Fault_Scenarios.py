@@ -34,30 +34,10 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-TAGS = collections.defaultdict(lambda: False)
-WRITES = []                      # (tag, value) for every PC write
-LOCK = threading.Lock()
-
-
-class _V:
-    def __init__(self, v): self.value = v
-
-
-class FakeLogix:
-    def __init__(self, ip): self.connected = False
-    def open(self): self.connected = True
-    def close(self): self.connected = False
-    def read(self, *tags):
-        with LOCK:
-            return _V(TAGS[tags[0]])
-    def write(self, tag, value):
-        with LOCK:
-            TAGS[tag] = value; WRITES.append((tag, value))
-
-
-import costhetaio.allenbradley.IOServer as IOS
-IOS.LogixDriver = FakeLogix
-from costhetaio.allenbradley.IOServer import IOServer
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _plc_sim import setup        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
+print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
 from utils.RedisUtils import *
 
@@ -286,9 +266,10 @@ def run_scenarios():
         "PLC_PC_Station3TorqueValueSet", "PLC_PC_Station3TorqueValue",
         "PLC_PC_EmergencyAbort")}
     NOT_RESET_ON_ABORT = {"PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
+                          "PLC_PC_Station2RotationDuringTighteningDone",   # PLC-owned, read only (no action yet)
                           "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                           "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2"}
-    all_tag_attrs = {a for a in vars(IOServer) if a.split("_")[0] in ("PLC", "PC") and a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
+    all_tag_attrs = {a for a in dir(IOServer) if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
     unclassified = all_tag_attrs - set(RESET_TAGS) - NOT_RESET_ON_ABORT
     check("C: every IOServer PLC tag is classified (reset on abort, or deliberately not)", unclassified == set(), str(sorted(unclassified)))
     with LOCK:

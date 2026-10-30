@@ -306,3 +306,47 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - **Integrated window, 19/19:** with the real frontend and simulated QR and camera servers, all 15 steps are delivered and consumed, and the record is all OK.
 - **Auto Run All OK** in the frontend simulated-inputs window now starts from the current step and finishes the cycle the frontend is in. Before, it always restarted at the QR step, which stalled when pressed mid-cycle. Pressed at the QR step, it still runs a whole cycle. Verified in both folders, 11/11 checks each: a QR and a knuckle NOT OK sent by hand, then Auto Run from the knuckle to the end of the cycle, then a full Auto Run cycle; each record is all OK.
 - **Deleted:** `test/MockPLCTest.py`, an old Machine 1 GUI with its own copy of the IOServer. It used Machine 1's free-rotations state and could not run against the current code. `Test_IOServer_With_Mock_PLC_UI.py` replaces it.
+
+## 16. Siemens S7-1515 IOServer (2026-10-31)
+
+- **Selecting the PLC:** `plc.vendor=allenbradley|siemens` in `ApplicationConfiguration.properties` decides which IOServer MainProgram starts; the default is allenbradley. For dry runs, the environment variable `COSTHETA_PLC_VENDOR` overrides it.
+- **Siemens settings:** when the vendor is siemens, Configuration takes each key from its `siemens.<key>` counterpart. The new SIEMENS S7-1515 section in the properties file holds those keys:
+  - the tag names from `HUb_and_Knuckle_Revised_Assembly_Process.xlsx`;
+  - `siemens.plc.ip=192.168.1.10`.
+
+  The Allen-Bradley keys are unchanged. MainProgram's PLC ping uses whichever IP applies.
+- **`costhetaio/siemens/IOServer.py` is now a subclass of `costhetaio/allenbradley/IOServer.py`.** It replaces the old 1,689-line Machine 1 port. Only the PLC client changes: `connectPLC()` creates two `PyS7PLCBackend` clients (reads and writes) instead of two pycomm3 `LogixDriver` clients. Everything else is the Allen-Bradley code itself, so the functionality is identical by construction:
+  - the 28 states and the OK, pause, Done handshake;
+  - torque reads and the delayed tag resets;
+  - the state-2 cycle settings (side, model, torque setpoints 1 and 2, RPM 1 and 2; -1 means skipped);
+  - emergency abort, heartbeats and Redis messages;
+  - tag publishing and mock-PLC mode.
+
+  At start-up it refuses to run if any tag it uses has no address.
+- **`costhetaio/siemens/plc_backend.py` was rewritten.** `PyS7PLCBackend` presents pyS7 through the LogixDriver interface (`open`, `close`, `connected`, `read(tag).value`, `write(tag, value)`). It resolves each tag name to its DB address through `IOServerProperties.yaml` and uses the pyS7 calls from `s7_smoke_test.py`:
+  - the keyword constructor with fallbacks, and connect with retries;
+  - `read([addr])[0]` and `write([addr], [value])`;
+  - reading the byte and masking the bit when a bit read fails with INVALID_DATA_SIZE.
+
+  Values are converted to the address type before writing, and an INT is range-checked to 16 bits. `load_tag_map()` rejects bad addresses, a type that disagrees with its address letter, two tags on one bit, and overlapping words.
+- **`IOServerProperties.yaml`** holds all 46 tags in DB500, from the spreadsheet's last column, with the corrections of 2026-10-31:
+  - Station 2 torque-set `X2.7` at both tightening steps;
+  - cap-press done = `PLC_PC_Station4CapPressDone X3.2`; the cap-press-value-set bit is spurious and unused.
+
+  These addresses are **provisional** until confirmed against the PLC programme:
+
+  | Tag | Address | Reason |
+  |---|---|---|
+  | Component press done | `X3.5` | not in the sheet |
+  | Split pin & washer Done / OK | `X0.5` / `X0.6` | the sheet's `X1.3` / `X1.4` are Cap OK / Done |
+  | Station 3 torque-set | `X2.6` | `X2.7` is Station 2 |
+  | Tightening torque setpoints 1 / 2 | `R18` / `R22` | old rotation-count slots |
+  | RPM 1 / 2 | `I40` / `I42` | not in the sheet |
+- **`PLC_PC_Station2RotationDuringTighteningDone`** (`X3.6`) is read and logged with each Station 2 torque value. No action is taken on it. It is also in the tag dump and the Real-PLC test window. On the Allen-Bradley its tag name is empty, so it is skipped.
+- **`costhetaio/siemens/s7_tag_check.py` (new):** a read-only commissioning check. It validates the tag map, connects, reads every tag and checks the watch tag reads 1234.
+- **`requirements.txt`:** adds `pyS7==3.1.2`, the PyPI release of github.com/xtimmy86x/pyS7.
+- **Verified:**
+  - The three IOServer dry runs now run against either PLC through `test/*_dryrun/_plc_sim.py`. The Siemens run uses a simulated S7 data block with real byte encoding, so address clashes would show up as failures, and bit reads fail once to exercise the fallback.
+  - **Siemens:** fault scenarios 35/35; two full cycles with the state trace exact, the settings written to `PC_PLC_LH_RH_Selection` / `PC_PLC_ComponentType` / the setpoints, and the rotation-done bit read at both tightening steps; integrated run with all servers, giving the DB row DOSTPLUS/RHS/2.5T/19.08/19.03/2.41/all OK.
+  - **Allen-Bradley:** unchanged, with the same results. `s7_tag_check.py` passes against the simulated PLC.
+  - The tag-map validator catches the spreadsheet's three original clashes.

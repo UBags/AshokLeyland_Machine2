@@ -2,256 +2,248 @@
 # See LICENSE in the project root for license information.
 
 """
-pyS7 PLC backend for IOServer (Siemens S7-1500 port).
+pyS7 PLC backend for the Siemens S7-1515 IOServer.
 
-This module isolates every line that touches the PLC driver. It replaces the
-pycomm3 `LogixDriver` layer with pyS7's `S7Client`, keeping the *exact* method
-signatures and return contracts of IOServer's original primitives so that the
-loops, the state machine and the Redis wiring above it do not change.
+PyS7PLCBackend gives the IOServer the same client interface it uses with Allen-Bradley's pycomm3 LogixDriver:
+    open(), close(), .connected, read(tag) -> object with .value, read(tag1, tag2, ...) -> list, write(tag, value)
+with SYMBOLIC tag names. Each name is resolved to its absolute DB address through IOServerProperties.yaml, so the
+IOServer's state machine, handshakes and loops are exactly the Allen-Bradley code (costhetaio/siemens/IOServer.py only
+swaps the client).
 
-Design notes
-------------
-* Two independent S7Client sockets (reads / writes), mirroring the original
-  two-LogixDriver split. pyS7 wants one client per thread; the reading/writing
-  locks preserve that guarantee when several threads share a client.
-* Symbolic tag name -> absolute S7 address resolution comes from
-  IOServerProperties.yaml. The tag NAMES stay identical to the IOServer
-  constants; only their resolved target changes (symbolic -> DBx,offset).
-* Bit writes go out as true single-bit S7 writes (transport size BIT), so a
-  PC write never disturbs neighbouring bits on the wire.
+The pyS7 calls are the ones proven in s7_smoke_test.py:
+  * S7Client constructed with keyword arguments, falling back to the minimal constructor on a TypeError (pyS7
+    versions differ: pdu_size vs max_pdu), connect() retried up to `connect_retries` times;
+  * client.read([address])[0] and client.write([address], [value]);
+  * a bit read that fails with INVALID_DATA_SIZE is retried as a byte read plus bit mask (safe_read_one).
+Values are coerced to the address type before writing (bool for X, int for I/DI, float for R).
 
-Deviation from the original (intentional, flagged):
-* IOServer.read_int() returned a value only inside its `if debug:` branch, so
-  with the default debug=False it fell through and returned None. That made the
-  watchdog check (`read_int(WatchTag) != 1234`) fire spuriously. This port
-  returns the value unconditionally.
+Install pyS7:  pip install pyS7   (PyPI release of https://github.com/xtimmy86x/pyS7)
 """
 
 from __future__ import annotations
 
 import os
+import re
 import threading
-from typing import Any, Dict, Optional, Tuple
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
-from pyS7 import S7Client
 
-# ---- fallback sentinels (kept identical to IOServer's constants) -------------
-FALSE_FLOAT_VALUE: float = -1234.0
-FALSE_INT_VALUE: int = -1234
+try:
+    from pyS7 import S7Client
+except ImportError:                       # reported clearly when the Siemens IOServer actually connects
+    S7Client = None
+
+try:
+    from pyS7 import extract_bit_from_byte  # type: ignore
+except Exception:
+    def extract_bit_from_byte(byte_value: int, bit_offset: int) -> bool:
+        return bool((byte_value >> bit_offset) & 1)
+
+DEFAULT_PROPERTIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "IOServerProperties.yaml")
+
+_ADDRESS = re.compile(r"^DB(\d+),(X(\d+)\.([0-7])|I(\d+)|DI(\d+)|R(\d+)|B(\d+))$")
+_SIZES = {"X": 0, "B": 1, "I": 2, "DI": 4, "R": 4}
+_TYPE_FOR_LETTER = {"X": "bool", "B": "int", "I": "int", "DI": "int", "R": "float"}
+
+
+def parse_address(address: str) -> Tuple[int, str, int, int]:
+    """'DB500,X2.5' -> (500, 'X', 2, 5); 'DB500,I16' -> (500, 'I', 16, 0). Raises ValueError otherwise."""
+    m = _ADDRESS.match(address.strip())
+    if not m:
+        raise ValueError(f"unsupported S7 address {address!r} (use DB<n>,X<b>.<bit> / I<b> / DI<b> / R<b> / B<b>)")
+    db = int(m.group(1))
+    if m.group(3) is not None:
+        return db, "X", int(m.group(3)), int(m.group(4))
+    for letter, group in (("I", 5), ("DI", 6), ("R", 7), ("B", 8)):
+        if m.group(group) is not None:
+            return db, letter, int(m.group(group)), 0
+    raise ValueError(address)
+
+
+def load_tag_map(path: str = DEFAULT_PROPERTIES_PATH) -> Tuple[Dict[str, Any], Dict[str, Tuple[str, str, str]]]:
+    """Read IOServerProperties.yaml -> (plc settings, {tag: (address, type, dir)}), validating every entry:
+    address syntax, type agreeing with the address letter, no two tags on the same bit, no overlapping words."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"IOServerProperties not found: {path}")
+    with open(path, "r", encoding="utf-8") as fh:
+        cfg = yaml.safe_load(fh) or {}
+    tags: Dict[str, Tuple[str, str, str]] = {}
+    bits: Dict[Tuple[int, int, int], str] = {}
+    spans: List[Tuple[int, int, int, str]] = []          # (db, start, end, tag) for byte/word/real areas
+    problems = []
+    for name, spec in (cfg.get("tags") or {}).items():
+        address = str(spec["address"]).strip()
+        typ = str(spec.get("type", "")).lower()
+        direction = str(spec.get("dir", "")).lower()
+        try:
+            db, letter, byte, bit = parse_address(address)
+        except ValueError as e:
+            problems.append(f"{name}: {e}")
+            continue
+        if typ != _TYPE_FOR_LETTER[letter]:
+            problems.append(f"{name}: type '{typ}' does not match address {address} ({_TYPE_FOR_LETTER[letter]})")
+        if letter == "X":
+            if (db, byte, bit) in bits:
+                problems.append(f"{name} and {bits[(db, byte, bit)]} share {address}")
+            bits[(db, byte, bit)] = name
+            spans.append((db, byte, byte + 1, name))
+        else:
+            spans.append((db, byte, byte + _SIZES[letter], name))
+        tags[name] = (address, typ, direction)
+    # words / reals must not overlap each other or bit bytes (bits in the same byte are fine)
+    words = [s for s in spans if tags.get(s[3], ("", "", ""))[1] != "bool"]
+    for i, (db, a0, a1, n) in enumerate(words):
+        for db2, b0, b1, m in spans:
+            if m != n and db == db2 and a0 < b1 and b0 < a1:
+                pair = tuple(sorted((n, m)))
+                msg = f"{pair[0]} and {pair[1]} overlap in DB{db}"
+                if msg not in problems:
+                    problems.append(msg)
+    if problems:
+        raise ValueError("IOServerProperties.yaml: " + "; ".join(problems))
+    return cfg.get("plc", {}) or {}, tags
+
+
+class _TagValue:
+    """What pycomm3's LogixDriver.read() returns: an object with .tag, .value, .error."""
+    __slots__ = ("tag", "value", "error")
+
+    def __init__(self, tag: str, value: Any, error: Optional[str] = None):
+        self.tag, self.value, self.error = tag, value, error
+
+    def __repr__(self):
+        return f"_TagValue({self.tag!r}, {self.value!r}{', ' + self.error if self.error else ''})"
+
+
+def _byte_addr_for_bit(bit_addr: str) -> Tuple[str, int]:
+    """'DB100,X3.5' -> ('DB100,B3', 5). (from s7_smoke_test.py)"""
+    m = re.match(r"^(DB\d+),X(\d+)\.([0-7])$", bit_addr.strip())
+    if not m:
+        raise ValueError(f"not a DB bit address: {bit_addr}")
+    return f"{m.group(1)},B{int(m.group(2))}", int(m.group(3))
+
+
+def safe_read_one(client: Any, addr: str) -> Any:
+    """Read a single address; on INVALID_DATA_SIZE for a bit, fall back to byte + mask. (from s7_smoke_test.py)"""
+    try:
+        return client.read([addr])[0]
+    except Exception as e:
+        if "INVALID_DATA_SIZE" in str(e) and ",X" in addr:
+            byte_addr, bit = _byte_addr_for_bit(addr)
+            byte_val = client.read([byte_addr])[0]
+            return extract_bit_from_byte(int(byte_val), bit)
+        raise
 
 
 class PyS7PLCBackend:
-    """Holds the two S7Client connections and the tag->address map.
+    """One pyS7 connection, presented with the LogixDriver interface the IOServer uses. The IOServer creates two
+    (reads / writes) and guards each with its own lock, exactly as with pycomm3."""
 
-    IOServer delegates its read_*/write_* primitives and connectPLC to an
-    instance of this class. Return values match the originals exactly.
-    """
-
-    def __init__(self, properties_path: str, logger=None) -> None:
-        self.properties_path = properties_path
-        self.logger = logger  # optional: pass IOServer.logger for parity
-
-        cfg = self._load(properties_path)
-        plc = cfg.get("plc", {}) or {}
-        self.address: Optional[str] = plc.get("address")
+    def __init__(self, ip: Optional[str] = None, properties_path: str = DEFAULT_PROPERTIES_PATH, logger=None):
+        plc, self._tagmap = load_tag_map(properties_path)
+        self.ip: Optional[str] = plc.get("address") or ip
         self.rack: int = int(plc.get("rack", 0))
         self.slot: int = int(plc.get("slot", 1))
         self.pdu_size: int = int(plc.get("pdu_size", 480))
+        self.timeout: float = float(plc.get("timeout", 5.0))
+        self.connect_retries: int = int(plc.get("connect_retries", 3))
+        self.logger = logger
+        self._client = None
+        self._lock = threading.Lock()
 
-        # tag name -> (address, type, dir)
-        self._tagmap: Dict[str, Tuple[str, str, str]] = {}
-        for name, spec in (cfg.get("tags") or {}).items():
-            self._tagmap[name] = (
-                spec["address"],
-                str(spec.get("type", "")).lower(),
-                str(spec.get("dir", "")).lower(),
-            )
-
-        self.clientForReads: Optional[S7Client] = None
-        self.clientForWrites: Optional[S7Client] = None
-
-        self.readingLock = threading.Lock()
-        self.writingLock = threading.Lock()
-
-    # ---- config -------------------------------------------------------------
-
-    @staticmethod
-    def _load(path: str) -> Dict[str, Any]:
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"IOServerProperties not found: {path}")
-        with open(path, "r", encoding="utf-8") as fh:
-            return yaml.safe_load(fh) or {}
+    # ---- tag map ----------------------------------------------------------------------------------------------------
+    @property
+    def tag_names(self) -> List[str]:
+        return list(self._tagmap)
 
     def address_for(self, tag: str) -> Optional[str]:
-        """Resolve a logical tag name to its absolute S7 address, or None."""
         entry = self._tagmap.get(tag)
         return entry[0] if entry else None
 
-    def _warn(self, msg: str) -> None:
-        if self.logger is not None:
+    def _resolve(self, tag: str) -> Tuple[str, str]:
+        entry = self._tagmap.get(tag)
+        if entry is None:
+            raise KeyError(f"tag {tag!r} has no address in IOServerProperties.yaml")
+        return entry[0], entry[1]
+
+    # ---- connection (LogixDriver: open / close / connected) ---------------------------------------------------------
+    def _new_client(self):
+        """As s7_smoke_test.connect(): keyword arguments first, minimal constructor on TypeError."""
+        if S7Client is None:
+            raise ImportError("pyS7 is not installed: pip install pyS7")
+        for kwargs in (dict(address=self.ip, rack=self.rack, slot=self.slot, pdu_size=self.pdu_size, timeout=self.timeout),
+                       dict(address=self.ip, rack=self.rack, slot=self.slot, max_pdu=self.pdu_size, timeout=self.timeout)):
             try:
-                self.logger.warning(msg)
+                return S7Client(**kwargs)
+            except TypeError:
+                continue
+        return S7Client(address=self.ip, rack=self.rack, slot=self.slot)
+
+    def open(self) -> bool:
+        if not self.ip:
+            raise ConnectionError("Siemens PLC IP not set (siemens.plc.ip in ApplicationConfiguration.properties)")
+        last_error: Optional[Exception] = None
+        for attempt in range(1, self.connect_retries + 1):
+            try:
+                client = self._new_client()
+                client.connect()
+                if client.is_connected:
+                    self._client = client
+                    return True
+            except Exception as e:
+                last_error = e
+                time.sleep(min(2 ** (attempt - 1), 5) if attempt < self.connect_retries else 0)
+        raise ConnectionError(f"could not connect to S7 PLC {self.ip} rack {self.rack} slot {self.slot}: {last_error}")
+
+    def close(self) -> None:
+        client, self._client = self._client, None
+        if client is not None:
+            try:
+                client.disconnect()
             except Exception:
                 pass
 
-    # ---- connection (mirrors IOServer.connectPLC / MockPLC removed) ----------
-
     @property
-    def is_connected(self) -> bool:
-        return (
-            self.clientForReads is not None
-            and self.clientForWrites is not None
-            and self.clientForReads.is_connected
-            and self.clientForWrites.is_connected
-        )
-
-    def connect(self, forceRenew: bool = False, ip: Optional[str] = None) -> bool:
-        """Open both sockets. Returns True on success, False otherwise.
-
-        `ip` overrides the YAML address (IOServer passes self.plc_ip).
-        """
-        target = ip or self.address
-        if target is None:
-            self._warn("PLC address not set in YAML and no ip override given")
-            return False
-
-        if forceRenew:
-            self.close()
-
+    def connected(self) -> bool:
         try:
-            self.clientForReads = S7Client(target, self.rack, self.slot, pdu_size=self.pdu_size)
-            self.clientForReads.connect()
-            self.clientForWrites = S7Client(target, self.rack, self.slot, pdu_size=self.pdu_size)
-            self.clientForWrites.connect()
-            return True
-        except Exception as e:
-            self._warn(f"PLC connection error: {e}")
-            self.close()
+            return self._client is not None and bool(self._client.is_connected)
+        except Exception:
             return False
 
-    def close(self) -> None:
-        for attr in ("clientForReads", "clientForWrites"):
-            client = getattr(self, attr, None)
-            if client is not None:
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
-            setattr(self, attr, None)
+    # ---- read / write (LogixDriver: read(tag) -> .value, read(*tags) -> list, write(tag, value)) --------------------
+    def _read_one(self, tag: str) -> _TagValue:
+        address, typ = self._resolve(tag)
+        with self._lock:
+            value = safe_read_one(self._client, address)
+        if typ == "bool":
+            value = bool(value)
+        elif typ == "float":
+            value = float(value)
+        elif typ == "int":
+            value = int(value)
+        return _TagValue(tag, value)
 
-    # ---- read primitives (contracts identical to IOServer) ------------------
+    def read(self, *tags: str):
+        if not tags:
+            return None
+        if len(tags) == 1:
+            return self._read_one(tags[0])
+        return [self._read_one(t) for t in tags]
 
-    def read_bool(self, tag: str, expected_value: bool = True, debug: bool = False) -> Optional[bool]:
-        if not tag:
-            return False
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"read_bool: no address mapped for tag {tag}")
-            return not expected_value
-        if self.clientForReads is None or not self.clientForReads.is_connected:
-            return False
-        try:
-            with self.readingLock:
-                value = self.clientForReads.read([addr])[0]
-            if value is None:
-                self._warn(f"Error reading bool tag {tag}")
-                return not expected_value
-            return bool(value)
-        except Exception as e:
-            self._warn(f"Error reading bool tag {tag}: {e}")
-            return not expected_value
-
-    def read_float(self, tag: str, debug: bool = False) -> Optional[float]:
-        if not tag:
-            return FALSE_FLOAT_VALUE
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"read_float: no address mapped for tag {tag}")
-            return FALSE_FLOAT_VALUE
-        if self.clientForReads is None or not self.clientForReads.is_connected:
-            return FALSE_FLOAT_VALUE
-        try:
-            with self.readingLock:
-                value = self.clientForReads.read([addr])[0]
-            if value is None:
-                self._warn(f"Error reading float tag {tag}")
-                return FALSE_FLOAT_VALUE
-            return float(value)
-        except Exception as e:
-            self._warn(f"Error reading float tag {tag}: {e}")
-            return FALSE_FLOAT_VALUE
-
-    def read_int(self, tag: str, debug: bool = False) -> Optional[int]:
-        # NOTE: returns unconditionally (original only returned under `if debug`).
-        if not tag:
-            return FALSE_INT_VALUE
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"read_int: no address mapped for tag {tag}")
-            return FALSE_INT_VALUE
-        if self.clientForReads is None or not self.clientForReads.is_connected:
-            return FALSE_INT_VALUE
-        try:
-            with self.readingLock:
-                value = self.clientForReads.read([addr])[0]
-            if value is None:
-                self._warn(f"Error reading int tag {tag}: value is None")
-                return FALSE_INT_VALUE
-            return int(value)
-        except Exception as e:
-            self._warn(f"Error reading int tag {tag}: {e}")
-            return FALSE_INT_VALUE
-
-    # ---- write primitives (contracts identical to IOServer) -----------------
-
-    def write_bool(self, tag: str, value: bool, debug: bool = True) -> bool:
-        if tag is None:
-            return False
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"write_bool: no address mapped for tag {tag}")
-            return False
-        if self.clientForWrites is None or not self.clientForWrites.is_connected:
-            return False
-        try:
-            with self.writingLock:
-                self.clientForWrites.write([addr], [bool(value)])
-            return True
-        except Exception as e:
-            self._warn(f"Error writing bool tag {tag}: {e}")
-            return False
-
-    def write_float(self, tag: str, value: float, debug: bool = True) -> bool:
-        if tag is None:
-            return False
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"write_float: no address mapped for tag {tag}")
-            return False
-        if self.clientForWrites is None or not self.clientForWrites.is_connected:
-            return False
-        try:
-            with self.writingLock:
-                self.clientForWrites.write([addr], [float(value)])
-            return True
-        except Exception as e:
-            self._warn(f"Error writing float tag {tag}: {e}")
-            return False
-
-    def write_int(self, tag: str, value: int, debug: bool = False) -> bool:
-        if tag is None or not isinstance(value, int):
-            return False
-        addr = self.address_for(tag)
-        if addr is None:
-            self._warn(f"write_int: no address mapped for tag {tag}")
-            return False
-        if self.clientForWrites is None or not self.clientForWrites.is_connected:
-            return False
-        try:
-            with self.writingLock:
-                self.clientForWrites.write([addr], [int(value)])
-            return True
-        except Exception as e:
-            self._warn(f"Error writing int tag {tag}: {e}")
-            return False
+    def write(self, tag: str, value: Any) -> _TagValue:
+        address, typ = self._resolve(tag)
+        if typ == "bool":
+            value = bool(value)
+        elif typ == "float":
+            value = float(value)
+        elif typ == "int":
+            if isinstance(value, float) and not value.is_integer():
+                raise ValueError(f"{tag}: {value} is not an integer")
+            value = int(value)
+            if not -32768 <= value <= 32767 and ",I" in address:
+                raise ValueError(f"{tag}: {value} does not fit a 16-bit INT")
+        with self._lock:
+            self._client.write([address], [value])
+        return _TagValue(tag, value)

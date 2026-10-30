@@ -11,20 +11,10 @@ import numpy as np, cv2, psycopg2
 from redis import Redis
 
 # ---------------- fake Allen-Bradley PLC ----------------
-TAGS = collections.defaultdict(lambda: False); LOCK = threading.RLock(); WRITES = []
-class _V:
-    def __init__(self, v): self.value = v
-class FakeLogix:
-    def __init__(self, ip): self.connected = False
-    def open(self): self.connected = True
-    def close(self): self.connected = False
-    def read(self, *t):
-        with LOCK: return _V(TAGS[t[0]])
-    def write(self, t, v):
-        with LOCK: TAGS[t] = v; WRITES.append((t, v))
-import costhetaio.allenbradley.IOServer as IOS
-IOS.LogixDriver = FakeLogix
-from costhetaio.allenbradley.IOServer import IOServer
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _plc_sim import setup        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
+print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
 from utils.RedisUtils import *
 import persistence.Persistence as P

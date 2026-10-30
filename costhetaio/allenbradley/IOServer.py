@@ -247,6 +247,8 @@ class IOServer:
 
     # ==================== Station 2 Torque (Tightening) Tags (Step 5 and 10) ====================
     PLC_PC_Station2TorqueValueSet: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueSetTagName()
+    # Read with each Station 2 torque value and logged; no action on it yet. Empty when the PLC does not provide it.
+    PLC_PC_Station2RotationDuringTighteningDone: str = CosThetaConfigurator.getInstance().getPlcPcStation2RotationDuringTighteningDoneTagName()
     PLC_PC_Station2TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueTagName()
 
     # ==================== No Cap Bunk Tags (Step 7) ====================
@@ -369,6 +371,7 @@ class IOServer:
 
         # Current QR Code for this cycle
         self.currentQRCode: str = ""
+        self.lastStation2RotationDuringTighteningDone: Optional[bool] = None
 
         # Initialize logging
         self.logger = logging.getLogger("pycomm3")
@@ -1282,6 +1285,7 @@ class IOServer:
                     # Step 5B: Tightening Torque 1 Value
                     if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
                         printBoldGreen(f"Read Station 2 Torque Value (1st time): {valueRead}")
+                        self._readStation2RotationDuringTighteningDone()
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_1,
                                                                           value=valueRead)
@@ -1303,6 +1307,7 @@ class IOServer:
                     # Step 10B: Tightening Torque 2 Value
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2:
                         printBoldGreen(f"Read Station 2 Torque Value (2nd time): {valueRead}")
+                        self._readStation2RotationDuringTighteningDone()
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_2,
                                                                           value=valueRead)
@@ -1661,6 +1666,16 @@ class IOServer:
         # Emergency Abort
         self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
 
+    def _readStation2RotationDuringTighteningDone(self) -> Optional[bool]:
+        """Read PLC_PC_Station2RotationDuringTighteningDone, which the PLC provides with the Station 2 torque value.
+        Logged and kept in self.lastStation2RotationDuringTighteningDone; no action is taken on it yet."""
+        if not IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+            return None
+        value = self.read_bool(IOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
+        self.lastStation2RotationDuringTighteningDone = value
+        printBoldGreen(f"Read Station 2 rotation-during-tightening done: {value}")
+        return value
+
     def getCurrentQRCode(self) -> str:
         """Get the current QR code for this cycle."""
         return self.currentQRCode
@@ -1725,6 +1740,9 @@ class IOServer:
                                                                             debug=False)
         tag_values[IOServer.PLC_PC_Station2TorqueValue] = self.read_float(IOServer.PLC_PC_Station2TorqueValue,
                                                                           debug=False)
+        if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+            tag_values[IOServer.PLC_PC_Station2RotationDuringTighteningDone] = self.read_bool(
+                IOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
 
         # Step 7: No Cap Bunk
         tag_values[IOServer.PLC_PC_CheckNoCapBunk] = self.read_bool(IOServer.PLC_PC_CheckNoCapBunk, debug=False)

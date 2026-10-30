@@ -32,3 +32,12 @@ from the project root, e.g. `python test/machine1_dryrun/Test_IOServer_With_Mock
 | `Test_FEServer_Mock_With_Image_Files_UI.py` | as above, running the real camera checks on image files you pick | + the models (torch) |
 | `Test_FEServer_With_Live_Camera_UI.py` | as above, or with the live camera through a running CameraProcessorServer | + camera / CameraProcessorServer |
 | `Test_Integrated_All_Servers_Running_UI.py` | the IOServer, with every other server running | all other servers |
+
+## Allen-Bradley or Siemens
+
+`DryRun_IOServer_Two_Full_Cycles.py`, `DryRun_IOServer_Fault_Scenarios.py` and `DryRun_All_Servers_Integrated_Cycle.py`
+run the Allen-Bradley IOServer by default. With the environment variable `COSTHETA_PLC_VENDOR=siemens` they run the
+Siemens IOServer (`costhetaio/siemens/IOServer.py`) instead, on a simulated S7 data block (`_plc_sim.py`): every tag
+goes through the real pyS7 backend, its DB500 address and the S7 byte encoding. PowerShell:
+
+    $env:COSTHETA_PLC_VENDOR = "siemens"; python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py; Remove-Item Env:COSTHETA_PLC_VENDOR
