@@ -3038,13 +3038,12 @@ class CosThetaConfigurator():
         if componentType.upper() == "DOSTPLUS":
             return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_NUT_KEY, default="35"))
         elif componentType.upper() == "DOST":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="30"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="30"))
+            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="35"))
+        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="35"))
 
     # *********************************** CAP CHECK PARAMETERS DONE *********************************
 
 
-    # Replace the old keys with these new ones:
 
 
 

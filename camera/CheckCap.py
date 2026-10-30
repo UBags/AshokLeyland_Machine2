@@ -104,6 +104,9 @@ class CheckCap:
             cls.DELTA_THRESHOLD_HUB_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdHub(DOSTPLUS)
             cls.DELTA_THRESHOLD_TOP_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdTop(DOSTPLUS)
             cls.DELTA_THRESHOLD_NUT_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdNut(DOSTPLUS)
+            cls.DELTA_THRESHOLD_HUB_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdHub(DOST)
+            cls.DELTA_THRESHOLD_TOP_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdTop(DOST)
+            cls.DELTA_THRESHOLD_NUT_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdNut(DOST)
         except:
             pass
 

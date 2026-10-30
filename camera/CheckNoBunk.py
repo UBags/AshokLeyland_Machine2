@@ -26,6 +26,7 @@ except:
     pass
 
 from camera.HexagonNutDetector import NutDetector
+from camera.VisionConfig import vInt, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -67,8 +68,8 @@ class CheckNoBunk:
     """
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = (632, 360)
-    NUT_DETECTION_RADIUS = 80
+    NUT_DETECTION_CENTER = vTuple("vision.nobunk.nut.detection.center", (632, 360))
+    NUT_DETECTION_RADIUS = vInt("vision.nobunk.nut.detection.radius", 80)
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None

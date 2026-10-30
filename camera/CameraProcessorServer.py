@@ -1242,6 +1242,23 @@ def CameraServer(mode : str = "Test"):
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
 
+    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (vision.* keys), so a site
+    # re-tune is always visible in the logs. Purely informational - never stops the server.
+    try:
+        from camera.VisionConfig import describeVisionParameters, getRegistry
+        retuned = describeVisionParameters(onlyChanged=True)
+        if retuned:
+            message = (f"Vision parameters: {len(retuned)} of {len(getRegistry())} differ from the built-in defaults:\n  "
+                       + "\n  ".join(retuned))
+            printBoldBlue(message)
+            SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.ISSUE)
+        else:
+            message = f"Vision parameters: all {len(getRegistry())} at the built-in defaults"
+            printLight(message)
+            SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.SUCCESS)
+    except Exception as e:
+        printBoldRed(f"Could not report vision parameters: {e}")
+
     # imageWriter : GenericQueueProcessor = None
     # if mode.upper() == "TEST":
     #     imageWriter = ImageWriter(name="ImageWriter", savingDir=CosThetaConfigurator.getInstance().getMainPictureSavingDirForModeTrial())
