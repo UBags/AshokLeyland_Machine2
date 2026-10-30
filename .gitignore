@@ -37,3 +37,6 @@ client_secret*.json
 # OS
 Thumbs.db
 desktop.ini
+# Build / recording output
+nuitka-crash-report*.xml
+recorders/output-*.mp4
