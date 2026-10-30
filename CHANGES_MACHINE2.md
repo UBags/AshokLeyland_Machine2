@@ -304,5 +304,5 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
 
     The vision algorithms themselves were stubbed, because they need torch and real pictures.
   - **Integrated window, 19/19:** with the real frontend and simulated QR and camera servers, all 15 steps are delivered and consumed, and the record is all OK.
-- **Usability note:** "Auto Run All OK" in the frontend simulated-inputs window always starts at the QR step. Pressed in the middle of a cycle, it waits for a QR code the frontend is not asking for. Use it at the start of a cycle.
-- **Not moved:** `test/MockPLCTest.py` is an old Machine 1 GUI. It re-implements the IOServer with Machine 1's free-rotations state and Station3RotationDone tag, so it cannot run against the current code. `Test_IOServer_With_Mock_PLC_UI.py` replaces it. Delete it.
+- **Auto Run All OK** in the frontend simulated-inputs window now starts from the current step and finishes the cycle the frontend is in. Before, it always restarted at the QR step, which stalled when pressed mid-cycle. Pressed at the QR step, it still runs a whole cycle. Verified in both folders, 11/11 checks each: a QR and a knuckle NOT OK sent by hand, then Auto Run from the knuckle to the end of the cycle, then a full Auto Run cycle; each record is all OK.
+- **Deleted:** `test/MockPLCTest.py`, an old Machine 1 GUI with its own copy of the IOServer. It used Machine 1's free-rotations state and could not run against the current code. `Test_IOServer_With_Mock_PLC_UI.py` replaces it.

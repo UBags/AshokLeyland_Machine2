@@ -401,9 +401,15 @@ class FrontEndTesterApp:
             self.log(f"Error flushing Redis: {e}")
 
     def auto_run_all_ok(self):
-        """Run one full cycle with OK results, one message per frontend state."""
-        self.log("=== Starting auto-run with all OK ===")
-        self.current_command_index = 0
+        """Send OK for every remaining step, from the current step to the end of the cycle (the final free-rotation
+        torque), one message per frontend state. Pressed at the QR step it runs a whole cycle; pressed mid-cycle it
+        finishes the cycle the frontend is in."""
+        if self.pending_queue is not None:
+            self.log("Previous message not yet consumed by the FE - press Auto Run again once it is")
+            return
+        cmd = commands[self.current_command_index]
+        self.log(f"=== Starting auto-run with all OK from step {self.current_command_index + 1}/{len(commands)}: "
+                 f"{cmd['name']} ===")
         self.auto_running = True
         self.update_display()
         self._auto_run_step()
