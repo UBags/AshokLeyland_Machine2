@@ -1,0 +1,1 @@
+C:\Windows\System32\wbem\WMIC.exe /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "%DATE%", 100, 7

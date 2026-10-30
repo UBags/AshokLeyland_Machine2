@@ -1,0 +1,39 @@
+# IDE
+.idea/
+*.iml
+
+# Virtual environments ("External Libraries")
+.venv/
+venv/
+env/
+
+# Python build / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime output
+logs/
+*.log
+
+# Models & weights (kept out of repo)
+models/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.safetensors
+
+# OAuth artifacts
+token.json
+token.pickle
+client_secret*.json
+
+# OS
+Thumbs.db
+desktop.ini

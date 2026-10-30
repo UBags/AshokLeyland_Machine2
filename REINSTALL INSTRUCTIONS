@@ -1,0 +1,16 @@
+1. Install WSL2
+2. Install Redis
+3. Remove password
+4. Check if redis working
+5. Configure Task Scheduler to start redis as startup
+6. Install Python 3.10, and add to path
+7. Install Java, and add to path
+8. Copy libblas and add to path
+9. Install postgres and pgAdmin4
+10. Install SADP
+11. Install gcc from gmail
+12. Create python project, get venv, go to command prompt and activate venv
+13. pip install -r requirements.txt
+14. Copy onvif directory, and change the 2 files (xmlmime and another one)
+15. Copy startup. Edit and make sure that paths are ok
+16. Copy redis.vbs and start-vision-processing in shell:startup (in Run). Edit and make sure that paths are ok

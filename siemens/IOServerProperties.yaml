@@ -1,0 +1,113 @@
+# =============================================================================
+# IOServerProperties.yaml
+# -----------------------------------------------------------------------------
+# Tag -> S7 address map for the pyS7 port of IOServer (Siemens S7-1500).
+#
+# FICTITIOUS ADDRESSES. Replace the DB numbers / offsets with the real layout
+# from your TIA Portal project before going live. The KEYS, however, are load-
+# bearing: each key must equal the string that IOServer passes to read_*/write_*
+# (i.e. the value your Configuration.get*TagName() getters return). They are set
+# here to the IOServer class-constant names; point your getters at these, or load
+# the constants from this file.
+#
+# DESIGN (deliberate, not incidental):
+#   * Two DBs, split strictly by direction:
+#       DB100  PLC -> PC  (PLC writes, PC reads)   ......... dir: r
+#       DB101  PC  -> PLC (PC writes, PLC reads)   ......... dir: w
+#     No byte is written by both parties, so the CPU-side bit-atomicity question
+#     never arises. This is the race-avoidance measure discussed for shared bytes.
+#   * BOOLs are packed contiguously; REAL/DINT are placed on aligned offsets.
+#   * The address LETTER is authoritative for pyS7's type inference:
+#       X = BIT (bool)   R = REAL (float)   DI = DINT (int)
+#     The `type:` field is documentation + a validation hook for the backend; it
+#     must agree with the letter.
+#
+# PLC-SIDE PREREQUISITES (unchanged from snap7 — pyS7 speaks the same S7comm):
+#   * CPU  -> Protection & Security -> permit PUT/GET from remote partner.
+#   * Both DBs -> properties -> "Optimized block access" UNCHECKED (so absolute
+#     offsets exist and are stable).
+#   * Freeze these layouts. Append only; never insert mid-DB or every offset
+#     below the insertion shifts silently. Consider a LayoutVersion : INT at
+#     offset 0 of each DB and refuse to start on mismatch.
+# =============================================================================
+
+plc:
+  address: "192.168.0.10"     # PLC IP (falls back to Configuration.getPlcIP() if omitted)
+  rack: 0                     # S7-1500: rack 0
+  slot: 1                     # S7-1500: slot 1
+  pdu_size: 960               # negotiate large PDU where the CPU supports it
+
+tags:
+
+  # ---------------------------------------------------------------------------
+  # DB100 : PLC -> PC   (PLC writes, PC reads)   dir: r
+  # ---------------------------------------------------------------------------
+
+  # --- trigger / status bits (byte 0) ---
+  PLC_PC_CheckQRCode:                 { address: "DB100,X0.0", type: bool,  dir: r }
+  PLC_PC_CheckKnuckle:                { address: "DB100,X0.1", type: bool,  dir: r }
+  PLC_PC_CheckHub:                    { address: "DB100,X0.2", type: bool,  dir: r }
+  PLC_PC_CheckHubAndSecondBearing:    { address: "DB100,X0.3", type: bool,  dir: r }
+  PLC_PC_CheckNutAndPlateWasher:      { address: "DB100,X0.4", type: bool,  dir: r }
+  PLC_PC_Station2TorqueValueSet:      { address: "DB100,X0.5", type: bool,  dir: r }
+  PLC_PC_Station3RotationDone:        { address: "DB100,X0.6", type: bool,  dir: r }
+  PLC_PC_CheckNoCapBunk:              { address: "DB100,X0.7", type: bool,  dir: r }
+
+  # --- trigger / status bits (byte 1) ---
+  PLC_PC_ComponentPressDone:          { address: "DB100,X1.0", type: bool,  dir: r }
+  PLC_PC_CheckNoBunk:                 { address: "DB100,X1.1", type: bool,  dir: r }
+  PLC_PC_CheckSplitPinAndWasher:      { address: "DB100,X1.2", type: bool,  dir: r }
+  PLC_PC_CheckCap:                    { address: "DB100,X1.3", type: bool,  dir: r }
+  PLC_PC_CheckBunk:                   { address: "DB100,X1.4", type: bool,  dir: r }
+  PLC_PC_CapPressDone:                { address: "DB100,X1.5", type: bool,  dir: r }
+  PLC_PC_Station3TorqueValueSet:      { address: "DB100,X1.6", type: bool,  dir: r }
+  PLC_PC_EmergencyAbort:              { address: "DB100,X1.7", type: bool,  dir: r }
+
+  # --- torque readings (REAL, aligned) ---
+  PLC_PC_Station2TorqueValue:         { address: "DB100,R2",   type: float, dir: r }
+  PLC_PC_Station3TorqueValue:         { address: "DB100,R6",   type: float, dir: r }
+
+  # --- comms watchdog (PC reads, expects WATCH_TAG_VALUE = 1234) ---
+  PLC_PC_WatchTag:                    { address: "DB100,DI10", type: int,   dir: r }
+
+  # ---------------------------------------------------------------------------
+  # DB101 : PC -> PLC   (PC writes, PLC reads)   dir: w
+  # ---------------------------------------------------------------------------
+
+  # --- OK / Done result bits (byte 0) ---
+  PC_PLC_QRCodeCheckOK:               { address: "DB101,X0.0", type: bool,  dir: w }
+  PC_PLC_QRCodeCheckDone:             { address: "DB101,X0.1", type: bool,  dir: w }
+  PC_PLC_KnuckleCheckOK:              { address: "DB101,X0.2", type: bool,  dir: w }
+  PC_PLC_KnuckleCheckDone:            { address: "DB101,X0.3", type: bool,  dir: w }
+  PC_PLC_HubCheckOK:                  { address: "DB101,X0.4", type: bool,  dir: w }
+  PC_PLC_HubCheckDone:                { address: "DB101,X0.5", type: bool,  dir: w }
+  PC_PLC_HubAndSecondBearingCheckOK:  { address: "DB101,X0.6", type: bool,  dir: w }
+  PC_PLC_HubAndSecondBearingCheckDone: { address: "DB101,X0.7", type: bool, dir: w }
+
+  # --- OK / Done result bits (byte 1) ---
+  PC_PLC_NutAndPlateWasherCheckOK:    { address: "DB101,X1.0", type: bool,  dir: w }
+  PC_PLC_NutAndPlateWasherCheckDone:  { address: "DB101,X1.1", type: bool,  dir: w }
+  PC_PLC_NoCapBunkCheckOK:            { address: "DB101,X1.2", type: bool,  dir: w }
+  PC_PLC_NoCapBunkCheckDone:          { address: "DB101,X1.3", type: bool,  dir: w }
+  PC_PLC_NoBunkCheckOK:               { address: "DB101,X1.4", type: bool,  dir: w }
+  PC_PLC_NoBunkCheckDone:             { address: "DB101,X1.5", type: bool,  dir: w }
+  PC_PLC_SplitPinAndWasherCheckOK:    { address: "DB101,X1.6", type: bool,  dir: w }
+  PC_PLC_SplitPinAndWasherCheckDone:  { address: "DB101,X1.7", type: bool,  dir: w }
+
+  # --- OK / Done result bits (byte 2) ---
+  # NOTE: key spelling PC_PLP_CapCheckOK preserved verbatim from IOServer (typo in source).
+  PC_PLP_CapCheckOK:                  { address: "DB101,X2.0", type: bool,  dir: w }
+  PC_PLC_CapCheckDone:                { address: "DB101,X2.1", type: bool,  dir: w }
+  PC_PLC_BunkCheckOK:                 { address: "DB101,X2.2", type: bool,  dir: w }
+  PC_PLC_BunkCheckDone:               { address: "DB101,X2.3", type: bool,  dir: w }
+
+  # --- connection status heartbeat (PC writes) ---
+  PC_PLC_ConnectionStatusTag:         { address: "DB101,X2.4", type: bool,  dir: w }
+
+  # --- rotation settings (DINT, aligned; written via write_int) ---
+  PC_PLC_NoOfRotation1CCW:            { address: "DB101,DI4",  type: int,   dir: w }
+  PC_PLC_NoOfRotation1CW:             { address: "DB101,DI8",  type: int,   dir: w }
+  PC_PLC_NoOfRotation2CCW:            { address: "DB101,DI12", type: int,   dir: w }
+  PC_PLC_NoOfRotation2CW:             { address: "DB101,DI16", type: int,   dir: w }
+  PC_PLC_LH_RH_Selection:             { address: "DB101,DI20", type: int,   dir: w }
+  PC_PLC_RotationUnitRPM:             { address: "DB101,DI24", type: int,   dir: w }

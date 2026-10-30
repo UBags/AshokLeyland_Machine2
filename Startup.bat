@@ -1,0 +1,1 @@
+start /B cmd.exe /k MainProgram.dist\MainProgram.exe

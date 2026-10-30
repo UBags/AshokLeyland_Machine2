@@ -1,0 +1,71 @@
+1. 
+
+The background is that there is a machine with an Allen-Bradley PLC (Micro850), which needs to interact with an industrial server on which runs my python program.
+
+The machine has 4 stations. Station 1 is where one does a few manual steps. Station 2 is for tightening a nut. Station 3 is for checking the torque required for free rotation.
+Station 4 is for a cap pressing operation. The machine noves back and forth between station 2 and 3 a couple of times.
+
+2.
+
+I want a python class called IOServer that can be called from another module as IOServer(). IOServer helps me communicate with the PLC. 
+
+The machine is question goes through a set of states. The various states defined in MachineState.py give you an idea of what states the machine will be in.
+
+For some states, I need to read a tag from the PLC, then do some action (like taking a picture and analysing it, etc), then write a tag back to the PLC, and then change the state of the machine to the next state, if the write succeeds. 
+
+In some other states, I just need to read some tag from the PLC and change the state in the IOServer to the next state e.g. If I need to read a torque value from the PLC, then, after the value stabilises (which means I might need to read it 2-3 times. The number of times that I read it, is defined as a class variable), then I should change machineState in IOServer to the next state.
+
+For each state, I have a specific variable defined in the PLC that I need to track. The idea is to run a read thread in the IOServer that sleeps for a class-defined period of time (e.g. 100 msecs), then wakes up, and reads specific tags from the PLC, depending on which state the machine is in. For some states, it reads only 1 tag. For some others, it reads 2. Which tag (or tags) to read in each state is known, and which tag or tags to write is also known, as per the details below.
+
+3.
+
+There are a few class-level variables to be initialised. These are :
+a) a variable called machineState, which is of type MachineState (See attached code for MachineState.py). 
+b) names of tags are :
+	PLC_PC_CheckQRCode (boolean)
+	PC_PLC_QRCodeCheckingOK (boolean)
+	PLC_PC_CheckBearing (boolean)
+	PC_PLC_BearingCheckingOK (boolean)
+	PLC_PC_CheckHubAndSecondBearing (boolean)
+	PC_PLC_HubAndSecondBearingCheckingOK (boolean)
+	PLC_PC_CheckNutAndPlateWasher (boolean)
+	PC_PLC_NutAndPlateWasherCheckingOK (boolean)
+	PLC_PC_Station2TorqueValue (boolean)
+	PLC_PC_Station3TorqueValue ()
+	PLC_PC_CheckSplitPinAndWasher
+	PC_PLC_SplitPinAndWasherCheckingOK
+	PLC_PC_CheckCap
+	PC_PLC_CapCheckingOK
+	PLC_PC_CheckBung
+	PC_PLC_BungCheckingOK
+	PLC_PC_CapPressDone
+	PLC_PC_Sequence_Number
+
+	All tags starting with PLC_PC need to be read
+	All tags starting with PC_PLC need to be written
+c) In machine state 1, where QR Code is checked, the Kunckle check is also done automatically after that i.e machine states READ_QR_CODE and TAKE_PICTURE_FOR_CHECKING_KNUCKLE are both covered in this. The result of this is updated in the tag PC_PLC_QRCodeCheckingOK. At the end of this step, the server goes to state 3
+d) After the step of updating PC_PLC_BearingCheckingOK, the server goes to state 4
+e) After the step updating PC_PLC_HubAndSecondBearingCheckingOK, the server goes to state 5
+f) After the step updating PC_PLC_NutAndPlateWasherCheckingOK, the server goes to state 6. In state 6, the machine moves to Station 2, and this move is controlled by the PLC.
+g) After the step of reading PLC_PC_Station2TorqueValue, the server goes to state 7. In state 7, the machine moves to Station 3, and this move is controlled by the PLC.
+h) After the step of reading PLC_PC_Station3TorqueValue, the server goes to state 8. In state 8, the machine moves back to Station 2, and this move is controlled by the PLC.
+i) At this stage, the machine is in Station 2, for a round of loosing and tightening of the nut again. We again read the torque value from PLC_PC_Station2TorqueValue. After this, the server goes to state 9
+j) After another step of reading PLC_PC_Station3TorqueValue, the server goes to state 10. In state 10, the machine moves back to Station 2, and this move is controlled by the PLC.
+k) After another step of reading PLC_PC_Station2TorqueValue, the server goes to state 11. In state 11, the machine moves to Station 3, and this move is controlled by the PLC.
+l) After the step of reading PLC_PC_Station3TorqueValue, the server goes to state 12. In state 12, the machine moves back to Station 1, and this move is controlled by the PLC.
+m) The server now waits for tag PLC_PC_CheckSplitPinAndWasher. After reading it, we do some activity and write back the result in tag PC_PLC_SplitPinAndWasherCheckingOK. The server goes to state 13
+n) The server now waits for tag PLC_PC_CheckCap. After reading it, we do some activity and write back the result in tag PC_PLC_CapCheckingOK. The server goes to state 14
+o) The server now waits for tag PLC_PC_CheckBung. After reading it, we do some activity and write back the result in tag PC_PLC_BungCheckingOK. The server goes to state 15
+n) The server now waits for tag PLC_PC_CapPressDone. After reading it, the server goes to state 1, and waits for reading tag PLC_PC_CheckQRCode
+
+4.
+
+Factorise the code well, e.g. put read and write operations of booleans, strings, int, floats, array of boolean, array of strings, ints, floats in separate functions. Put a a parameter in each of these functions that is initialised to false, which prints what has been read, or what has been successfully written. For the functions that read, the print statement should execute only when the value read is equal to an expected value, which is again defined as a parameter in the function.
+
+5.
+
+Start another thread that checks if the connection is alive by trying to read some other data from the PLC every 5-10 secs (parameterise this number as a class variable).
+
+6.
+
+Lastly, ensure that both threads shutdown when a class variable called shutdown is set to True. I'll take care of adding code that changes this value.

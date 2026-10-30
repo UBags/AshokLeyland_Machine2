@@ -1,0 +1,4 @@
+1. If onvif2 library is reloaded, then make sure that the contents of definition.py file in the site-package of onvif2 is replaced
+    with the contents of definition.py file in 'C:\CosTheta\Geltec'. Basically, replace the './' from './ver10/...' in wdsl files names to leave them with '../ver10/...'
+
+2. Ensure that the entire contents of directory 'onvif' in this project are fully copied to the target machine
