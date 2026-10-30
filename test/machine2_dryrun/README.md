@@ -6,8 +6,8 @@ Run from a scratch directory: image files are written under `C:/AshokLeylandImag
 
 | Script | What it exercises |
 |---|---|
-| `io_cycle.py` | Real `costhetaio/IOServer.py` with a simulated Allen-Bradley PLC (in-memory tags) and simulated QR/camera servers; runs two full cycles and prints the state trace, the state-2 cycle settings written, and the IO->FE messages. |
-| `db_pipeline.py` | Frontend record -> `fe2db.q` -> real `persistence/DBServer.py` -> PostgreSQL (test DB); prints the stored row. |
-| `integrated.py` | Everything together: simulated PLC/camera/QR + real IOServer, Frontend (PySide6), DBServer and HeartbeatAndAlarmServer; one cycle, saves `integrated_end_of_cycle.png` and prints the stored DB row. |
+| `DryRun_IOServer_Two_Full_Cycles.py` | Real `costhetaio/IOServer.py` with a simulated Allen-Bradley PLC (in-memory tags) and simulated QR/camera servers; runs two full cycles and prints the state trace, the state-2 cycle settings written, and the IO->FE messages. |
+| `DryRun_FEServer_To_DBServer_Pipeline.py` | Frontend record -> `fe2db.q` -> real `persistence/DBServer.py` -> PostgreSQL (test DB); prints the stored row. |
+| `DryRun_All_Servers_Integrated_Cycle.py` | Everything together: simulated PLC/camera/QR + real IOServer, Frontend (PySide6), DBServer and HeartbeatAndAlarmServer; one cycle, saves `integrated_end_of_cycle.png` and prints the stored DB row. |
 
 `m1_frontend_sample.png` (a Machine 1 screenshot) supplies the inspection pictures shown in the frontend.

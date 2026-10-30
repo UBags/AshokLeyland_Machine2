@@ -23,9 +23,9 @@ In state 2, the PC now writes side, model, tightening-torque setpoints and rotat
 | `Persistence.py`: report queries | Removed the two columns from `all_columns_record_header` and from every SELECT behind the frontend reports: `getDataByModelName`, `getDataByModelNameAndDateLimits`, `getDataOfTodayByModelNumber`, `getDataByDateLimits` and `getAllDataOfToday`. These now produce a 49-column CSV. |
 | `Persistence.py`: legacy template `insert_table_data` | Removed the two columns. |
 | `DBServer.py` | Removed the two fields from the unpacking of `readDataInDatabaseServerFromFEServer()` and from the `insertData()` call. |
-| `Test_DBServer_Persistence.py` | Removed the two fields from its test records. |
+| `Test_DBServer_Persistence.py` (now `test/Test_DBServer_And_Persistence.py`, see §8) | Removed the two fields from its test records. |
 
-The `machine_settings` table and the frontend's **Machine Settings** dialog are left as they are. On Machine 2 they no longer drive the PLC (see §4).
+The `machine_settings` table is left in place (still created and seeded) but nothing reads it any more. The frontend's Machine Settings menu was removed (see §8).
 
 ## 2. Redis messaging: `utils/RedisUtils.py`
 
@@ -79,7 +79,7 @@ rotation2.rpm=-1                         # -1 = do not write  <-- set the real v
 | `AshokLeylandFrontEnd.py` | Free-rotation state, handlers and reset removed. After torque 1, the frontend goes straight to the bunk-for-component-press picture. The free-rotation torque goes to its own tile, and "Cap Press Result" now shows only "Done". The overall OK/NOT OK result no longer includes free-rotation-done, and the DB record no longer carries it. |
 | `AshokLeylandFrontEnd.py`: **bug fix** | Torques were truncated with `int(value*100)/100`, so 19.08 became **19.07** on screen *and in the database* because of float error. This was found in the dry run and replaced with `round(value, 2)` for torque 1, torque 2 and the free-rotation torque. |
 
-## 6. Verification (synthetic dry runs; harnesses in `test/machine2_dryrun/`)
+## 6. Verification (synthetic dry runs; harnesses in `test/machine2_dryrun/DryRun_*.py`)
 
 | Run | Result |
 |---|---|
@@ -92,17 +92,43 @@ rotation2.rpm=-1                         # -1 = do not write  <-- set the real v
 
 ## 7. Not changed, and open items
 
-- **Not updated:**
-  - `siemens/IOServer.py`, the Siemens port. It will be redone for the S7-1515 in the next phase.
-  - The Machine 1 test harnesses `costhetaio/TestIOServerWithPLC.py`, `TestIOServerWithMockPLC.py` and `MockPLC.py`.
-  - Everything under `test/`.
-
-  These still refer to the old state 13 and will fail if run as-is.
-- `Configuration.getPlcPcStation3RotationDoneTagName()` and the `plc.pc.station3.rotation.done.tagname` property are now unused. They are left in place.
+- **Not updated:** `siemens/IOServer.py`, the Siemens port. It will be redone for the S7-1515 in the next phase.
 - `ApplicationConfiguration - Production - 29-01-2026.properties` (the Machine 1 snapshot) is left untouched. **Do not deploy it on Machine 2.**
-- **Machine Settings menu** (rotation counts and RPM, held in the database): it still opens and saves, but it no longer affects the PLC on Machine 2. Decide whether to remove it or repurpose it.
-- **To set before commissioning:**
-  - `rotation1.rpm` and `rotation2.rpm`;
-  - confirm the 19.0 Nm torque setpoints;
-  - the actual PLC tag names for the six state-2 tags.
-- The reporting web services (`endpoints/`, started by `OtherServices.py`) still query the old Machine 1 schema and remain broken. This is a pre-existing issue, unrelated to this change.
+- **To set before commissioning:** `rotation1.rpm` and `rotation2.rpm`; confirm the 19.0 Nm torque setpoints; the actual PLC tag names for the six state-2 tags.
+- The reporting web services (`endpoints/`, started by `OtherServices.py`) still query the old Machine 1 schema and remain broken. This is a pre-existing issue.
+
+## 8. Second round (2026-10-30, later)
+
+### Production code
+- **Machine Settings menu removed** from the frontend (`AshokLeylandFrontEnd.py` menu and Operator-role disable; `SimplePopups.updateMachineSettingsDialog()` deleted). Setpoints come only from the properties file.
+- `costhetaio/MockPLC.py`: rotation-done tag removed, the six state-2 tags added. `IOServer(mockInstance=True)` now imports it as `costhetaio.MockPLC`, so it works when run as a package.
+- `IOServer.getAllTagValues()` (the `publishTags`/`receiveTags` tag dump used by the real-PLC tester) now includes the six state-2 tags and `PC_PLC_ConnectionStatus`. It reports the state as its **name**: `str(IntEnum)` is just `"1"` on Python 3.11+.
+- Unused property `plc.pc.station3.rotation.done.tagname` removed. Its getter stays, with a default.
+- **Frontend bug fix:** `showATemporaryLargeImage()` tested `(result is not None) or …`, which is always true, so NOT OK images were shown for the OK time (0.5 s) instead of the NOT OK time (2.5 s). It now tests the result itself.
+
+### Test programs: updated to the 28-state sequence, renamed, all in `test/`
+Every program's docstring says what it tests and how to run it: `python -m test.<Module>` from the project root, or `python test/<file>.py`.
+
+| New name | Was | What it does | Verified here |
+|---|---|---|---|
+| `Test_DBServer_And_Persistence.py` | `persistence/Test_DBServer_Persistence.py` | Persistence + DBServer: direct and Redis inserts, retrieval, duplicate handling (stored with `remarks='DUPLICATE'`, since `qr_code` is not unique), image files, datetimes | Yes: 10/10 against Postgres + Redis |
+| `Test_LoggingServer.py` | `test/TestMasterConsoleAndMasterFileLoggers.py` | Starts the logging server as MainProgram does, logs at every level via the slave loggers, checks console/file filtering, queue drain and clean stop | Yes: 16/16 |
+| `Test_FEServer_Mock_With_Image_Files_UI.py` | `test/IntegratedTestWithoutCamera_UI.py` | Drives the running frontend; runs the real `camera/Check*.py` algorithm on image files you pick and sends the result | Yes: full cycle on the real frontend (algorithms needing torch not available here) |
+| `Test_FEServer_With_Live_Camera_UI.py` | `test/IntegratedTestWithCameraToTestHappyPath_UI.py` | As above, plus live mode: sends take-picture commands to the CameraProcessorServer and waits for its result | File mode: yes. Live mode: yes, against a stand-in camera server (no camera here) |
+| `Test_FEServer_Simulated_Inputs_UI.py` | `test/TestingFrontEndServer.py` | Plays the QR, camera and IO servers towards the frontend with fixed image files (`AL_TEST_IMAGE_DIR`); Auto-Run All OK | Yes: full cycle on the real frontend |
+| `Test_IOServer_With_Mock_PLC_UI.py` | `costhetaio/TestIOServerWithMockPLC.py` | Real IOServer on MockPLC; buttons for each PLC signal and QR/camera reply; tag monitor including the state-2 settings; Auto Cycle | Yes: 1→28→1, NOT OK retry, settings written |
+| `Test_IOServer_With_Real_PLC_UI.py` | `costhetaio/TestIOServerWithPLC.py` | Runs alongside an IOServer connected to the real PLC; answers QR/camera and reads the tag dump | Yes: against an IOServer on MockPLC (no PLC here) |
+| `Test_IOServer_With_Simulated_QR_And_Camera_UI.py` | `test/TestingIOServer.py` | Plays the QR and camera servers towards a running IOServer, OK / NOT OK per step | Yes: real IOServer walked 28 states, NOT OK retry |
+| `Test_Integrated_All_Servers_Running_UI.py` | `test/TestAshokLeylandIntegration.py` | With all other servers up, plays the IOServer: commands QR/camera servers and sends torque/press values to the frontend, step by step | Yes: real frontend + DBServer + heartbeat; DB row correct |
+| `Test_CameraServer_Live_Camera.py` | *(new)* | Sends take-picture for the 9 picture states (component QR first), saves original and processed images, prints a pass/fail table; `--start-server` runs the CameraProcessorServer in-process | Against a fake camera responder only (CameraProcessorServer needs torch, models/, ffmpeg) |
+
+`test/machine2_dryrun/` harnesses renamed `DryRun_IOServer_Two_Full_Cycles.py`, `DryRun_FEServer_To_DBServer_Pipeline.py` and `DryRun_All_Servers_Integrated_Cycle.py`.
+
+### Superseded copies (not updated; recommend deleting)
+`test/MockPLCTest.py`, `test/wip/` (MockPLCServer.py, TestIOServer.py, TestIOServerResponses.py, TestIOServerWithMockPLC.py), `test/StartMasterLoggersInACommandShell.py` + `test/E.py` (the logger launcher it starts). They reimplement or duplicate the programs above, and the IOServer ones use the removed Machine 1 state 13.
+
+### Issues found, not changed
+- `DBServer` polls `fe2db.q` every 5 s and the reader keeps only the latest message, so two records arriving within one poll lose the earlier one (silent data loss; unlikely at manual cycle times).
+- A rejected QR leaves IOServer waiting in `WRITE_QR_CODE` without telling the PLC (same as Machine 1).
+- `camera/CheckTopBearing.py` swallows an import failure of `utils.ImageNormalisationWithMask` (needs scipy/matplotlib). Every top-bearing check would then fail with a `NameError` instead of the app failing at start-up.
+- `frontend/AshokLeylandFrontEnd.py`: the picture worker class is declared as `GetQRCodeWorker` and works only through a later rebinding of the name.

@@ -1,17 +1,28 @@
 """
-Tkinter Test UI for Ashok Leyland Image Processor
-Simulates the full inspection pipeline for testing camera check functionality.
+Tests the real frontend (FE server) over a full Machine 2 cycle, either from image files you pick (checks run locally) or with the live camera via CameraProcessorServer; run from project root: python -m test.Test_FEServer_With_Live_Camera_UI
 
-Usage:
-    Run this script from the project root directory where all the modules are accessible.
-    python ImageProcessorTestUI.py
+Start the frontend first. This Tk UI plays the QR server and the IO server (and, in file mode, the camera server):
+  - QR step: sends the QR code to the FE (qrcode2fe) and to the camera server (qrcode2camera).
+  - Camera steps, file mode: loads the chosen image, runs the real camera/Check*.py algorithm locally and sends
+    image + ok/notok + READ_TAKE_PICTURE_FOR_CHECKING_* state to the FE (camera2fe).
+  - Camera steps, "Use Live Camera" mode: sends a takePicture command (io2camera) for the READ_TAKE_PICTURE_FOR_CHECKING_*
+    state to a running CameraProcessorServer (camera/CameraProcessorServer.py), which takes the pictures, runs the checks
+    and sends the result to the FE (camera2fe) and to the IO server (camera2io). This UI reads camera2io to learn the
+    result, so do NOT run the real IOServer at the same time.
+  - IO steps: Tightening Torque 1, Component Press, Tightening Torque 2, Cap Press, and finally Free Rotation Torque
+    (READ_FREE_ROTATION_TORQUE_1, action=moveAheadToNextComponent), sent to the FE on io2fe.
+There is no free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
-The UI simulates sending QR codes and camera check results to the FE Server for testing
-the image processing pipeline without needing the physical hardware.
-
-NEW: "Use Live Camera" mode sends commands to CameraProcessorServer, which takes pictures
-from the actual camera, processes them, and sends results to the FE Server.
+Every frontend reader trims its queue to the latest message, so after each message the UI disables its buttons
+until the FE (or, for take-picture commands, the camera server) has consumed it.
 """
+
+import sys
+import pathlib
+
+PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -20,9 +31,10 @@ import random
 import cv2
 import numpy as np
 from redis import Redis
-from typing import Union, Tuple, Callable, Dict, Optional
-import time
+from typing import Union, Tuple, Dict, Optional
 import copy
+import time
+import importlib
 
 # Import project modules
 from statemachine.StateMachine import MachineState
@@ -32,9 +44,11 @@ from utils.RedisUtils import (
     sendComponentQRCodeFromQRCodeServerToCameraServer,
     sendDataFromCameraServerToFEServer,
     sendDataFromIOServerToFEServer,
-    sendDataFromIOServerToCameraServer,  # NEW: For triggering CameraProcessorServer
-    takePictureCommand,  # NEW: The action command
-    ok, notok, updateValueCommand,
+    sendDataFromIOServerToCameraServer,
+    readDataInIOServerFromCameraServer,
+    takePictureCommand,
+    ok, notok, updateValueCommand, moveAheadToNextComponent,
+    qrcode2feq, camera2feq, io2feq, io2cameraq, camera2ioq,
     knucklePictureKeyString,
     hubAndBottomBearingPictureKeyString,
     topBearingPictureKeyString,
@@ -45,18 +59,33 @@ from utils.RedisUtils import (
     capPictureKeyString,
     capPressBunkPictureKeyString
 )
-from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 
-# Import check modules - using the class-based approach
-from camera.CheckKnuckle import CheckKnuckle
-from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing
-from camera.CheckTopBearing import CheckTopBearing
-from camera.CheckNutAndPlateWasher import CheckNutAndPlateWasher
-from camera.CheckBunk import CheckBunk
-from camera.CheckNoBunk import CheckNoBunk
-from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher
-from camera.CheckCap import CheckCap
-from camera.CheckNoCapBunk import CheckNoCapBunk
+# Import check modules - using the class-based approach. Some need torch/models; a module that cannot be imported
+# only disables its own file-based check (the error is shown when that check is run).
+CHECK_IMPORT_ERRORS: Dict[str, str] = {}
+
+def _importCheck(name: str):
+    try:
+        return getattr(importlib.import_module(f"camera.{name}"), name)
+    except Exception as e:
+        CHECK_IMPORT_ERRORS[name] = f"{type(e).__name__}: {e}"
+        print(f"Warning: camera.{name} unavailable ({CHECK_IMPORT_ERRORS[name]}); its file-based check is disabled")
+        return None
+
+CheckKnuckle = _importCheck("CheckKnuckle")
+CheckHubAndBottomBearing = _importCheck("CheckHubAndBottomBearing")
+CheckTopBearing = _importCheck("CheckTopBearing")
+CheckNutAndPlateWasher = _importCheck("CheckNutAndPlateWasher")
+CheckBunk = _importCheck("CheckBunk")
+CheckNoBunk = _importCheck("CheckNoBunk")
+CheckSplitPinAndWasher = _importCheck("CheckSplitPinAndWasher")
+CheckCap = _importCheck("CheckCap")
+CheckNoCapBunk = _importCheck("CheckNoCapBunk")
+
+def _requireCheck(checkClass, name: str):
+    if checkClass is None:
+        raise RuntimeError(f"camera.{name} could not be imported: {CHECK_IMPORT_ERRORS.get(name)}")
+    return checkClass
 
 # QR Code constants
 DOST_QR_CODE = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
@@ -85,13 +114,11 @@ def createDisplayString(qrCode: str, printQRCode: bool = False) -> Union[str, No
 class TestStep:
     """Represents a single step in the test pipeline."""
 
-    def __init__(self, name: str, state: MachineState, step_type: str,
-                 check_name: str = None, write_state: MachineState = None):
+    def __init__(self, name: str, state: MachineState, step_type: str, check_name: str = None):
         self.name = name
-        self.state = state  # The state this step corresponds to
-        self.step_type = step_type  # 'qrcode', 'camera', 'torque', 'done'
+        self.state = state  # The frontend state this step's message is meant for (always a READ_* state)
+        self.step_type = step_type  # 'qrcode', 'camera', 'torque', 'torque_final', 'done'
         self.check_name = check_name  # Name of the check to run
-        self.write_state = write_state  # The WRITE state for camera checks
         self.file_path = None  # For camera checks - selected file
         self.result = None  # Last result
 
@@ -130,8 +157,11 @@ class ImageProcessorTestUI:
         # Storage for bearing geometry (from CheckTopBearing, used by CheckNutAndPlateWasher)
         self.bearing_geometry: Optional[dict] = None
 
-        # NEW: Live camera mode flag
+        # Live camera mode flag
         self.use_live_camera = tk.BooleanVar(value=False)
+
+        # Set while the last message has not yet been consumed (buttons are disabled meanwhile)
+        self.waiting_for: Optional[str] = None
 
         # Define all test steps in order
         self.steps = self._create_steps()
@@ -144,74 +174,32 @@ class ImageProcessorTestUI:
         self._update_button_states()
 
     def _create_steps(self) -> list:
-        """Create the ordered list of test steps."""
+        """Create the ordered list of the 15 Machine 2 operator steps (in frontend order)."""
         return [
-            # Step 0: QR Code
             TestStep("QR Code", MachineState.READ_QR_CODE, "qrcode"),
-
-            # Step 1: Knuckle
             TestStep("Knuckle", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, "camera",
-                     check_name="knuckle",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE),
-
-            # Step 2: Hub and Bottom Bearing
+                     check_name="knuckle"),
             TestStep("Hub & Bottom Bearing", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
-                     "camera",
-                     check_name="hub",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING),
-
-            # Step 3: Top Bearing
+                     "camera", check_name="hub"),
             TestStep("Top Bearing", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, "camera",
-                     check_name="top_bearing",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_TOP_BEARING),
-
-            # Step 4: Nut and Plate Washer
+                     check_name="top_bearing"),
             TestStep("Nut & Plate Washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, "camera",
-                     check_name="nut_platewasher",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER),
-
-            # Step 5: Tightening Torque 1 (value only, state 12)
+                     check_name="nut_platewasher"),
             TestStep("Tightening Torque 1", MachineState.READ_TIGHTENING_TORQUE_1, "torque"),
-
-            # Step 6: Free Rotations Done
-            TestStep("Free Rotations Done", MachineState.READ_FREE_ROTATIONS_DONE, "done"),
-
-            # Step 7: Bung for Component Press
-            TestStep("Bung (Component Press)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-                     "camera",
-                     check_name="no_cap_bung",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS),
-
-            # Step 8: Component Press Done
-            TestStep("Component Press Done", MachineState.READ_COMPONENT_PRESS_DONE, "done"),
-
-            # Step 9: No Bung (after component press)
-            TestStep("No Bung", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, "camera",
-                     check_name="no_bung",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_NO_BUNK),
-
-            # Step 10: Tightening Torque 2 (value only, state 20)
+            TestStep("Bunk for Component Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
+                     "camera", check_name="no_cap_bunk"),
+            TestStep("Component Press", MachineState.READ_COMPONENT_PRESS_DONE, "done"),
+            TestStep("No Bunk (after component press)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, "camera",
+                     check_name="no_bunk"),
             TestStep("Tightening Torque 2", MachineState.READ_TIGHTENING_TORQUE_2, "torque"),
-
-            # Step 11: Split Pin and Washer
             TestStep("Split Pin & Washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, "camera",
-                     check_name="splitpin_washer",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER),
-
-            # Step 12: Cap
+                     check_name="splitpin_washer"),
             TestStep("Cap", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP, "camera",
-                     check_name="cap",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_CAP),
-
-            # Step 13: Bung for Cap Press
-            TestStep("Bung (Cap Press)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, "camera",
-                     check_name="bung",
-                     write_state=MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS),
-
-            # Step 14: Cap Press Done
-            TestStep("Cap Press Done", MachineState.READ_CAP_PRESS_DONE, "done"),
-
-            # Step 15: Free Rotation Torque 1 (value only, state 29)
+                     check_name="cap"),
+            TestStep("Bunk for Cap Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, "camera",
+                     check_name="bunk"),
+            TestStep("Cap Press", MachineState.READ_CAP_PRESS_DONE, "done"),
+            # Final step - the frontend ends the cycle on this message and sends the record to the DB server
             TestStep("Free Rotation Torque", MachineState.READ_FREE_ROTATION_TORQUE_1, "torque_final"),
         ]
 
@@ -264,7 +252,7 @@ class ImageProcessorTestUI:
         self.redis_label = ttk.Label(status_frame, text=f"Redis: {redis_status}")
         self.redis_label.pack(side="right", padx=20)
 
-        # NEW: Live Camera Mode checkbox
+        # Live Camera Mode checkbox
         mode_frame = ttk.LabelFrame(scrollable_frame, text="Camera Mode", padding="5")
         mode_frame.pack(fill="x", padx=5, pady=5)
 
@@ -302,7 +290,7 @@ class ImageProcessorTestUI:
 
     def _build_step_ui(self, parent: ttk.Frame, idx: int, step: TestStep):
         """Build UI for a single step."""
-        frame = ttk.LabelFrame(parent, text=f"Step {idx}: {step.name}", padding="5")
+        frame = ttk.LabelFrame(parent, text=f"Step {idx + 1}: {step.name}", padding="5")
         frame.pack(fill="x", padx=5, pady=3)
 
         widgets = {"frame": frame}
@@ -359,10 +347,11 @@ class ImageProcessorTestUI:
             btn_frame = ttk.Frame(frame)
             btn_frame.pack(fill="x")
 
+            # Same ranges as Test_FEServer_Mock_With_Image_Files_UI (tightening setpoint is ~19 Nm on Machine 2)
             if step.step_type == "torque_final":
-                min_val, max_val = 0.5, 2.0
+                min_val, max_val = 2.0, 6.0
             else:
-                min_val, max_val = 100.0, 200.0
+                min_val, max_val = 17.0, 19.0
 
             send_btn = ttk.Button(btn_frame, text=f"Send Random ({min_val}-{max_val})",
                                   command=lambda s=step, i=idx, mn=min_val, mx=max_val: self._send_torque(s, i, mn, mx))
@@ -395,8 +384,8 @@ class ImageProcessorTestUI:
 
         for idx, step in enumerate(self.steps):
             widgets = self.step_widgets[idx]
-            is_current = (idx == self.current_step_index)
-            is_past = (idx < self.current_step_index)
+            # Nothing can be sent while the previous message is still waiting to be consumed
+            is_current = (idx == self.current_step_index) and (self.waiting_for is None)
 
             if step.step_type == "qrcode":
                 # Enable QR buttons only if current step
@@ -435,9 +424,44 @@ class ImageProcessorTestUI:
         # Update state label
         if self.current_step_index < len(self.steps):
             current_step = self.steps[self.current_step_index]
-            self.state_label.config(text=f"Current Step: {current_step.name}")
+            waiting = f" (waiting for {self.waiting_for})" if self.waiting_for else ""
+            self.state_label.config(text=f"Current Step {self.current_step_index + 1}/{len(self.steps)}: {current_step.name}{waiting}")
         else:
             self.state_label.config(text="All steps complete!")
+
+    # ---------------------------------------------------------------------------------------------
+    # Message ordering: the FE trims each queue to the latest message, so wait until it has been read
+    # ---------------------------------------------------------------------------------------------
+
+    POLL_MS = 100
+
+    def _queue_consumed(self, queueName: str) -> bool:
+        try:
+            return self.redis_connection.xlen(queueName) == 0
+        except Exception:
+            return False
+
+    def _wait_until_consumed(self, queueName: str, who: str = "FE"):
+        """Disable sending until the consumer has read the message just put on queueName."""
+        self.waiting_for = who
+        self._update_button_states()
+
+        def poll():
+            if self.waiting_for is None:
+                return
+            if self._queue_consumed(queueName):
+                self.waiting_for = None
+                self._update_button_states()
+            else:
+                self.root.after(self.POLL_MS, poll)
+        self.root.after(self.POLL_MS, poll)
+
+    def _advance(self):
+        """Move to the next step; after the final step start the next cycle at the QR step."""
+        self.current_step_index += 1
+        if self.current_step_index >= len(self.steps):
+            self.current_step_index = 0
+            self.status_label.config(text="Cycle complete - FE sends the record to the DB server. Send the next QR Code.")
 
     def _send_qr_code(self, qr_code: str, model_name: str):
         """Send QR code to FE Server and Camera Server."""
@@ -455,6 +479,7 @@ class ImageProcessorTestUI:
                 redisConnection=self.redis_connection,
                 qrCode=qr_code,
                 displayString=display_string,
+                qrCodeStatus=ok,
                 aProducer="TestUI"
             )
 
@@ -471,8 +496,8 @@ class ImageProcessorTestUI:
             # Update UI
             self.qr_display.config(text=f"{model_name}: {display_string}")
             self.status_label.config(text=f"{model_name} QR Code sent successfully")
-            self.current_step_index += 1
-            self._update_button_states()
+            self._advance()
+            self._wait_until_consumed(qrcode2feq)
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to send QR code: {e}")
@@ -508,45 +533,69 @@ class ImageProcessorTestUI:
                 return
             self._run_file_based_check(step, step_idx)
 
+    LIVE_RESULT_TIMEOUT_S = 60
+
     def _run_live_camera_check(self, step: TestStep, step_idx: int):
-        """Send takePicture command to CameraProcessorServer."""
+        """Send a takePicture command to CameraProcessorServer and wait for its result on camera2io.
+
+        CameraProcessorServer sends the pictures and ok/notok to the FE itself (camera2fe); the result it also sends
+        to the IO server (camera2io) is read here to decide whether to advance, as the IO server would.
+        """
         try:
-            # Disable button during processing
             self.step_widgets[step_idx]["run_btn"].state(["disabled"])
             self.status_label.config(text=f"Sending takePicture command for {step.name}...")
             self.root.update()
 
-            # Send takePicture command to CameraProcessorServer
-            # The READ state tells CameraProcessorServer which check to perform
+            self.redis_connection.xtrim(camera2ioq, 0)     # drop any stale result
             sendDataFromIOServerToCameraServer(
                 redisConnection=self.redis_connection,
-                currentMachineState=step.state,  # Use th-  e READ state
+                currentMachineState=step.state,   # READ_TAKE_PICTURE_FOR_CHECKING_* tells it which check to run
                 action=takePictureCommand,
                 aProducer="TestUI"
             )
 
-            # Update UI - CameraProcessorServer will send result to FE Server
-            self.step_widgets[step_idx]["result_label"].config(
-                text="Command sent - check FE",
-                foreground="blue"
-            )
+            self.step_widgets[step_idx]["result_label"].config(text="Command sent - waiting for camera server",
+                                                               foreground="blue")
             self.status_label.config(
-                text=f"takePicture command sent for {step.name}. CameraProcessorServer is processing..."
-            )
-
-            # Advance to next step
-            # Note: In live mode, we don't wait for the result - we trust CameraProcessorServer
-            # The result will appear on the FE Server
-            self.current_step_index += 1
+                text=f"takePicture command sent for {step.name}. CameraProcessorServer is processing...")
+            self.waiting_for = "camera server result"
             self._update_button_states()
+
+            threading.Thread(target=self._wait_for_live_camera_result, args=(step, step_idx), daemon=True).start()
 
         except Exception as e:
             import traceback
             traceback.print_exc()
+            self.waiting_for = None
             self.step_widgets[step_idx]["result_label"].config(text="ERROR", foreground="red")
             self.status_label.config(text=f"Error: {e}")
             messagebox.showerror("Error", f"Failed to send command: {e}")
             self._update_button_states()
+
+    def _wait_for_live_camera_result(self, step: TestStep, step_idx: int):
+        """Runs in a thread: read the camera server's result from camera2io."""
+        conn = Redis(CosThetaConfigurator.getInstance().getRedisHost(), CosThetaConfigurator.getInstance().getRedisPort())
+        deadline = time.time() + self.LIVE_RESULT_TIMEOUT_S
+        while time.time() < deadline:
+            if conn.xlen(camera2ioq) > 0:
+                resultState, result = readDataInIOServerFromCameraServer(conn, block=500)
+                self.root.after(0, lambda: self._handle_live_camera_result(step, step_idx, result, resultState))
+                return
+            time.sleep(0.1)
+        self.root.after(0, lambda: self._handle_live_camera_result(step, step_idx, None, MachineState.INVALID_STATE))
+
+    def _handle_live_camera_result(self, step: TestStep, step_idx: int, result: Optional[bool], resultState: MachineState):
+        self.waiting_for = None
+        if result is None:
+            self.step_widgets[step_idx]["result_label"].config(text="NO RESPONSE", foreground="red")
+            self.status_label.config(text=f"No result from CameraProcessorServer within {self.LIVE_RESULT_TIMEOUT_S} s "
+                                          f"(io2camera pending: {self.redis_connection.xlen(io2cameraq)})")
+            self._update_button_states()
+            return
+        self._handle_check_result(step, step_idx, result)
+        if resultState == MachineState.INVALID_STATE:
+            # CameraProcessorServer reports INVALID_STATE when it could not take pictures (e.g. camera not connected)
+            self.status_label.config(text=f"{step.name}: camera server could not take pictures (camera not connected?) - retry")
 
     def _run_file_based_check(self, step: TestStep, step_idx: int):
         """Run the camera check from file in a separate thread (original behavior)."""
@@ -587,12 +636,15 @@ class ImageProcessorTestUI:
                 originalImage=image,
                 processedImage=processed_image if processed_image is not None else image,
                 result=result_str,
-                currentMachineState=step.write_state,
+                currentMachineState=step.state,
                 aProducer="TestUI"
             )
 
-            # Update UI in main thread
-            self.root.after(0, lambda: self._handle_check_result(step, step_idx, result))
+            # Update UI in main thread; then wait for the FE to read the picture before allowing the next send
+            def done():
+                self._handle_check_result(step, step_idx, result)
+                self._wait_until_consumed(camera2feq)
+            self.root.after(0, done)
 
         except Exception as e:
             import traceback
@@ -610,19 +662,19 @@ class ImageProcessorTestUI:
             # CheckKnuckle.checkKnuckle(image, qr_code) -> (processed_image, result)
             print(f"Invoking checkKnuckle with {self.current_qr_code}")
             ImageProcessorTestUI.currentPictures[knucklePictureKeyString] = image
-            processed_image, result = CheckKnuckle.checkKnuckle(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures, componentQRCode=self.current_qr_code)
+            processed_image, result = _requireCheck(CheckKnuckle, "CheckKnuckle").checkKnuckle(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures, componentQRCode=self.current_qr_code)
             return result, processed_image
 
         elif check_name == "hub":
             # CheckHubAndBottomBearing.checkHubAndBottomBearing(image, qr_code) -> (result_image, success, winning_gamma)
             ImageProcessorTestUI.currentPictures[hubAndBottomBearingPictureKeyString] = image
-            result_image, success, _ = CheckHubAndBottomBearing.checkHubAndBottomBearing(anImage=image, componentQRCode=self.current_qr_code, use_smart_gamma=True)
+            result_image, success, _ = _requireCheck(CheckHubAndBottomBearing, "CheckHubAndBottomBearing").checkHubAndBottomBearing(anImage=image, componentQRCode=self.current_qr_code, use_smart_gamma=True)
             return success, result_image
 
         elif check_name == "top_bearing":
             # CheckTopBearing.checkTopBearing(...) -> (annotated_image, is_bearing_present, geometry)
             ImageProcessorTestUI.currentPictures[topBearingPictureKeyString] = image
-            annotated_image, is_present, geometry = CheckTopBearing.checkTopBearing(
+            annotated_image, is_present, geometry = _requireCheck(CheckTopBearing, "CheckTopBearing").checkTopBearing(
                 anImage=image,
                 currentPictures=ImageProcessorTestUI.currentPictures,
                 componentQRCode=self.current_qr_code
@@ -634,7 +686,7 @@ class ImageProcessorTestUI:
         elif check_name == "nut_platewasher":
             # CheckNutAndPlateWasher.checkNutAndPlateWasher(image, currentPictures, qr_code, bearing_geometry)
             ImageProcessorTestUI.currentPictures[nutAndPlateWasherPictureKeyString] = image
-            processed_image, result = CheckNutAndPlateWasher.checkNutAndPlateWasher(
+            processed_image, result = _requireCheck(CheckNutAndPlateWasher, "CheckNutAndPlateWasher").checkNutAndPlateWasher(
                 anImage=image,
                 currentPictures=ImageProcessorTestUI.currentPictures,
                 componentQRCode=self.current_qr_code,
@@ -642,37 +694,37 @@ class ImageProcessorTestUI:
             )
             return result, processed_image
 
-        elif check_name == "no_cap_bung":
-            # CheckNoCapBunk.checkNoCapBung(image, qr_code) -> (result_image, success, winning_gamma)
+        elif check_name == "no_cap_bunk":
+            # CheckNoCapBunk.checkNoCapBunk(image, qr_code) -> (result_image, success, winning_gamma)
             ImageProcessorTestUI.currentPictures[componentPressBunkPictureKeyString] = image
-            result_image, success, _ = CheckNoCapBunk.checkNoCapBunk(anImage=image, componentQRCode=self.current_qr_code)
+            result_image, success, _ = _requireCheck(CheckNoCapBunk, "CheckNoCapBunk").checkNoCapBunk(anImage=image, componentQRCode=self.current_qr_code)
             return success, result_image
 
-        elif check_name == "no_bung":
+        elif check_name == "no_bunk":
             # CheckNoBunk.checkNoBunk(image, currentPictures, qr_code) -> (annotated_image, nut_present)
             ImageProcessorTestUI.currentPictures[noBunkPictureKeyString] = image
-            processed_image, result = CheckNoBunk.checkNoBunk(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
+            processed_image, result = _requireCheck(CheckNoBunk, "CheckNoBunk").checkNoBunk(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
                                                               componentQRCode=self.current_qr_code)
             return result, processed_image
 
         elif check_name == "splitpin_washer":
             # CheckSplitPinAndWasher.checkSplitPinAndWasher(image, qr_code) -> (processed_image, result)
             ImageProcessorTestUI.currentPictures[splitPinAndWasherPictureKeyString] = image
-            processed_image, result = CheckSplitPinAndWasher.checkSplitPinAndWasher(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
+            processed_image, result = _requireCheck(CheckSplitPinAndWasher, "CheckSplitPinAndWasher").checkSplitPinAndWasher(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
                                                            componentQRCode=self.current_qr_code)
             return result, processed_image
 
         elif check_name == "cap":
             # CheckCap.checkCap(image, currentPictures, qr_code)
             ImageProcessorTestUI.currentPictures[capPictureKeyString] = image
-            processed_image, result = CheckCap.checkCap(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
+            processed_image, result = _requireCheck(CheckCap, "CheckCap").checkCap(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
                                                            componentQRCode=self.current_qr_code)
             return result, processed_image
 
-        elif check_name == "bung":
-            # CheckBunk.checkBung(image, qr_code) -> (result_image, success, winning_gamma)
+        elif check_name == "bunk":
+            # CheckBunk.checkBunk(image, qr_code) -> (result_image, success, winning_gamma)
             ImageProcessorTestUI.currentPictures[capPressBunkPictureKeyString] = image
-            result_image, success, _ = CheckBunk.checkBunk(anImage=image, componentQRCode=self.current_qr_code)
+            result_image, success, _ = _requireCheck(CheckBunk, "CheckBunk").checkBunk(anImage=image, componentQRCode=self.current_qr_code)
             return success, result_image
 
         else:
@@ -698,7 +750,7 @@ class ImageProcessorTestUI:
 
         if result:
             self.status_label.config(text=f"{step.name} check PASSED")
-            self.current_step_index += 1
+            self._advance()
         else:
             self.status_label.config(text=f"{step.name} check FAILED - retry or select new image")
 
@@ -724,12 +776,14 @@ class ImageProcessorTestUI:
             self.status_label.config(text=f"Sending {step.name}: {value}")
             self.root.update()
 
-            # Send to FE Server
+            # Send to FE Server. The final free-rotation torque ends the cycle, as the IO server does it.
+            is_final = (step.step_type == "torque_final")
             sendDataFromIOServerToFEServer(
                 redisConnection=self.redis_connection,
                 currentMachineState=step.state,
+                moveToState=MachineState.READ_QR_CODE if is_final else MachineState.INVALID_STATE,
                 result=ok,
-                action=updateValueCommand,
+                action=moveAheadToNextComponent if is_final else updateValueCommand,
                 value=value,
                 aProducer="TestUI"
             )
@@ -737,8 +791,8 @@ class ImageProcessorTestUI:
             # Update UI
             self.step_widgets[step_idx]["value_label"].config(text=f"Sent: {value}")
             self.status_label.config(text=f"{step.name} sent: {value}")
-            self.current_step_index += 1
-            self._update_button_states()
+            self._advance()
+            self._wait_until_consumed(io2feq)
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to send torque: {e}")
@@ -767,8 +821,8 @@ class ImageProcessorTestUI:
             # Update UI
             self.step_widgets[step_idx]["status_label"].config(text="Sent ✓", foreground="green")
             self.status_label.config(text=f"{step.name} sent successfully")
-            self.current_step_index += 1
-            self._update_button_states()
+            self._advance()
+            self._wait_until_consumed(io2feq)
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to send done: {e}")
@@ -787,6 +841,7 @@ class ImageProcessorTestUI:
                                                     noBunkPictureKeyString: None,
                                                     capPressBunkPictureKeyString: None}
             self.current_step_index = 0
+            self.waiting_for = None
             self.current_qr_code = ""
             self.stored_images = {}  # Clear stored intermediate images
             self.bearing_geometry = None  # Clear bearing geometry

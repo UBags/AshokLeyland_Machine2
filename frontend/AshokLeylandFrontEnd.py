@@ -1123,7 +1123,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.largeImageWindow.show()
         self.largeImageWindow.raise_()
         self.largeImageWindow.activateWindow()
-        if (result is not None) or (f"{result}".lower() == ok.lower()):
+        if f"{result}".lower() == ok.lower():   # was "(result is not None) or ...", which always chose the OK display time
             QTimer.singleShot(AshokLeylandFrontEnd.TIME_TO_SHOW_OK_IMAGE_MSEC, self.hideLargeImageWindow)
         else:
             QTimer.singleShot(AshokLeylandFrontEnd.TIME_TO_SHOW_NOT_OK_IMAGE_MSEC, self.hideLargeImageWindow)
