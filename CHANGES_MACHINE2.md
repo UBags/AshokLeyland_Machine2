@@ -230,3 +230,28 @@ The goal was that a site engineer can re-tune a check from `ApplicationConfigura
   - The IOServer dry run gives the same two-cycle state trace as before.
   - The integrated all-servers dry run passes, and its DB row is unchanged.
 - **Already broken before the move, not fixed:** `costhetaio/siemens/IOServer.py` imports `logBoth` from `logutils.SlaveLoggers`, and that function doesn't exist. It will be dealt with in the Siemens S7-1515 port.
+
+## 13. IOServer fault-scenario dry run; `test/wip` removed (2026-10-31)
+
+- **New `test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py`** (also copied to `test/machine1_dryrun/`). It uses the same harness as the two-cycle dry run, with the real IOServer, and has 35 automatic checks (exit code 1 on failure):
+  - **A. Camera NOT OK.** IOServer writes OK=False with Done=True, goes back to the picture state, asks the camera again and retries. The cycle then completes. This is exercised on the knuckle and cap steps.
+  - **B. Rejected QR.** IOServer stays in WRITE_QR_CODE and writes nothing to the PLC: no QR OK/Done and no cycle settings. This is the current behaviour; see §9. The re-scanned, accepted code then proceeds with its own side and model.
+  - **C. Emergency abort mid-cycle.** IOServer must:
+    - send ABORT to the QR server and the emergency message to the frontend;
+    - clear the 7 key queues of the stale messages planted beforehand;
+    - reset all 37 per-cycle handshake tags. The test sets each to True or 12.34 first and checks it against an explicit list, so a tag dropped from `resetAll()` is caught.
+    - re-arm the QR read, after which a full normal cycle completes.
+
+    The test also fails if a new PLC tag is added to IOServer without being listed as reset or not reset on abort.
+- **Mutation-tested:** each of these deliberately planted faults in the IOServer is caught:
+  - NOT OK does not go back to the picture state;
+  - the abort does not clear the queues;
+  - `resetAll()` skips one bool tag;
+  - `resetAll()` skips one torque reset;
+  - a rejected QR is treated as accepted.
+- **`test/wip/` deleted.** Its four programs used Machine 1's 29-state sequence and tested no real code:
+  - one GUI's simulated PLC tags were not connected to the IOServer;
+  - one was a separate re-implementation of the IOServer;
+  - one imported a module that does not exist.
+
+  Their features are covered by this dry run, `DryRun_IOServer_Two_Full_Cycles.py`, and the three `test/Test_IOServer_*_UI.py` programs. Two gaps remain in the interactive Mock-PLC window: it has no emergency-abort button, and the abort path is now covered only by this dry run.

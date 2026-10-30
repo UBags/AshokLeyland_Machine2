@@ -21,14 +21,15 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
   C. Emergency abort part-way through a cycle (after tightening torque 1, waiting for the bunk picture)
      Stale messages are placed on every queue first. After the PLC raises PLC_PC_EmergencyAbort, IOServer must:
      send ABORT to the QR server (io2qrcodeabort.q) and the emergency message to the frontend (emergency.q); clear the
-     7 key communication queues (no stale message left); write False / 0.0 to every handshake tag that resetAll()
-     covers (read from IOServer's own source), including PLC_PC_EmergencyAbort; go back to READ_QR_CODE and re-arm
+     7 key communication queues (no stale message left); write False / 0.0 to all 37 per-cycle handshake tags (an
+     explicit list in this script, independent of resetAll(); each is set to True / 12.34 first), including
+     PLC_PC_EmergencyAbort; go back to READ_QR_CODE and re-arm
      PLC_PC_CheckQRCode=True (so it moves straight on to WRITE_QR_CODE and asks the QR server for a code).
      A full normal cycle must then complete.
 
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
-import ast, collections, inspect, sys, textwrap, threading, time
+import collections, sys, threading, time
 import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -199,107 +200,137 @@ def writes_of(tags, since):
 time.sleep(6)          # IOServer __init__ sleeps 5 s before starting its threads
 
 # =====================================================================================================
-print("\n=== A. Camera NOT OK, then retry (knuckle and cap) ===", flush=True)
-TRACE.clear(); PICTURE_REQUESTS.clear()
-CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE].append(notok)
-CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP].append(notok)
-plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
-run_steps(retry_on_notok=("KNUCKLE", "CAP"))
-cycleA = wrapped()
-for name, read_state in (("KNUCKLE", 3), ("CAP", 22)):
-    write_state = read_state + 1
-    i = next((k for k in range(1, len(TRACE)) if TRACE[k - 1] == write_state and TRACE[k] == read_state), None)
-    check(f"A {name}: NOT OK wrote OK=False with Done=True", NOTOK_SEEN.get(name) is False, f"OK tag at NOT OK = {NOTOK_SEEN.get(name)}")
-    check(f"A {name}: went back from state {write_state} to picture state {read_state}", i is not None)
-    check(f"A {name}: camera asked twice for state {read_state}", PICTURE_REQUESTS.count(MS(read_state)) == 2,
-          f"{PICTURE_REQUESTS.count(MS(read_state))} requests")
-    check(f"A {name}: retry answered OK -> OK=True", RETRY_OK.get(name) is True)
-check("A: cycle completed and wrapped to state 1", cycleA, f"trace tail {TRACE[-6:]}")
-check("A: each other picture state asked exactly once",
-      all(PICTURE_REQUESTS.count(MS(s)) == 1 for s in (5, 7, 9, 13, 16, 20, 24)))
+def run_scenarios():
+    global mark
+    print("\n=== A. Camera NOT OK, then retry (knuckle and cap) ===", flush=True)
+    TRACE.clear(); PICTURE_REQUESTS.clear()
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE].append(notok)
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP].append(notok)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(retry_on_notok=("KNUCKLE", "CAP"))
+    cycleA = wrapped()
+    for name, read_state in (("KNUCKLE", 3), ("CAP", 22)):
+        write_state = read_state + 1
+        i = next((k for k in range(1, len(TRACE)) if TRACE[k - 1] == write_state and TRACE[k] == read_state), None)
+        check(f"A {name}: NOT OK wrote OK=False with Done=True", NOTOK_SEEN.get(name) is False, f"OK tag at NOT OK = {NOTOK_SEEN.get(name)}")
+        check(f"A {name}: went back from state {write_state} to picture state {read_state}", i is not None)
+        check(f"A {name}: camera asked twice for state {read_state}", PICTURE_REQUESTS.count(MS(read_state)) == 2,
+              f"{PICTURE_REQUESTS.count(MS(read_state))} requests")
+        check(f"A {name}: retry answered OK -> OK=True", RETRY_OK.get(name) is True)
+    check("A: cycle completed and wrapped to state 1", cycleA, f"trace tail {TRACE[-6:]}")
+    check("A: each other picture state asked exactly once",
+          all(PICTURE_REQUESTS.count(MS(s)) == 1 for s in (5, 7, 9, 13, 16, 20, 24)))
 
-# =====================================================================================================
-print("\n=== B. QR code rejected, then accepted ===", flush=True)
-TRACE.clear(); mark = len(WRITES)
-QR_TAGS = (IOServer.PC_PLC_QRCodeCheckOK, IOServer.PC_PLC_QRCodeCheckDone)
-SETTING_TAGS = (IOServer.PC_PLC_LH_RH_Selection, IOServer.PC_PLC_ModelSelection,
-                IOServer.PC_PLC_TighteningTorque1Setpoint, IOServer.PC_PLC_TighteningTorque2Setpoint,
-                IOServer.PC_PLC_RotationRPM1, IOServer.PC_PLC_RotationRPM2)
-# the cycle end already re-armed CheckQRCode (state 2); scan a bad code first
-plc_start_cycle(QR_DOSTPLUS_RHS, status_sequence=(notok, ok))
-check("B: waiting in WRITE_QR_CODE before the scan", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE))
-mark = len(WRITES)
-SCAN.set()                                   # operator scans -> rejected code
-time.sleep(2.0)
-check("B: rejected code -> still in WRITE_QR_CODE", io.machineState.getCurrentState() == MS.WRITE_QR_CODE,
-      io.machineState.getCurrentState().name)
-check("B: rejected code -> nothing written to QRCodeCheckOK/Done (not reported to the PLC; see section 9)",
-      writes_of(QR_TAGS, mark) == [], str(writes_of(QR_TAGS, mark)))
-check("B: rejected code -> no cycle settings written", writes_of(SETTING_TAGS, mark) == [])
-mark = len(WRITES)
-SCAN.set()                                   # operator re-scans -> accepted code
-finish_qr_handshake()
-qr_writes = writes_of(QR_TAGS, mark)
-check("B: accepted code -> QRCodeCheckOK=True then Done=True",
-      (IOServer.PC_PLC_QRCodeCheckOK, True) in qr_writes and (IOServer.PC_PLC_QRCodeCheckDone, True) in qr_writes, str(qr_writes))
-settings = dict(writes_of(SETTING_TAGS, mark))
-check("B: settings are those of the accepted DOSTPLUS RHS code",
-      settings.get(IOServer.PC_PLC_LH_RH_Selection) == 2 and settings.get(IOServer.PC_PLC_ModelSelection) == 2, str(settings))
-check("B: moved on to the knuckle picture state", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE))
-run_steps()
-check("B: cycle completed and wrapped to state 1", wrapped())
+    # =====================================================================================================
+    print("\n=== B. QR code rejected, then accepted ===", flush=True)
+    TRACE.clear(); mark = len(WRITES)
+    QR_TAGS = (IOServer.PC_PLC_QRCodeCheckOK, IOServer.PC_PLC_QRCodeCheckDone)
+    SETTING_TAGS = (IOServer.PC_PLC_LH_RH_Selection, IOServer.PC_PLC_ModelSelection,
+                    IOServer.PC_PLC_TighteningTorque1Setpoint, IOServer.PC_PLC_TighteningTorque2Setpoint,
+                    IOServer.PC_PLC_RotationRPM1, IOServer.PC_PLC_RotationRPM2)
+    # the cycle end already re-armed CheckQRCode (state 2); scan a bad code first
+    plc_start_cycle(QR_DOSTPLUS_RHS, status_sequence=(notok, ok))
+    check("B: waiting in WRITE_QR_CODE before the scan", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE))
+    mark = len(WRITES)
+    SCAN.set()                                   # operator scans -> rejected code
+    time.sleep(2.0)
+    check("B: rejected code -> still in WRITE_QR_CODE", io.machineState.getCurrentState() == MS.WRITE_QR_CODE,
+          io.machineState.getCurrentState().name)
+    check("B: rejected code -> nothing written to QRCodeCheckOK/Done (not reported to the PLC; see section 9)",
+          writes_of(QR_TAGS, mark) == [], str(writes_of(QR_TAGS, mark)))
+    check("B: rejected code -> no cycle settings written", writes_of(SETTING_TAGS, mark) == [])
+    mark = len(WRITES)
+    SCAN.set()                                   # operator re-scans -> accepted code
+    finish_qr_handshake()
+    qr_writes = writes_of(QR_TAGS, mark)
+    check("B: accepted code -> QRCodeCheckOK=True then Done=True",
+          (IOServer.PC_PLC_QRCodeCheckOK, True) in qr_writes and (IOServer.PC_PLC_QRCodeCheckDone, True) in qr_writes, str(qr_writes))
+    settings = dict(writes_of(SETTING_TAGS, mark))
+    check("B: settings are those of the accepted DOSTPLUS RHS code",
+          settings.get(IOServer.PC_PLC_LH_RH_Selection) == 2 and settings.get(IOServer.PC_PLC_ModelSelection) == 2, str(settings))
+    check("B: moved on to the knuckle picture state", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE))
+    run_steps()
+    check("B: cycle completed and wrapped to state 1", wrapped())
 
-# =====================================================================================================
-print("\n=== C. Emergency abort part-way through a cycle ===", flush=True)
-TRACE.clear()
-plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
-run_steps(last="TORQUE1")
-check("C: before abort, waiting for the bunk (component press) picture",
-      wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
-      io.machineState.getCurrentState().name)
-PAUSE.set(); time.sleep(0.3)
-KEY_QUEUES = [io2cameraq, io2qrcodeq, qrcode2ioq, qrcode2feq, qrcode2cameraq, camera2ioq, camera2feq]
-for q in KEY_QUEUES + [io2feq]:
-    sendData(r, {"stale": "1"}, queueName=q, aProducer="DRYRUN_STALE")
-abortLen0, emergLen0 = r.xlen(io2qrcodeabortq), r.xlen(emergencyq)
-# leave some handshake tags set, as they would be mid-cycle
-with LOCK:
-    TAGS[IOServer.PLC_PC_CheckNoCapBunk] = True; TAGS[IOServer.PLC_PC_Station2TorqueValue] = 19.08
-    TAGS[IOServer.PLC_PC_EmergencyAbort] = True
-mark = len(WRITES)
-reset_ok = wait_for(lambda: TAGS[IOServer.PLC_PC_EmergencyAbort] is False and TAGS[IOServer.PLC_PC_CheckQRCode] is True, timeout=5)
-time.sleep(0.6)
-check("C: abort handled within 5 s (EmergencyAbort reset, CheckQRCode re-armed)", reset_ok)
-check("C: ABORT sent to the QR server (io2qrcodeabort.q)", r.xlen(io2qrcodeabortq) > abortLen0)
-check("C: emergency message sent to the frontend (emergency.q)", r.xlen(emergencyq) > emergLen0)
-for q in KEY_QUEUES:
-    stale = [m for m in r.xrange(q) if m[1].get(b"producer") == b"DRYRUN_STALE"]
-    check(f"C: queue {q} cleared of stale messages", stale == [], f"{len(stale)} stale left")
-# every tag resetAll() covers must be False / 0.0, except CheckQRCode, which the PC re-arms
-reset_src = textwrap.dedent(inspect.getsource(IOServer.resetAll))
-reset_attrs = [n.attr for n in ast.walk(ast.parse(reset_src)) if isinstance(n, ast.Attribute)
-               and isinstance(n.value, ast.Name) and n.value.id == "IOServer"]
-not_reset = {}
-for a in reset_attrs:
-    tag = getattr(IOServer, a)
-    expected = True if a == "PLC_PC_CheckQRCode" else (0.0 if isinstance(TAGS[tag], float) else False)
-    if TAGS[tag] != expected:
-        not_reset[a] = TAGS[tag]
-check(f"C: all {len(reset_attrs)} handshake tags reset by resetAll() (CheckQRCode re-armed True)", not_reset == {}, str(not_reset))
-check("C: state back to the QR code (READ_QR_CODE -> WRITE_QR_CODE)",
-      io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), io.machineState.getCurrentState().name)
-fresh = [m for m in r.xrange(io2qrcodeq) if m[1].get(b"producer") != b"DRYRUN_STALE"]
-check("C: fresh QR read request sent after the abort", len(fresh) >= 1 or io.machineState.getCurrentState() == MS.READ_QR_CODE)
-staleFE = [m for m in r.xrange(io2feq) if m[1].get(b"producer") == b"DRYRUN_STALE"]
-print(f"INFO  io2frontend.q is not in IOServer's abort clear list (architecture finding R14): stale message "
-      f"{'still there' if staleFE else 'gone'}", flush=True)
-with LOCK: TAGS[IOServer.PLC_PC_CheckNoCapBunk] = False
-PAUSE.clear()
-TRACE.clear()
-plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
-run_steps()
-check("C: a full normal cycle completes after the abort", wrapped(), f"trace {TRACE}")
-check("C: that cycle walked every state 1..28", set(range(1, 29)) <= set(TRACE))
+    # =====================================================================================================
+    print("\n=== C. Emergency abort part-way through a cycle ===", flush=True)
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="TORQUE1")
+    check("C: before abort, waiting for the bunk (component press) picture",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
+          io.machineState.getCurrentState().name)
+    PAUSE.set(); time.sleep(0.3)
+    KEY_QUEUES = [io2cameraq, io2qrcodeq, qrcode2ioq, qrcode2feq, qrcode2cameraq, camera2ioq, camera2feq]
+    for q in KEY_QUEUES + [io2feq]:
+        sendData(r, {"stale": "1"}, queueName=q, aProducer="DRYRUN_STALE")
+    abortLen0, emergLen0 = r.xlen(io2qrcodeabortq), r.xlen(emergencyq)
+    # Every per-cycle handshake tag is put in a NON-default state first (True, or a non-zero torque), so that a tag the
+    # abort fails to reset is caught. The list is the specification, written out here, NOT read from resetAll(), so a
+    # tag dropped from resetAll() is detected. Tags IOServer does not reset on abort: the PLC watch tag, the PC
+    # heartbeat tag and the six cycle-setting tags written in state 2.
+    RESET_TAGS = {a: ("float" if a.endswith("TorqueValue") else "bool") for a in (
+        "PLC_PC_CheckQRCode", "PC_PLC_QRCodeCheckOK", "PC_PLC_QRCodeCheckDone",
+        "PLC_PC_CheckKnuckle", "PC_PLC_KnuckleCheckOK", "PC_PLC_KnuckleCheckDone",
+        "PLC_PC_CheckHub", "PC_PLC_HubCheckOK", "PC_PLC_HubCheckDone",
+        "PLC_PC_CheckHubAndSecondBearing", "PC_PLC_HubAndSecondBearingCheckOK", "PC_PLC_HubAndSecondBearingCheckDone",
+        "PLC_PC_CheckNutAndPlateWasher", "PC_PLC_NutAndPlateWasherCheckOK", "PC_PLC_NutAndPlateWasherCheckDone",
+        "PLC_PC_Station2TorqueValueSet", "PLC_PC_Station2TorqueValue",
+        "PLC_PC_CheckNoCapBunk", "PC_PLC_NoCapBunkCheckOK", "PC_PLC_NoCapBunkCheckDone",
+        "PLC_PC_ComponentPressDone",
+        "PLC_PC_CheckNoBunk", "PC_PLC_NoBunkCheckOK", "PC_PLC_NoBunkCheckDone",
+        "PLC_PC_CheckSplitPinAndWasher", "PC_PLC_SplitPinAndWasherCheckOK", "PC_PLC_SplitPinAndWasherCheckDone",
+        "PLC_PC_CheckCap", "PC_PLP_CapCheckOK", "PC_PLC_CapCheckDone",
+        "PLC_PC_CheckBunk", "PC_PLC_BunkCheckOK", "PC_PLC_BunkCheckDone",
+        "PLC_PC_CapPressDone",
+        "PLC_PC_Station3TorqueValueSet", "PLC_PC_Station3TorqueValue",
+        "PLC_PC_EmergencyAbort")}
+    NOT_RESET_ON_ABORT = {"PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
+                          "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
+                          "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2"}
+    all_tag_attrs = {a for a in vars(IOServer) if a.split("_")[0] in ("PLC", "PC") and a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
+    unclassified = all_tag_attrs - set(RESET_TAGS) - NOT_RESET_ON_ABORT
+    check("C: every IOServer PLC tag is classified (reset on abort, or deliberately not)", unclassified == set(), str(sorted(unclassified)))
+    with LOCK:
+        for a, kind in RESET_TAGS.items():
+            TAGS[getattr(IOServer, a)] = 12.34 if kind == "float" else True
+    mark = len(WRITES)
+    reset_ok = wait_for(lambda: TAGS[IOServer.PLC_PC_EmergencyAbort] is False and TAGS[IOServer.PLC_PC_CheckQRCode] is True, timeout=5)
+    time.sleep(0.6)
+    check("C: abort handled within 5 s (EmergencyAbort reset, CheckQRCode re-armed)", reset_ok)
+    check("C: ABORT sent to the QR server (io2qrcodeabort.q)", r.xlen(io2qrcodeabortq) > abortLen0)
+    check("C: emergency message sent to the frontend (emergency.q)", r.xlen(emergencyq) > emergLen0)
+    for q in KEY_QUEUES:
+        stale = [m for m in r.xrange(q) if m[1].get(b"producer") == b"DRYRUN_STALE"]
+        check(f"C: queue {q} cleared of stale messages", stale == [], f"{len(stale)} stale left")
+    # every one of those tags must now be False / 0.0, except CheckQRCode, which the PC re-arms
+    not_reset = {}
+    for a, kind in RESET_TAGS.items():
+        tag = getattr(IOServer, a)
+        expected = True if a == "PLC_PC_CheckQRCode" else (0.0 if kind == "float" else False)
+        if TAGS[tag] != expected or type(TAGS[tag]) != type(expected):
+            not_reset[a] = TAGS[tag]
+    check(f"C: all {len(RESET_TAGS)} handshake tags reset by resetAll() (CheckQRCode re-armed True)",
+          len(RESET_TAGS) > 30 and not_reset == {}, str(not_reset))
+    check("C: state back to the QR code (READ_QR_CODE -> WRITE_QR_CODE)",
+          io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), io.machineState.getCurrentState().name)
+    fresh = [m for m in r.xrange(io2qrcodeq) if m[1].get(b"producer") != b"DRYRUN_STALE"]
+    check("C: fresh QR read request sent after the abort", len(fresh) >= 1 or io.machineState.getCurrentState() == MS.READ_QR_CODE)
+    staleFE = [m for m in r.xrange(io2feq) if m[1].get(b"producer") == b"DRYRUN_STALE"]
+    print(f"INFO  io2frontend.q is not in IOServer's abort clear list (architecture finding R14): stale message "
+          f"{'still there' if staleFE else 'gone'}", flush=True)
+    PAUSE.clear()
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("C: a full normal cycle completes after the abort", wrapped(), f"trace {TRACE}")
+    check("C: that cycle walked every state 1..28", set(range(1, 29)) <= set(TRACE))
+
+
+try:
+    run_scenarios()
+except AssertionError as e:
+    check(f"scenario aborted: {e}", False)
 
 # =====================================================================================================
 failed = [n for n, ok_ in RESULTS if not ok_]
