@@ -9,7 +9,9 @@ call in the live vision modules it verifies:
   2. ApplicationConfiguration.properties contains the key for each machine (allenbradley.<key> and siemens.<key>):
      the Machine 1 (allenbradley.) value parses (VisionConfig rules) to exactly the default; the Machine 2 (siemens.)
      value must be valid - if it differs from the default (re-tuned for Machine 2) that is reported, not an error;
-  3. a key used in more than one place always has the same default.
+  3. a key used in more than one place always has the same default;
+  4. the per-machine camera / image settings (CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS) exist for both
+     machines, and no <machine>.vision.* key is left that nothing reads.
 Exit code 0 = all equivalent.
 
 Usage (from the project root):
@@ -32,15 +34,17 @@ _ap.add_argument("--props", nargs="*", default=[])
 ARGS = _ap.parse_args()
 
 MANIFEST = pathlib.Path(__file__).with_name("vision_config_manifest.json")
-manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists() else {}
 manifest.setdefault("extracted", {})
 for extra in ARGS.manifest:
-    manifest["extracted"].update(json.loads(pathlib.Path(extra).read_text()).get("extracted", {}))
+    manifest["extracted"].update(json.loads(pathlib.Path(extra).read_text(encoding="utf-8")).get("extracted", {}))
 BASELINE = ARGS.baseline or manifest.get("_baseline", "39ead96")
 
 
 def git_show(rel: str) -> str:
-    return subprocess.run(["git", "show", f"{BASELINE}:{rel}"], cwd=ROOT, capture_output=True, text=True).stdout
+    rel = str(rel).replace("\\", "/")          # git wants forward slashes (Windows paths have backslashes)
+    return subprocess.run(["git", "show", f"{BASELINE}:{rel}"], cwd=ROOT, capture_output=True,
+                          encoding="utf-8", errors="replace").stdout
 
 
 def scope_assignments(tree: ast.AST):
@@ -224,8 +228,8 @@ def load_properties():
 
 
 def main() -> int:
-    files = ARGS.files or sorted(
-        str(p.relative_to(ROOT)) for p in (ROOT / "camera").glob("*.py")
+    files = [f.replace("\\", "/") for f in ARGS.files] if ARGS.files else sorted(
+        p.relative_to(ROOT).as_posix() for p in (ROOT / "camera").glob("*.py")
         if p.name != "VisionConfig.py" and any(f + "(" in p.read_text(encoding="utf-8") for f in FUNCS))
     props = load_properties()
     problems, checked, seen, retuned = [], 0, {}, set()
@@ -288,9 +292,16 @@ def main() -> int:
     stray += sorted(k for k in props if k.startswith("vision."))
     if stray:
         problems.append(f"vision keys without a machine prefix (not read by VisionConfig): {stray[:5]}")
+    from Configuration import CosThetaConfigurator
+    cameraKeys = {f"vision.{k}" for k in CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS}   # read via getValue
+    for prefix in MACHINE_PREFIXES:
+        missing = sorted(prefix + k for k in cameraKeys if prefix + k not in props)
+        if missing:
+            problems.append(f"camera / image settings missing for {prefix[:-1]}: {missing}")
     unread = sorted(k for k in props if any(k.startswith(p + "vision.") and not k.startswith(p + "vision.unused.")
-                                              for p in MACHINE_PREFIXES) and k.split(".", 1)[1] not in seen)
-    if unread:
+                                              for p in MACHINE_PREFIXES)
+                    and k.split(".", 1)[1] not in seen and k.split(".", 1)[1] not in cameraKeys)
+    if unread and not ARGS.files:          # only meaningful when every vision module was checked
         problems.append(f"{len(unread)} properties keys not read by any vision module: {unread[:5]}")
     if retuned:
         print(f"INFO: {len(retuned)} Machine 2 (siemens.) value(s) differ from the built-in defaults (re-tuned): "

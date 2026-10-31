@@ -248,6 +248,14 @@ class CosThetaConfigurator():
         vendor = str(vendor or "allenbradley").strip().lower()
         return vendor if vendor in CosThetaConfigurator.PLC_VENDORS else "allenbradley"
 
+    # Camera and image settings that are per machine (same camera model on both machines today, but either machine's
+    # camera / camera settings can change). In ApplicationConfiguration.properties each is written as
+    # allenbradley.vision.<key> and siemens.vision.<key>; getValue(<key>) reads the one for this machine.
+    PER_MACHINE_CAMERA_AND_IMAGE_KEYS = frozenset(
+        ["camera.id", "camera.ip", "camera.port", "camera.uid", "camera.pwd",
+         "time.between.pictures.ms", "max.allowed.none.frame.counts.in.camera", "sleeptime.monitor.takepic"]
+        + [f"machine.state.{n}.target.{d}" for n in (3, 5, 7, 9, 13, 16, 20, 22, 24) for d in ("width", "height")])
+
     @classmethod
     def getVisionKeyPrefix(cls) -> str:
         """The vision-check parameters are per machine: 'allenbradley.' (Machine 1) or 'siemens.' (Machine 2), chosen
@@ -276,6 +284,14 @@ class CosThetaConfigurator():
         key = str(key)
         l, r, c = CosThetaConfigurator._getConfig()
         value = None
+        # Camera and image settings are per machine: "camera.ip" is read from "<vendor>.vision.camera.ip"
+        # (allenbradley.vision.* = Machine 1, siemens.vision.* = Machine 2). No fallback to the other machine.
+        if key in CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS:
+            try:
+                value = c[f"{CosThetaConfigurator.getVisionKeyPrefix()}vision.{key}"]
+            except Exception:
+                value = None
+            return default if value is None else value
         # PLC vendor overrides: when the Siemens IOServer is selected (plc.vendor=siemens), a key "siemens.<key>"
         # replaces "<key>" (e.g. its own tag names and PLC IP). The Allen-Bradley values stay the plain keys.
         if key != CosThetaConfigurator.PLC_VENDOR_KEY and not key.startswith("siemens."):

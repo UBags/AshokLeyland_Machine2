@@ -558,3 +558,28 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   | Integrated DB row | settings 30 / 19 / 19 / 1 / 1, rotation True / False | identical |
 
   A negative test of the verifier and VisionConfig: changing `siemens.vision.nobunk.nut.detection.radius` changed the value only on Siemens, and was reported as INFO; changing an `allenbradley.` value is reported as a PROBLEM.
+
+## 25. Camera and image settings per machine; verifier fixed for Windows (2026-11-01)
+
+- **Settings split.** The camera and image settings that existed before the vision work are now per machine, with the same values on both to start with: the same camera model is used today, but either machine's camera or camera settings can change. The 26 keys are:
+  - `camera.id`, `camera.ip`, `camera.port`, `camera.uid`, `camera.pwd`;
+  - `time.between.pictures.ms`, `max.allowed.none.frame.counts.in.camera`, `sleeptime.monitor.takepic`;
+  - `machine.state.{3,5,7,9,13,16,20,22,24}.target.{width,height}`.
+- **Properties layout.** Each key is written as `allenbradley.vision.<key>` and `siemens.vision.<key>`, in a new "CAMERA AND IMAGE SETTINGS" block at the top of each machine's vision section. The plain keys are removed, and comments where they used to be point to the new blocks.
+- **`Configuration.py`.**
+  - The 26 keys are listed in `CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS`.
+  - `getValue(<key>)` reads `<plc.vendor>.vision.<key>` for these, with no fallback to the other machine.
+  - Every existing getter (`getCameraIP()`, `getCameraPwd()`, `getTargetWidthAndHeight()`, `getTimeBetweenPicturesInMs()`, …) therefore returns this machine's value without being changed.
+- **`Verify_Vision_Config_Equivalence.py`.**
+  - It now also checks that the 26 camera / image keys exist for both machines.
+  - **Windows fix:** the file list was built with `str(Path)` (backslashes), so `git show 39ead96:camera\X.py` found nothing. It now uses POSIX paths, also for `--files`.
+  - `git show` and the manifest are read as UTF-8.
+  - The "key not read by any module" check runs only when all modules are checked.
+- **Verified:**
+  - The getters return the same values as before on both machines.
+  - **Negative test:**
+    - a different `siemens.vision.camera.ip` and state-3 width took effect only with `plc.vendor=siemens`;
+    - a deleted `siemens.vision.camera.port` was reported by the verifier.
+  - The verifier reports ALL EQUIVALENT.
+  - `ApplicationConfiguration.Machine1/Machine2.properties` were re-copied (`plc.vendor` allenbradley / siemens).
+  - Integrated runs (both PLCs): DB rows unchanged. FE dry run: 55/55.
