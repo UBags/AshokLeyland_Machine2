@@ -8,7 +8,7 @@ The IOServer is chosen by the environment variable COSTHETA_PLC_VENDOR (as in Co
     table of tag values;
   * siemens: costhetaio.siemens.IOServer with pyS7's S7Client replaced by an in-memory S7 data block. Every read and
     write goes through the real PyS7PLCBackend: tag name -> DB500 address (IOServerProperties.yaml) -> bytes encoded
-    as the S7 CPU stores them (bits in bytes, INT big-endian 16-bit, REAL big-endian IEEE 754). Two tags sharing an
+    as the S7 CPU stores them (bits in bytes, INT big-endian 16-bit, REAL / LREAL big-endian IEEE 754 32 / 64-bit). Two tags sharing an
     address would therefore disturb each other here exactly as on the real PLC. Bit reads fail the first time with
     INVALID_DATA_SIZE, so the byte-read fall-back taken from s7_smoke_test.py is exercised too.
 
@@ -96,6 +96,7 @@ class S7Memory:
             if letter == "I": return struct.unpack(">h", m[byte:byte + 2])[0]
             if letter == "DI": return struct.unpack(">i", m[byte:byte + 4])[0]
             if letter == "R": return struct.unpack(">f", m[byte:byte + 4])[0]
+            if letter == "LR": return struct.unpack(">d", m[byte:byte + 8])[0]
 
     def set(self, address, value):
         from costhetaio.siemens.plc_backend import parse_address
@@ -108,6 +109,7 @@ class S7Memory:
             elif letter == "I": m[byte:byte + 2] = struct.pack(">h", int(value))
             elif letter == "DI": m[byte:byte + 4] = struct.pack(">i", int(value))
             elif letter == "R": m[byte:byte + 4] = struct.pack(">f", float(value))
+            elif letter == "LR": m[byte:byte + 8] = struct.pack(">d", float(value))
 
 
 def _setup_siemens():
@@ -145,6 +147,10 @@ def _setup_siemens():
         """TAGS[tag]: the tag's value in PLC memory, by name (reading / writing as the PLC)."""
         def __getitem__(self, tag): return MEM.get(tagmap[tag][0])
         def __setitem__(self, tag, value): MEM.set(tagmap[tag][0], value)
+        def raw(self, tag):
+            """The tag's bytes in PLC memory exactly as the CPU holds them (size from the address type)."""
+            db, letter, byte, bit = PB.parse_address(tagmap[tag][0])
+            with MEM.lock: return bytes(MEM.dbs[db][byte:byte + max(1, PB._SIZES[letter])])
 
     import costhetaio.siemens.IOServer as S
     return S.IOServer, TagView(), WRITES, LOCK, "siemens"

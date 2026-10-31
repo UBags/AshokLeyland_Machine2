@@ -462,3 +462,18 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   The other 40 tags stay in DB500. DB500's I34, R18, R22, R36, R40 and R44 are now free.
 - **PLC prerequisites:** DB101 must also have "Optimized block access" off.
 - **Verified:** the tag map loads (46 tags across DB101 and DB500, no clashes), and the Siemens fault scenarios pass 55/55 on the simulated S7.
+
+## 22. Siemens: LREAL support; RPM and rotation counts are LREAL (2026-10-31)
+
+- **Finding.** A raw dump of DB101 showed that offsets 96, 120 and 144 hold 8-byte LReal values: 200.0, 3.0 and 0.0. Reading them as 4-byte Real gave 3.640625 and 2.125. Writing a 4-byte Real there would set only half of each value, so a setting of 30 rpm would be read by the PLC as about 4.3e9.
+- **`plc_backend.py`** now accepts the `DB<n>,LR<byte>` address form (LREAL, 8 bytes, type `float`), which pyS7 already supports. The start-up validator counts LR as 8 bytes, so a tag overlapping one is rejected.
+- **`IOServerProperties.yaml`:**
+  - `PC_PLC_RotationRPM` = `DB101,LR96`
+  - `PC_PLC_NoOfRotation1CW` = `DB101,LR120`
+  - `PC_PLC_NoOfRotation1CCW` = `DB101,LR144`
+  - The torque setpoints stay REAL (`R200` / `R204`), and the side stays INT (`I246`).
+- **Simulated S7 (`_plc_sim.py`).** It now stores LREAL as 8 bytes and exposes `TAGS.raw(tag)`. Fault scenario D checks that the bytes in PLC memory are each value in its declared width.
+- **Verified:**
+  - Siemens: fault scenarios 56/56; two full cycles exact (30.0 / 1.0 / 1.0 written as LREAL).
+  - Allen-Bradley: 47/47.
+- **Still to confirm with the PLC programmer:** what LR96 means. It currently holds 200.0, while our range is 20–40 rpm. The neighbouring LR88 = 50 and LR104 = 100. LR120/128/136 all hold 3.0, while our counts are 1 or 2.

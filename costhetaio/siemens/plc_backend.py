@@ -15,7 +15,8 @@ The pyS7 calls are the ones proven in s7_smoke_test.py:
     versions differ: pdu_size vs max_pdu), connect() retried up to `connect_retries` times;
   * client.read([address])[0] and client.write([address], [value]);
   * a bit read that fails with INVALID_DATA_SIZE is retried as a byte read plus bit mask (safe_read_one).
-Values are coerced to the address type before writing (bool for X, int for I/DI, float for R).
+Values are coerced to the address type before writing (bool for X, int for I/DI, float for R / LR).
+Address forms: X = BOOL, B = BYTE, I = INT (16-bit), DI = DINT (32-bit), R = REAL (32-bit), LR = LREAL (64-bit).
 
 Install pyS7:  pip install pyS7   (PyPI release of https://github.com/xtimmy86x/pyS7)
 """
@@ -43,20 +44,21 @@ except Exception:
 
 DEFAULT_PROPERTIES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "IOServerProperties.yaml")
 
-_ADDRESS = re.compile(r"^DB(\d+),(X(\d+)\.([0-7])|I(\d+)|DI(\d+)|R(\d+)|B(\d+))$")
-_SIZES = {"X": 0, "B": 1, "I": 2, "DI": 4, "R": 4}
-_TYPE_FOR_LETTER = {"X": "bool", "B": "int", "I": "int", "DI": "int", "R": "float"}
+_ADDRESS = re.compile(r"^DB(\d+),(X(\d+)\.([0-7])|I(\d+)|DI(\d+)|R(\d+)|B(\d+)|LR(\d+))$")
+_SIZES = {"X": 0, "B": 1, "I": 2, "DI": 4, "R": 4, "LR": 8}
+_TYPE_FOR_LETTER = {"X": "bool", "B": "int", "I": "int", "DI": "int", "R": "float", "LR": "float"}
 
 
 def parse_address(address: str) -> Tuple[int, str, int, int]:
-    """'DB500,X2.5' -> (500, 'X', 2, 5); 'DB500,I16' -> (500, 'I', 16, 0). Raises ValueError otherwise."""
+    """'DB500,X2.5' -> (500, 'X', 2, 5); 'DB500,I16' -> (500, 'I', 16, 0); 'DB101,LR96' -> (101, 'LR', 96, 0).
+    Raises ValueError otherwise."""
     m = _ADDRESS.match(address.strip())
     if not m:
-        raise ValueError(f"unsupported S7 address {address!r} (use DB<n>,X<b>.<bit> / I<b> / DI<b> / R<b> / B<b>)")
+        raise ValueError(f"unsupported S7 address {address!r} (use DB<n>,X<b>.<bit> / I<b> / DI<b> / R<b> / LR<b> / B<b>)")
     db = int(m.group(1))
     if m.group(3) is not None:
         return db, "X", int(m.group(3)), int(m.group(4))
-    for letter, group in (("I", 5), ("DI", 6), ("R", 7), ("B", 8)):
+    for letter, group in (("I", 5), ("DI", 6), ("R", 7), ("B", 8), ("LR", 9)):
         if m.group(group) is not None:
             return db, letter, int(m.group(group)), 0
     raise ValueError(address)

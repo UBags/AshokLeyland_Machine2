@@ -351,6 +351,19 @@ def run_scenarios():
         check("D: side + the 5 settings in force in the database written (30 rpm, 19 / 19 Nm, 1 / 1 rotations)",
               first == expected, str(first))
         check("D: no model written (no ModelSelection tag on this PLC)", not IOServer.PC_PLC_ModelSelection)
+        if hasattr(TAGS, "raw"):          # Siemens simulator: check the bytes the PLC CPU actually holds
+            import struct
+            from costhetaio.siemens.plc_backend import load_tag_map
+            _, tagmap = load_tag_map()
+            bad = {}
+            for tag, value in expected.items():
+                addr = tagmap[tag][0]
+                fmt = ">d" if ",LR" in addr else ">f" if ",R" in addr else ">h"
+                want = struct.pack(fmt, value)
+                if TAGS.raw(tag) != want:
+                    bad[f"{tag} ({addr})"] = (TAGS.raw(tag).hex(" "), want.hex(" "))
+            check("D: PLC memory holds each setting in its declared width (LREAL 8 bytes, REAL 4, INT 2) = the value written",
+                  bad == {}, str(bad))
     else:
         check("D: side + model written from the QR code (1 = LHS, 1 = DOST)",
               first.get(IOServer.PC_PLC_LH_RH_Selection) == 1 and first.get(IOServer.PC_PLC_ModelSelection) == 1, str(first))
