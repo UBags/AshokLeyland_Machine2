@@ -1,5 +1,6 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from datetime import datetime
+import time
 from typing import Union, Optional
 
 import numpy as np
@@ -146,6 +147,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     emergencyUpdationRedisConnection: Union[Redis, None] = None
     emergencyUpdationRedisConnected: bool = False
     heartbeatRedisConnection: Union[Redis, None] = None
+    STATUS_STALE_AFTER_INTERVALS: int = 3          # no status for 3 heartbeat intervals -> all shown as down
+    lastConnectionStatusReceivedAt: float = 0.0     # time.monotonic() of the last status message
     heartbeatRedisConnected: bool = False
     databaseUpdationRedisConnection: Union[Redis, None] = None
     databaseUpdationRedisConnected: bool = False
@@ -1022,7 +1025,22 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     @Slot()
     def updateConnectionStatus(self):
-        cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus = readHeartbeatsInFEServerFromHeartbeatServer(AshokLeylandFrontEnd.connectionsUpdationRedisConnection)
+        # Runs in the GUI thread, so the read must not wait (block=None): a blocking read froze the screen for up to
+        # 0.5 s each time no status message had arrived yet (as in production, which made these reads non-blocking).
+        # No new message -> the tiles keep their last status; only when the heartbeat server has sent nothing for
+        # STATUS_STALE_AFTER_INTERVALS of its intervals are all servers shown as down (the heartbeat server itself is gone).
+        cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus, received = \
+            readHeartbeatsInFEServerFromHeartbeatServer(AshokLeylandFrontEnd.connectionsUpdationRedisConnection,
+                                                        block=None, withReceived=True)
+        now = time.monotonic()
+        if received:
+            AshokLeylandFrontEnd.lastConnectionStatusReceivedAt = now
+        else:
+            staleAfter = AshokLeylandFrontEnd.STATUS_STALE_AFTER_INTERVALS * max(
+                CosThetaConfigurator.getInstance().getCombinedHeartbeatConnectionStatusSleepInterval(),
+                CosThetaConfigurator.getInstance().getGeneralConnectionStatusSleepInterval())
+            if now - AshokLeylandFrontEnd.lastConnectionStatusReceivedAt < staleAfter:
+                return
         AshokLeylandFrontEnd.cameraServerConnectionStatus = cameraServerStatus
         AshokLeylandFrontEnd.qrCodeServerConnectionStatus = qrCodeServerStatus
         AshokLeylandFrontEnd.ioServerConnectionStatus = ioServerStatus
@@ -1044,7 +1062,10 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     @Slot()
     def updateEmergencyAbortPressed(self):
-        emergencyPressed = readEmergencyAbortInFEServerFromIOServer(AshokLeylandFrontEnd.emergencyUpdationRedisConnection)
+        # GUI thread: must not wait (block=None). With the default 0.5 s block the screen froze for 0.5 s at every
+        # check, because normally there is no emergency message (as in production, which made this read non-blocking).
+        emergencyPressed = readEmergencyAbortInFEServerFromIOServer(AshokLeylandFrontEnd.emergencyUpdationRedisConnection,
+                                                                    block=None)
         if not emergencyPressed:
             return
         AshokLeylandFrontEnd.emergencyButtonPressed = True
@@ -1588,6 +1609,14 @@ class TimeDurationUpdateWorker(QObject):
         self.updateTimer.stop()
         self.updateTimer.deleteLater()
 
+def _applyLiveInterval(timer, intervalMs: int) -> None:
+    """Live configuration: a changed interval in the properties file is applied to a running QTimer."""
+    try:
+        if intervalMs > 0 and timer.interval() != intervalMs:
+            timer.setInterval(intervalMs)
+    except Exception:
+        noteSuppressed()
+
 # ****************************************************
 
 class ConnectionStatusUpdateWorker(QObject):
@@ -1612,6 +1641,7 @@ class ConnectionStatusUpdateWorker(QObject):
         if not AshokLeylandFrontEnd.shutdownThreads:
             # printBoldGreen("Emitting doConnectionStatusUpdate")
             self.doConnectionStatusUpdate.emit()
+            _applyLiveInterval(self.updateTimer, self._getIntervalMs())
         else:
             self.updateTimer.stop()
             # printBoldRed("Stopped ConnectionStatusUpdateWorker due to shutdown.")
@@ -1644,6 +1674,7 @@ class EmergencyStatusMonitoringWorker(QObject):
         if not AshokLeylandFrontEnd.shutdownThreads:
             # printBoldGreen("Emitting doEmergencyPressedUpdate")
             self.doEmergencyPressedUpdate.emit()
+            _applyLiveInterval(self.updateTimer, self._getIntervalMs())
         else:
             self.updateTimer.stop()
             # printBoldRed("Stopped EmergencyStatusMonitoringWorker due to shutdown.")
@@ -1888,13 +1919,21 @@ class HeartbeatSenderWorker(QObject):
         self.timer.timeout.connect(self.send_heartbeat)
 
     def start(self):
-        self.timer.start(500)  # 500 milliseconds
+        self.timer.start(self._getIntervalMs())   # frontend.status.sleepinterval.sec (was a fixed 500 ms)
+
+    @staticmethod
+    def _getIntervalMs() -> int:
+        try:
+            return max(100, int(CosThetaConfigurator.getInstance().getFrontEndHeartbeatSleepInterval() * 1000))
+        except Exception:
+            return 500
 
     def stop(self):
         self.timer.stop()
 
     def send_heartbeat(self):
         sendHeartbeatFromFEServerToHeartbeatServer(AshokLeylandFrontEnd.heartbeatRedisConnection, ALIVE)
+        _applyLiveInterval(self.timer, self._getIntervalMs())
 
     def __del__(self):
         self.timer.stop()

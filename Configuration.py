@@ -721,7 +721,9 @@ class CosThetaConfigurator():
     TIME_DURATION_SLEEP_INTERVAL_KEY = 'timeduration.sleepinterval.sec'
     GENERAL_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'general.connectionstatus.sleepinterval.sec'
     COMBINED_HEARTBEAT_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = "combinedheartbeat.connectionstatus.sleepinterval.sec"
-    FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.connectionstatus.sleepinterval.sec'
+    FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.emergency.status.sleepinterval.sec'
+    OLD_FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.connectionstatus.sleepinterval.sec'
+    FRONTEND_HEARTBEAT_SLEEP_INTERVAL_KEY = 'frontend.status.sleepinterval.sec'
     CAMERA_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'camera.connectionstatus.sleepinterval.sec'
     IO_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'costhetaio.connectionstatus.sleepinterval.sec'
     DATABASE_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = "db.connectionstatus.update.sleepinterval.sec"
@@ -762,13 +764,26 @@ class CosThetaConfigurator():
 
     @classmethod
     def getFrontEndEmergencyConnectionStatusSleepInterval(cls) -> float:
+        """How often the frontend checks for an emergency abort (frontend.emergency.status.sleepinterval.sec, as in
+        production; the earlier key frontend.connectionstatus.sleepinterval.sec is still read if the new one is absent)."""
         try:
-            return float(
-                CosThetaConfigurator.getValue(
-                    key=CosThetaConfigurator.FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
-                    default="5.0"))
+            value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
+                                                  default=None)
+            if value is None or str(value).strip() == "":
+                value = CosThetaConfigurator.getValue(
+                    key=CosThetaConfigurator.OLD_FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY, default="1.0")
+            return float(value)
         except Exception as e:
-            return 5.0
+            return 1.0
+
+    @classmethod
+    def getFrontEndHeartbeatSleepInterval(cls) -> float:
+        """How often the frontend sends its heartbeat to the heartbeat server (frontend.status.sleepinterval.sec)."""
+        try:
+            return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.FRONTEND_HEARTBEAT_SLEEP_INTERVAL_KEY,
+                                                       default="0.5"))
+        except Exception as e:
+            return 0.5
 
     @classmethod
     def getCameraConnectionStatusSleepInterval(cls) -> float:

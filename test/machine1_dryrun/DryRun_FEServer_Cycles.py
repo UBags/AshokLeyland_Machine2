@@ -305,6 +305,37 @@ def driver():
                     tightening_torque2_setpoint="1.234", no_of_rotation1_ccw="3", no_of_rotation1_cw="x"))
         check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 3, not a number)",
               len(errors) == 5, str(errors))
+        # ---------------- F7 ----------------
+        print("\n=== F7. GUI thread never blocked by Redis reads ===", flush=True)
+        GUI_GAPS["max"] = 0.0; GUI_GAPS["last"] = time.monotonic()
+        time.sleep(7)
+        check("F7 idle for 7 s (no emergency or status message): GUI thread never busy > 0.25 s",
+              GUI_GAPS["max"] < 0.25, f"longest GUI-thread stall {GUI_GAPS['max']:.3f} s")
+        check("F7 emergency checked every 1 s (frontend.emergency.status.sleepinterval.sec), FE heartbeat every 0.5 s",
+              fe.emergencyAbortUpdateWorker.updateTimer.interval() == 1000 and fe.heartbeatWorker.timer.interval() == 500,
+              (fe.emergencyAbortUpdateWorker.updateTimer.interval(), fe.heartbeatWorker.timer.interval()))
+        from utils.RedisUtils import sendHeartbeatsFromHeartbeatServerToFEServer as _hb, ALIVE as _A, DEAD as _D
+        from frontend.AshokLeylandFrontEnd import AshokLeylandFrontEnd as _FE
+        _hb(r, qrCodeServerStatus=_A, cameraServerStatus=_D, ioServerStatus=_A, dbServerStatus=_A)
+        ok_ = wait_for(lambda: _FE.cameraServerConnectionStatus is False and _FE.ioServerConnectionStatus is True, 5)
+        check("F7 status message shown on the tiles (camera down, IO up)", ok_,
+              (_FE.cameraServerConnectionStatus, _FE.ioServerConnectionStatus))
+        time.sleep(2.5)
+        check("F7 no new status message for 2.5 s: tiles keep their last status (IO still up, no flicker to down)",
+              _FE.ioServerConnectionStatus is True, _FE.ioServerConnectionStatus)
+        stale = 3 * max(2.0, 2.0)
+        ok_ = wait_for(lambda: _FE.ioServerConnectionStatus is False, stale + 3)
+        check("F7 heartbeat server silent for 3 intervals (6 s): all shown down", ok_, _FE.ioServerConnectionStatus)
+        GUI_GAPS["max"] = 0.0; GUI_GAPS["last"] = time.monotonic()
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        scan(QR2, "DOSTPLUS - RHS - 2.5T : 22881 : 15.10.2026")
+        run_steps(upto=1)
+        TILES.clear(); SCREENS.clear(); time.sleep(0.3)
+        t0 = time.monotonic(); sendEmergencyAbortFromIOServerToFEServer(r)
+        ok_ = wait_for(lambda: "showEmergencyAbort" in SCREENS, 5)
+        take_record(timeout=5)
+        check("F7 emergency abort shown within about 1 s", ok_ and time.monotonic() - t0 < 2.0,
+              f"{time.monotonic() - t0:.2f} s, {SCREENS}")
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:
@@ -313,6 +344,15 @@ def driver():
     failed = [n for n, ok_ in RESULTS if not ok_]
     print(f"\nRESULT {len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed" + (f"; FAILED: {failed}" if failed else ""), flush=True)
     os._exit(1 if failed else 0)
+
+# GUI-thread responsiveness probe (F7): a 20 ms timer in the GUI thread; the largest gap between two ticks is the
+# longest time the GUI thread was busy (a blocking call there freezes the screen).
+from PySide6.QtCore import QTimer as _QTimer
+GUI_GAPS = {"last": time.monotonic(), "max": 0.0}
+def _guiTick():
+    now = time.monotonic()
+    GUI_GAPS["max"] = max(GUI_GAPS["max"], now - GUI_GAPS["last"]); GUI_GAPS["last"] = now
+_guiProbe = _QTimer(); _guiProbe.timeout.connect(_guiTick); _guiProbe.start(20)
 
 fe = FE(mode="Test", username="admin", role="Administrator")
 threading.Thread(target=driver, daemon=True).start()

@@ -1246,13 +1246,17 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
     return timeOfMessage, decodedOriginalImage, decodedProcessedImage, decodedResult, currentMachineState
 
 # returns 4 things - cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus as booleans, in that order
-def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Redis, block : int = 500):
+def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Redis, block : int = 500,
+                                                withReceived : bool = False):
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
+    # block=None: do not wait at all (for calls made in the GUI thread).
+    # withReceived=True: a 5th value, True if a status message was read (False = nothing new; the 4 statuses are then
+    # False only because nothing was received, not because a server is down).
     if redisConnection is None:
         printBoldRed(f"Redis connection is None in readDataInFEServerFromHeartbeatServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
-        return False, False, False, False
+        return (False, False, False, False, False) if withReceived else (False, False, False, False)
     last_id = 0
     cameraServerStatus = False
     qrCodeServerStatus = False
@@ -1274,16 +1278,18 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
             redisConnection.xdel(hb2feq, last_id)
             redisConnection.xtrim(hb2feq, 0)
     except ConnectionError as e1:
-        return cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus
+        newData = {}
 
+    received = cameraServerStatusKeyString in newData
     try:
         cameraServerStatus = (newData[cameraServerStatusKeyString] == ALIVE)
         qrCodeServerStatus = (newData[qrCodeServerStatusKeyString] == ALIVE)
         ioServerStatus = (newData[ioServerStatusKeyString] == ALIVE)
         dbServerStatus = (newData[dbServerStatusKeyString] == ALIVE)
-        return cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus
     except:
-        return cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus
+        noteSuppressed()
+    statuses = (cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus)
+    return statuses + (received,) if withReceived else statuses
 
 
 def _withRotation(withRotationDone: bool, result: tuple, rotationDone):

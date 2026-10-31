@@ -762,3 +762,41 @@ What production does differently in these three files, and what was taken.
   | Heartbeat/start-up dry run | 16/16 on both vendors |
   | Integrated cycle | DB row unchanged (settings 30/19/19/1/1, rotation True/False), both vendors |
   | FE dry run | 55/55 |
+
+## 30. From production: frontend, costhetaio, persistence, processors, statemachine (2026-11-01)
+
+Production's own changes since the common ancestor `6b31dd7` were compared with code, logging and imports ignored.
+- **Mostly logging.** In DBServer, IOServer, QRCodeScanningServer, Persistence, PostgresBackupUtility and GenericQueueProcessor, production's changes are logging only: print and Slave*Logger calls became `logBoth` / `logMessageToConsoleAndFile`. Here the same messages already reach the log file, through the print mirror and `setLogProcess`.
+- **No changes:** statemachine and most frontend widgets.
+
+**Taken: no Redis wait in the frontend's GUI thread.**
+- The emergency-abort and server-status reads run in the GUI thread: the worker threads only emit a signal, and the slot runs in the window's thread. Each read waited up to 0.5 s for a message. There is normally no emergency message, so the screen froze for 0.5 s at every emergency check.
+  - Measured in the FE dry run: the longest GUI-thread stall was 1.08 s. It is now 0.02 s.
+  - Production made these reads non-blocking (`block=None`); so does this branch.
+- **Status tiles keep their last status** when no new status message has arrived. Production's non-blocking read showed every server down whenever the message had not arrived yet; production worked around that with a 5 s refresh. Here all servers are shown down only when the heartbeat server has sent nothing for 3 of its intervals, i.e. it is gone itself. `readHeartbeatsInFEServerFromHeartbeatServer(..., withReceived=True)` tells the two cases apart.
+- **Emergency checked every 1 s, instead of every 3 s.** The interval came from `frontend.connectionstatus.sleepinterval.sec=3`, a key whose name did not say what it was for. It is now production's `frontend.emergency.status.sleepinterval.sec=1.0`; the old key is still read if the new one is missing. In the dry run the emergency abort screen showed 0.96 s after the PLC signal.
+- **Frontend heartbeat interval from the properties.** It was a fixed 500 ms in the code. It is now production's key `frontend.status.sleepinterval.sec`, with the value kept at 0.5.
+- The three frontend timer intervals (status, emergency, heartbeat) are applied while running.
+
+**Not taken:**
+- **Non-blocking reads with a 250 ms poll in the worker threads** (QR, picture, torque). Those reads run in their own QThreads, so waiting there freezes nothing. A blocking read delivers the message the moment it arrives; a 250 ms poll adds up to 250 ms.
+- **Shorter server heartbeat intervals (0.25 s) and the 5 s status refresh.** The current values are well inside the 2 s heartbeat check. The 5 s refresh only hid the problem above.
+- **`frontend/widgets/CosThetaIconLabel`: `QWidget.__init__()` without `self`.** That is a bug: it raises TypeError.
+
+**Redis connection pools.**
+- `redis.Redis(...)` already creates its own thread-safe `ConnectionPool`. Each command borrows a connection and returns it; a blocking XREAD holds one only while it waits.
+- Production's "pool" is a queue of 5 `Redis` clients, each with its own internal pool. It adds no pooling. It gives a connection to code that has none of its own, which was the frontend's log calls.
+- Each component here creates its own client. That is a few dozen connections across all processes, far below Redis's limit, so pooling would gain little.
+- What a shared per-process pool could add is one place for connection settings (`health_check_interval`, `socket_keepalive`, `socket_timeout`, `retry`) and a bound on the connections. That would mean changing about 70 places where clients are created. It is not done here.
+
+**FE dry run:** 61 checks; F7 is new: GUI thread never blocked, tiles keep their status, stale status, emergency within about 1 s, the intervals.
+- **Verified:**
+
+  | Run | Result |
+  |---|---|
+  | FE dry run | 61/61 |
+  | Integrated cycle | DB row unchanged on both vendors |
+  | Logging dry run | 37/37 |
+  | Heartbeat dry run | 16/16 on both vendors |
+
+  The heartbeat dry run scored 14/16 once, started straight after the integrated run while that run's processes were still reading the heartbeat streams. Run on its own, it passes.
