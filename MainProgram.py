@@ -85,13 +85,10 @@ if tryAgain:
         printBoldRed(f"Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
         sys.exit(1)
 
-try:
-    redisConnection.flushdb()
-    printBoldBlue(f"Flushed the redis db")
-    clearQueues(redisConnection)
-    printBoldBlue(f"Cleared redis queues")
-except:
-    printBoldRed(f"Could not flush the redis db")
+# Redis is NOT flushed here, at module level (as in production). On Windows every server process is started with
+# 'spawn', which re-imports this module in the new process, so a flush here ran again in each server as it started
+# and deleted what the servers already running had put in Redis (queued log messages, heartbeats, cycle data).
+# main() clears Redis once, before any server is started (clearQueues flushes the db and trims the queues).
 
 def startTheLoggingServer():
     from logutils.LogSettings import setLogProcess
@@ -318,7 +315,7 @@ def main():
         printBoldGreen(f"Cleared up all queues")
     except Exception as e:
         printBoldRed(f"Couldn't clear queues because of {e}")
-        printBoldRed(f"Queues have to work properly for the application to worl. Hence, exiting...")
+        printBoldRed(f"Queues have to work properly for the application to work. Hence, exiting...")
         sys.exit(0)
 
     currentProcessPIDs = []

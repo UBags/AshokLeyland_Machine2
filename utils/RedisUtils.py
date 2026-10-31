@@ -1880,6 +1880,61 @@ def readAlarmInHeartbeatServer(redisConnection: redis.client.Redis, block : int 
         return False
     return False
 
+def readAllHeartbeatsInHeartbeatServer(redisConnection: redis.client.Redis, block: int = 500) -> dict:
+    """
+    Heartbeat server: read the latest heartbeat of all 5 servers (IO, QR code, camera, DB, frontend) in 3 Redis
+    round trips, instead of 5 separate reads (15 round trips, each read blocking up to 0.5 s when its server was down,
+    so one dead server delayed the status of every other one).
+
+      1. each heartbeat stream is trimmed to its latest entry (one pipeline);
+      2. one XREAD over the 5 streams: it returns at once with every stream that has an entry, and waits up to
+         `block` ms only when none has;
+      3. the entries read are deleted (one pipeline).
+    A stream with no entry, or whose latest entry is not ALIVE, is False for this cycle.
+
+    Taken from the production code, with three changes:
+      - the trim is exact. redis-py trims approximately ('MAXLEN ~ 1') by default, and Redis then trims only whole
+        internal nodes, so a short stream is not trimmed at all and XREAD returned the OLDEST heartbeat since the last
+        check, not the latest (the old per-server reads behave the same way);
+      - count=1 (XREAD's COUNT is per stream, so 1 already returns one entry from each stream);
+      - a heartbeat that arrives between the XREAD and the delete is kept for the next cycle instead of being trimmed
+        away (it is recent, and trimming it could count a live server as down).
+
+    Returns {'io': bool, 'qrcode': bool, 'camera': bool, 'db': bool, 'fe': bool}.
+    """
+    queueToKey = {io2hbq: 'io', qrcode2hbq: 'qrcode', camera2hbq: 'camera', db2hbq: 'db', fe2hbq: 'fe'}
+    result = {k: False for k in queueToKey.values()}
+    if redisConnection is None:
+        printBoldRed("Redis connection is None in readAllHeartbeatsInHeartbeatServer(). Cannot receive data.")
+        return result
+    try:
+        pipe = redisConnection.pipeline(transaction=False)
+        for q in queueToKey:
+            pipe.xtrim(q, 1, approximate=False)     # exact: redis-py's default '~' trim leaves a short stream untouched
+        pipe.execute()
+        resp = redisConnection.xread({q: 0 for q in queueToKey}, count=1, block=block)
+    except Exception as e:
+        printBoldRed(f"readAllHeartbeatsInHeartbeatServer(): {e}")
+        return result
+    if not resp:
+        return result
+    pipe = redisConnection.pipeline(transaction=False)
+    for streamName, messages in resp:
+        q = streamName.decode("utf-8") if isinstance(streamName, bytes) else streamName
+        if q not in queueToKey or not messages:
+            continue
+        entryId, raw = messages[0]
+        status = raw.get(connectionStatusKeyString.encode("utf-8"), raw.get(connectionStatusKeyString))
+        if isinstance(status, bytes):
+            status = status.decode("utf-8", "replace")
+        result[queueToKey[q]] = (status == ALIVE)
+        pipe.xdel(q, entryId)
+    try:
+        pipe.execute()
+    except Exception as e:
+        printBoldRed(f"readAllHeartbeatsInHeartbeatServer(): could not delete the heartbeats read: {e}")
+    return result
+
 # ********************************** COMMUNICATION INWARD INTO DATABASE SERVER *************************
 
 def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False,

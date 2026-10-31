@@ -722,3 +722,43 @@ CheckKnuckle, CheckNoBunk, CheckNutAndPlateWasher, CheckBunk, CheckNoCapBunk, Ca
   | Integrated cycle | settings 30/19/19/1/1 and rotation True/False in the DB row, on both vendors |
 
   The checks were not run on real images here (no torch, no camera). Run the camera server on the plant machine before production.
+
+## 29. From production: MainProgram, heartbeat server, RedisUtils (2026-11-01)
+
+What production does differently in these three files, and what was taken.
+
+**Taken:**
+- **MainProgram: Redis is no longer flushed at module level.**
+  - On Windows every server process is started with `spawn`, which re-imports MainProgram in the new process. So the module-level `flushdb()` + `clearQueues()` ran again in each server as it started, deleting what the servers already running had put in Redis: queued log messages, heartbeats, cycle data.
+  - Production commented it out. Here it is removed. `main()` still clears Redis once, before any server is started (`clearQueues` flushes the db and trims the queues).
+  - Also fixed: the typo "worl" → "work".
+- **Heartbeat server: one read of all 5 heartbeat streams** (`RedisUtils.readAllHeartbeatsInHeartbeatServer`), in place of 5 separate reads.
+  - Each old read could block 0.5 s when its server was down, so one dead server delayed every status. Now it takes 3 Redis round trips and waits only when no server has sent anything.
+  - The loop uses `time.monotonic()` for its interval.
+  - The log messages use `logBoth`.
+  - The production loop's old, commented-out copy was left out.
+- **Three corrections to the production read:**
+  - **Exact trim.** redis-py's `xtrim(q, 1)` is approximate (`MAXLEN ~ 1`) by default, and Redis then trims only whole internal nodes. So a short stream was not trimmed, and the read returned the oldest heartbeat since the last check, not the latest. `approximate=False` is used now; `XTRIM MAXLEN` exact works on Redis 5 and later.
+  - `count=1`: XREAD's COUNT applies per stream.
+  - A heartbeat arriving between the read and the delete is kept for the next check. Production trims it away.
+
+**Not taken:**
+- **MainProgram's start-up messages through `logMessageToConsoleAndFile`.** Here MainProgram runs with `setLogProcess("mainprogram")`, so its prints already go to the log file, with the process name and levels.
+- **`logMessageToConsole/File/ConsoleAndFile` and the logging connection pool in RedisUtils.**
+  - Production added them so PySide code can log without the logger threads. Here the slave loggers only put messages on an in-process queue, which is thread-safe from Qt code, and the frontend dry runs pass.
+  - Production's functions would bypass the per-server levels, the production clamp and the cycle context. They filter every caller by `frontend.logging.level`.
+  - The pool also opens 5 Redis connections at import, in every process.
+  - If production frontend code that calls them is merged later, thin adapters onto this logging can be added then.
+
+**Found, not changed:** the same approximate `xtrim(q, 1)` is in 23 other readers in RedisUtils, including the data queues (e.g. `io2feq`). There it is effectively a no-op, so those queues are read oldest-first and no message is dropped. The code relies on that, so it was left as it is.
+
+**New dry run:** `test/*_dryrun/DryRun_Heartbeat_And_Startup.py` (16 checks). It covers the heartbeat read, the real heartbeat server (camera DEAD after the configured missed checks, then ALIVE again), and MainProgram imported without flushing Redis.
+
+**Also:** the integrated dry run's screenshot is no longer committed (`.gitignore`).
+- **Verified:**
+
+  | Run | Result |
+  |---|---|
+  | Heartbeat/start-up dry run | 16/16 on both vendors |
+  | Integrated cycle | DB row unchanged (settings 30/19/19/1/1, rotation True/False), both vendors |
+  | FE dry run | 55/55 |

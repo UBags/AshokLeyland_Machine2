@@ -8,11 +8,12 @@ from BaseUtils import *
 import sys
 
 from Configuration import *
-from utils import printLight
+
 from utils.RedisUtils import readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, \
     sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, readDataInHeartbeatServerFromQRCodeServer, \
     readDataInHeartbeatServerFromCameraServer, readDataInHeartbeatServerFromIOServer, \
-    readDataInHeartbeatServerFromDatabaseServer, readDataInHeartbeatServerFromFEServer, DEAD
+    readDataInHeartbeatServerFromDatabaseServer, readDataInHeartbeatServerFromFEServer, DEAD, \
+    readAllHeartbeatsInHeartbeatServer
 
 CosThetaConfigurator.getInstance()
 
@@ -43,7 +44,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
         self.redisConnectionQ = None
         self.clientRedisConnectedQ = False
         self.connectToRedis()
-        printBoldBlue(f"Started Heartbeat and Alarm Server")
+        logBoth('logInfo', HeartbeatAndAlarmServer.logSource, f"Started Heartbeat and Alarm Server", Logger.GENERAL)
 
         self.qrCodeServerConnectionStatus : bool = False
         self.cameraServerConnectionStatus: bool = False
@@ -59,7 +60,10 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
 
         self.launchConnectionAlarmMonitoringThread()
         self.launchThreadForBadComponentAlarm()
-        printBoldBlue(f"Started Connection and Alarm Monitoring Thread")
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"************", Logger.SUCCESS)
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"Started Connection and Alarm Monitoring Thread", Logger.SUCCESS)
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"************", Logger.SUCCESS)
+
 
         self.gapBetweenConnectionProblemAlarms : float = CosThetaConfigurator.getInstance().getGapBetweenConnectionAlarms() # secs
         self.alarmSoundedAtLeastOnceForCurrentDisconnection : bool = False
@@ -76,8 +80,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                 self.clientRedisConnectedQ = True
             except:
                 self.clientRedisConnectedQ = False
-                SlaveConsoleLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource, f'Could not get Redis Connection', Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource, f'Could not get Redis Connection', Logger.PROBLEM)
+                logBoth('logTakeAction', HeartbeatAndAlarmServer.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
 
 
@@ -89,70 +92,83 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
 
     def launchConnectionAlarmMonitoringThread(self):
         objRef = self
+
         def monitorConnections():
             monitoringTimeGap = CosThetaConfigurator.getInstance().getCombinedHeartbeatConnectionStatusSleepInterval()
-            SlaveFileLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource, f'{monitoringTimeGap = }',
-                                                        Logger.PROBLEM)
+            logBoth('logInfo', HeartbeatAndAlarmServer.logSource,
+                    f'Heartbeat monitoring interval: {monitoringTimeGap}s', Logger.GENERAL)
 
-            counter : int = 0
+            counter: int = 0
             while not objRef.stopped:
                 counter += 1
-                startTime = time.time()
+                startTime = time.monotonic()
                 try:
-                    objRef.qrCodeServerConnectionStatus = readDataInHeartbeatServerFromQRCodeServer(objRef.redisConnectionQ)
-                    objRef.cameraServerConnectionStatus = readDataInHeartbeatServerFromCameraServer(objRef.redisConnectionQ)
-                    objRef.ioServerConnectionStatus = readDataInHeartbeatServerFromIOServer(objRef.redisConnectionQ)
-                    objRef.databaseServerConnectionStatus = readDataInHeartbeatServerFromDatabaseServer(objRef.redisConnectionQ)
-                    objRef.frontendServerConnectionStatus = readDataInHeartbeatServerFromFEServer(objRef.redisConnectionQ)
+                    # One multi-stream read instead of 5 sequential reads (each of which could block 0.5 s when a
+                    # server was down, so one dead server delayed the status of all the others). Waits at most the
+                    # monitoring interval, and only when no server has sent a heartbeat.
+                    statuses = readAllHeartbeatsInHeartbeatServer(
+                        objRef.redisConnectionQ,
+                        block=int(monitoringTimeGap * 1000)
+                    )
 
-                    if not objRef.qrCodeServerConnectionStatus:
-                        objRef.consecutiveQRCodeServerConnectionDown += 1
-                    else:
-                        objRef.consecutiveQRCodeServerConnectionDown = 0
+                    objRef.qrCodeServerConnectionStatus = statuses['qrcode']
+                    objRef.cameraServerConnectionStatus = statuses['camera']
+                    objRef.ioServerConnectionStatus = statuses['io']
+                    objRef.databaseServerConnectionStatus = statuses['db']
+                    objRef.frontendServerConnectionStatus = statuses['fe']
 
-                    if not objRef.cameraServerConnectionStatus:
-                        objRef.consecutiveCameraServerConnectionStatusDown += 1
-                    else:
-                        objRef.consecutiveCameraServerConnectionStatusDown = 0
+                    # ── update consecutive-down counters ─────────────────────────
+                    def _update(current_status, counter_attr):
+                        if not current_status:
+                            setattr(objRef, counter_attr, getattr(objRef, counter_attr) + 1)
+                        else:
+                            setattr(objRef, counter_attr, 0)
 
-                    if not objRef.ioServerConnectionStatus :
-                        objRef.consecutiveIOServerConnectionStatusDown += 1
-                    else:
-                        objRef.consecutiveIOServerConnectionStatusDown = 0
+                    _update(objRef.qrCodeServerConnectionStatus, 'consecutiveQRCodeServerConnectionDown')
+                    _update(objRef.cameraServerConnectionStatus, 'consecutiveCameraServerConnectionStatusDown')
+                    _update(objRef.ioServerConnectionStatus, 'consecutiveIOServerConnectionStatusDown')
+                    _update(objRef.databaseServerConnectionStatus, 'consecutiveDatabaseServerConnectionStatusDown')
+                    _update(objRef.frontendServerConnectionStatus, 'consecutiveFrontendServerConnectionStatusDown')
 
-                    if not objRef.databaseServerConnectionStatus:
-                        objRef.consecutiveDatabaseServerConnectionStatusDown += 1
-                    else:
-                        objRef.consecutiveDatabaseServerConnectionStatusDown = 0
+                    _MIN_ = HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM
 
-                    if not objRef.frontendServerConnectionStatus:
-                        objRef.consecutiveFrontendServerConnectionStatusDown += 1
-                    else:
-                        objRef.consecutiveFrontendServerConnectionStatusDown = 0
+                    maxDisconnectionNumber = max(
+                        objRef.consecutiveQRCodeServerConnectionDown,
+                        objRef.consecutiveCameraServerConnectionStatusDown,
+                        objRef.consecutiveIOServerConnectionStatusDown,
+                        objRef.consecutiveDatabaseServerConnectionStatusDown,
+                        objRef.consecutiveFrontendServerConnectionStatusDown,
+                    )
+                    if maxDisconnectionNumber > 10 and maxDisconnectionNumber % 10 == 0:
+                        logBoth('logInfo', HeartbeatAndAlarmServer.logSource,
+                                f"consecutiveDown: QR={objRef.consecutiveQRCodeServerConnectionDown}, "
+                                f"Cam={objRef.consecutiveCameraServerConnectionStatusDown}, "
+                                f"IO={objRef.consecutiveIOServerConnectionStatusDown}, "
+                                f"DB={objRef.consecutiveDatabaseServerConnectionStatusDown}, "
+                                f"FE={objRef.consecutiveFrontendServerConnectionStatusDown}",
+                                Logger.GENERAL)
 
-                    # printLight(f"{objRef.qrCodeServerConnectionStatus = }, {objRef.cameraServerConnectionStatus = }, {objRef.ioServerConnectionStatus = }, {objRef.databaseServerConnectionStatus =}, {objRef.frontendServerConnectionStatus =}")
-                    maxDisconnectionNumber = max(objRef.consecutiveQRCodeServerConnectionDown, objRef.consecutiveCameraServerConnectionStatusDown, objRef.consecutiveIOServerConnectionStatusDown, objRef.consecutiveDatabaseServerConnectionStatusDown, objRef.consecutiveFrontendServerConnectionStatusDown)
-                    if (maxDisconnectionNumber > 10) and ((maxDisconnectionNumber % 10) == 0):
-                        printLight(f"consecutiveQRCodeServerDown = {objRef.consecutiveQRCodeServerConnectionDown}, consecutiveCameraServerDown = {objRef.consecutiveCameraServerConnectionStatusDown}, consecutiveIOServerDown = {objRef.consecutiveIOServerConnectionStatusDown}, consecutiveDatabaseServer = {objRef.consecutiveDatabaseServerConnectionStatusDown}, consecutiveFrontendServerDown = {objRef.consecutiveFrontendServerConnectionStatusDown}")
+                    # ── send aggregated status to FE and IO ───────────────────────
+                    sendHeartbeatsFromHeartbeatServerToFEServer(
+                        redisConnection=objRef.redisConnectionQ,
+                        cameraServerStatus=ALIVE if objRef.consecutiveCameraServerConnectionStatusDown < _MIN_ else DEAD,
+                        qrCodeServerStatus=ALIVE if objRef.consecutiveQRCodeServerConnectionDown < _MIN_ else DEAD,
+                        ioServerStatus=ALIVE if objRef.consecutiveIOServerConnectionStatusDown < _MIN_ else DEAD,
+                        dbServerStatus=ALIVE if objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_ else DEAD,
+                    )
 
-                    sendHeartbeatsFromHeartbeatServerToFEServer(redisConnection=objRef.redisConnectionQ,
-                                                                cameraServerStatus=ALIVE if (objRef.consecutiveCameraServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM) else DEAD,
-                                                                qrCodeServerStatus=ALIVE if (objRef.consecutiveQRCodeServerConnectionDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM) else DEAD,
-                                                                ioServerStatus=ALIVE if (objRef.consecutiveIOServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM) else DEAD,
-                                                                dbServerStatus=ALIVE if (objRef.consecutiveDatabaseServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM) else DEAD)
-                    # allok = (objRef.qrCodeServerConnectionStatus and objRef.cameraServerConnectionStatus
-                    #          and objRef.ioServerConnectionStatus)
-                    # allok = allok and objRef.databaseServerConnectionStatus and objRef.frontendServerConnectionStatus
+                    allok = all([
+                        objRef.consecutiveQRCodeServerConnectionDown < _MIN_,
+                        objRef.consecutiveCameraServerConnectionStatusDown < _MIN_,
+                        objRef.consecutiveIOServerConnectionStatusDown < _MIN_,
+                        objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_,
+                        objRef.consecutiveFrontendServerConnectionStatusDown < _MIN_,
+                    ])
 
-                    allok = (objRef.consecutiveQRCodeServerConnectionDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM)
-                    allok = allok and (objRef.consecutiveCameraServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM)
-                    allok = allok and (objRef.consecutiveIOServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM)
-                    allok = allok and (objRef.consecutiveDatabaseServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM)
-                    allok = allok and (objRef.consecutiveFrontendServerConnectionStatusDown < HeartbeatAndAlarmServer.MINIMUM_CONSECUTIVE_DOWNS_NEEDED_FOR_ALARM)
-
-                    sendCombinedHeartbeatFromHeartbeatServerToIOServer(redisConnection=objRef.redisConnectionQ, combinedConnectionStatus=ALIVE if allok else DEAD)
-
-                    # printBoldYellow(f"Current value of allok is {allok}")
+                    sendCombinedHeartbeatFromHeartbeatServerToIOServer(
+                        redisConnection=objRef.redisConnectionQ,
+                        combinedConnectionStatus=ALIVE if allok else DEAD,
+                    )
 
                     objRef.clearQueue()
 
@@ -162,36 +178,41 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                             objRef.alarmSoundedAtLeastOnceForCurrentDisconnection = True
                             objRef.lastTimeAlarmSoundedInSecs = time.time()
                         else:
-                            currentTime = time.time()
-                            if currentTime - objRef.lastTimeAlarmSoundedInSecs > objRef.gapBetweenConnectionProblemAlarms:
+                            if time.time() - objRef.lastTimeAlarmSoundedInSecs > objRef.gapBetweenConnectionProblemAlarms:
                                 objRef.addItem(HeartbeatAndAlarmServer.beepMessage)
                                 objRef.lastTimeAlarmSoundedInSecs = time.time()
-                        if (maxDisconnectionNumber > 1) and ((maxDisconnectionNumber % 3) == 0):
-                            SlaveFileLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource,
-                                                                        f'All connections are NOT simultaneously ok - connection status is {objRef.qrCodeServerConnectionStatus}, {objRef.cameraServerConnectionStatus}, {objRef.ioServerConnectionStatus}, {objRef.databaseServerConnectionStatus}, {objRef.frontendServerConnectionStatus}',
-                                                                        Logger.PROBLEM)
-                            SlaveConsoleLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource,
-                                                                        f'All connections are NOT simultaneously ok - connection status is {objRef.qrCodeServerConnectionStatus}, {objRef.cameraServerConnectionStatus}, {objRef.ioServerConnectionStatus}, {objRef.databaseServerConnectionStatus}, {objRef.frontendServerConnectionStatus}',
-                                                                           Logger.PROBLEM)
+                        if maxDisconnectionNumber > 1 and maxDisconnectionNumber % 3 == 0:
+                            logBoth('logTakeAction', HeartbeatAndAlarmServer.logSource,
+                                    f'Connections NOT all OK: '
+                                    f'QR={objRef.qrCodeServerConnectionStatus}, '
+                                    f'Cam={objRef.cameraServerConnectionStatus}, '
+                                    f'IO={objRef.ioServerConnectionStatus}, '
+                                    f'DB={objRef.databaseServerConnectionStatus}, '
+                                    f'FE={objRef.frontendServerConnectionStatus}',
+                                    Logger.PROBLEM)
                     else:
-                        # objRef.clearQueue()
                         objRef.alarmSoundedAtLeastOnceForCurrentDisconnection = False
                         if counter % 50 == 0:
-                            SlaveFileLogger.getInstance().logTakeNote(HeartbeatAndAlarmServer.logSource,
-                                                                      f'All connections are ok',
-                                                                      Logger.SUCCESS)
-                            SlaveConsoleLogger.getInstance().logTakeNote(HeartbeatAndAlarmServer.logSource,
-                                                                         f'All connections are ok',
-                                                                         Logger.SUCCESS)
+                            logBoth('logTakeNote', HeartbeatAndAlarmServer.logSource,
+                                    'All connections are ok', Logger.SUCCESS)
+
                 except Exception as e:
-                    SlaveFileLogger.getInstance().logTakeAction(HeartbeatAndAlarmServer.logSource, f'Problem in launchConnectionAlarmMonitoringThread due to {e}',
-                                                                Logger.PROBLEM)
+                    logBoth('logTakeAction', HeartbeatAndAlarmServer.logSource,
+                            f'Problem in monitorConnections: {e}', Logger.PROBLEM)
                     objRef.connectToRedis()
-                endTime = time.time()
-                sleepTime = monitoringTimeGap - (endTime - startTime)
+
+                # ── precise sleep: subtract actual elapsed time ───────────────────
+                elapsed = time.monotonic() - startTime
+                sleepTime = monitoringTimeGap - elapsed
                 if sleepTime > 0:
                     time.sleep(sleepTime)
-        monitoringThread = threading.Thread(name=f"Connection Alarm Monitoring Thread", target=monitorConnections, args=(), daemon=True)
+
+        monitoringThread = threading.Thread(
+            name="Connection Alarm Monitoring Thread",
+            target=monitorConnections,
+            args=(),
+            daemon=True,
+        )
         monitoringThread.start()
 
     def launchThreadForBadComponentAlarm(self):
@@ -242,9 +263,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
 def startHeartbeatAndAlarmServer():
     hdServer=HeartbeatAndAlarmServer()
     hdServer.start()
-    printBoldBlue("*****************")
-    printBoldBlue("Started HeartbeatAndAlarmServer")
-    printBoldBlue("*****************")
+    logBoth('logInfo', HeartbeatAndAlarmServer.logSource, "Started HeartbeatAndAlarmServer", Logger.GENERAL)
     hdServer.join()
     sys.exit(0)
 

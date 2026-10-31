@@ -43,3 +43,6 @@ recorders/output-*.mp4
 
 # Dry-run outputs
 test/machine2_dryrun/*_end_of_cycle.png
+
+# Dry-run screenshots (written by the integrated dry run)
+test/*_dryrun/integrated_end_of_cycle.png
