@@ -21,6 +21,7 @@ Parameters (from configuration):
     RB_THRESHOLD: Maximum R-B value for cap (default: -1)
 """
 
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import cv2
 import numpy as np
 from typing import Dict, Tuple
@@ -110,8 +111,11 @@ class CheckCap:
             cls.DELTA_THRESHOLD_HUB_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdHub(DOSTPLUS)
             cls.DELTA_THRESHOLD_TOP_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdTop(DOSTPLUS)
             cls.DELTA_THRESHOLD_NUT_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdNut(DOSTPLUS)
+            cls.DELTA_THRESHOLD_HUB_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdHub(DOST)
+            cls.DELTA_THRESHOLD_TOP_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdTop(DOST)
+            cls.DELTA_THRESHOLD_NUT_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdNut(DOST)
         except:
-            pass
+            noteSuppressed()
 
     @classmethod
     def _get_radius_for_component(cls, componentType: str) -> int:

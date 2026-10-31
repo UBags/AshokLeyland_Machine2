@@ -38,7 +38,7 @@ manifest = json.loads(MANIFEST.read_text(encoding="utf-8")) if MANIFEST.exists()
 manifest.setdefault("extracted", {})
 for extra in ARGS.manifest:
     manifest["extracted"].update(json.loads(pathlib.Path(extra).read_text(encoding="utf-8")).get("extracted", {}))
-BASELINE = ARGS.baseline or manifest.get("_baseline", "39ead96")
+BASELINE = ARGS.baseline or manifest.get("_baseline", "5728def")
 
 
 def git_show(rel: str) -> str:

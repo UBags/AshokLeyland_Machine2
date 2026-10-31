@@ -684,3 +684,41 @@ Not changed: the vision modules (they are checked by the equivalence verifier), 
 - It now uses `XRANGE` and `XDEL`, which work on Redis 5 or later.
 - Nothing else in the logging or live-configuration code needs a newer Redis.
 - Logging dry run: 34/34 (Siemens).
+
+## 28. Vision files: production versions, made configurable again (2026-11-01)
+
+The 15 vision files are now the production versions (from `For_comparison.zip`), with this branch's changes re-applied on top:
+CheckKnuckle, CheckNoBunk, CheckNutAndPlateWasher, CheckBunk, CheckNoCapBunk, CameraProcessorServer, HexagonNutDetector, CheckCap, HubAndBearingSegmenter, BunkSegmenter, CheckHubAndBottomBearing, CheckSplitPinAndWasher, CheckTopBearing, RTSPCam, ModelManager.
+
+- **How.** Three-way merge with the common ancestor `6b31dd7` (ours = this branch, theirs = production). 10 files merged cleanly. The 10 conflicts in the other 5 files were resolved by hand: production code and `logBoth` calls, this branch's configurable constants in the messages.
+- **Two commits.**
+  - `5728def` is the reference: the production files plus only the Machine 2 changes made after `6b31dd7` (CameraProcessorServer 28 states; CheckTopBearing requires `ImageNormalisationWithMask` at start-up). The parameters are still hard-coded there.
+  - The next commit makes the 135 parameters configurable again (`vInt`/`vFloat`/... with `<vendor>.vision.*` keys). It also re-applies `noteSuppressed()`, the camera server's live-configuration listener and the vision-parameter report.
+- **Production changes now in the branch:**
+  - CheckKnuckle: the model check is case-insensitive and None-safe.
+  - CheckNoBunk, CheckNutAndPlateWasher: crop 240 instead of 180; the annotated image is centred on the bearing geometry.
+  - CheckBunk, CheckNoCapBunk: the `bearing_geometry` parameter and a 300 crop; CameraProcessorServer passes `ImageProcessor.bearingCentreAndRadii`.
+  - HexagonNutDetector: numpy k-means instead of sklearn; MobileSAM optional.
+  - CheckCap uses `getInstance()`; message and type-hint changes elsewhere.
+- **Logging.**
+  - The production files log with `logBoth(level, source, message, messageType)`. New `logutils.SlaveLoggers.logBoth` maps that call onto this branch's logging. The message goes to the file and console loggers, with per-server levels, the production clamp, cycle context and live reload, and the calling function and line are recorded.
+  - Level mapping: `logDebug`→DEBUG, `logInfo`→INFO, `logWarning`→TAKE_NOTE, `logError`→CONSIDER_ACTION, `logCritical`→TAKE_ACTION.
+  - The branch-only messages in CameraProcessorServer (live configuration, vision-parameter report, missing dependencies) now use `logBoth` too.
+- **Kept from this branch:**
+  - The DOST hub/top/nut cap thresholds are read from the properties (production reads only DOSTPLUS). The values are equal: 30/30/35.
+  - Messages show the configured values, not the old numbers (e.g. "need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES}").
+- **Verifier.**
+  - `Verify_Vision_Config_Equivalence.py` now compares against `5728def`. Each file is identical to the production version once every configurable value is replaced by its default.
+  - The `vision_config_manifest.json` line references were moved to the production files.
+- **Logging dry run.** It now has 37 checks; new L13 covers `logBoth`.
+- **Verified.**
+
+  | Check | Result |
+  |---|---|
+  | Vision verifier | ALL EQUIVALENT (135 parameters in 8 files) |
+  | All 15 files import | torch stubbed here, since the sandbox has no torch; no undefined names |
+  | Logging dry run | 37/37 on both vendors |
+  | Fault scenarios (Siemens) | 55/55 |
+  | Integrated cycle | settings 30/19/19/1/1 and rotation True/False in the DB row, on both vendors |
+
+  The checks were not run on real images here (no torch, no camera). Run the camera server on the plant machine before production.

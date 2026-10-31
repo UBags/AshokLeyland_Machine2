@@ -1,11 +1,11 @@
 {
-  "_baseline": "39ead96",
+  "_baseline": "5728def",
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1298,
+      "old_line": 1310,
       "old_literal": "100",
       "old_snippet": "distance <= 100:"
     },
@@ -13,7 +13,7 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MIN",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1298,
+      "old_line": 1310,
       "old_literal": "75",
       "old_snippet": "if 75 <= distance"
     },
@@ -21,7 +21,7 @@
       "const": "SQUARE_MAX_ANGLE_STD",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 370,
+      "old_line": 372,
       "old_literal": "20.0",
       "old_snippet": "allowed_angle_std: float = 20.0"
     },
@@ -29,7 +29,7 @@
       "const": "SQUARE_MAX_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 369,
+      "old_line": 371,
       "old_literal": "115.0",
       "old_snippet": "max_interior_angle: float = 115.0"
     },
@@ -37,7 +37,7 @@
       "const": "SQUARE_MIN_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 368,
+      "old_line": 370,
       "old_literal": "65.0",
       "old_snippet": "min_interior_angle: float = 65.0"
     },
@@ -45,7 +45,7 @@
       "const": "SQUARE_SIDE_LENGTH_TOLERANCE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 367,
+      "old_line": 369,
       "old_literal": "0.2",
       "old_snippet": "tolerance: float = 0.2"
     },
@@ -53,7 +53,7 @@
       "const": "HUB_CENTRE_CHECK_INNER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 153,
+      "old_line": 157,
       "old_literal": "20",
       "old_snippet": "(635, 350), 20,"
     },
@@ -61,7 +61,7 @@
       "const": "HUB_CENTRE_CHECK_MAX_MEAN",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 164,
+      "old_line": 168,
       "old_literal": "144",
       "old_snippet": "average < 144"
     },
@@ -69,7 +69,7 @@
       "const": "HUB_CENTRE_CHECK_OUTER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 152,
+      "old_line": 156,
       "old_literal": "60",
       "old_snippet": "(635, 350), 60,"
     },
@@ -77,7 +77,7 @@
       "const": "HUB_CENTRE_CHECK_X",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 152,
+      "old_line": 156,
       "old_literal": "635",
       "old_snippet": "(635, 350)"
     },
@@ -85,7 +85,7 @@
       "const": "HUB_CENTRE_CHECK_Y",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 152,
+      "old_line": 156,
       "old_literal": "350",
       "old_snippet": "(635, 350)"
     },
@@ -93,7 +93,7 @@
       "const": "HUB_EQUAL_ANGLE_TOLERANCE",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2233,
+      "old_line": 2291,
       "old_literal": "0.15",
       "old_snippet": "angular_tolerance = 0.15"
     },
@@ -101,7 +101,7 @@
       "const": "HUB_MAX_MASK_AREA",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2674,
+      "old_line": 2759,
       "old_literal": "3000",
       "old_snippet": "self.max_area = 3000"
     },
@@ -109,7 +109,7 @@
       "const": "HUB_MIN_MASK_AREA",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2673,
+      "old_line": 2758,
       "old_literal": "100",
       "old_snippet": "self.min_area = 100"
     },
@@ -117,7 +117,7 @@
       "const": "HUB_SEGMENT_CENTER_X",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2690,
+      "old_line": 2775,
       "old_literal": "635",
       "old_snippet": "(635, 345)"
     },
@@ -125,7 +125,7 @@
       "const": "HUB_SEGMENT_CENTER_Y",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2690,
+      "old_line": 2775,
       "old_literal": "345",
       "old_snippet": "(635, 345)"
     },
@@ -133,7 +133,7 @@
       "const": "HUB_SEGMENT_INNER_RADIUS",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2692,
+      "old_line": 2777,
       "old_literal": "120",
       "old_snippet": "self.annular_inner_radius = 120"
     },
@@ -141,7 +141,7 @@
       "const": "HUB_SEGMENT_OUTER_RADIUS",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2691,
+      "old_line": 2776,
       "old_literal": "250",
       "old_snippet": "self.annular_outer_radius = 250"
     },
@@ -149,7 +149,7 @@
       "const": "HUB_YOLO_CONF_THRESHOLD",
       "file": "camera/HubAndBearingSegmenter.py",
       "old_file": "camera/HubAndBearingSegmenter.py",
-      "old_line": 2671,
+      "old_line": 2756,
       "old_literal": "0.3",
       "old_snippet": "self.conf_thresh = 0.3"
     },
@@ -157,7 +157,7 @@
       "const": "NUT_CENTER_DISC_RADIUS",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2220,
+      "old_line": 2294,
       "old_literal": "25",
       "old_snippet": "disc_radius = 25"
     },
@@ -165,7 +165,7 @@
       "const": "NUT_EDGE_MIN_LENGTH_FACTOR",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2342,
+      "old_line": 2416,
       "old_literal": "0.8",
       "old_snippet": "min_length_factor=0.8"
     },
@@ -173,7 +173,7 @@
       "const": "NUT_MAX_ASPECT_RATIO",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2201,
+      "old_line": 2275,
       "old_literal": "1.3",
       "old_snippet": "aspect_ratio < 1.3"
     },
@@ -181,7 +181,7 @@
       "const": "NUT_MAX_MASK_AREA",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2616,
+      "old_line": 2690,
       "old_literal": "5500",
       "old_snippet": "max_mask_region_area=5500"
     },
@@ -189,7 +189,7 @@
       "const": "NUT_MAX_VERTICES",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2188,
+      "old_line": 2262,
       "old_literal": "8",
       "old_snippet": "num_vertices <= 8"
     },
@@ -197,7 +197,7 @@
       "const": "NUT_MIN_ACTUAL_AREA",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2312,
+      "old_line": 2386,
       "old_literal": "2000",
       "old_snippet": "actual_mask_area <= 2000"
     },
@@ -205,7 +205,7 @@
       "const": "NUT_MIN_ASPECT_RATIO",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2201,
+      "old_line": 2275,
       "old_literal": "0.7",
       "old_snippet": "0.7 < aspect_ratio"
     },
@@ -213,7 +213,7 @@
       "const": "NUT_MIN_MASK_AREA",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2615,
+      "old_line": 2689,
       "old_literal": "3000",
       "old_snippet": "min_mask_region_area=3000"
     },
@@ -221,7 +221,7 @@
       "const": "NUT_MIN_REMAINING_AREA_FRACTION",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2262,
+      "old_line": 2336,
       "old_literal": "0.3",
       "old_snippet": "original_mask_area * 0.3"
     },
@@ -229,7 +229,7 @@
       "const": "NUT_MIN_SYMMETRY_SCORE",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2416,
+      "old_line": 2490,
       "old_literal": "55",
       "old_snippet": "composite_score < 55"
     },
@@ -237,7 +237,7 @@
       "const": "NUT_MIN_THICKNESS_SCORE",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2418,
+      "old_line": 2492,
       "old_literal": "45",
       "old_snippet": "thickness_symmetry_score < 45"
     },
@@ -245,7 +245,7 @@
       "const": "NUT_MIN_VERTICES",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2188,
+      "old_line": 2262,
       "old_literal": "5",
       "old_snippet": "5 <= num_vertices"
     },
@@ -253,7 +253,7 @@
       "const": "NUT_MIN_VERTICES_AFTER_DISC",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2297,
+      "old_line": 2371,
       "old_literal": "4",
       "old_snippet": "len(approx_check) < 4"
     },
@@ -261,7 +261,7 @@
       "const": "NUT_REFERENCE_CENTER_X",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2352,
+      "old_line": 2426,
       "old_literal": "72",
       "old_snippet": "center=(72, 64)"
     },
@@ -269,7 +269,7 @@
       "const": "NUT_REFERENCE_CENTER_Y",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2352,
+      "old_line": 2426,
       "old_literal": "64",
       "old_snippet": "center=(72, 64)"
     },
@@ -277,7 +277,7 @@
       "const": "NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2422,
+      "old_line": 2496,
       "old_literal": "35",
       "old_snippet": "total_deviated_pixels >= 35"
     },
@@ -285,7 +285,7 @@
       "const": "NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2420,
+      "old_line": 2494,
       "old_literal": "28",
       "old_snippet": "total_deviated_pixels >= 28"
     },
@@ -293,7 +293,7 @@
       "const": "NUT_SYMMETRY_REJECT_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2465,
+      "old_line": 2539,
       "old_literal": "1.1",
       "old_snippet": "SYMMETRY_REJECT_THRESHOLD = 1.10"
     },
@@ -301,7 +301,7 @@
       "const": "NUT_SYMMETRY_WARNING_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2466,
+      "old_line": 2540,
       "old_literal": "1.4",
       "old_snippet": "SYMMETRY_WARNING_THRESHOLD = 1.40"
     },
@@ -309,7 +309,7 @@
       "const": "NUT_YOLO_CONF_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2613,
+      "old_line": 2687,
       "old_literal": "0.3",
       "old_snippet": "conf_threshold=0.3"
     },
@@ -317,7 +317,7 @@
       "const": "AVERAGE_G_THRESHOLD",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 703,
+      "old_line": 731,
       "old_literal": "77",
       "old_snippet": "average_G > 77"
     },
@@ -325,7 +325,7 @@
       "const": "DETECTION_MASK_RADIUS",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 420,
+      "old_line": 430,
       "old_literal": "60",
       "old_snippet": "detection_radius = 60"
     },
@@ -333,7 +333,7 @@
       "const": "INNER_EDGE_MAX_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 451,
+      "old_line": 463,
       "old_literal": "1.2",
       "old_snippet": "prompt_r * 1.20"
     },
@@ -341,7 +341,7 @@
       "const": "INNER_EDGE_MIN_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 450,
+      "old_line": 462,
       "old_literal": "0.65",
       "old_snippet": "prompt_r * 0.65"
     },
@@ -349,7 +349,7 @@
       "const": "LOWER_SCORE_THRESHOLD",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 703,
+      "old_line": 731,
       "old_literal": "0.65",
       "old_snippet": "lower_score > 0.65"
     },
@@ -357,7 +357,7 @@
       "const": "OUTER_EDGE_MAX_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 453,
+      "old_line": 465,
       "old_literal": "1.6",
       "old_snippet": "prompt_r * 1.60"
     },
@@ -365,7 +365,7 @@
       "const": "OUTER_EDGE_MIN_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 452,
+      "old_line": 464,
       "old_literal": "0.8",
       "old_snippet": "prompt_r * 0.80"
     },
@@ -373,7 +373,7 @@
       "const": "TARGET_RING_THICKNESS",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 636,
+      "old_line": 658,
       "old_literal": "14",
       "old_snippet": "TARGET_THICKNESS = 14"
     },
@@ -381,7 +381,7 @@
       "const": "TARGET_RING_THICKNESS_FOR_AREA_SCORE",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 694,
+      "old_line": 722,
       "old_literal": "15",
       "old_snippet": "TARGET_THICK_FOR_SCORE = 15"
     }

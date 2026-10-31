@@ -119,6 +119,26 @@ printBoldRed("L3-not-mirrored-marker"); SFL.logTakeAction("test", "L3-after-off"
 check("L3 log.mirror.prints.to.file=False: prints not mirrored", in_log("L3-after-off") and "L3-not-mirrored-marker" not in logtext())
 set_props(log__mirror__prints__to__file="True")
 
+# ---------------------------------------------------------------- L13
+print("\n=== L13 logBoth (the logging call of the production vision modules) ===", flush=True)
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
+setLogProcess("cameraserver")          # global level INFO
+def visionCheckThatLogs():
+    logBoth('logDebug', "camera.Test", "L13-debug-marker", MessageType.GENERAL)
+    logBoth('logWarning', "camera.Test", "L13-warning-marker", MessageType.RISK)
+    logBoth('logError', "camera.Test", "L13-error-marker", MessageType.ISSUE)
+    logBoth('logCritical', "camera.Test", "L13-critical-marker", MessageType.PROBLEM)
+visionCheckThatLogs()
+check("L13 logBoth levels mapped (logWarning->TAKE_NOTE, logError->CONSIDER_ACTION, logCritical->TAKE_ACTION)",
+      in_log("L13-critical-marker") and "TAKE_NOTE" in line_with("L13-warning-marker").replace(" ", "_").upper()
+      and "CONSIDER" in line_with("L13-error-marker").upper() and "TAKE" in line_with("L13-critical-marker").upper(),
+      line_with("L13-error-marker"))
+check("L13 logBoth respects the server's level (cameraserver INFO: logDebug not written)", "L13-debug-marker" not in logtext())
+check("L13 logBoth records the calling function, not logBoth", "visionCheckThatLogs" in line_with("L13-error-marker"),
+      line_with("L13-error-marker"))
+setLogProcess("ioserver")
+
 # ---------------------------------------------------------------- L2
 print("\n=== L2 production clamp ===", flush=True)
 set_props(application__mode="PRODUCTION", file__loggingLevel="CONSIDER_ACTION", console__logginglevel="CONSIDER_ACTION",

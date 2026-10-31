@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import copy
 import time
 from threading import Thread
@@ -14,6 +15,8 @@ from utils.RedisUtils import *
 from BaseUtils import *
 from logutils import SlaveLoggers
 from logutils.SlaveLoggers import *
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 from utils.QRCodeHelper import *
 # from processors.image.ImageSaver import *
 from concurrent.futures import ThreadPoolExecutor, wait
@@ -174,7 +177,7 @@ def resetResults():
             resultsFromPictureAssessment = [[INVALID_RESULT, None],[INVALID_RESULT, None],[INVALID_RESULT, None]]
             resultsStatus = [False, False, False]
         except:
-            pass
+            noteSuppressed()
         resultsLock.release()
     # printBold("Exiting reset results")
 
@@ -193,7 +196,7 @@ def addAResult(anImage : np.ndarray, aResult : bool, index: int):
             resultsFromPictureAssessment[index] = (aResult, anImage)
             resultsStatus[index] = aResult
         except:
-            pass
+            noteSuppressed()
 
 
 # *******************************Results Tracking End*********************************************
@@ -216,6 +219,27 @@ class TakePictures(GenericQueueProcessor):
         self.cameraPwd = CosThetaConfigurator.getInstance().getCameraPwd()
         self.gapBetweenPictures = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
         self.camera = RTSPCam(IP=self.cameraIP, port=self.cameraPort, uid=self.cameraUID, password=self.cameraPwd, name=self.cameraID)
+        CosThetaConfigurator.addReloadListener(self._applyLiveConfiguration)
+
+    def _applyLiveConfiguration(self, changedKeys) -> None:
+        """Live configuration: the gap between pictures and the missing-frame limit apply at once; a change to the
+        camera connection (IP, port, user, password, id) needs a restart of the camera server."""
+        prefix = CosThetaConfigurator.getVisionKeyPrefix()
+        gap = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
+        if gap != self.gapBetweenPictures:
+            self.gapBetweenPictures = gap
+            logBoth('logWarning', logSource, f"Configuration applied while running: gap between pictures = {gap} s", MessageType.RISK)
+        try:
+            limit = CosThetaConfigurator.getInstance().getMaxAllowedNoneFrameCountsInCamera()
+            if getattr(self.camera, "maxAllowedNoneFrameCountsInCamera", limit) != limit:
+                self.camera.maxAllowedNoneFrameCountsInCamera = limit
+                logBoth('logWarning', logSource, f"Configuration applied while running: max allowed missing frames = {limit}", MessageType.RISK)
+        except Exception:
+            noteSuppressed()
+        connection = [k for k in changedKeys if k.startswith(f"{prefix}vision.camera.")]
+        if connection:
+            logBoth('logError', logSource, f"Camera connection settings changed ({', '.join(connection)}): restart the "
+                    f"camera server for them to take effect", MessageType.ISSUE)
         self.redisConnectionForHeartbeat = None
         self.clientRedisConnectedForHeartbeat = False
         self.connectToRedisForHeartbeat()
@@ -329,7 +353,7 @@ class TakePictures(GenericQueueProcessor):
                 try:
                     time.sleep(cameraHeartbeatGap)
                 except:
-                    pass
+                    noteSuppressed()
         heartbeatThread = threading.Thread(name=f"Camera Heartbeat Thread", target=reportHeartbeat, args=(), daemon = True)
         heartbeatThread.start()
 
@@ -1215,11 +1239,24 @@ def CameraServer(mode : str = "Test"):
     problems = verifyVisionDependencies()
     if problems:
         message = "Camera server NOT started - missing vision dependencies:\n  - " + "\n  - ".join(problems)
-        printBoldRed(message)
-        SlaveConsoleLogger.getInstance().logTakeAction(logSource, message, Logger.PROBLEM)
-        SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.PROBLEM)
+        logBoth('logCritical', logSource, message, MessageType.PROBLEM)
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
+
+    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
+    # re-tune is always visible in the logs. Purely informational - never stops the server.
+    try:
+        from camera.VisionConfig import describeVisionParameters, getRegistry
+        retuned = describeVisionParameters(onlyChanged=True)
+        if retuned:
+            message = (f"Vision parameters: {len(retuned)} of {len(getRegistry())} differ from the built-in defaults:\n  "
+                       + "\n  ".join(retuned))
+            logBoth('logCritical', logSource, message, MessageType.ISSUE)
+        else:
+            message = f"Vision parameters: all {len(getRegistry())} at the built-in defaults"
+            logBoth('logCritical', logSource, message, MessageType.SUCCESS)
+    except Exception as e:
+        logBoth('logError', logSource, f"Could not report vision parameters: {e}", MessageType.ISSUE)
 
     # imageWriter : GenericQueueProcessor = None
     # if mode.upper() == "TEST":
