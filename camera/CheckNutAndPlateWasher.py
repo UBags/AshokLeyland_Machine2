@@ -32,7 +32,6 @@ except:
     pass
 
 from camera.HexagonNutDetector import NutDetector
-from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -40,6 +39,8 @@ try:
     from BaseUtils import *
     from Configuration import *
     from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage, UNKNOWN
+    from logutils.SlaveLoggers import logBoth
+    from logutils.Logger import MessageType
 
     CosThetaConfigurator.getInstance()
 except ImportError:
@@ -49,14 +50,18 @@ except ImportError:
     hubAndBottomBearingPictureKeyString = "hubAndBottomBearingPicture"
     topBearingPictureKeyString = "topBearingPicture"
 
-    def printBoldBlue(msg):
-        print(f"\033[1;34m{msg}\033[0m")
+    def logBoth(level, source, msg, messageType=None):
+        colours = {'logInfo': '\033[1;32m', 'logError': '\033[1;31m', 'logWarning': '\033[1;33m', 'logDebug': '\033[1;34m', 'logCritical': '\033[1;31m'}
+        reset = '\033[0m'
+        colour = colours.get(level, '')
+        print(f"{colour}{msg}{reset}")
 
-    def printBoldGreen(msg):
-        print(f"\033[1;32m{msg}\033[0m")
-
-    def printBoldRed(msg):
-        print(f"\033[1;31m{msg}\033[0m")
+    class MessageType:
+        GENERAL = 1
+        SUCCESS = 2
+        RISK = 3
+        ISSUE = 4
+        PROBLEM = 5
 
     def saveImage(img, name):
         pass
@@ -83,13 +88,13 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
+    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = 3.0            # Gamma correction value
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -98,11 +103,12 @@ class CheckNutAndPlateWasher:
     @classmethod
     def _get_nut_detector(cls) -> NutDetector:
         """Get or create singleton NutDetector instance."""
+        _src = getFullyQualifiedName(__file__, cls)
         if not cls._detector_initialized or cls._nut_detector is None:
-            printBoldBlue("[CheckNutAndPlateWasher] Initializing NutDetector...")
+            logBoth('logDebug', _src, "[CheckNutAndPlateWasher] Initializing NutDetector...", MessageType.GENERAL)
             cls._nut_detector = NutDetector()
             cls._detector_initialized = True
-            printBoldGreen("[CheckNutAndPlateWasher] NutDetector initialized")
+            logBoth('logInfo', _src, "[CheckNutAndPlateWasher] NutDetector initialized", MessageType.SUCCESS)
         return cls._nut_detector
 
     @classmethod
@@ -166,6 +172,8 @@ class CheckNutAndPlateWasher:
         Returns:
             Binary mask of bearing annulus in nut's annular space
         """
+        _src = getFullyQualifiedName(__file__, cls)
+
         bearing_cx_orig, bearing_cy_orig = bearing_geometry["center"]
         bearing_inner_r = bearing_geometry["inner_radius"]
         bearing_outer_r = bearing_geometry["outer_radius"]
@@ -178,9 +186,9 @@ class CheckNutAndPlateWasher:
         bearing_cx_annular = bearing_cx_orig - crop_offset_x
         bearing_cy_annular = bearing_cy_orig - crop_offset_y
 
-        printBoldBlue(f"[Bearing Mask] Original center: ({bearing_cx_orig}, {bearing_cy_orig})")
-        printBoldBlue(f"[Bearing Mask] Annular center: ({bearing_cx_annular}, {bearing_cy_annular})")
-        printBoldBlue(f"[Bearing Mask] Radii: inner={bearing_inner_r}, outer={bearing_outer_r}")
+        logBoth('logDebug', _src, f"[Bearing Mask] Original center: ({bearing_cx_orig}, {bearing_cy_orig})", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"[Bearing Mask] Annular center: ({bearing_cx_annular}, {bearing_cy_annular})", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"[Bearing Mask] Radii: inner={bearing_inner_r}, outer={bearing_outer_r}", MessageType.GENERAL)
 
         # Create bearing annular mask
         h, w = annular_image_shape
@@ -209,6 +217,8 @@ class CheckNutAndPlateWasher:
         Returns:
             Tuple of (non_overlap_mask, original_area, nut_area, final_area)
         """
+        _src = getFullyQualifiedName(__file__, cls)
+
         original_area = np.sum(bearing_mask == 255)
         nut_area = np.sum(nut_mask == 255)
 
@@ -219,8 +229,10 @@ class CheckNutAndPlateWasher:
         final_area = np.sum(non_overlap_mask == 255)
         overlap_removed = original_area - final_area
 
-        printBoldBlue(f"[Mask Creation] Bearing: {original_area}px, Nut: {nut_area}px, "
-                     f"Overlap: {overlap_removed}px, Final: {final_area}px")
+        logBoth('logDebug', _src,
+                f"[Mask Creation] Bearing: {original_area}px, Nut: {nut_area}px, "
+                f"Overlap: {overlap_removed}px, Final: {final_area}px",
+                MessageType.GENERAL)
 
         return non_overlap_mask, original_area, nut_area, final_area
 
@@ -235,6 +247,8 @@ class CheckNutAndPlateWasher:
         Returns:
             Tuple of (diff_R, diff_RB)
         """
+        _src = getFullyQualifiedName(__file__, cls)
+
         gamma_lut = cls._create_gamma_lut(gamma)
 
         # Extract and gamma-correct channels
@@ -251,7 +265,7 @@ class CheckNutAndPlateWasher:
         mask_bool = non_overlap_mask == 255
 
         if np.sum(mask_bool) == 0:
-            printBoldRed("[Color Calc] ERROR: Empty mask!")
+            logBoth('logError', _src, "[Color Calc] ERROR: Empty mask!", MessageType.ISSUE)
             return 0.0, 0.0
 
         # Calculate averages
@@ -263,7 +277,7 @@ class CheckNutAndPlateWasher:
         diff_R = bearing_r_avg - nut_r_avg
         diff_RB = bearing_rb_avg - nut_rb_avg
 
-        printBoldBlue(f"[Color Results] diff_R={diff_R:.2f}, diff_RB={diff_RB:.2f}")
+        logBoth('logDebug', _src, f"[Color Results] diff_R={diff_R:.2f}, diff_RB={diff_RB:.2f}", MessageType.GENERAL)
 
         return diff_R, diff_RB
 
@@ -274,7 +288,8 @@ class CheckNutAndPlateWasher:
                                 nut_annular_center: Tuple[int, int],
                                 nut_annular_radius: int,
                                 washer_present: bool,
-                                hex_center_original: Tuple[int, int]) -> np.ndarray:
+                                hex_center_original: Tuple[int, int],
+                                bearing_geometry: Optional[Dict[str, Any]] = None) -> np.ndarray:
         """
         Create annotated image with nut in green and non-overlapping bearing in blue.
 
@@ -285,44 +300,64 @@ class CheckNutAndPlateWasher:
             nut_annular_center: Center used for nut extraction
             nut_annular_radius: Radius used for nut extraction
             washer_present: Detection result
-            hex_center_original: Nut centre in original image space for 180x180 crop output.
+            hex_center_original: Nut centre in original image space for 240x240 crop output.
         """
         annotated = original_image.copy()
+
+        # Draw bearing annulus in blue, centred on bearing centre relocated by the
+        # same delta that separates hex_center_original from nut_annular_center
+        # printBoldBlue(f"{hex_center_original = }")
+        # printBoldBlue(f"{nut_annular_center = }")
+        # printBoldBlue(f"{bearing_geometry = }")
+        if bearing_geometry is not None:
+            # delta_x = hex_center_original[0] - nut_annular_center[0]
+            # delta_y = hex_center_original[1] - nut_annular_center[1]
+            # print(f"{delta_x = }; {delta_y = }")
+            # bearing_cx = int(round(bearing_geometry["center"][0] + delta_x))
+            # bearing_cy = int(round(bearing_geometry["center"][1] + delta_y))
+            # print(f"{bearing_cx = }; {bearing_cy = }")
+            bearing_cx = int(round(bearing_geometry["center"][0]))
+            bearing_cy = int(round(bearing_geometry["center"][1]))
+            inner_r = int(bearing_geometry["inner_radius"])
+            outer_r = int(bearing_geometry["outer_radius"])
+            # print(f"{inner_r = }; {outer_r = }")
+
+            # Fill annulus with light blue (BGR: 255, 191, 0 is amber — light blue is 255, 200, 150... use (200, 150, 50) in BGR)
+            annulus_mask = np.zeros(original_image.shape[:2], dtype=np.uint8)
+            cv2.circle(annulus_mask, (bearing_cx, bearing_cy), outer_r, 255, -1)
+            cv2.circle(annulus_mask, (bearing_cx, bearing_cy), inner_r, 0, -1)
+            light_blue_bgr = (200, 150, 50)  # light blue in BGR
+            annotated[annulus_mask == 255] = (
+                annotated[annulus_mask == 255] * 0.6 +
+                np.array(light_blue_bgr) * 0.4
+            ).astype(np.uint8)
+
+            # Draw inner and outer circle outlines in solid blue
+            cv2.circle(annotated, (bearing_cx, bearing_cy), inner_r, (255, 100, 0), 2)
+            cv2.circle(annotated, (bearing_cx, bearing_cy), outer_r, (255, 100, 0), 2)
 
         # Draw nut in green
         if np.sum(nut_mask_full) > 0:
             contours, _ = cv2.findContours(nut_mask_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             cv2.drawContours(annotated, contours, -1, (0, 255, 0), 2)  # Green
 
-        # Draw non-overlapping bearing in blue (only if washer check was performed)
-        if bearing_mask_annular is not None and np.sum(bearing_mask_annular) > 0:
-            # Convert bearing mask from annular to original space
-            crop_offset_x = nut_annular_center[0] - nut_annular_radius
-            crop_offset_y = nut_annular_center[1] - nut_annular_radius
-
-            bearing_mask_full = np.zeros((original_image.shape[0], original_image.shape[1]), dtype=np.uint8)
-            bearing_mask_full[crop_offset_y:crop_offset_y + bearing_mask_annular.shape[0],
-                            crop_offset_x:crop_offset_x + bearing_mask_annular.shape[1]] = bearing_mask_annular
-
-            contours, _ = cv2.findContours(bearing_mask_full, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            cv2.drawContours(annotated, contours, -1, (255, 0, 0), 2)  # Blue
-
         # Add text result
         # result_text = "WASHER PRESENT" if washer_present else "WASHER MISSING"
         # color = (0, 255, 0) if washer_present else (0, 0, 255)
         # cv2.putText(annotated, result_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 
-        # Crop 180x180 centred on the nut centre
-        cx, cy = hex_center_original
-        half = 90
+        # Crop 240x240 centred on the nut centre
+        # cx, cy = hex_center_original
+        cx, cy = bearing_geometry["center"]
+        half = 120
         h, w = annotated.shape[:2]
         x1 = max(cx - half, 0)
         y1 = max(cy - half, 0)
         x2 = min(cx + half, w)
         y2 = min(cy + half, h)
         cropped = annotated[y1:y2, x1:x2]
-        # Pad to exactly 180x180 if near edge
-        result = np.zeros((180, 180, 3), dtype=np.uint8)
+        # Pad to exactly 240x240 if near edge
+        result = np.zeros((240, 240, 3), dtype=np.uint8)
         ch, cw = cropped.shape[:2]
         result[:ch, :cw] = cropped
         return result
@@ -349,23 +384,25 @@ class CheckNutAndPlateWasher:
         Returns:
             Tuple of (annotated_image, washer_present)
         """
-        printBoldBlue("="*80)
-        printBoldBlue("[CheckNutAndPlateWasher] DETECTION START")
-        printBoldBlue("="*80)
+        _src = getFullyQualifiedName(__file__, CheckNutAndPlateWasher)
+
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
+        logBoth('logDebug', _src, "[CheckNutAndPlateWasher] DETECTION START", MessageType.GENERAL)
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
 
         # =====================================================================
         # VALIDATION
         # =====================================================================
         if anImage is None:
-            printBoldRed("[CheckNutAndPlateWasher] anImage is None")
+            logBoth('logError', _src, "[CheckNutAndPlateWasher] anImage is None", MessageType.ISSUE)
             return anImage, False
 
         if currentPictures is None:
-            printBoldRed("[CheckNutAndPlateWasher] currentPictures is None")
+            logBoth('logError', _src, "[CheckNutAndPlateWasher] currentPictures is None", MessageType.ISSUE)
             return anImage, False
 
         if componentQRCode is None:
-            printBoldRed("[CheckNutAndPlateWasher] componentQRCode is None")
+            logBoth('logError', _src, "[CheckNutAndPlateWasher] componentQRCode is None", MessageType.ISSUE)
             return anImage, False
 
         # Get component type
@@ -380,7 +417,7 @@ class CheckNutAndPlateWasher:
         # =====================================================================
         # STEP 1: DETECT NUT
         # =====================================================================
-        printBoldBlue("[Step 1] Detecting nut using HexagonNutDetector...")
+        logBoth('logDebug', _src, "[Step 1] Detecting nut using HexagonNutDetector...", MessageType.GENERAL)
 
         detector = CheckNutAndPlateWasher._get_nut_detector()
         image_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
@@ -394,34 +431,34 @@ class CheckNutAndPlateWasher:
         )
 
         if not nut_found:
-            printBoldRed("[Step 1] Nut NOT detected")
+            logBoth('logError', _src, "[Step 1] Nut NOT detected", MessageType.ISSUE)
             # Return annotated image from detector (or original)
             _cx, _cy = CheckNutAndPlateWasher.NUT_DETECTION_CENTER
             _img = nut_result.get('annotated_original', anImage)
             _h, _w = _img.shape[:2]
-            _x1, _y1 = max(_cx - 90, 0), max(_cy - 90, 0)
-            _x2, _y2 = min(_cx + 90, _w), min(_cy + 90, _h)
+            _x1, _y1 = max(_cx - 120, 0), max(_cy - 120, 0)
+            _x2, _y2 = min(_cx + 120, _w), min(_cy + 120, _h)
             _cropped = _img[_y1:_y2, _x1:_x2]
-            annotated = np.zeros((180, 180, 3), dtype=np.uint8)
+            annotated = np.zeros((240, 240, 3), dtype=np.uint8)
             annotated[:_cropped.shape[0], :_cropped.shape[1]] = _cropped
             return annotated, False
 
-        printBoldGreen("[Step 1] Nut DETECTED")
+        logBoth('logInfo', _src, "[Step 1] Nut DETECTED", MessageType.SUCCESS)
 
-        # Compute hex_center in original image space (used for 180x180 crop in all paths)
+        # Compute hex_center in original image space (used for 240x240 crop in all paths)
         _hcx, _hcy = nut_result.get('hex_center', (CheckNutAndPlateWasher.NUT_DETECTION_RADIUS,
                                                     CheckNutAndPlateWasher.NUT_DETECTION_RADIUS))
         _offset_x = CheckNutAndPlateWasher.NUT_DETECTION_CENTER[0] - CheckNutAndPlateWasher.NUT_DETECTION_RADIUS
         _offset_y = CheckNutAndPlateWasher.NUT_DETECTION_CENTER[1] - CheckNutAndPlateWasher.NUT_DETECTION_RADIUS
         hex_center_original = (_hcx + _offset_x, _hcy + _offset_y)
 
-        def _crop180(img: np.ndarray) -> np.ndarray:
+        def _crop240(img: np.ndarray) -> np.ndarray:
             cx, cy = hex_center_original
             h, w = img.shape[:2]
-            x1, y1 = max(cx - 90, 0), max(cy - 90, 0)
-            x2, y2 = min(cx + 90, w), min(cy + 90, h)
+            x1, y1 = max(cx - 120, 0), max(cy - 120, 0)
+            x2, y2 = min(cx + 120, w), min(cy + 120, h)
             cropped = img[y1:y2, x1:x2]
-            result = np.zeros((180, 180, 3), dtype=np.uint8)
+            result = np.zeros((240, 240, 3), dtype=np.uint8)
             ch, cw = cropped.shape[:2]
             result[:ch, :cw] = cropped
             return result
@@ -432,13 +469,13 @@ class CheckNutAndPlateWasher:
         check_washer = CosThetaConfigurator.getInstance().getCheckWashersPresenceInNutAndPlateWasher()
 
         if not check_washer:
-            printBoldBlue("[Config] Washer check DISABLED - returning nut detection result")
-            printBoldGreen("[Result] Nut found - RETURNING TRUE (washer check skipped)")
+            logBoth('logDebug', _src, "[Config] Washer check DISABLED - returning nut detection result", MessageType.GENERAL)
+            logBoth('logInfo', _src, "[Result] Nut found - RETURNING TRUE (washer check skipped)", MessageType.SUCCESS)
             # Return nut detection result with green outline
-            annotated = _crop180(nut_result.get('annotated_original', anImage))
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, True  # Nut found = True
 
-        printBoldBlue("[Config] Washer check ENABLED - proceeding with washer detection")
+        logBoth('logDebug', _src, "[Config] Washer check ENABLED - proceeding with washer detection", MessageType.GENERAL)
 
         # =====================================================================
         # STEP 2: GET PREREQUISITES FOR WASHER CHECK
@@ -447,17 +484,17 @@ class CheckNutAndPlateWasher:
         # Get top bearing reference image
         top_bearing_image = currentPictures.get(topBearingPictureKeyString, None)
         if top_bearing_image is None:
-            printBoldRed("[CheckNutAndPlateWasher] Top Bearing image missing - cannot check washer")
-            annotated = _crop180(nut_result.get('annotated_original', anImage))
+            logBoth('logError', _src, "[CheckNutAndPlateWasher] Top Bearing image missing - cannot check washer", MessageType.ISSUE)
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, False
 
         # Get bearing geometry from parameter
         if bearing_geometry is None:
-            printBoldRed("[CheckNutAndPlateWasher] Bearing geometry not available - cannot check washer")
-            annotated = _crop180(nut_result.get('annotated_original', anImage))
+            logBoth('logError', _src, "[CheckNutAndPlateWasher] Bearing geometry not available - cannot check washer", MessageType.ISSUE)
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, False
 
-        printBoldBlue(f"[CheckNutAndPlateWasher] Bearing geometry: {bearing_geometry}")
+        logBoth('logDebug', _src, f"[CheckNutAndPlateWasher] Bearing geometry: {bearing_geometry}", MessageType.GENERAL)
 
         nut_mask = nut_result['mask']  # Annular space
         nut_annular_rgb = nut_result['annular_rgb']  # RGB format
@@ -465,7 +502,7 @@ class CheckNutAndPlateWasher:
         # =====================================================================
         # STEP 3: EXTRACT BEARING ANNULAR REGION
         # =====================================================================
-        printBoldBlue("[Step 3] Extracting bearing annular region...")
+        logBoth('logDebug', _src, "[Step 3] Extracting bearing annular region...", MessageType.GENERAL)
 
         bearing_center = tuple(bearing_geometry["center"])
         bearing_annular_bgr, _ = CheckNutAndPlateWasher._extract_annular_region(
@@ -475,12 +512,12 @@ class CheckNutAndPlateWasher:
         )
         bearing_annular_rgb = cv2.cvtColor(bearing_annular_bgr, cv2.COLOR_BGR2RGB)
 
-        printBoldGreen(f"[Step 3] Extracted bearing annular region centered at {bearing_center}")
+        logBoth('logInfo', _src, f"[Step 3] Extracted bearing annular region centered at {bearing_center}", MessageType.SUCCESS)
 
         # =====================================================================
         # STEP 4: CREATE MASKS
         # =====================================================================
-        printBoldBlue("[Step 4] Creating bearing mask in annular space...")
+        logBoth('logDebug', _src, "[Step 4] Creating bearing mask in annular space...", MessageType.GENERAL)
 
         bearing_mask = CheckNutAndPlateWasher._create_bearing_mask_in_annular_space(
             bearing_geometry,
@@ -494,12 +531,12 @@ class CheckNutAndPlateWasher:
         )
 
         if final_area < 500:
-            printBoldRed(f"[Step 4] WARNING: Very small bearing area ({final_area}px)")
+            logBoth('logWarning', _src, f"[Step 4] WARNING: Very small bearing area ({final_area}px)", MessageType.RISK)
 
         # =====================================================================
         # STEP 5: CALCULATE COLOR DIFFERENCES
         # =====================================================================
-        printBoldBlue(f"[Step 5] Calculating color differences (gamma={CheckNutAndPlateWasher.WASHER_GAMMA})...")
+        logBoth('logDebug', _src, f"[Step 5] Calculating color differences (gamma={CheckNutAndPlateWasher.WASHER_GAMMA})...", MessageType.GENERAL)
 
         diff_R, diff_RB = CheckNutAndPlateWasher._calculate_color_differences(
             bearing_annular_rgb,
@@ -511,25 +548,29 @@ class CheckNutAndPlateWasher:
         # =====================================================================
         # STEP 6: APPLY THRESHOLDS
         # =====================================================================
-        printBoldBlue("="*80)
-        printBoldBlue("[Step 6] DECISION")
-        printBoldBlue("="*80)
-        printBoldBlue(f"Thresholds: diff_R > {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f} AND "
-                     f"diff_RB > {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f}")
-        printBoldBlue(f"Measured:   diff_R = {diff_R:.2f} AND diff_RB = {diff_RB:.2f}")
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
+        logBoth('logDebug', _src, "[Step 6] DECISION", MessageType.GENERAL)
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
+        logBoth('logDebug', _src,
+                f"Thresholds: diff_R > {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f} AND "
+                f"diff_RB > {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f}",
+                MessageType.GENERAL)
+        logBoth('logDebug', _src,
+                f"Measured:   diff_R = {diff_R:.2f} AND diff_RB = {diff_RB:.2f}",
+                MessageType.GENERAL)
 
         washer_present = (diff_R > CheckNutAndPlateWasher.WASHER_THRESHOLD_R) and (diff_RB > CheckNutAndPlateWasher.WASHER_THRESHOLD_RB)
 
         if washer_present:
-            printBoldGreen("✓ WASHER PRESENT - Top Bearing Detected")
+            logBoth('logInfo', _src, "✓ WASHER PRESENT - Top Bearing Detected", MessageType.SUCCESS)
         else:
-            printBoldRed("✗ WASHER MISSING - Nut Only")
+            logBoth('logError', _src, "✗ WASHER MISSING - Nut Only", MessageType.ISSUE)
             if diff_R <= CheckNutAndPlateWasher.WASHER_THRESHOLD_R:
-                printBoldRed(f"  Reason: R channel failed ({diff_R:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f})")
+                logBoth('logError', _src, f"  Reason: R channel failed ({diff_R:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f})", MessageType.ISSUE)
             if diff_RB <= CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:
-                printBoldRed(f"  Reason: R-B failed ({diff_RB:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f})")
+                logBoth('logError', _src, f"  Reason: R-B failed ({diff_RB:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f})", MessageType.ISSUE)
 
-        printBoldBlue("="*80)
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
 
         # =====================================================================
         # STEP 7: CREATE ANNOTATED IMAGE
@@ -549,7 +590,8 @@ class CheckNutAndPlateWasher:
             CheckNutAndPlateWasher.NUT_DETECTION_CENTER,
             CheckNutAndPlateWasher.NUT_DETECTION_RADIUS,
             washer_present,
-            hex_center_original
+            hex_center_original,
+            bearing_geometry=bearing_geometry
         )
 
         return annotated, washer_present

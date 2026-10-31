@@ -1,4 +1,3 @@
-from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import copy
 import time
 from threading import Thread
@@ -68,12 +67,9 @@ class MonitorGetPicQueue(GenericQueueProcessor):
                                        monitorRedisQueueForStopping=monitorRedisQueueForStopping, max_size=max_size,
                                        **kwargs)
         if consumer is None:
-            SlaveFileLogger.getInstance().logConsiderAction(MonitorGetPicQueue.logSource,
-                                            f"In {MonitorGetPicQueue.logSource}.{self.name}, consumer instance is None",
-                                            Logger.ISSUE)
-            SlaveConsoleLogger.getInstance().logConsiderAction(MonitorGetPicQueue.logSource,
-                                            f"In {MonitorGetPicQueue.logSource}.{self.name}, consumer instance is None",
-                                            Logger.ISSUE)
+            logBoth('logWarning', MonitorGetPicQueue.logSource,
+                    f"In {MonitorGetPicQueue.logSource}.{self.name}, consumer instance is None",
+                    Logger.ISSUE)
             raise Exception("Consumer is needed for MonitorGetPicQueue")
         MonitorGetPicQueue.logSource = getFullyQualifiedName(__file__, __class__)
         self.redisConnectionQ = None
@@ -90,12 +86,10 @@ class MonitorGetPicQueue(GenericQueueProcessor):
                 self.redisConnectionQ = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort,
                                               retry_on_timeout=True)
                 self.clientRedisConnectedQ = True
+                logBoth('logInfo', MonitorGetPicQueue.logSource, 'Redis connection established', Logger.SUCCESS)
             except:
                 self.clientRedisConnectedQ = False
-                SlaveConsoleLogger.getInstance().logTakeAction(MonitorGetPicQueue.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(MonitorGetPicQueue.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
+                logBoth('logCritical', MonitorGetPicQueue.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
 
     def getItem(self, blocking=True) -> Union[Any, None]:
@@ -116,14 +110,14 @@ class MonitorGetPicQueue(GenericQueueProcessor):
         try:
             timeOfMessage, currentMachineState, takePicture = readDataInCameraServerFromIOServer(self.redisConnectionQ, block=500)
         except Exception as e:
-            printBoldRed(e)
+            logBoth('logWarning', MonitorGetPicQueue.logSource, f"Exception reading camera queue: {e}", Logger.ISSUE)
             self.connectToRedis()
         if takePicture:
             timeOfMessage = float(timeOfMessage)
-            printBoldGreen(f"Got takePicture command in MonitorGetPicQueue")
+            logBoth('logInfo', MonitorGetPicQueue.logSource, f"Got takePicture command in MonitorGetPicQueue", Logger.SUCCESS)
             messageToBeSentToConsumer = {timeKeyString: timeOfMessage, currentMachineStateKeyString : currentMachineState,
                     actionKeyString: takePictureCommand}
-            printBoldGreen(f"In MonitorGetPic, sending message {messageToBeSentToConsumer}")
+            logBoth('logDebug', MonitorGetPicQueue.logSource, f"In MonitorGetPic, sending message {messageToBeSentToConsumer}", Logger.GENERAL)
             return messageToBeSentToConsumer
         else:
             # printBoldRed(f"Got no command in MonitorGetPicQueue")
@@ -180,7 +174,7 @@ def resetResults():
             resultsFromPictureAssessment = [[INVALID_RESULT, None],[INVALID_RESULT, None],[INVALID_RESULT, None]]
             resultsStatus = [False, False, False]
         except:
-            noteSuppressed()
+            pass
         resultsLock.release()
     # printBold("Exiting reset results")
 
@@ -199,7 +193,7 @@ def addAResult(anImage : np.ndarray, aResult : bool, index: int):
             resultsFromPictureAssessment[index] = (aResult, anImage)
             resultsStatus[index] = aResult
         except:
-            noteSuppressed()
+            pass
 
 
 # *******************************Results Tracking End*********************************************
@@ -222,27 +216,6 @@ class TakePictures(GenericQueueProcessor):
         self.cameraPwd = CosThetaConfigurator.getInstance().getCameraPwd()
         self.gapBetweenPictures = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
         self.camera = RTSPCam(IP=self.cameraIP, port=self.cameraPort, uid=self.cameraUID, password=self.cameraPwd, name=self.cameraID)
-        CosThetaConfigurator.addReloadListener(self._applyLiveConfiguration)
-
-    def _applyLiveConfiguration(self, changedKeys) -> None:
-        """Live configuration: the gap between pictures and the missing-frame limit apply at once; a change to the
-        camera connection (IP, port, user, password, id) needs a restart of the camera server."""
-        prefix = CosThetaConfigurator.getVisionKeyPrefix()
-        gap = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
-        if gap != self.gapBetweenPictures:
-            self.gapBetweenPictures = gap
-            printBoldYellow(f"Configuration applied while running: gap between pictures = {gap} s")
-        try:
-            limit = CosThetaConfigurator.getInstance().getMaxAllowedNoneFrameCountsInCamera()
-            if getattr(self.camera, "maxAllowedNoneFrameCountsInCamera", limit) != limit:
-                self.camera.maxAllowedNoneFrameCountsInCamera = limit
-                printBoldYellow(f"Configuration applied while running: max allowed missing frames = {limit}")
-        except Exception:
-            noteSuppressed()
-        connection = [k for k in changedKeys if k.startswith(f"{prefix}vision.camera.")]
-        if connection:
-            printBoldRed(f"Camera connection settings changed ({', '.join(connection)}): restart the camera server "
-                         f"for them to take effect")
         self.redisConnectionForHeartbeat = None
         self.clientRedisConnectedForHeartbeat = False
         self.connectToRedisForHeartbeat()
@@ -256,15 +229,13 @@ class TakePictures(GenericQueueProcessor):
             try:
                 self.redisConnectionForHeartbeat = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort, retry_on_timeout=True)
                 self.clientRedisConnectedForHeartbeat = True
+                logBoth('logInfo', TakePictures.logSource, 'Heartbeat Redis connection established', Logger.SUCCESS)
             except Exception as e:
                 self.clientRedisConnectedForHeartbeat = False
                 self.redisConnectionForHeartbeat = None
-                SlaveFileLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                          f'Could not get Redis Connection for heartbeat in {TakePictures.logSource} due to {e}',
-                                                          Logger.RISK)
-                SlaveConsoleLogger.getInstance().logTakeAction(TakePictures.logSource,
-                                                               f'Could not get Redis Connection for hearbeat in {TakePictures.logSource} due to {e}',
-                                                               Logger.RISK)
+                logBoth('logWarning', TakePictures.logSource,
+                        f'Could not get Redis Connection for heartbeat in {TakePictures.logSource} due to {e}',
+                        Logger.RISK)
 
     def addItem(self, item: Any) -> Union[Any, None]:
         if isinstance(item, dict):
@@ -275,7 +246,7 @@ class TakePictures(GenericQueueProcessor):
         return
 
     def processItem(self, item : Any) -> Any :
-        printBoldGreen(f"In TakePictures, about to process item {item}. Camera status is {self.camera.connected}")
+        logBoth('logDebug', TakePictures.logSource, f"In TakePictures, about to process item. Camera status is {self.camera.connected}", Logger.GENERAL)
         if not self.camera.connected:
             return {timeKeyString: None, FIRST_PICTURE: None, SECOND_PICTURE: None,
              THIRD_PICTURE: None, currentMachineStateKeyString: MachineState.INVALID_STATE}
@@ -285,29 +256,29 @@ class TakePictures(GenericQueueProcessor):
                 try:
                     _, firstPic = self.camera.getLatestFrame()
                 except Exception as e1:
-                    SlaveFileLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                              f"Exception getting first frame: {e1}", Logger.RISK)
+                    logBoth('logWarning', TakePictures.logSource,
+                            f"Exception getting first frame: {e1}", Logger.RISK)
 
-                printBoldGreen(f"In TakePictures, got first picture with shape {firstPic.shape if isinstance(firstPic, np.ndarray) else ''}")
+                logBoth('logDebug', TakePictures.logSource, f"Got first picture with shape {firstPic.shape if isinstance(firstPic, np.ndarray) else 'None'}", Logger.GENERAL)
 
                 time.sleep(self.gapBetweenPictures)
                 secondPic : Union[None | np.ndarray] = None
                 try:
                     _, secondPic = self.camera.getLatestFrame()
                 except Exception as e2:
-                    SlaveFileLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                              f"Exception getting second frame: {e2}", Logger.RISK)
+                    logBoth('logWarning', TakePictures.logSource,
+                            f"Exception getting second frame: {e2}", Logger.RISK)
 
-                printBoldGreen(f"In TakePictures, got second picture with shape {secondPic.shape if isinstance(secondPic, np.ndarray) else ''}")
+                logBoth('logDebug', TakePictures.logSource, f"Got second picture with shape {secondPic.shape if isinstance(secondPic, np.ndarray) else 'None'}", Logger.GENERAL)
                 time.sleep(self.gapBetweenPictures)
                 thirdPic: Union[None | np.ndarray] = None
                 try:
                     _, thirdPic = self.camera.getLatestFrame()
                 except Exception as e3:
-                    SlaveFileLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                              f"Exception getting third frame: {e3}", Logger.RISK)
+                    logBoth('logWarning', TakePictures.logSource,
+                            f"Exception getting third frame: {e3}", Logger.RISK)
 
-                printBoldGreen(f"In TakePictures, got third picture with shape {thirdPic.shape if isinstance(thirdPic, np.ndarray) else ''}")
+                logBoth('logDebug', TakePictures.logSource, f"Got third picture with shape {thirdPic.shape if isinstance(thirdPic, np.ndarray) else 'None'}", Logger.GENERAL)
 
                 # if isinstance(image, np.ndarray):
                 #     if (image.shape[1] == self.targetWidth) and (image.shape[0] == self.targetHeight):
@@ -324,20 +295,14 @@ class TakePictures(GenericQueueProcessor):
                 return {timeKeyString : item[timeKeyString], FIRST_PICTURE : firstPic, SECOND_PICTURE : secondPic, THIRD_PICTURE : thirdPic, currentMachineStateKeyString : item[currentMachineStateKeyString]}
             except Exception as e:
                 if self.debugOtherExceptions:
-                    SlaveFileLogger.getInstance().logTakeAction(TakePictures.logSource,
-                                                              f"Could not take pictures in TakePictures.{self.name} due to exception {e}",
-                                                              Logger.TAKEACTION)
-                    SlaveConsoleLogger.getInstance().logTakeAction(TakePictures.logSource,
-                                                                 f"Could not take pictures in TakePictures.{self.name} due to exception {e}",
-                                                                 Logger.TAKEACTION)
+                    logBoth('logCritical', TakePictures.logSource,
+                            f"Could not take pictures in TakePictures.{self.name} due to exception {e}",
+                            Logger.CRITICAL)
         else:
             if self.debugOtherExceptions:
-                SlaveFileLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                          f"Could not take pictures in TakePictures.{self.name} as item is None",
-                                                          Logger.RISK)
-                SlaveConsoleLogger.getInstance().logTakeNote(TakePictures.logSource,
-                                                             f"Could not take pictures in TakePictures.{self.name} as item is None",
-                                                             Logger.RISK)
+                logBoth('logWarning', TakePictures.logSource,
+                        f"Could not take pictures in TakePictures.{self.name} as item is None",
+                        Logger.RISK)
         return {timeKeyString: None, FIRST_PICTURE: None, SECOND_PICTURE: None,
                 THIRD_PICTURE: None, currentMachineStateKeyString: MachineState.INVALID_STATE}
 
@@ -364,7 +329,7 @@ class TakePictures(GenericQueueProcessor):
                 try:
                     time.sleep(cameraHeartbeatGap)
                 except:
-                    noteSuppressed()
+                    pass
         heartbeatThread = threading.Thread(name=f"Camera Heartbeat Thread", target=reportHeartbeat, args=(), daemon = True)
         heartbeatThread.start()
 
@@ -399,12 +364,10 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                 self.redisConnection = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort,
                                              retry_on_timeout=True)
                 self.clientRedisConnected = True
+                logBoth('logInfo', ConverterScalerAndProcessor.logSource, 'Redis connection established', Logger.SUCCESS)
             except:
                 self.clientRedisConnected = False
-                SlaveConsoleLogger.getInstance().logTakeAction(ConverterScalerAndProcessor.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(ConverterScalerAndProcessor.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
+                logBoth('logCritical', ConverterScalerAndProcessor.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
 
 
@@ -456,12 +419,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             except Exception as e:
                 modified_FirstPic = None
                 if self.debugOtherExceptions:
-                    SlaveFileLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                              f"Could not get the first pic due to exception {e}",
-                                                              Logger.RISK)
-                    SlaveConsoleLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                                 f"Could not get the first pic due to exception {e}",
-                                                                 Logger.RISK)
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"Could not get the first pic due to exception {e}",
+                            Logger.RISK)
 
             try:
                 if (secondPic is not None) and isinstance(secondPic, np.ndarray):
@@ -480,12 +440,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             except Exception as e:
                 modified_SecondPic = None
                 if self.debugOtherExceptions:
-                    SlaveFileLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                              f"Could not get the second pic due to exception {e}",
-                                                              Logger.RISK)
-                    SlaveConsoleLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                                 f"Could not get the second pic due to exception {e}",
-                                                                 Logger.RISK)
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"Could not get the second pic due to exception {e}",
+                            Logger.RISK)
 
             try:
                 if (thirdPic is not None) and isinstance(thirdPic, np.ndarray):
@@ -504,12 +461,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             except Exception as e:
                 modified_ThirdPic = None
                 if self.debugOtherExceptions:
-                    SlaveFileLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                              f"Could not get the third pic due to exception {e}",
-                                                              Logger.RISK)
-                    SlaveConsoleLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                                 f"Could not get the third pic due to exception {e}",
-                                                                 Logger.RISK)
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"Could not get the third pic due to exception {e}",
+                            Logger.RISK)
 
             imagesToBeProcessed = [
                 modified_FirstPic, modified_FirstPic,
@@ -521,12 +475,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             try:
                 methodToBeExecuted = ImageProcessor.methodMapping[currentMachineState]
             except Exception as e:
-                SlaveFileLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                          f"Exception getting methodMapping for state {currentMachineState}: {e}",
-                                                          Logger.RISK)
-                SlaveConsoleLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                                                          f"Exception getting methodMapping for state {currentMachineState}: {e}",
-                                                          Logger.RISK)
+                logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                        f"Exception getting methodMapping for state {currentMachineState}: {e}",
+                        Logger.RISK)
 
             # Set flags based on currentMachineState directly (not dependent on methodMapping)
             # This ensures batch processing works even when methodMapping entry is None
@@ -557,20 +508,18 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                         ImageProcessor.currentSide = None
                         ImageProcessor.clearCurrentPictures()
                         ImageProcessor.clearBearingCentreAndRadii()
-                        SlaveFileLogger.getInstance().logTakeNote(
-                            ConverterScalerAndProcessor.logSource,
-                            "Reset ImageProcessor attributes for checkKnuckle method",
-                            Logger.SUCCESS)
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "Reset ImageProcessor attributes for checkKnuckle method",
+                                Logger.SUCCESS)
                 except Exception as e:
-                    SlaveFileLogger.getInstance().logTakeNote(
-                        ConverterScalerAndProcessor.logSource,
-                        f"methodToBeExecuted lacks __name__: {methodToBeExecuted}, , error: {e}",
-                        Logger.RISK)
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"methodToBeExecuted lacks __name__: {methodToBeExecuted}, , error: {e}",
+                            Logger.RISK)
 
                 try:
                     if is_hub_and_bearing:
                         # NEW: Use batch processing instead of threading
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckHubAndBottomBearing")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckHubAndBottomBearing", Logger.GENERAL)
 
                         try:
                             # Use the first image (they're all duplicates in imagesToBeProcessed)
@@ -588,13 +537,15 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenOriginalImage = test_image
 
                             if allok:
-                                printBoldGreen(
-                                    f"[CameraProcessor] Batch processing SUCCESS with gamma={winning_gamma}")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        f"CheckHubAndBottomBearing PASSED with gamma={winning_gamma}", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] Batch processing FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckHubAndBottomBearing FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] Batch processing exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckHubAndBottomBearing exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -603,7 +554,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                     elif is_nut_and_washer:
                         # Use batch processing for CheckNutAndPlateWasher
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckNutAndPlateWasher")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNutAndPlateWasher", Logger.GENERAL)
 
                         try:
                             test_image = imagesToBeProcessed[0]  # Just need one image
@@ -620,12 +571,15 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenOriginalImage = test_image
 
                             if allok:
-                                printBoldGreen("[CameraProcessor] CheckNutAndPlateWasher PASSED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckNutAndPlateWasher PASSED", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] CheckNutAndPlateWasher FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckNutAndPlateWasher FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] CheckNutAndPlateWasher exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckNutAndPlateWasher exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -634,7 +588,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                     elif is_nocap_bunk:
                         # NEW: Use batch processing for CheckNoCapBunk
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckNoCapBunk")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoCapBunk", Logger.GENERAL)
 
                         try:
                             # Use the first image (they're all duplicates in imagesToBeProcessed)
@@ -644,19 +598,22 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                             chosenProcessedImage, allok, winning_gamma = CheckNoCapBunk.checkNoCapBunk(
                                 test_image,
-                                ImageProcessor.currentComponentQRCodeValue
+                                ImageProcessor.currentComponentQRCodeValue,
+                                bearing_geometry=ImageProcessor.bearingCentreAndRadii
                             )
 
                             chosenOriginalImage = test_image
 
                             if allok:
-                                printBoldGreen(
-                                    f"[CameraProcessor] Batch processing SUCCESS with gamma={winning_gamma}")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        f"CheckNoCapBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] Batch processing FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckNoCapBunk FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] Batch processing exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckNoCapBunk exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -665,7 +622,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                     elif is_bunk:
                         # NEW: Use batch processing for CheckBunk
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckBunk")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckBunk", Logger.GENERAL)
 
                         try:
                             # Use the first image (they're all duplicates in imagesToBeProcessed)
@@ -675,19 +632,22 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                             chosenProcessedImage, allok, winning_gamma = CheckBunk.checkBunk(
                                 test_image,
-                                ImageProcessor.currentComponentQRCodeValue
+                                ImageProcessor.currentComponentQRCodeValue,
+                                bearing_geometry=ImageProcessor.bearingCentreAndRadii
                             )
 
                             chosenOriginalImage = test_image
 
                             if allok:
-                                printBoldGreen(
-                                    f"[CameraProcessor] Batch processing SUCCESS with gamma={winning_gamma}")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        f"CheckBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] Batch processing FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckBunk FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] Batch processing exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckBunk exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -696,7 +656,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                     elif is_no_bunk:
                         # Use batch processing for CheckNoBunk (avoids ThreadPoolExecutor timeout issues)
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckNoBunk")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoBunk", Logger.GENERAL)
 
                         try:
                             test_image = imagesToBeProcessed[0]
@@ -712,12 +672,15 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenOriginalImage = test_image
 
                             if allok:
-                                printBoldGreen("[CameraProcessor] CheckNoBunk PASSED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckNoBunk PASSED", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] CheckNoBunk FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckNoBunk FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] CheckNoBunk exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckNoBunk exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -725,7 +688,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenOriginalImage = imagesToBeProcessed[0]
 
                     elif is_top_bearing:
-                        printBoldBlue("[CameraProcessor] Using batch processing for CheckTopBearing")
+                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckTopBearing", Logger.GENERAL)
                         try:
                             test_image = imagesToBeProcessed[0]
 
@@ -742,12 +705,15 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
                             if allok:
                                 ImageProcessor.bearingCentreAndRadii = geometry
-                                printBoldGreen(f"[CameraProcessor] CheckTopBearing PASSED, geometry={geometry}")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        f"CheckTopBearing PASSED, geometry={geometry}", Logger.SUCCESS)
                             else:
-                                printBoldRed("[CameraProcessor] CheckTopBearing FAILED")
+                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                        "CheckTopBearing FAILED", Logger.ISSUE)
 
                         except Exception as e:
-                            printBoldRed(f"[CameraProcessor] CheckTopBearing exception: {e}")
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"CheckTopBearing exception: {e}", Logger.ISSUE)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -766,17 +732,18 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             for index, future in enumerate(futures):
                                 processedImage, evaluation = future.result(timeout=3.0)
                                 if processedImage is not None:
-                                    printBoldGreen(
-                                        f"Shape of processedImage = {processedImage.shape}, and the evaluation result is {evaluation}")
+                                    logBoth('logDebug', ConverterScalerAndProcessor.logSource,
+                                            f"Shape of processedImage = {processedImage.shape}, evaluation result is {evaluation}",
+                                            Logger.GENERAL)
                                 else:
-                                    printBoldRed(f"processedImage is None")
+                                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                            "processedImage is None", Logger.ISSUE)
                                 addAResult(anImage=processedImage, aResult=evaluation, index=index // 2)
 
                 except Exception as e:
-                    SlaveFileLogger.getInstance().logTakeAction(ConverterScalerAndProcessor.logSource,
-                                    f'Could not complete ThreadPoolExecutor actions due to {e} in CameraProcessorServer',
-                                                                Logger.PROBLEM)
-                    printBoldRed(e)
+                    logBoth('logCritical', ConverterScalerAndProcessor.logSource,
+                            f'Could not complete ThreadPoolExecutor actions due to {e} in CameraProcessorServer',
+                            Logger.PROBLEM)
                     pass
 
             if not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
@@ -798,9 +765,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                         chosenOriginalImage = imagesToBeProcessed[index * 2]  # Map back to original (0→0, 1→2, 2→4)
                         break
             if allok:
-                printBoldGreen(f"Final result is {allok}")
+                logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: OK", Logger.SUCCESS)
             else:
-                printBoldRed(f"Final result is {allok}")
+                logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: FAILED", Logger.ISSUE)
                 sendAlarmSignalToHeartbeatServer(redisConnection=self.redisConnection)
 
             sendDataFromCameraServerToFEServer(redisConnection=self.redisConnection, originalImage=chosenOriginalImage,
@@ -810,12 +777,9 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                                                currentMachineState=currentMachineState)
         else:
             if self.debugOtherExceptions:
-                SlaveFileLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                f"Did not reduce {'None startingImage' if item is None else type(item)} in ConverterScalerAndProcessor.{self.name}",
-                                                          Logger.RISK)
-                SlaveConsoleLogger.getInstance().logTakeNote(ConverterScalerAndProcessor.logSource,
-                f"Did not reduce {'None startingImage' if item is None else type(item)} in ConverterScalerAndProcessor.{self.name}",
-                                                             Logger.RISK)
+                logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                        f"Did not reduce {'None startingImage' if item is None else type(item)} in ConverterScalerAndProcessor.{self.name}",
+                        Logger.RISK)
             sendDataFromCameraServerToFEServer(redisConnection=self.redisConnection, originalImage=None,
                                                processedImage=None, result=notok,
                                                currentMachineState=MachineState.INVALID_STATE)
@@ -878,12 +842,10 @@ class ImageProcessor():
                 ImageProcessor.redisConnectionQ = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort,
                                               retry_on_timeout=True)
                 ImageProcessor.clientRedisConnectedQ = True
+                logBoth('logInfo', ImageProcessor.logSource, 'Redis connection established', Logger.SUCCESS)
             except:
                 ImageProcessor.clientRedisConnectedQ = False
-                SlaveConsoleLogger.getInstance().logTakeAction(MonitorGetPicQueue.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(MonitorGetPicQueue.logSource,
-                                                             f'Could not get Redis Connection', Logger.PROBLEM)
+                logBoth('logCritical', ImageProcessor.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
 
 
@@ -904,16 +866,16 @@ class ImageProcessor():
             ImageProcessor.currentPictures[noBunkPictureKeyString] = None
             ImageProcessor.currentPictures[capPressBunkPictureKeyString] = None
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeNote(ImageProcessor.logSource,
-                                                      f"Exception in clearCurrentPictures: {e}", Logger.RISK)
+            logBoth('logWarning', ImageProcessor.logSource,
+                    f"Exception in clearCurrentPictures: {e}", Logger.RISK)
 
     @classmethod
     def clearBearingCentreAndRadii(cls):
         try:
             ImageProcessor.bearingCentreAndRadii = None
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeNote(ImageProcessor.logSource,
-                                                      f"Exception in clearBearingCentreAndRadii: {e}", Logger.RISK)
+            logBoth('logWarning', ImageProcessor.logSource,
+                    f"Exception in clearBearingCentreAndRadii: {e}", Logger.RISK)
 
     @classmethod
     def setCurrentComponentName(cls, qrCodeValue : str | None = None):
@@ -927,9 +889,9 @@ class ImageProcessor():
         try:
             ImageProcessor.connectToRedis()
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeNote(ImageProcessor.logSource,
-                                                      f"Could not connect to Redis in fetchAndPopulateCurrentComponentQRCode: {e}",
-                                                      Logger.RISK)
+            logBoth('logWarning', ImageProcessor.logSource,
+                    f"Could not connect to Redis in fetchAndPopulateCurrentComponentQRCode: {e}",
+                    Logger.RISK)
             return
 
         received: bool = False
@@ -943,15 +905,15 @@ class ImageProcessor():
                 if received:
                     ImageProcessor.setCurrentComponentName(qrCodeValue=comp_QRCode)
             except Exception as e:
-                SlaveFileLogger.getInstance().logTakeNote(ImageProcessor.logSource,
-                                                          f"Exception reading QR code: {e}", Logger.RISK)
+                logBoth('logWarning', ImageProcessor.logSource,
+                        f"Exception reading QR code: {e}", Logger.RISK)
             time.sleep(0.15)
 
     @classmethod
     def checkKnuckle(cls, anImage: np.ndarray, index: int = -1, gamma : float = 2.0) -> Tuple[np.ndarray, bool]:
 
         try:
-            printBoldGreen("Entered checkKnuckle() of class ImageProcessor")
+            logBoth('logDebug', ImageProcessor.logSource, "Entered checkKnuckle() of class ImageProcessor", Logger.GENERAL)
             with ImageProcessor.getQRCodeLock:
                 if ImageProcessor.currentComponentQRCodeValue is None:
                     ImageProcessor.fetchAndPopulateCurrentComponentQRCode()
@@ -974,10 +936,9 @@ class ImageProcessor():
             return CheckKnuckle.checkKnuckle(anImage=anImage, currentPictures=ImageProcessor.currentPictures,
                                              componentQRCode=ImageProcessor.currentComponentQRCodeValue, gamma=gamma)
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(ImageProcessor.logSource,
-                                                        f"Exception in ImageProcessor.checkKnuckle: {e}",
-                                                        Logger.PROBLEM)
-            printBoldRed(f"Exception in ImageProcessor.checkKnuckle: {e}")
+            logBoth('logCritical', ImageProcessor.logSource,
+                    f"Exception in ImageProcessor.checkKnuckle: {e}",
+                    Logger.PROBLEM)
             return anImage, False
 
     @classmethod
@@ -1011,10 +972,9 @@ class ImageProcessor():
             return annotated_img, is_present
 
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(ImageProcessor.logSource,
-                                                        f"Exception in ImageProcessor.checkTopBearing: {e}",
-                                                        Logger.PROBLEM)
-            printBoldRed(f"Exception in ImageProcessor.checkTopBearing: {e}")
+            logBoth('logCritical', ImageProcessor.logSource,
+                    f"Exception in ImageProcessor.checkTopBearing: {e}",
+                    Logger.PROBLEM)
             return anImage, False
 
     @classmethod
@@ -1038,10 +998,9 @@ class ImageProcessor():
                                                                  componentQRCode=ImageProcessor.currentComponentQRCodeValue,
                                                                  gamma=gamma)
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(ImageProcessor.logSource,
-                                                        f"Exception in ImageProcessor.checkSplitPinAndWasher: {e}",
-                                                        Logger.PROBLEM)
-            printBoldRed(f"Exception in ImageProcessor.checkSplitPinAndWasher: {e}")
+            logBoth('logCritical', ImageProcessor.logSource,
+                    f"Exception in ImageProcessor.checkSplitPinAndWasher: {e}",
+                    Logger.PROBLEM)
             return anImage, False
 
     @classmethod
@@ -1065,10 +1024,9 @@ class ImageProcessor():
                                      componentQRCode=ImageProcessor.currentComponentQRCodeValue,
                                      gamma=gamma)
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(ImageProcessor.logSource,
-                                                        f"Exception in ImageProcessor.checkCap: {e}",
-                                                        Logger.PROBLEM)
-            printBoldRed(f"Exception in ImageProcessor.checkCap: {e}")
+            logBoth('logCritical', ImageProcessor.logSource,
+                    f"Exception in ImageProcessor.checkCap: {e}",
+                    Logger.PROBLEM)
             return anImage, False
 
     @classmethod
@@ -1092,10 +1050,9 @@ class ImageProcessor():
                                            componentQRCode=ImageProcessor.currentComponentQRCodeValue,
                                            gamma=gamma)
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(ImageProcessor.logSource,
-                                                        f"Exception in ImageProcessor.checkNoBunk: {e}",
-                                                        Logger.PROBLEM)
-            printBoldRed(f"Exception in ImageProcessor.checkNoBunk: {e}")
+            logBoth('logCritical', ImageProcessor.logSource,
+                    f"Exception in ImageProcessor.checkNoBunk: {e}",
+                    Logger.PROBLEM)
             return anImage, False
 
     methodMapping: dict = {
@@ -1264,23 +1221,6 @@ def CameraServer(mode : str = "Test"):
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
 
-    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
-    # re-tune is always visible in the logs. Purely informational - never stops the server.
-    try:
-        from camera.VisionConfig import describeVisionParameters, getRegistry
-        retuned = describeVisionParameters(onlyChanged=True)
-        if retuned:
-            message = (f"Vision parameters: {len(retuned)} of {len(getRegistry())} differ from the built-in defaults:\n  "
-                       + "\n  ".join(retuned))
-            printBoldBlue(message)
-            SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.ISSUE)
-        else:
-            message = f"Vision parameters: all {len(getRegistry())} at the built-in defaults"
-            printLight(message)
-            SlaveFileLogger.getInstance().logTakeAction(logSource, message, Logger.SUCCESS)
-    except Exception as e:
-        printBoldRed(f"Could not report vision parameters: {e}")
-
     # imageWriter : GenericQueueProcessor = None
     # if mode.upper() == "TEST":
     #     imageWriter = ImageWriter(name="ImageWriter", savingDir=CosThetaConfigurator.getInstance().getMainPictureSavingDirForModeTrial())
@@ -1291,37 +1231,26 @@ def CameraServer(mode : str = "Test"):
         # takePictures = TakePictures(name="TakePictures", cameraId=camId, consumer=converterScalerAndProcessor)
         takePictures = TakePictures(name="TakePictures", consumer=converterScalerAndProcessor)
         monitorGetPic = MonitorGetPicQueue(name="MonitorGetPicQueue", consumer=takePictures)
-        printLight("Declared ConverterAndScaler, TakePictures, MonitorGetPic")
         converterScalerAndProcessor.start()
-        SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                       f"Started thread ConverterScalerAndProcessor",
-                                                       Logger.SUCCESS)
-        printLight("Started ConverterAndScaler")
+        logBoth('logInfo', logSource, f"Started thread ConverterScalerAndProcessor", Logger.SUCCESS)
         takePictures.start()
-        SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                       f"Started thread TakePictures",
-                                                       Logger.SUCCESS)
-        printLight("Started TakePictures")
+        logBoth('logInfo', logSource, f"Started thread TakePictures", Logger.SUCCESS)
         monitorGetPic.start()
-        SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                       f"Started thread MonitorGetPicQ",
-                                                       Logger.SUCCESS)
-        printLight("Started MonitorGetPic")
-        printBoldBlue(f"*****************")
-        printBlue(f"Started Camera Server")
-        printBoldBlue(f"*****************")
-
+        logBoth('logInfo', logSource, f"Started thread MonitorGetPicQ", Logger.SUCCESS)
+        logBoth('logCritical', logSource, f"************", Logger.SUCCESS)
+        logBoth('logCritical', logSource, f"Started Camera Server", Logger.SUCCESS)
+        logBoth('logCritical', logSource, f"************", Logger.SUCCESS)
         monitorGetPic.join()
         takePictures.join()
         converterScalerAndProcessor.join()
     except Exception as e:
-        printBoldRed(f"Got Exception {e} while declaring Processors in Camera Server")
-    printBoldRed(f"About to exit Camera Server")
+        logBoth('logCritical', logSource, f"Got Exception {e} while declaring Processors in Camera Server", Logger.PROBLEM)
+    logBoth('logInfo', logSource, "About to exit Camera Server", Logger.GENERAL)
     sys.exit(0)
 
 # **************************************************************************************************
 
 def startCameraServer(mode: str = "Test"):
-    cameraServer = CameraServer(mode=mode)
+    CameraServer(mode=mode)
 
 # startCameraServer()

@@ -22,11 +22,10 @@ import torch
 from numpy import ndarray
 
 from BaseUtils import *
-from logutils.SlaveLoggers import *
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
-from camera.VisionConfig import vInt
-from utils.CosThetaPrintUtils import *
 from concurrent.futures import ThreadPoolExecutor
 
 # Import the core segmentation engine (STANDALONE VERSION v2.0)
@@ -39,16 +38,9 @@ try:
 
     SAM_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: HubAndBearingSegmenter not available: {e}")
+    logBoth('logWarning', __name__, f"Warning: HubAndBearingSegmenter not available: {e}", MessageType.RISK)
     SAM_AVAILABLE = False
     HubAndBearingSegmenter = None  # Prevents NameError
-
-# "No bearing in centre" check: annulus (full-image pixels) whose mean gray value (after gamma 3.0) must stay below the limit
-HUB_CENTRE_CHECK_X = vInt("vision.hub.centre.check.x", 635)
-HUB_CENTRE_CHECK_Y = vInt("vision.hub.centre.check.y", 350)
-HUB_CENTRE_CHECK_OUTER_RADIUS = vInt("vision.hub.centre.check.outer.radius", 60)
-HUB_CENTRE_CHECK_INNER_RADIUS = vInt("vision.hub.centre.check.inner.radius", 20)
-HUB_CENTRE_CHECK_MAX_MEAN = vInt("vision.hub.centre.check.max.mean", 144)
 
 
 def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
@@ -61,31 +53,33 @@ def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
     Returns:
         List of gamma values in priority order
     """
+    _src = __name__
+
     # Calculate average brightness (0-255)
     brightness = np.mean(image)
 
-    printBoldBlue(f"[SmartGamma] Image brightness: {brightness:.1f}")
+    logBoth('logDebug', _src, f"[SmartGamma] Image brightness: {brightness:.1f}", MessageType.GENERAL)
 
     if brightness < 60:
         # Very dark image - needs strong brightening
         gamma_order = [4, 6, 3, 5, 2, 1]
-        printBoldBlue("[SmartGamma] Very dark → trying high gammas first")
+        logBoth('logDebug', _src, "[SmartGamma] Very dark → trying high gammas first", MessageType.GENERAL)
     elif brightness < 90:
         # Dark image - moderate brightening
         gamma_order = [3, 4, 2, 5, 1, 6]
-        printBoldBlue("[SmartGamma] Dark → trying medium-high gammas")
+        logBoth('logDebug', _src, "[SmartGamma] Dark → trying medium-high gammas", MessageType.GENERAL)
     elif brightness < 120:
         # Normal brightness
         gamma_order = [1, 3, 2, 4, 5, 6]
-        printBoldBlue("[SmartGamma] Normal → standard order")
+        logBoth('logDebug', _src, "[SmartGamma] Normal → standard order", MessageType.GENERAL)
     elif brightness < 150:
         # Slightly bright
         gamma_order = [1, 2, 3, 4, 5, 6]
-        printBoldBlue("[SmartGamma] Bright → trying lower gammas")
+        logBoth('logDebug', _src, "[SmartGamma] Bright → trying lower gammas", MessageType.GENERAL)
     else:
         # Very bright - may need darkening
         gamma_order = [1, 2, 3, 4, 5, 6]
-        printBoldBlue("[SmartGamma] Very bright → trying lowest gammas")
+        logBoth('logDebug', _src, "[SmartGamma] Very bright → trying lowest gammas", MessageType.GENERAL)
 
     return gamma_order
 
@@ -145,6 +139,8 @@ class CheckHubAndBottomBearing:
         Returns:
             True if average pixel value < 144 (no bearing), False otherwise
         """
+        _src = getFullyQualifiedName(__file__, cls)
+
         # Get gamma LUT
         gamma_lut = cls._get_gamma_lut()
 
@@ -157,8 +153,8 @@ class CheckHubAndBottomBearing:
         # Create annular mask (center: 635, 350; inner: 20; outer: 60)
         h, w = gray.shape
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_OUTER_RADIUS, 255, -1)  # Outer circle
-        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_INNER_RADIUS, 0, -1)  # Inner circle (hole)
+        cv2.circle(mask, (635, 350), 60, 255, -1)  # Outer circle
+        cv2.circle(mask, (635, 350), 20, 0, -1)  # Inner circle (hole)
 
         # Extract pixels within mask
         masked_pixels = gray[mask > 0]
@@ -166,10 +162,10 @@ class CheckHubAndBottomBearing:
         # Calculate average
         average = np.mean(masked_pixels)
 
-        printBoldBlue(f"[ensureNoBearingInCentre] Average pixel value: {average:.2f}")
+        logBoth('logDebug', _src, f"[ensureNoBearingInCentre] Average pixel value: {average:.2f}", MessageType.GENERAL)
 
         # Return True if average < 144 (no bearing present)
-        return average < HUB_CENTRE_CHECK_MAX_MEAN
+        return average < 144
 
     @staticmethod
     def checkHubAndBottomBearing(
@@ -200,10 +196,12 @@ class CheckHubAndBottomBearing:
         - Count doesn't match expected
         - Detected model doesn't match expected (mismatch detection - v2.0)
         """
-        printBoldBlue(
-            f"CheckHubAndBottomBearing.checkHubAndBottomBearing() called with "
-            f"anImage = {anImage.shape if anImage is not None else 'None'}"
-        )
+        _src = getFullyQualifiedName(__file__, CheckHubAndBottomBearing)
+
+        logBoth('logDebug', _src,
+                f"CheckHubAndBottomBearing.checkHubAndBottomBearing() called with "
+                f"anImage = {anImage.shape if anImage is not None else 'None'}",
+                MessageType.GENERAL)
 
         if anImage is None or componentQRCode is None:
             return None, False, None
@@ -212,28 +210,28 @@ class CheckHubAndBottomBearing:
         model_name, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(componentQRCode)
 
         if model_name not in ["DOST", "DOSTPLUS"]:
-            printBoldRed(f"[CheckHubAndBottomBearing] Unknown model: {model_name}")
+            logBoth('logError', _src, f"[CheckHubAndBottomBearing] Unknown model: {model_name}", MessageType.ISSUE)
             return anImage, False, None
 
         expected_count = 4 if model_name == "DOST" else 5
-        printBoldBlue(f"[CheckHubAndBottomBearing] Expected model: {model_name}, count: {expected_count}")
+        logBoth('logDebug', _src, f"[CheckHubAndBottomBearing] Expected model: {model_name}, count: {expected_count}", MessageType.GENERAL)
 
         # Check if bearing is present in center region
         if not CheckHubAndBottomBearing.ensureNoBearingInCentre(anImage):
-            printBoldRed("[CheckHubAndBottomBearing] Bearing detected in center - should not be present")
+            logBoth('logError', _src, "[CheckHubAndBottomBearing] Bearing detected in center - should not be present", MessageType.ISSUE)
             return anImage, False, None
 
-        printBoldGreen("[CheckHubAndBottomBearing] No bearing in center - proceeding with verification")
+        logBoth('logInfo', _src, "[CheckHubAndBottomBearing] No bearing in center - proceeding with verification", MessageType.SUCCESS)
 
         # Get segmenter
         segmenter = HubAndBearingSegmenter.get_instance() if SAM_AVAILABLE else None
         if segmenter is None:
-            printBoldRed("[CheckHubAndBottomBearing] Segmenter not available")
+            logBoth('logError', _src, "[CheckHubAndBottomBearing] Segmenter not available", MessageType.ISSUE)
             return anImage, False, None
 
         # Convert BGR to RGB (camera provides BGR, segmenter expects RGB)
         anImage_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
-        printBoldBlue("[CheckHubAndBottomBearing] Converted BGR to RGB")
+        logBoth('logDebug', _src, "[CheckHubAndBottomBearing] Converted BGR to RGB", MessageType.GENERAL)
 
         try:
             # SMART GAMMA ORDERING
@@ -242,8 +240,8 @@ class CheckHubAndBottomBearing:
             else:
                 gamma_values = [1, 2, 3, 4, 5, 6]
 
-            printBoldBlue(f"[LazyEval] Testing gammas in order: {gamma_values}")
-            printBoldBlue(f"[LazyEval] Will stop as soon as valid detection found")
+            logBoth('logDebug', _src, f"[LazyEval] Testing gammas in order: {gamma_values}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[LazyEval] Will stop as soon as valid detection found", MessageType.GENERAL)
 
             # Helper function for parallel preprocessing
             def preprocess_single_gamma(gamma):
@@ -260,28 +258,28 @@ class CheckHubAndBottomBearing:
                 future_next = None
 
                 for idx, gamma in enumerate(gamma_values):
-                    printBoldBlue(f"[LazyEval] Processing gamma {gamma} (position {idx + 1}/{len(gamma_values)})...")
+                    logBoth('logDebug', _src, f"[LazyEval] Processing gamma {gamma} (position {idx + 1}/{len(gamma_values)})...", MessageType.GENERAL)
 
                     # If we have a future from previous iteration, get its result
                     # Otherwise, preprocess current gamma
                     if future_next is not None:
                         preprocessed = future_next.result()
-                        printBoldBlue(f"[LazyEval] Used parallel-preprocessed gamma {gamma}")
+                        logBoth('logDebug', _src, f"[LazyEval] Used parallel-preprocessed gamma {gamma}", MessageType.GENERAL)
                     else:
                         preprocessed = preprocess_single_gamma(gamma)
-                        printBoldBlue(f"[LazyEval] Preprocessed gamma {gamma}")
+                        logBoth('logDebug', _src, f"[LazyEval] Preprocessed gamma {gamma}", MessageType.GENERAL)
 
                     # Start preprocessing NEXT gamma in parallel while GPU is busy
                     # (if there is a next gamma)
                     if idx + 1 < len(gamma_values):
                         next_gamma = gamma_values[idx + 1]
                         future_next = executor.submit(preprocess_single_gamma, next_gamma)
-                        printBoldBlue(f"[LazyEval] Started parallel preprocessing of gamma {next_gamma}")
+                        logBoth('logDebug', _src, f"[LazyEval] Started parallel preprocessing of gamma {next_gamma}", MessageType.GENERAL)
                     else:
                         future_next = None
 
                     # Run GPU segmentation on current gamma
-                    printBoldBlue(f"[LazyEval] Running GPU segmentation on gamma {gamma}...")
+                    logBoth('logDebug', _src, f"[LazyEval] Running GPU segmentation on gamma {gamma}...", MessageType.GENERAL)
                     count, groups_with_tuples, detected_model, is_match = \
                         segmenter.segment_holes(preprocessed, model_type=model_name)
 
@@ -291,9 +289,9 @@ class CheckHubAndBottomBearing:
 
                         # v2.0: Check for model mismatch FIRST (safety-critical)
                         if not is_match:
-                            printBoldRed(f"[LazyEval] *** MISMATCH DETECTED at gamma {gamma} ***")
-                            printBoldRed(f"  Expected: {model_name}, Detected: {detected_model}")
-                            printBoldRed(f"  WRONG COMPONENT may be presented!")
+                            logBoth('logError', _src, f"[LazyEval] *** MISMATCH DETECTED at gamma {gamma} ***", MessageType.PROBLEM)
+                            logBoth('logError', _src, f"  Expected: {model_name}, Detected: {detected_model}", MessageType.PROBLEM)
+                            logBoth('logError', _src, f"  WRONG COMPONENT may be presented!", MessageType.PROBLEM)
 
                             # Cancel any pending preprocessing
                             if future_next is not None:
@@ -316,17 +314,20 @@ class CheckHubAndBottomBearing:
 
                         # Model matches - now check count
                         if winning_group and len(winning_group) == expected_count:
-                            printBoldGreen(
-                                f"[LazyEval] >>> WINNER: Gamma {gamma} (stopped at position {idx + 1}/{len(gamma_values)}) <<<")
-                            printBoldGreen(
-                                f"  Detected: {detected_model}, Count: {len(winning_group)}, Match: {is_match}")
+                            logBoth('logInfo', _src,
+                                    f"[LazyEval] >>> WINNER: Gamma {gamma} (stopped at position {idx + 1}/{len(gamma_values)}) <<<",
+                                    MessageType.SUCCESS)
+                            logBoth('logInfo', _src,
+                                    f"  Detected: {detected_model}, Count: {len(winning_group)}, Match: {is_match}",
+                                    MessageType.SUCCESS)
 
                             # Cancel any pending preprocessing (early termination!)
                             if future_next is not None:
                                 cancelled = future_next.cancel()
                                 if cancelled:
-                                    printBoldBlue(
-                                        f"[LazyEval] Cancelled preprocessing of gamma {gamma_values[idx + 1]} (not needed)")
+                                    logBoth('logDebug', _src,
+                                            f"[LazyEval] Cancelled preprocessing of gamma {gamma_values[idx + 1]} (not needed)",
+                                            MessageType.GENERAL)
 
                             result_image = paint_masks_on_image(anImage_rgb, winning_group, color=(0, 255, 0))
 
@@ -339,19 +340,20 @@ class CheckHubAndBottomBearing:
                         else:
                             # Count mismatch (not a model mismatch)
                             actual_count = len(winning_group) if winning_group else 0
-                            printBoldYellow(
-                                f"[LazyEval] Gamma {gamma}: Count mismatch - expected {expected_count}, got {actual_count}")
+                            logBoth('logWarning', _src,
+                                    f"[LazyEval] Gamma {gamma}: Count mismatch - expected {expected_count}, got {actual_count}",
+                                    MessageType.RISK)
                             # Continue to next gamma
                     else:
-                        printBoldYellow(f"[LazyEval] Gamma {gamma}: No valid detections")
+                        logBoth('logWarning', _src, f"[LazyEval] Gamma {gamma}: No valid detections", MessageType.RISK)
                         # Continue to next gamma
 
             # No success after trying all gammas
-            printBoldRed("[LazyEval] No valid detections in any gamma")
+            logBoth('logError', _src, "[LazyEval] No valid detections in any gamma", MessageType.ISSUE)
             return cv2.cvtColor(anImage_rgb, cv2.COLOR_RGB2BGR), False, None
 
         except Exception as e:
-            printBoldRed(f"[LazyEval] Exception: {e}")
+            logBoth('logCritical', _src, f"[LazyEval] Exception: {e}", MessageType.PROBLEM)
             import traceback
             traceback.print_exc()
             return cv2.cvtColor(anImage_rgb, cv2.COLOR_RGB2BGR), False, None

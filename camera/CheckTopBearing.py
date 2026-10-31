@@ -28,12 +28,11 @@ warnings.filterwarnings('ignore', '.*h264.*')
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
-    import logutils.SlaveLoggers
     from utils.CosThetaFileUtils import *
     from utils.RedisUtils import *
     from BaseUtils import *
-    from logutils import SlaveLoggers
-    from logutils.SlaveLoggers import *
+    from logutils.SlaveLoggers import logBoth
+    from logutils.Logger import MessageType
     from Configuration import *
     CosThetaConfigurator.getInstance()
 except ImportError:
@@ -41,14 +40,18 @@ except ImportError:
     DOST = "DOST"
     hubAndBottomBearingPictureKeyString = "hubAndBottomBearingPicture"
 
-    def printBoldBlue(msg):
-        print(f"\033[1;34m{msg}\033[0m")
+    def logBoth(level, source, msg, messageType=None):
+        colours = {'logInfo': '\033[1;32m', 'logError': '\033[1;31m', 'logWarning': '\033[1;33m', 'logDebug': '\033[1;34m', 'logCritical': '\033[1;31m'}
+        reset = '\033[0m'
+        colour = colours.get(level, '')
+        print(f"{colour}{msg}{reset}")
 
-    def printBoldGreen(msg):
-        print(f"\033[1;32m{msg}\033[0m")
-
-    def printBoldRed(msg):
-        print(f"\033[1;31m{msg}\033[0m")
+    class MessageType:
+        GENERAL = 1
+        SUCCESS = 2
+        RISK = 3
+        ISSUE = 4
+        PROBLEM = 5
 
     def saveImage(img, name):
         pass
@@ -64,7 +67,6 @@ from utils.ImageNormalisationWithMask import (
     pixBackgroundNorm_masked,
     pixContrastNorm_masked,
     relative_gamma_masked)
-from camera.VisionConfig import vInt, vFloat, vList, vPoints
 
 
 # =============================================================================
@@ -72,22 +74,8 @@ from camera.VisionConfig import vInt, vFloat, vList, vPoints
 # =============================================================================
 
 # Detection parameters from TopBearingSegmentation
-MAX_ALLOWED_CENTER_PERCENT_DEVIATION = vFloat("vision.unused.topbearing.max.allowed.center.percent.deviation", 25.0)
-PERCENTILE_CUT_OFF_FOR_BLACK_PIXELS = vInt("vision.topbearing.percentile.cut.off.for.black.pixels", 25)
-
-# Branch acceptance: a branch is valid only if min(score_A, score_B) > LOWER_SCORE_THRESHOLD AND average_G > AVERAGE_G_THRESHOLD
-LOWER_SCORE_THRESHOLD = vFloat("vision.topbearing.lower.score.threshold", 0.65)
-AVERAGE_G_THRESHOLD = vInt("vision.topbearing.average.g.threshold", 77)
-# Radius (px, in the annular crop) of the disc whose pixels set the binarisation percentile threshold
-DETECTION_MASK_RADIUS = vInt("vision.topbearing.detection.mask.radius", 60)
-# Radial tracing: accepted edge distances as multiples of PROMPT_RADIUS (inner edge / outer edge)
-INNER_EDGE_MIN_DIST_FACTOR = vFloat("vision.topbearing.inner.edge.min.dist.factor", 0.65)
-INNER_EDGE_MAX_DIST_FACTOR = vFloat("vision.topbearing.inner.edge.max.dist.factor", 1.20)
-OUTER_EDGE_MIN_DIST_FACTOR = vFloat("vision.topbearing.outer.edge.min.dist.factor", 0.80)
-OUTER_EDGE_MAX_DIST_FACTOR = vFloat("vision.topbearing.outer.edge.max.dist.factor", 1.60)
-# Expected annulus thickness (px): target for percentile selection, and for the ideal area in score_B
-TARGET_RING_THICKNESS = vInt("vision.topbearing.target.ring.thickness", 14)
-TARGET_RING_THICKNESS_FOR_AREA_SCORE = vInt("vision.topbearing.target.ring.thickness.for.area.score", 15)
+MAX_ALLOWED_CENTER_PERCENT_DEVIATION = 25.0
+PERCENTILE_CUT_OFF_FOR_BLACK_PIXELS = 25
 
 # ---------------------------------------------------------------------------
 # Diagnostic print verbosity flags (set True to enable)
@@ -107,19 +95,19 @@ class CheckTopBearing:
     """
 
     # Annular disc parameters (from TopBearingSegmentation defaults)
-    ANNULAR_CENTER_X = vInt("vision.topbearing.annular.center.x", 632)
-    ANNULAR_CENTER_Y = vInt("vision.topbearing.annular.center.y", 360)
-    ANNULAR_OUTER_RADIUS = vInt("vision.topbearing.annular.outer.radius", 120)
-    ANNULAR_INNER_RADIUS = vInt("vision.topbearing.annular.inner.radius", 0)  # Set to 0 to include full disc
+    ANNULAR_CENTER_X = 632
+    ANNULAR_CENTER_Y = 360
+    ANNULAR_OUTER_RADIUS = 120
+    ANNULAR_INNER_RADIUS = 0  # Set to 0 to include full disc
 
     # Background normalization parameters
-    BG_NORM_SX = vInt("vision.topbearing.bg.norm.sx", 40)
-    BG_NORM_SY = vInt("vision.topbearing.bg.norm.sy", 40)
+    BG_NORM_SX = 40
+    BG_NORM_SY = 40
 
     # Contrast normalization parameters
     APPLY_CONTRAST_NORM = True
-    CONTRAST_NORM_SX = vInt("vision.topbearing.contrast.norm.sx", 10)
-    CONTRAST_NORM_SY = vInt("vision.topbearing.contrast.norm.sy", 10)
+    CONTRAST_NORM_SX = 10
+    CONTRAST_NORM_SY = 10
 
     # Gamma and filtering
     ALTER_GAMMA = True
@@ -134,20 +122,20 @@ class CheckTopBearing:
     REMOVE_INNER_REGION = False
 
     # Point prompt radius for bearing ring detection
-    PROMPT_RADIUS = vInt("vision.topbearing.prompt.radius", 40)
+    PROMPT_RADIUS = 40
 
     # Scoring mode
     SCORING_MODE = "InlierRatio+ArcCov"  # or "InlierRatio+ArcCov+Area"
 
     # Final gamma check threshold (from original CheckTopBearing)
-    FINAL_GAMMA_THRESHOLD = vFloat("vision.topbearing.final.gamma.threshold", 30.0)
-    FINAL_GAMMA_VALUE = vFloat("vision.topbearing.final.gamma.value", 3.0)
+    FINAL_GAMMA_THRESHOLD = 30.0
+    FINAL_GAMMA_VALUE = 3.0
 
     # Gamma values to test in parallel branches
-    GAMMA_CANDIDATES = vList("vision.topbearing.gamma.candidates", [3.0, 4.0, 5.0, 6.0, 6.5])
+    GAMMA_CANDIDATES = [3.0, 4.0, 5.0, 6.0, 6.5]
 
     # Center offsets to test
-    CENTER_OFFSETS = vPoints("vision.topbearing.center.offsets", [(0, 0), (0, -10)])  # Relative to base center
+    CENTER_OFFSETS = [(0, 0), (0, -10)]  # Relative to base center
 
     # Pre-calculated gamma LUTs
     _gamma_luts = {}
@@ -313,6 +301,7 @@ class CheckTopBearing:
 
         All variable values are passed via the *cfg* dict.
         """
+        _src = getFullyQualifiedName(__file__, cls)
         branch_images: Dict[str, Any] = {}
 
         # Unpack pre-read config (plain Python values)
@@ -368,8 +357,10 @@ class CheckTopBearing:
                 branch_images['step4_name'] = "Gamma (skipped)"
 
         if PRINT_IMAGE_TRANSFORMATION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
-                  f"Step3: {branch_images['step3_name']}  |  Step4: {branch_images['step4_name']}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
+                    f"Step3: {branch_images['step3_name']}  |  Step4: {branch_images['step4_name']}",
+                    MessageType.GENERAL)
 
         # --- Step 5: Contrast Normalisation ---
         if apply_contrast_norm:
@@ -388,8 +379,10 @@ class CheckTopBearing:
         branch_images['step6_name'] = "Bilateral (15,30,40)"
 
         if PRINT_IMAGE_TRANSFORMATION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
-                  f"Step5: {branch_images['step5_name']}  |  Step6: {branch_images['step6_name']}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
+                    f"Step5: {branch_images['step5_name']}  |  Step6: {branch_images['step6_name']}",
+                    MessageType.GENERAL)
 
         # --- Step 7: Use Channel ---
         if channel_choice != "All channels":
@@ -416,8 +409,10 @@ class CheckTopBearing:
             branch_images['step8_name'] = "Invert (skipped)"
 
         if PRINT_IMAGE_TRANSFORMATION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
-                  f"Step7: {branch_images['step7_name']}  |  Step8: {branch_images['step8_name']}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
+                    f"Step7: {branch_images['step7_name']}  |  Step8: {branch_images['step8_name']}",
+                    MessageType.GENERAL)
 
         # =================================================================
         # Step 9: Annular ring detection via radial tracing
@@ -432,7 +427,7 @@ class CheckTopBearing:
         morph_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         gray_det = cv2.morphologyEx(gray_det, cv2.MORPH_OPEN, morph_kernel)
 
-        detection_radius = DETECTION_MASK_RADIUS
+        detection_radius = 60
         det_mask = np.zeros((h_det, w_det), dtype=np.uint8)
         cv2.circle(det_mask, (cx, cy), detection_radius, 255, -1)
 
@@ -454,18 +449,20 @@ class CheckTopBearing:
 
         if PRINT_IMAGE_TRANSFORMATION_DETAILS:
             white_pct = np.sum(binary_img == 255) / max(binary_img.size, 1) * 100
-            printBoldBlue(f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
-                  f"Binarisation: thresh={threshold_value}, white={white_pct:.1f}%")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({det_cx},{det_cy})] "
+                    f"Binarisation: thresh={threshold_value}, white={white_pct:.1f}%",
+                    MessageType.GENERAL)
 
         # --- Radial tracing with modified start and guard ---
         list_a = []
         list_b = []
 
         # Separate validation ranges for inner vs outer edge.
-        min_valid_dist_inner = prompt_r * INNER_EDGE_MIN_DIST_FACTOR
-        max_valid_dist_inner = prompt_r * INNER_EDGE_MAX_DIST_FACTOR
-        min_valid_dist_outer = prompt_r * OUTER_EDGE_MIN_DIST_FACTOR
-        max_valid_dist_outer = prompt_r * OUTER_EDGE_MAX_DIST_FACTOR
+        min_valid_dist_inner = prompt_r * 0.65
+        max_valid_dist_inner = prompt_r * 1.20
+        min_valid_dist_outer = prompt_r * 0.80
+        max_valid_dist_outer = prompt_r * 1.60
 
         # Modification 1: Start scanning from prompt_r - 18
         scan_start = max(1, prompt_r - 18)
@@ -510,11 +507,13 @@ class CheckTopBearing:
                     list_b.append(found_b)
 
         if PRINT_RADIAL_TRACING_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Radial tracing: "
-                  f"list_a(inner)={len(list_a)} pts, list_b(outer)={len(list_b)} pts, "
-                  f"scan_start={scan_start}, guard={guard_distance}, "
-                  f"innerRange=[{min_valid_dist_inner:.0f},{max_valid_dist_inner:.0f}], "
-                  f"outerRange=[{min_valid_dist_outer:.0f},{max_valid_dist_outer:.0f}]")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] Radial tracing: "
+                    f"list_a(inner)={len(list_a)} pts, list_b(outer)={len(list_b)} pts, "
+                    f"scan_start={scan_start}, guard={guard_distance}, "
+                    f"innerRange=[{min_valid_dist_inner:.0f},{max_valid_dist_inner:.0f}], "
+                    f"outerRange=[{min_valid_dist_outer:.0f},{max_valid_dist_outer:.0f}]",
+                    MessageType.GENERAL)
 
         # =====================================================================
         # Fit circles via RANSAC then refine using anchor + thickness
@@ -531,11 +530,13 @@ class CheckTopBearing:
         arc_cov_b = cls._compute_arc_coverage(list_b, center_b)
 
         if PRINT_CIRCLE_FITTING_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] "
-                  f"CircleA(inner): c=({center_a[0]:.1f},{center_a[1]:.1f}) r={radius_a:.1f} "
-                  f"rmse={rmse_a:.3f} inlRat={inlier_ratio_a:.2f} arcCov={arc_cov_a:.2f}  |  "
-                  f"CircleB(outer): c=({center_b[0]:.1f},{center_b[1]:.1f}) r={radius_b:.1f} "
-                  f"rmse={rmse_b:.3f} inlRat={inlier_ratio_b:.2f} arcCov={arc_cov_b:.2f}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] "
+                    f"CircleA(inner): c=({center_a[0]:.1f},{center_a[1]:.1f}) r={radius_a:.1f} "
+                    f"rmse={rmse_a:.3f} inlRat={inlier_ratio_a:.2f} arcCov={arc_cov_a:.2f}  |  "
+                    f"CircleB(outer): c=({center_b[0]:.1f},{center_b[1]:.1f}) r={radius_b:.1f} "
+                    f"rmse={rmse_b:.3f} inlRat={inlier_ratio_b:.2f} arcCov={arc_cov_b:.2f}",
+                    MessageType.GENERAL)
 
         # =================================================================
         # Calculate average G value from original annular region
@@ -574,8 +575,10 @@ class CheckTopBearing:
             average_G = 0.0
 
         if PRINT_CIRCLE_FITTING_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] "
-                  f"Early metrics: score_A={score_A:.3f}, average_G={average_G:.1f}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] "
+                    f"Early metrics: score_A={score_A:.3f}, average_G={average_G:.1f}",
+                    MessageType.GENERAL)
 
         # Decide which edge was found better using the same quality metrics
         # as branch scoring: weighted combination of inlier ratio and arc
@@ -596,9 +599,11 @@ class CheckTopBearing:
             anchor_rmse = rmse_b
 
         if PRINT_ANCHOR_SELECTION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Anchor edge: {anchor_edge} "
-                  f"(edgeScore_a={edge_score_a:.3f} [{len(list_a)}pts], "
-                  f"edgeScore_b={edge_score_b:.3f} [{len(list_b)}pts])")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] Anchor edge: {anchor_edge} "
+                    f"(edgeScore_a={edge_score_a:.3f} [{len(list_a)}pts], "
+                    f"edgeScore_b={edge_score_b:.3f} [{len(list_b)}pts])",
+                    MessageType.GENERAL)
 
         # -----------------------------------------------------------------
         # Determine annulus thickness by scanning from the anchor circle
@@ -645,10 +650,12 @@ class CheckTopBearing:
                     first_white_dist = None
 
         if PRINT_THICKNESS_DETERMINATION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] ListC (thickness samples): {len(list_c)}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] ListC (thickness samples): {len(list_c)}",
+                    MessageType.GENERAL)
 
         # Determine thickness from percentiles, pick closest to 14
-        TARGET_THICKNESS = TARGET_RING_THICKNESS
+        TARGET_THICKNESS = 14
         if len(list_c) >= 5:
             arr_c = np.array(list_c, dtype=np.float64)
             percentiles = [25, 40, 50, 60, 75, 90]
@@ -658,17 +665,23 @@ class CheckTopBearing:
             thickness = pct_values[best_pct_idx]
             chosen_pct = percentiles[best_pct_idx]
             if PRINT_THICKNESS_DETERMINATION_DETAILS:
-                printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Thickness percentiles: "
-                      f"{dict(zip(percentiles, [f'{v:.1f}' for v in pct_values]))}")
-                printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Chosen thickness={thickness:.1f} "
-                      f"(p{chosen_pct}, target={TARGET_THICKNESS})")
+                logBoth('logDebug', _src,
+                        f"[Branch g={gamma_value} c=({cx},{cy})] Thickness percentiles: "
+                        f"{dict(zip(percentiles, [f'{v:.1f}' for v in pct_values]))}",
+                        MessageType.GENERAL)
+                logBoth('logDebug', _src,
+                        f"[Branch g={gamma_value} c=({cx},{cy})] Chosen thickness={thickness:.1f} "
+                        f"(p{chosen_pct}, target={TARGET_THICKNESS})",
+                        MessageType.GENERAL)
         else:
             # Fallback: not enough thickness samples, use 14
             thickness = float(TARGET_THICKNESS)
             chosen_pct = -1
             if PRINT_THICKNESS_DETERMINATION_DETAILS:
-                printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Too few thickness samples "
-                      f"({len(list_c)}), defaulting to {TARGET_THICKNESS}")
+                logBoth('logDebug', _src,
+                        f"[Branch g={gamma_value} c=({cx},{cy})] Too few thickness samples "
+                        f"({len(list_c)}), defaulting to {TARGET_THICKNESS}",
+                        MessageType.GENERAL)
 
         # Construct the final two circles from anchor + thickness
         final_center = anchor_center
@@ -706,7 +719,7 @@ class CheckTopBearing:
             area_pixels = 0
 
         # Calculate score_B now that we have area_pixels
-        TARGET_THICK_FOR_SCORE = TARGET_RING_THICKNESS_FOR_AREA_SCORE
+        TARGET_THICK_FOR_SCORE = 15
         ideal_area = math.pi * ((prompt_r + TARGET_THICK_FOR_SCORE) ** 2 - prompt_r ** 2)
         area_score = min(area_pixels / ideal_area, 1.0) if ideal_area > 0 else 0.0
         score_B = 0.3 * avg_inlier_ratio + 0.4 * avg_arc_coverage + 0.3 * area_score
@@ -715,7 +728,7 @@ class CheckTopBearing:
         # NEW VALIDATION RULE: Only valid if min(score_A, score_B) > 0.65 AND average_G > 77
         # =================================================================
         lower_score = min(score_A, score_B)
-        validation_passed = (lower_score > LOWER_SCORE_THRESHOLD) and (average_G > AVERAGE_G_THRESHOLD)
+        validation_passed = (lower_score > 0.65) and (average_G > 77)
 
         # Final validity includes both old checks and new validation rule
         annular_valid = prelim_valid and validation_passed
@@ -724,21 +737,25 @@ class CheckTopBearing:
         if not prelim_valid:
             validation_reason = "Basic geometry check failed"
         elif not validation_passed:
-            if lower_score <= LOWER_SCORE_THRESHOLD and average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD} AND avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
-            elif lower_score <= LOWER_SCORE_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD}"
-            elif average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
+            if lower_score <= 0.65 and average_G <= 77:
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65 AND avg_G={average_G:.1f}<=77"
+            elif lower_score <= 0.65:
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65"
+            elif average_G <= 77:
+                validation_reason = f"Failed: avg_G={average_G:.1f}<=77"
 
         if PRINT_THICKNESS_DETERMINATION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Final: anchor={anchor_edge}, "
-                  f"center=({final_center[0]:.1f},{final_center[1]:.1f}), "
-                  f"r_in={r_inner_final:.1f}, r_out={r_outer_final:.1f}, "
-                  f"thickness={thickness:.1f}, score_A={score_A:.3f}, score_B={score_B:.3f}, "
-                  f"lower_score={lower_score:.3f}, avg_G={average_G:.1f}, valid={annular_valid}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] Final: anchor={anchor_edge}, "
+                    f"center=({final_center[0]:.1f},{final_center[1]:.1f}), "
+                    f"r_in={r_inner_final:.1f}, r_out={r_outer_final:.1f}, "
+                    f"thickness={thickness:.1f}, score_A={score_A:.3f}, score_B={score_B:.3f}, "
+                    f"lower_score={lower_score:.3f}, avg_G={average_G:.1f}, valid={annular_valid}",
+                    MessageType.GENERAL)
             if not annular_valid:
-                printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] Validation: {validation_reason}")
+                logBoth('logDebug', _src,
+                        f"[Branch g={gamma_value} c=({cx},{cy})] Validation: {validation_reason}",
+                        MessageType.GENERAL)
 
         # =================================================================
         # Branch quality scores
@@ -754,10 +771,12 @@ class CheckTopBearing:
             branch_score = 0.0
 
         if PRINT_WINNING_BRANCH_SELECTION_DETAILS:
-            printBoldBlue(f"[Branch g={gamma_value} c=({cx},{cy})] "
-                  f"ScoreA={score_A:.3f} ScoreB={score_B:.3f} "
-                  f"(avgInlR={avg_inlier_ratio:.2f}, avgArcCov={avg_arc_coverage:.2f}, "
-                  f"areaSc={area_score:.2f}) → using={scoring_mode} → {branch_score:.3f}")
+            logBoth('logDebug', _src,
+                    f"[Branch g={gamma_value} c=({cx},{cy})] "
+                    f"ScoreA={score_A:.3f} ScoreB={score_B:.3f} "
+                    f"(avgInlR={avg_inlier_ratio:.2f}, avgArcCov={avg_arc_coverage:.2f}, "
+                    f"areaSc={area_score:.2f}) → using={scoring_mode} → {branch_score:.3f}",
+                    MessageType.GENERAL)
 
         # Draw result overlay
         result_overlay = original_annular.copy()
@@ -916,7 +935,7 @@ class CheckTopBearing:
         }
 
         prompt_r = CheckTopBearing.PROMPT_RADIUS
-        detection_radius = DETECTION_MASK_RADIUS
+        detection_radius = 60
         trace_distance = max(detection_radius, outer_radius)
 
         h_det, w_det = annular_image.shape[:2]
@@ -1283,6 +1302,8 @@ class CheckTopBearing:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import threading
 
+        _src = getFullyQualifiedName(__file__, CheckTopBearing)
+
         # Parameter grid
         bg_norm_values = [5, 10]
         bilateral_values = [(25.0, 25.0), (30.0, 30.0)]
@@ -1297,7 +1318,7 @@ class CheckTopBearing:
 
         # Shared flag so threads can check if we already have a 100% result
         found_100 = threading.Event()
-        winning_result = [None]          # mutable container for the winner
+        winning_result: list[dict | None] = [None] # mutable container for the winner
         all_results: List[Dict] = []     # collect all completed results
         results_lock = threading.Lock()
 
@@ -1347,26 +1368,26 @@ class CheckTopBearing:
         # --- Report ---
         if winning_result[0] is not None:
             r = winning_result[0]
-            printBoldGreen(
-                f"[InnerWhiteRadius] radius = {r['radius']}, "
-                f"confidence = {r['confidence']}, "
-                f"outer_radius = {bearing_outer_radius}"
-            )
+            logBoth('logInfo', _src,
+                    f"[InnerWhiteRadius] radius = {r['radius']}, "
+                    f"confidence = {r['confidence']}, "
+                    f"outer_radius = {bearing_outer_radius}",
+                    MessageType.SUCCESS)
         elif all_results:
             # No 100% — pick the radius that occurs most often across all results
             all_radii = [r['radius'] for r in all_results if r['radius'] > 0]
             if all_radii:
                 counter = Counter(all_radii)
                 best_radius = counter.most_common(1)[0][0]
-                printBoldBlue(
-                    f"[InnerWhiteRadius] radius = {best_radius}, "
-                    f"confidence = 75%, "
-                    f"outer_radius = {bearing_outer_radius}"
-                )
+                logBoth('logDebug', _src,
+                        f"[InnerWhiteRadius] radius = {best_radius}, "
+                        f"confidence = 75%, "
+                        f"outer_radius = {bearing_outer_radius}",
+                        MessageType.GENERAL)
             else:
-                printBoldRed("[InnerWhiteRadius] No valid radius found across 8 branches")
+                logBoth('logError', _src, "[InnerWhiteRadius] No valid radius found across 8 branches", MessageType.ISSUE)
         else:
-            printBoldRed("[InnerWhiteRadius] No results returned from any branch")
+            logBoth('logError', _src, "[InnerWhiteRadius] No results returned from any branch", MessageType.ISSUE)
 
     @staticmethod
     def checkTopBearing(anImage: np.ndarray,
@@ -1398,6 +1419,8 @@ class CheckTopBearing:
                 - Dictionary with geometry: {"center": [cx, cy], "inner_radius": ri, "outer_radius": ro}
                   or None if detection failed
         """
+        _src = getFullyQualifiedName(__file__, CheckTopBearing)
+
         # printBoldBlue(
         #     f"CheckTopBearing.checkTopBearing() v2.0 called with "
         #     f"anImage = {anImage.shape if anImage is not None else 'None'}"
@@ -1406,26 +1429,26 @@ class CheckTopBearing:
         # Basic validation
         # try:
         #     modelName, lhs_rhs, _ = getModel_LHSRHS_AndTonnage(componentQRCode)
-        #     # printBoldBlue(f"Got modelName as {modelName}")
+        #     # logBoth('logDebug', _src, f"Got modelName as {modelName}", MessageType.GENERAL)
         # except:
         #     pass
 
         if anImage is None:
-            printBoldRed("CheckTopBearing: anImage is None, returning False")
+            logBoth('logError', _src, "CheckTopBearing: anImage is None, returning False", MessageType.ISSUE)
             return anImage, False, None
 
         if currentPictures is None:
-            printBoldRed("CheckTopBearing: currentPictures is None, returning False")
+            logBoth('logError', _src, "CheckTopBearing: currentPictures is None, returning False", MessageType.ISSUE)
             return anImage, False, None
 
         # Get the Hub+Bottom Bearing reference image
         base_image = currentPictures.get(hubAndBottomBearingPictureKeyString, None)
 
         if base_image is None:
-            printBoldRed(
-                "CheckTopBearing: Hub+Bottom Bearing reference image not found, "
-                "returning False"
-            )
+            logBoth('logError', _src,
+                    "CheckTopBearing: Hub+Bottom Bearing reference image not found, "
+                    "returning False",
+                    MessageType.ISSUE)
             return anImage, False, None
 
         try:
@@ -1459,9 +1482,11 @@ class CheckTopBearing:
 
             if PRINT_IMAGE_TRANSFORMATION_DETAILS:
                 h_ann, w_ann = annular_image.shape[:2]
-                printBoldBlue(f"[Pipeline] Step 1: Annular extraction — "
-                             f"center={annular_center}, outerR={outer_radius}, "
-                             f"innerR={inner_rad}, crop={w_ann}x{h_ann}")
+                logBoth('logDebug', _src,
+                        f"[Pipeline] Step 1: Annular extraction — "
+                        f"center={annular_center}, outerR={outer_radius}, "
+                        f"innerR={inner_rad}, crop={w_ann}x{h_ann}",
+                        MessageType.GENERAL)
 
             # Step 2: Background Normalisation
             bg_sx = CheckTopBearing.BG_NORM_SX
@@ -1471,7 +1496,9 @@ class CheckTopBearing:
             )
 
             if PRINT_IMAGE_TRANSFORMATION_DETAILS:
-                printBoldBlue(f"[Pipeline] Step 2: Background normalisation — sx={bg_sx}, sy={bg_sy}")
+                logBoth('logDebug', _src,
+                        f"[Pipeline] Step 2: Background normalisation — sx={bg_sx}, sy={bg_sy}",
+                        MessageType.GENERAL)
 
             # =================================================================
             # PRE-READ all configuration into plain Python values
@@ -1489,7 +1516,7 @@ class CheckTopBearing:
             }
 
             prompt_r = CheckTopBearing.PROMPT_RADIUS
-            detection_radius = DETECTION_MASK_RADIUS
+            detection_radius = 60
             trace_distance = max(detection_radius, outer_radius)
 
             # Image centre for detection (centre of cropped annular image)
@@ -1507,8 +1534,10 @@ class CheckTopBearing:
 
             n_branches = len(gamma_candidates) * len(centre_candidates)
             if PRINT_WINNING_BRANCH_SELECTION_DETAILS:
-                printBoldBlue(f"[Pipeline] Launching {len(gamma_candidates)}x{len(centre_candidates)} "
-                             f"= {n_branches} parallel branches")
+                logBoth('logDebug', _src,
+                        f"[Pipeline] Launching {len(gamma_candidates)}x{len(centre_candidates)} "
+                        f"= {n_branches} parallel branches",
+                        MessageType.GENERAL)
 
             # -----------------------------------------------------------------
             # Disable OpenCV's internal thread pool to avoid deadlocks
@@ -1543,18 +1572,22 @@ class CheckTopBearing:
             # Log all branch results
             scoring_mode = cfg['scoring_mode']
             if PRINT_WINNING_BRANCH_SELECTION_DETAILS:
-                printBoldBlue(f"[Pipeline] Branch results (sorted by score, mode={scoring_mode}):")
+                logBoth('logDebug', _src,
+                        f"[Pipeline] Branch results (sorted by score, mode={scoring_mode}):",
+                        MessageType.GENERAL)
                 for i, r in enumerate(all_results):
                     tag = " <<<< WINNER" if i == 0 else ""
                     val_info = f" [{r.get('validation_reason', '')}]" if not r['valid'] else ""
-                    printBoldBlue(f"  gamma={r['gamma']}, ctr={r['center']}, "
-                                 f"scA={r['score_A']:.3f}, scB={r['score_B']:.3f}, lower={r.get('lower_score', 0):.3f}, "
-                                 f"avg_G={r.get('average_G', 0):.1f}, "
-                                 f"area={r['area']}, areaSc={r['area_score']:.2f}, valid={r['valid']}{val_info}, "
-                                 f"anchor={r['anchor_edge']}, thick={r['thickness']:.1f}, "
-                                 f"inlR_a={r['inlier_ratio_a']:.2f}, inlR_b={r['inlier_ratio_b']:.2f}, "
-                                 f"arcCov_a={r['arc_cov_a']:.2f}, arcCov_b={r['arc_cov_b']:.2f}, "
-                                 f"listA={r['list_a_count']}, listB={r['list_b_count']}{tag}")
+                    logBoth('logDebug', _src,
+                            f"  gamma={r['gamma']}, ctr={r['center']}, "
+                            f"scA={r['score_A']:.3f}, scB={r['score_B']:.3f}, lower={r.get('lower_score', 0):.3f}, "
+                            f"avg_G={r.get('average_G', 0):.1f}, "
+                            f"area={r['area']}, areaSc={r['area_score']:.2f}, valid={r['valid']}{val_info}, "
+                            f"anchor={r['anchor_edge']}, thick={r['thickness']:.1f}, "
+                            f"inlR_a={r['inlier_ratio_a']:.2f}, inlR_b={r['inlier_ratio_b']:.2f}, "
+                            f"arcCov_a={r['arc_cov_a']:.2f}, arcCov_b={r['arc_cov_b']:.2f}, "
+                            f"listA={r['list_a_count']}, listB={r['list_b_count']}{tag}",
+                            MessageType.GENERAL)
 
             # Get the result overlay image
             result_overlay = best.get('pipeline_images', {}).get('step9_result', annular_image.copy())
@@ -1570,8 +1603,8 @@ class CheckTopBearing:
                 fcx_f = int(round(fc[0]))
                 fcy_f = int(round(fc[1]))
 
-                # printBoldBlue(f"[Final Check] Detected annulus: center=({fcx_f},{fcy_f}), "
-                #              f"r_inner={ri_f}, r_outer={ro_f}")
+                # logBoth('logDebug', _src, f"[Final Check] Detected annulus: center=({fcx_f},{fcy_f}), "
+                #              f"r_inner={ri_f}, r_outer={ro_f}", MessageType.GENERAL)
 
                 # Create annular mask for both images using detected geometry
                 h_orig, w_orig = annular_image.shape[:2]
@@ -1612,11 +1645,11 @@ class CheckTopBearing:
                 final_valid = brightness_diff > CheckTopBearing.FINAL_GAMMA_THRESHOLD
 
                 if final_valid:
-                    # printBoldGreen(
+                    # logBoth('logInfo', _src,
                     #     f"[Final Check] TOP BEARING DETECTED "
                     #     f"(base_mean={base_mean:.1f}, curr_mean={curr_mean:.1f}, "
-                    #     f"diff={brightness_diff:+.1f} > threshold={CheckTopBearing.FINAL_GAMMA_THRESHOLD})"
-                    # )
+                    #     f"diff={brightness_diff:+.1f} > threshold={CheckTopBearing.FINAL_GAMMA_THRESHOLD})",
+                    #     MessageType.SUCCESS)
 
                     # Add final check info to overlay
                     result_bgr = cv2.cvtColor(result_overlay, cv2.COLOR_RGB2BGR)
@@ -1646,7 +1679,7 @@ class CheckTopBearing:
 
                     end_time = time.perf_counter()
                     processing_time = end_time - start_time
-                    # printBoldGreen(f"[Pipeline] Processing completed in {processing_time:.2f}s")
+                    # logBoth('logInfo', _src, f"[Pipeline] Processing completed in {processing_time:.2f}s", MessageType.SUCCESS)
 
                     # Run inner white radius detection in parallel
                     # CheckTopBearing.find_inner_white_radius_parallel(anImage, tuple(geometry_dict["center"]), ro_f)
@@ -1656,11 +1689,11 @@ class CheckTopBearing:
                     return result_bgr_final, True, geometry_dict
 
                 else:
-                    printBoldRed(
-                        f"[Final Check] TOP BEARING NOT DETECTED - Failed brightness check "
-                        f"(base_mean={base_mean:.1f}, curr_mean={curr_mean:.1f}, "
-                        f"diff={brightness_diff:+.1f} <= threshold={CheckTopBearing.FINAL_GAMMA_THRESHOLD})"
-                    )
+                    logBoth('logError', _src,
+                            f"[Final Check] TOP BEARING NOT DETECTED - Failed brightness check "
+                            f"(base_mean={base_mean:.1f}, curr_mean={curr_mean:.1f}, "
+                            f"diff={brightness_diff:+.1f} <= threshold={CheckTopBearing.FINAL_GAMMA_THRESHOLD})",
+                            MessageType.ISSUE)
 
                     # Add failure info to overlay
                     result_bgr = cv2.cvtColor(result_overlay, cv2.COLOR_RGB2BGR)
@@ -1673,7 +1706,9 @@ class CheckTopBearing:
 
                     end_time = time.perf_counter()
                     processing_time = end_time - start_time
-                    printBoldRed(f"[Pipeline] Processing completed in {processing_time:.2f}s - FAILED")
+                    logBoth('logError', _src,
+                            f"[Pipeline] Processing completed in {processing_time:.2f}s - FAILED",
+                            MessageType.ISSUE)
 
                     # Convert result back to BGR for return
                     result_bgr_final = cv2.cvtColor(result_overlay, cv2.COLOR_RGB2BGR)
@@ -1684,23 +1719,25 @@ class CheckTopBearing:
                 validation_reason = best.get('validation_reason', 'Unknown reason')
                 avg_g_val = best.get('average_G', 0.0)
                 lower_sc = best.get('lower_score', 0.0)
-                printBoldRed(
-                    f"[Pipeline] NO VALID ANNULUS DETECTED "
-                    f"(best score={best['score']:.3f}, gamma={best['gamma']}, "
-                    f"ctr={best['center']}, reason={validation_reason}, "
-                    f"avg_G={avg_g_val:.1f}, lower_score={lower_sc:.3f})"
-                )
+                logBoth('logError', _src,
+                        f"[Pipeline] NO VALID ANNULUS DETECTED "
+                        f"(best score={best['score']:.3f}, gamma={best['gamma']}, "
+                        f"ctr={best['center']}, reason={validation_reason}, "
+                        f"avg_G={avg_g_val:.1f}, lower_score={lower_sc:.3f})",
+                        MessageType.ISSUE)
 
                 end_time = time.perf_counter()
                 processing_time = end_time - start_time
-                printBoldRed(f"[Pipeline] Processing completed in {processing_time:.2f}s - NO VALID ANNULUS")
+                logBoth('logError', _src,
+                        f"[Pipeline] Processing completed in {processing_time:.2f}s - NO VALID ANNULUS",
+                        MessageType.ISSUE)
 
                 # Convert result back to BGR for return
                 result_bgr_final = cv2.cvtColor(result_overlay, cv2.COLOR_RGB2BGR)
                 return result_bgr_final, False, None
 
         except Exception as e:
-            printBoldRed(f"CheckTopBearing: Exception during detection: {e}")
+            logBoth('logCritical', _src, f"CheckTopBearing: Exception during detection: {e}", MessageType.PROBLEM)
             import traceback
             traceback.print_exc()
             return anImage, False, None
@@ -1710,6 +1747,7 @@ class CheckTopBearing:
     # For backward compatibility - keep the old simple method as a fallback
     # =============================================================================
 
+    @staticmethod
     def checkTopBearing_simple(anImage: np.ndarray,
                                currentPictures: Dict[str, np.ndarray | None] = None,
                                componentQRCode: str = DOST,
@@ -1740,6 +1778,8 @@ def test(directory_path: str) -> None:
     import random
     from pathlib import Path
 
+    _src = __name__
+
     # Common image extensions
     image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
 
@@ -1761,26 +1801,26 @@ def test(directory_path: str) -> None:
     # Randomly select N hub images
     random_sample_size = 10
     if len(hub_candidates) < random_sample_size:
-        printBoldRed(f"Warning: Only {len(hub_candidates)} hub images found, using all")
+        logBoth('logWarning', _src, f"Warning: Only {len(hub_candidates)} hub images found, using all", MessageType.RISK)
         hub_list = hub_candidates
     else:
         hub_list = random.sample(hub_candidates, random_sample_size)
 
-    printBoldBlue(f"Test Configuration:")
-    printBoldBlue(f"  Directory: {directory_path}")
-    printBoldBlue(f"  Top images found: {len(top_list)}")
-    printBoldBlue(f"  Hub images selected: {len(hub_list)}")
-    printBoldBlue("=" * 70)
+    logBoth('logDebug', _src, f"Test Configuration:", MessageType.GENERAL)
+    logBoth('logDebug', _src, f"  Directory: {directory_path}", MessageType.GENERAL)
+    logBoth('logDebug', _src, f"  Top images found: {len(top_list)}", MessageType.GENERAL)
+    logBoth('logDebug', _src, f"  Hub images selected: {len(hub_list)}", MessageType.GENERAL)
+    logBoth('logDebug', _src, "=" * 70, MessageType.GENERAL)
 
     # Test each top image against all hub images
     for top_idx, top_file in enumerate(top_list, 1):
         top_name = os.path.basename(top_file)
-        printBoldBlue(f"\n[{top_idx}/{len(top_list)}] Testing: {top_name}")
+        logBoth('logDebug', _src, f"\n[{top_idx}/{len(top_list)}] Testing: {top_name}", MessageType.GENERAL)
 
         # Load top image
         top_image = cv2.imread(top_file)
         if top_image is None:
-            printBoldRed(f"  ERROR: Could not load {top_name}")
+            logBoth('logError', _src, f"  ERROR: Could not load {top_name}", MessageType.ISSUE)
             continue
 
         # Test against all hub images
@@ -1834,14 +1874,14 @@ def test(directory_path: str) -> None:
 
         # Report results for this top image
         if len(failures) == 0:
-            printBoldGreen(f"  ✓ OK - All {len(hub_list)} tests passed")
+            logBoth('logInfo', _src, f"  ✓ OK - All {len(hub_list)} tests passed", MessageType.SUCCESS)
         else:
-            printBoldRed(f"  ✗ NOT OK - {len(failures)}/{len(hub_list)} failed")
+            logBoth('logError', _src, f"  ✗ NOT OK - {len(failures)}/{len(hub_list)} failed", MessageType.ISSUE)
             for hub_name, reason in failures:
-                printBoldRed(f"    - {hub_name}: {reason}")
+                logBoth('logError', _src, f"    - {hub_name}: {reason}", MessageType.ISSUE)
 
-    printBoldBlue("=" * 70)
-    printBoldBlue("Test complete")
+    logBoth('logDebug', _src, "=" * 70, MessageType.GENERAL)
+    logBoth('logDebug', _src, "Test complete", MessageType.GENERAL)
 
 if __name__ == "__main__":
     # print("CheckTopBearing v2.0 - Complete Implementation")

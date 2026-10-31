@@ -1,4 +1,3 @@
-from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import threading
 import requests
 from requests import Response
@@ -33,7 +32,6 @@ from logutils.SlaveLoggers import *
 from logutils.Logger import *
 from logutils.AbstractSlaveLogger import *
 from utils.RedisUtils import *
-from utils.CosThetaPrintUtils import *
 from utils.IPUtils import *
 
 import warnings
@@ -94,12 +92,9 @@ class RTSPCam():
         try:
             self.reconnect()
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                        f"In RTSPCam.{self.name}, unable to create RTSPCamera due to {e}",
-                                                        Logger.PROBLEM)
-            SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                           f"In RTSPCam.{self.name}, unable to create RTSPCamera due to {e}",
-                                                           Logger.PROBLEM)
+            logBoth('logTakeAction', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, unable to create RTSPCamera due to {e}",
+                    Logger.PROBLEM)
             # Ensure monitoring thread starts even if initial connection fails
             # This allows recovery when camera becomes available later
             self.connected = False
@@ -109,9 +104,9 @@ class RTSPCam():
                 try:
                     self.launchMonitorCameraConnectionThread()
                 except Exception as e2:
-                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                f"In RTSPCam.{self.name}, could not start monitoring thread: {e2}",
-                                                                Logger.PROBLEM)
+                        logBoth('logTakeAction', RTSPCam.logSource,
+                                f"In RTSPCam.{self.name}, could not start monitoring thread: {e2}",
+                                Logger.PROBLEM)
 
         # Start ISAPI keepalive thread to prevent camera from going dormant
         if not self.keepaliveThreadStarted:
@@ -140,23 +135,17 @@ class RTSPCam():
                     except Exception as e:
                         response = Response.status_code = 400
                     if response.status_code == 200:
-                        SlaveFileLogger.getInstance().logDebug(RTSPCam.logSource,
-                                                               f"In RTSPCam.{self.name}, ISAPI keepalive OK",
-                                                               Logger.SUCCESS)
+                        logBoth('logDebug', RTSPCam.logSource,
+                                f"In RTSPCam.{self.name}, ISAPI keepalive OK",
+                                Logger.SUCCESS)
                     else:
-                        SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                  f"In RTSPCam.{self.name}, ISAPI keepalive returned status {response.status_code}",
-                                                                  Logger.PROBLEM)
-                        SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                     f"In RTSPCam.{self.name}, ISAPI keepalive returned status {response.status_code}",
-                                                                     Logger.PROBLEM)
+                        logBoth('logTakeNote', RTSPCam.logSource,
+                                f"In RTSPCam.{self.name}, ISAPI keepalive returned status {response.status_code}",
+                                Logger.PROBLEM)
                 except Exception as e:
-                    SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                              f"In RTSPCam.{self.name}, ISAPI keepalive exception: {e}",
-                                                              Logger.PROBLEM)
-                    SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                 f"In RTSPCam.{self.name}, ISAPI keepalive exception: {e}",
-                                                                 Logger.PROBLEM)
+                    logBoth('logTakeNote', RTSPCam.logSource,
+                            f"In RTSPCam.{self.name}, ISAPI keepalive exception: {e}",
+                            Logger.PROBLEM)
 
                 # Sleep in small increments so we can exit promptly when stopped
                 for _ in range(KEEPALIVE_INTERVAL_SECS):
@@ -164,9 +153,9 @@ class RTSPCam():
                         break
                     time.sleep(1)
 
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                      f"In RTSPCam.{self.name}, ISAPI keepalive thread exited",
-                                                      Logger.INFO)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, ISAPI keepalive thread exited",
+                    Logger.INFO)
 
         keepaliveThread = threading.Thread(
             name=f"ISAPI Keepalive for camera at {self.IP}",
@@ -175,12 +164,9 @@ class RTSPCam():
         )
         self.keepaliveThreadStarted = True
         keepaliveThread.start()
-        SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                  f"In RTSPCam.{self.name}, started ISAPI keepalive thread (interval: {KEEPALIVE_INTERVAL_SECS}s)",
-                                                  Logger.INFO)
-        SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                     f"In RTSPCam.{self.name}, started ISAPI keepalive thread (interval: {KEEPALIVE_INTERVAL_SECS}s)",
-                                                     Logger.INFO)
+        logBoth('logTakeNote', RTSPCam.logSource,
+                f"In RTSPCam.{self.name}, started ISAPI keepalive thread (interval: {KEEPALIVE_INTERVAL_SECS}s)",
+                Logger.INFO)
 
     def reconnect(self):
         # printLight(f"Entered reconnect")
@@ -194,12 +180,9 @@ class RTSPCam():
         self.connectionAttempts += 1
         if (self.connectionAttempts == 1) or ((self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
             # printLight(f"Trying to create camera with {self.IP}, {self.port}, {self.uid}, {self.password}")
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                      f"Trying to create camera with {self.IP}, {self.port}, {self.uid}, {self.password}",
-                                                      Logger.INFO)
-            SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                         f"Trying to create camera with {self.IP}, {self.port}, {self.uid}, {self.password}",
-                                                         Logger.INFO)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"Trying to create camera with {self.IP}, {self.port}, {self.uid}, {self.password}",
+                    Logger.INFO)
             # printBoldGreen(f"Reconnecting to camera at IP {self.IP}")
         camIPAvailable = checkIP(self.IP)
         # printLight(f"Pinged IP {self.IP}; it is {'reachable' if camIPAvailable else 'not reachable'}")
@@ -216,12 +199,9 @@ class RTSPCam():
             self.camAvailable = False
             if (self.connectionAttempts == 1) or (
                     (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
-                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                      f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP} - IP not reachable",
-                                                      Logger.PROBLEM)
-                SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                             f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP} - IP not reachable",
-                                                             Logger.PROBLEM)
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP} - IP not reachable",
+                        Logger.PROBLEM)
             self.connectionInProgress = False
             # if (self.connectionAttempts == 1) or (
             #         (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
@@ -232,7 +212,9 @@ class RTSPCam():
                 # printBoldBlue(f"As IP {self.IP} is reachable, attempting to connect.")
                 try:
                     if self.camProcess is not None:
-                        printBoldRed(f"About to kill camProcess() as it is not None")
+                        logBoth('logTakeAction', RTSPCam.logSource,
+                                f"In RTSPCam.{self.name}, about to kill camProcess as it is not None",
+                                Logger.ISSUE)
                         self.camProcess.kill()
                         self.camProcess = None
                         self.stopFrameUpdateThread = True
@@ -253,15 +235,13 @@ class RTSPCam():
                     # self.connected = True
                     # printBoldBlue(f"In RTSPCam.{self.name}, created camera at IP {self.IP}")
                 if self.connected:
-                    SlaveFileLogger.getInstance().logDebug(RTSPCam.logSource,
-                                                              f"In RTSPCam.{self.name}, created camera and connected to camera at IP {self.IP}",
-                                                              Logger.SUCCESS)
-                    SlaveConsoleLogger.getInstance().logDebug(RTSPCam.logSource,
-                                                                 f"In RTSPCam.{self.name}, created camera  and connected to camera at IP {self.IP}",
-                                                                 Logger.SUCCESS)
-                    printBoldGreen(f"Connected to camera at {self.IP}")
+                    logBoth('logDebug', RTSPCam.logSource,
+                            f"In RTSPCam.{self.name}, created camera and connected to camera at IP {self.IP}",
+                            Logger.SUCCESS)
             except Exception as e:
-                printBoldRed(f"Could not create camera due to {e}")
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"In RTSPCam.{self.name}, could not create camera due to {e}",
+                        Logger.PROBLEM)
                 self.camera = None
                 try:
                     if self.camProcess is not None:
@@ -275,17 +255,16 @@ class RTSPCam():
                 self.camAvailable = False
                 if (self.connectionAttempts == 1) or (
                         (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
-                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                          f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP}, though IP is reachable, due to {str(e)}",
-                                                          Logger.PROBLEM)
-                    SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                 f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP}, though IP is reachable, due to {str(e)}",
-                                                                 Logger.PROBLEM)
+                    logBoth('logTakeAction', RTSPCam.logSource,
+                            f"In RTSPCam.{self.name}, could not connect to camera at IP {self.IP}, though IP is reachable, due to {str(e)}",
+                            Logger.PROBLEM)
                 # printBoldRed(f"No camera available at IP {self.IP}, though IP is reachable")
                 self.connectionInProgress = False
                 if (self.connectionAttempts == 1) or (
                         (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
-                    printBoldRed(f"Could not create camera though {self.IP} is reachable - exiting reconnect() after setting {self.connectionInProgress = }")
+                    logBoth('logTakeAction', RTSPCam.logSource,
+                            f"In RTSPCam.{self.name}, could not create camera though {self.IP} is reachable - exiting reconnect() after setting connectionInProgress={self.connectionInProgress}",
+                            Logger.PROBLEM)
                 return
                 # raise Exception(f"No camera available at IP {self.IP}, though IP is reachable")
         try:
@@ -296,12 +275,9 @@ class RTSPCam():
                 # printBoldBlue(f"In RTSPCam.{self.name}, about to launch camera connection monitoring thread")
                 self.launchMonitorCameraConnectionThread()
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                        f"In RTSPCam.{self.name}, exception while launching threads: {e}",
-                                                        Logger.PROBLEM)
-            SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                           f"In RTSPCam.{self.name}, exception while launching threads: {e}",
-                                                           Logger.PROBLEM)
+            logBoth('logTakeAction', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, exception while launching threads: {e}",
+                    Logger.PROBLEM)
             self.connected = False
             self.camAvailable = False
         finally:
@@ -375,17 +351,14 @@ class RTSPCam():
                 cap_info = next(x for x in probe['streams'] if x['codec_type'] == 'video')
 
             except subprocess.TimeoutExpired:
-                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                            f"In RTSPCam.{self.name}, ffprobe timed out after {FFPROBE_TIMEOUT}s",
-                                                            Logger.PROBLEM)
-                SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                               f"In RTSPCam.{self.name}, ffprobe timed out after {FFPROBE_TIMEOUT}s",
-                                                               Logger.PROBLEM)
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"In RTSPCam.{self.name}, ffprobe timed out after {FFPROBE_TIMEOUT}s",
+                        Logger.PROBLEM)
                 return None
             except json.JSONDecodeError as e:
-                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                            f"In RTSPCam.{self.name}, ffprobe returned invalid JSON: {e}",
-                                                            Logger.PROBLEM)
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"In RTSPCam.{self.name}, ffprobe returned invalid JSON: {e}",
+                        Logger.PROBLEM)
                 return None
 
             self.width = cap_info['width']
@@ -393,7 +366,7 @@ class RTSPCam():
             up, down = str(cap_info['r_frame_rate']).split('/')
             self.fps = eval(up) / eval(down)
             self.timeRequiredBetweenFrames = 1.0 / self.fps
-            printBoldBlue(f"fps: {self.fps}")
+            logBoth('logInfo', RTSPCam.logSource, f"fps: {self.fps}", Logger.GENERAL)
 
             cameraProcess = (
                 ffmpeg
@@ -409,22 +382,15 @@ class RTSPCam():
                 .overwrite_output()
                 .run_async(pipe_stdout=True)
             )
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                      f"In RTSPCam.{self.name}, got FFMPEG process",
-                                                      Logger.SUCCESS)
-            SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                         f"In RTSPCam.{self.name}, got FFMPEG process",
-                                                         Logger.SUCCESS)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, got FFMPEG process",
+                    Logger.SUCCESS)
             return cameraProcess
 
         except Exception as e:
-            SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                        f"In RTSPCam.{self.name}, unable to create FFMPEG process due to {e}",
-                                                        Logger.PROBLEM)
-            SlaveConsoleLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                           f"In RTSPCam.{self.name}, unable to create FFMPEG process due to {e}",
-                                                           Logger.PROBLEM)
-            printBoldRed(f"Could not create FFMPEG process at IP {self.IP} due to {e}")
+            logBoth('logTakeAction', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, unable to create FFMPEG process due to {e}",
+                    Logger.PROBLEM)
             return None
 
     def launchFrameUpdateThread(self):
@@ -491,9 +457,9 @@ class RTSPCam():
                     try:
                         # Check if camProcess and stdout are valid
                         if objRef.camProcess is None or objRef.camProcess.stdout is None:
-                            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                      f"In RTSPCam.{objRef.name}, camProcess or stdout is None, exiting frame thread",
-                                                                      Logger.RISK)
+                            logBoth('logTakeNote', RTSPCam.logSource,
+                                    f"In RTSPCam.{objRef.name}, camProcess or stdout is None, exiting frame thread",
+                                    Logger.RISK)
                             objRef.stopFrameUpdateThread = True
                             break
 
@@ -503,9 +469,9 @@ class RTSPCam():
                             last_process_check = current_time
                             poll_result = objRef.camProcess.poll()
                             if poll_result is not None:
-                                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                            f"In RTSPCam.{objRef.name}, FFMPEG process exited with code {poll_result}",
-                                                                            Logger.PROBLEM)
+                                logBoth('logTakeAction', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, FFMPEG process exited with code {poll_result}",
+                                        Logger.PROBLEM)
                                 objRef.stopFrameUpdateThread = True
                                 break
 
@@ -517,16 +483,16 @@ class RTSPCam():
                             if first_frame_received:
                                 # After first frame, use normal watchdog
                                 if time_since_last_frame > WATCHDOG_TIMEOUT:
-                                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                                f"In RTSPCam.{objRef.name}, watchdog timeout: no frames for {time_since_last_frame:.1f}s, forcing disconnect",
-                                                                                Logger.PROBLEM)
+                                    logBoth('logTakeAction', RTSPCam.logSource,
+                                            f"In RTSPCam.{objRef.name}, watchdog timeout: no frames for {time_since_last_frame:.1f}s, forcing disconnect",
+                                            Logger.PROBLEM)
                                     objRef.stopFrameUpdateThread = True
                                     break
                             elif time_since_start > STARTUP_GRACE_PERIOD:
                                 # Never received a frame and grace period expired
-                                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                            f"In RTSPCam.{objRef.name}, no frames received within {STARTUP_GRACE_PERIOD}s startup period, forcing disconnect",
-                                                                            Logger.PROBLEM)
+                                logBoth('logTakeAction', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, no frames received within {STARTUP_GRACE_PERIOD}s startup period, forcing disconnect",
+                                        Logger.PROBLEM)
                                 objRef.stopFrameUpdateThread = True
                                 break
 
@@ -536,9 +502,9 @@ class RTSPCam():
                                 msg_type, msg_data = read_queue.get(timeout=READ_TIMEOUT)
 
                                 if msg_type == 'error':
-                                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                                f"In RTSPCam.{objRef.name}, reader thread error: {msg_data}",
-                                                                                Logger.PROBLEM)
+                                    logBoth('logTakeAction', RTSPCam.logSource,
+                                            f"In RTSPCam.{objRef.name}, reader thread error: {msg_data}",
+                                            Logger.PROBLEM)
                                     objRef.stopFrameUpdateThread = True
                                     break
                                 elif msg_type == 'empty':
@@ -552,13 +518,13 @@ class RTSPCam():
                             except queue.Empty:
                                 # Timeout occurred - no data available
                                 consecutiveCount += 1
-                                SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                          f"In RTSPCam.{objRef.name}, read timeout ({consecutiveCount} consecutive)",
-                                                                          Logger.RISK)
+                                logBoth('logTakeNote', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, read timeout ({consecutiveCount} consecutive)",
+                                        Logger.RISK)
                                 if consecutiveCount > objRef.maxAllowedNoneFrameCountsInCamera:
-                                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                                f"In RTSPCam.{objRef.name}, too many consecutive timeouts, stopping frame thread",
-                                                                                Logger.PROBLEM)
+                                    logBoth('logTakeAction', RTSPCam.logSource,
+                                            f"In RTSPCam.{objRef.name}, too many consecutive timeouts, stopping frame thread",
+                                            Logger.PROBLEM)
                                     objRef.stopFrameUpdateThread = True
                                 continue
                         else:
@@ -569,13 +535,13 @@ class RTSPCam():
                             if not ready:
                                 # Timeout occurred - no data available
                                 consecutiveCount += 1
-                                SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                          f"In RTSPCam.{objRef.name}, read timeout ({consecutiveCount} consecutive)",
-                                                                          Logger.RISK)
+                                logBoth('logTakeNote', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, read timeout ({consecutiveCount} consecutive)",
+                                        Logger.RISK)
                                 if consecutiveCount > objRef.maxAllowedNoneFrameCountsInCamera:
-                                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                                f"In RTSPCam.{objRef.name}, too many consecutive timeouts, stopping frame thread",
-                                                                                Logger.PROBLEM)
+                                    logBoth('logTakeAction', RTSPCam.logSource,
+                                            f"In RTSPCam.{objRef.name}, too many consecutive timeouts, stopping frame thread",
+                                            Logger.PROBLEM)
                                     objRef.stopFrameUpdateThread = True
                                 continue
 
@@ -593,9 +559,9 @@ class RTSPCam():
                         elif len(in_bytes) != bytes_to_read:
                             # Partial read - likely stream issue
                             consecutiveCount += 1
-                            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                      f"In RTSPCam.{objRef.name}, partial read: got {len(in_bytes)} bytes, expected {bytes_to_read}",
-                                                                      Logger.RISK)
+                            logBoth('logTakeNote', RTSPCam.logSource,
+                                    f"In RTSPCam.{objRef.name}, partial read: got {len(in_bytes)} bytes, expected {bytes_to_read}",
+                                    Logger.RISK)
                             if consecutiveCount > objRef.maxAllowedNoneFrameCountsInCamera:
                                 objRef.stopFrameUpdateThread = True
                         else:
@@ -615,33 +581,33 @@ class RTSPCam():
                             else:
                                 objRef.latestCamFrame = None
                             if frameCount % 4000 == 0:
-                                SlaveConsoleLogger.getInstance().logConsiderAction(RTSPCam.logSource,
-                                                                                   f"In RTSPCam.{objRef.name}, got frame {frameCount}",
-                                                                                   Logger.SUCCESS)
+                                logBoth('logConsiderAction', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, got frame {frameCount}",
+                                        Logger.SUCCESS)
                             if frameCount % 1000 == 0:
-                                SlaveFileLogger.getInstance().logDebug(RTSPCam.logSource,
-                                                                       f"In RTSPCam.{objRef.name}, got frame {frameCount}",
-                                                                       Logger.SUCCESS)
+                                logBoth('logDebug', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, got frame {frameCount}",
+                                        Logger.SUCCESS)
 
                     except (ValueError, OSError) as e:
                         # Handle case where file descriptor becomes invalid (process died)
-                        SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                    f"In RTSPCam.{objRef.name}, I/O error in frame thread: {e}",
-                                                                    Logger.PROBLEM)
+                        logBoth('logTakeAction', RTSPCam.logSource,
+                                f"In RTSPCam.{objRef.name}, I/O error in frame thread: {e}",
+                                Logger.PROBLEM)
                         objRef.stopFrameUpdateThread = True
                         break
                     except Exception as e:
                         consecutiveCount += 1
-                        SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                  f"In RTSPCam.{objRef.name}, exception in frame thread: {e}",
-                                                                  Logger.RISK)
+                        logBoth('logTakeNote', RTSPCam.logSource,
+                                f"In RTSPCam.{objRef.name}, exception in frame thread: {e}",
+                                Logger.RISK)
                         if consecutiveCount > objRef.maxAllowedNoneFrameCountsInCamera:
                             objRef.stopFrameUpdateThread = True
 
             except Exception as e:
-                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                            f"In RTSPCam.{objRef.name}, unexpected exception in frame thread: {e}",
-                                                            Logger.PROBLEM)
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"In RTSPCam.{objRef.name}, unexpected exception in frame thread: {e}",
+                        Logger.PROBLEM)
             finally:
                 # Stop the reader thread on Windows
                 if reader_stop_event:
@@ -656,15 +622,15 @@ class RTSPCam():
                         objRef.camProcess = None
                     except:
                         objRef.camProcess = None
-                SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                          f"In RTSPCam.{objRef.name}, frame update thread exited after {frameCount} frames",
-                                                          Logger.INFO)
+                logBoth('logTakeNote', RTSPCam.logSource,
+                        f"In RTSPCam.{objRef.name}, frame update thread exited after {frameCount} frames",
+                        Logger.INFO)
 
         updateThread = threading.Thread(name=f"Frame update thread for camera at {self.IP}", target=updateFrame,
                                         args=(), daemon=True)
-        SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                  f"In RTSPCam.{self.name}, about to start frame update thread",
-                                                  Logger.SUCCESS)
+        logBoth('logTakeNote', RTSPCam.logSource,
+                f"In RTSPCam.{self.name}, about to start frame update thread",
+                Logger.SUCCESS)
         updateThread.start()
 
     def launchMonitorCameraConnectionThread(self):
@@ -679,23 +645,23 @@ class RTSPCam():
                             try:
                                 objRef.releaseResources()
                             except Exception as e:
-                                SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                                          f"In RTSPCam.{objRef.name}, exception releasing resources: {e}",
-                                                                          Logger.RISK)
+                                logBoth('logTakeNote', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, exception releasing resources: {e}",
+                                        Logger.RISK)
                             try:
                                 objRef.reconnect()
                             except Exception as e:
-                                SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                            f"In RTSPCam.{objRef.name}, exception in reconnect: {e}",
-                                                                            Logger.PROBLEM)
+                                logBoth('logTakeAction', RTSPCam.logSource,
+                                        f"In RTSPCam.{objRef.name}, exception in reconnect: {e}",
+                                        Logger.PROBLEM)
                                 # Ensure connectionInProgress is reset even if reconnect throws
                                 objRef.connectionInProgress = False
                                 objRef.connected = False
                                 objRef.camAvailable = False
                 except Exception as e:
-                    SlaveFileLogger.getInstance().logTakeAction(RTSPCam.logSource,
-                                                                f"In RTSPCam.{objRef.name}, unexpected exception in monitoring thread: {e}",
-                                                                Logger.PROBLEM)
+                    logBoth('logTakeAction', RTSPCam.logSource,
+                            f"In RTSPCam.{objRef.name}, unexpected exception in monitoring thread: {e}",
+                            Logger.PROBLEM)
                     # Reset state to allow recovery
                     objRef.connectionInProgress = False
 
@@ -705,11 +671,11 @@ class RTSPCam():
                     try:
                         time.sleep(sleepTime)
                     except:
-                        noteSuppressed()
+                        pass
 
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                      f"In RTSPCam.{objRef.name}, monitoring thread exited",
-                                                      Logger.INFO)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"In RTSPCam.{objRef.name}, monitoring thread exited",
+                    Logger.INFO)
 
         connectionMonitoringThread = threading.Thread(
             name=f"Monitoring and Re-establishing camera connection at {self.IP}",
@@ -721,13 +687,12 @@ class RTSPCam():
         if (self.connectionAttempts == 1) or (
                 (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
             if (objRef.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0:
-                printBoldRed(f"RTSPCam {self.name} is NOT CONNECTED! Attempting reconnection...")
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                      f"In RTSPCam.{self.name}, about to start camera connection monitoring thread",
-                                                      Logger.INFO)
-            SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                         f"In RTSPCam.{self.name}, about to start camera connection monitoring thread",
-                                                         Logger.INFO)
+                logBoth('logTakeAction', RTSPCam.logSource,
+                        f"RTSPCam {self.name} is NOT CONNECTED! Attempting reconnection...",
+                        Logger.PROBLEM)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, about to start camera connection monitoring thread",
+                    Logger.INFO)
         self.connectionMonitoringThreadStarted = True
         connectionMonitoringThread.start()
 
@@ -751,19 +716,16 @@ class RTSPCam():
                 try:
                     self.camProcess.kill()
                 except:
-                    noteSuppressed()
+                    pass
             self.camProcess = None
         self.camAvailable = False
         self.connected = False
         self.stopFrameUpdateThread = True
         if (self.connectionAttempts == 1) or (
                 (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
-            SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
-                                                        f"In RTSPCam.{self.name}, killed frame update thread",
-                                                        Logger.INFO)
-            # SlaveConsoleLogger.getInstance().logTakeNote(RTSPCam.logSource,
-            #                                             f"In RTSPCam.{self.name}, killed frame update thread",
-            #                                             Logger.INFO)
+            logBoth('logTakeNote', RTSPCam.logSource,
+                    f"In RTSPCam.{self.name}, killed frame update thread",
+                    Logger.INFO)
         # printBoldBlue(f"Setting {self.camAvailable = } and {self.connected = } in releaseResources()")
 
 
@@ -1198,10 +1160,10 @@ def runStressTest(duration_minutes=5):
 
 
 def testToSeeFrames():
-    printBoldGreen(f"Starting")
+    logBoth('logInfo', RTSPCam.logSource, "Starting", Logger.GENERAL)
     # camera = RTSPCam("192.168.1.100", 80, "admin", "abcd1234", "Camera 1")
     camera = RTSPCam("192.168.1.64", 80, "admin", "Leyland9753", "Camera 1")
-    printBoldGreen(camera)
+    logBoth('logInfo', RTSPCam.logSource, f"{camera}", Logger.GENERAL)
     startTime = time.time()
     repeats=100000
     try:
@@ -1215,12 +1177,12 @@ def testToSeeFrames():
                     if cv2.waitKey(1) == ord('q'):
                         break
             except:
-                noteSuppressed()
+                pass
             time.sleep(0.05)
     except Exception as e:
-        printBoldRed(e)
+        logBoth('logTakeAction', RTSPCam.logSource, f"{e}", Logger.PROBLEM)
 
-    printBoldRed(f"About to call camera.releaseResources()")
+    logBoth('logTakeAction', RTSPCam.logSource, "About to call camera.releaseResources()", Logger.PROBLEM)
     camera.stop()
     endTime = time.time()
     print(f"{(endTime - startTime)*1000/repeats} ms")

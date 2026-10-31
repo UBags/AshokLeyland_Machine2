@@ -7,12 +7,11 @@ import glob
 import numpy as np
 from typing import Dict, Tuple, Optional, Union
 
-import logutils.SlaveLoggers
 from utils.CosThetaFileUtils import *
 from utils.RedisUtils import *
 from BaseUtils import *
-from logutils import SlaveLoggers
-from logutils.SlaveLoggers import *
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 from concurrent.futures import ThreadPoolExecutor, wait
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage, UNKNOWN
 # from HandDetector import HandDetector
@@ -22,7 +21,6 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
-from camera.VisionConfig import vInt, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -49,71 +47,71 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
-    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
-    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
-    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
+    LHS_CROP_X: int = 380
+    LHS_CROP_Y: int = 650
+    LHS_CROP_WIDTH: int = 130
+    LHS_CROP_HEIGHT: int = 50
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
-    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
-    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
-    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
+    RHS_CROP_X: int = 765
+    RHS_CROP_Y: int = 650
+    RHS_CROP_WIDTH: int = 100
+    RHS_CROP_HEIGHT: int = 55
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
-    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
-    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
-    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
+    COMMON_CHECK_A_X: int = 775
+    COMMON_CHECK_A_Y: int = 300
+    COMMON_CHECK_A_WIDTH: int = 35
+    COMMON_CHECK_A_HEIGHT: int = 25
 
-    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
-    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
-    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
-    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
+    COMMON_CHECK_B_X: int = 440
+    COMMON_CHECK_B_Y: int = 310
+    COMMON_CHECK_B_WIDTH: int = 40
+    COMMON_CHECK_B_HEIGHT: int = 20
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
+    COMMON_CHECK_THRESHOLD: int = 84
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
-    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
-    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
+    COMMON_CHECK_C_CENTER_X: int = 390
+    COMMON_CHECK_C_CENTER_Y: int = 465
+    COMMON_CHECK_C_RADIUS: int = 13
 
-    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
-    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
-    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
+    COMMON_CHECK_D_CENTER_X: int = 865
+    COMMON_CHECK_D_CENTER_Y: int = 465
+    COMMON_CHECK_D_RADIUS: int = 13
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
-    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
-    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
-    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
+    COMMON_CHECK_E_X: int = 600
+    COMMON_CHECK_E_Y: int = 600
+    COMMON_CHECK_E_WIDTH: int = 50
+    COMMON_CHECK_E_HEIGHT: int = 20
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
+    STEP2_POLYGON_POINTS = np.array([
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
+    STEP3_POLYGON_POINTS = np.array([
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
+    LHS_RHS_DARKNESS_THRESHOLD: int = 220
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
 
     # Binarization threshold: pixels below this become black (0), else white (255)
-    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
+    BINARIZATION_THRESHOLD: int = 48
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
+    KERNEL_SIZE: Tuple[int, int] = (5, 5)
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,
@@ -367,17 +365,20 @@ class CheckKnuckle():
                 - original_image: The unmodified input image
                 - is_valid: True if knuckle matches QR code, False otherwise
         """
+        _src = getFullyQualifiedName(__file__, CheckKnuckle)
+
         try:
-            printBoldBlue(
-                f"CheckKnuckle.checkKnuckle() called with anImage = {anImage.shape if anImage is not None else 'None'}")
+            logBoth('logDebug', _src,
+                    f"CheckKnuckle.checkKnuckle() called with anImage = {anImage.shape if anImage is not None else 'None'}",
+                    MessageType.GENERAL)
 
             # Validate inputs
             if anImage is None:
-                printBoldRed("CheckKnuckle: Input image is None")
+                logBoth('logError', _src, "CheckKnuckle: Input image is None", MessageType.ISSUE)
                 return anImage, False
 
             if componentQRCode is None:
-                printBoldRed("CheckKnuckle: Component QR code is None")
+                logBoth('logError', _src, "CheckKnuckle: Component QR code is None", MessageType.ISSUE)
                 return anImage, False
 
             # =====================================================================
@@ -385,28 +386,28 @@ class CheckKnuckle():
             # Ensure no operator hands are still in the frame
             # =====================================================================
             # if HandDetector.detectHands(anImage):
-            #     printBoldRed("CheckKnuckle: HAND DETECTION FAILED - Operator hands detected in image!")
-            #     printBoldRed("CheckKnuckle: Please ensure hands are completely out of frame before capturing")
+            #     logBoth('logError', _src, "CheckKnuckle: HAND DETECTION FAILED - Operator hands detected in image!", MessageType.PROBLEM)
+            #     logBoth('logError', _src, "CheckKnuckle: Please ensure hands are completely out of frame before capturing", MessageType.PROBLEM)
             #     return anImage, False
 
-            # printBoldGreen("CheckKnuckle: Hand detection passed - No hands in frame")
+            # logBoth('logInfo', _src, "CheckKnuckle: Hand detection passed - No hands in frame", MessageType.SUCCESS)
 
             # =====================================================================
             # Step 1: Get model info from QR code using QRCodeHelper
             # =====================================================================
             modelName, lhs_rhs_from_qr, tonnage = getModel_LHSRHS_AndTonnage(componentQRCode)
 
-            printBoldBlue(f"QR Code parsing result: Model={modelName}, Side={lhs_rhs_from_qr}, Tonnage={tonnage}")
+            logBoth('logDebug', _src, f"QR Code parsing result: Model={modelName}, Side={lhs_rhs_from_qr}, Tonnage={tonnage}", MessageType.GENERAL)
 
             if modelName == UNKNOWN or lhs_rhs_from_qr == UNKNOWN:
-                printBoldRed(f"CheckKnuckle: Invalid QR Code - could not parse model/side: {componentQRCode}")
+                logBoth('logError', _src, f"CheckKnuckle: Invalid QR Code - could not parse model/side: {componentQRCode}", MessageType.ISSUE)
                 return anImage, False
 
             # =====================================================================
             # Convert image to grayscale once - reuse for all checks
             # =====================================================================
             gray_image = cv2.cvtColor(anImage, cv2.COLOR_BGR2GRAY)
-            printBoldBlue("Converted image to grayscale for all checks")
+            logBoth('logDebug', _src, "Converted image to grayscale for all checks", MessageType.GENERAL)
 
             # =====================================================================
             # COMMON CHECKS - Apply to all knuckles (DOST/DOSTPLUS, LHS/RHS)
@@ -423,17 +424,21 @@ class CheckKnuckle():
                         ]
             mean_a = np.mean(cropped_a)
 
-            printBoldBlue(f"Common Check A - Region ({CheckKnuckle.COMMON_CHECK_A_X}, {CheckKnuckle.COMMON_CHECK_A_Y}) "
-                          f"{CheckKnuckle.COMMON_CHECK_A_WIDTH}x{CheckKnuckle.COMMON_CHECK_A_HEIGHT}: "
-                          f"mean = {mean_a:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logDebug', _src,
+                    f"Common Check A - Region ({CheckKnuckle.COMMON_CHECK_A_X}, {CheckKnuckle.COMMON_CHECK_A_Y}) "
+                    f"{CheckKnuckle.COMMON_CHECK_A_WIDTH}x{CheckKnuckle.COMMON_CHECK_A_HEIGHT}: "
+                    f"mean = {mean_a:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.GENERAL)
 
             if mean_a >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
-                printBoldRed(
-                    f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(
-                f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logInfo', _src,
+                    f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.SUCCESS)
 
             # =====================================================================
             # Common Check B: Rectangular region B (440, 310) 40x20
@@ -445,17 +450,21 @@ class CheckKnuckle():
                         ]
             mean_b = np.mean(cropped_b)
 
-            printBoldBlue(f"Common Check B - Region ({CheckKnuckle.COMMON_CHECK_B_X}, {CheckKnuckle.COMMON_CHECK_B_Y}) "
-                          f"{CheckKnuckle.COMMON_CHECK_B_WIDTH}x{CheckKnuckle.COMMON_CHECK_B_HEIGHT}: "
-                          f"mean = {mean_b:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logDebug', _src,
+                    f"Common Check B - Region ({CheckKnuckle.COMMON_CHECK_B_X}, {CheckKnuckle.COMMON_CHECK_B_Y}) "
+                    f"{CheckKnuckle.COMMON_CHECK_B_WIDTH}x{CheckKnuckle.COMMON_CHECK_B_HEIGHT}: "
+                    f"mean = {mean_b:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.GENERAL)
 
             if mean_b >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
-                printBoldRed(
-                    f"CheckKnuckle: Common Check B failed - Region B mean {mean_b:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Common Check B failed - Region B mean {mean_b:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(
-                f"CheckKnuckle: Common Check B passed - Region B mean {mean_b:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logInfo', _src,
+                    f"CheckKnuckle: Common Check B passed - Region B mean {mean_b:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.SUCCESS)
 
             # =====================================================================
             # Common Check C: Circular region at (390, 465) radius 13
@@ -480,18 +489,21 @@ class CheckKnuckle():
             circle_pixels_c = cropped_c[mask_c_cropped == 255]
             mean_c = np.mean(circle_pixels_c) if len(circle_pixels_c) > 0 else 255.0
 
-            printBoldBlue(
-                f"Common Check C - Circle ({CheckKnuckle.COMMON_CHECK_C_CENTER_X}, {CheckKnuckle.COMMON_CHECK_C_CENTER_Y}) "
-                f"radius {CheckKnuckle.COMMON_CHECK_C_RADIUS}: "
-                f"mean = {mean_c:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logDebug', _src,
+                    f"Common Check C - Circle ({CheckKnuckle.COMMON_CHECK_C_CENTER_X}, {CheckKnuckle.COMMON_CHECK_C_CENTER_Y}) "
+                    f"radius {CheckKnuckle.COMMON_CHECK_C_RADIUS}: "
+                    f"mean = {mean_c:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.GENERAL)
 
             if mean_c >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
-                printBoldRed(
-                    f"CheckKnuckle: Common Check C failed - Circle C mean {mean_c:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Common Check C failed - Circle C mean {mean_c:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(
-                f"CheckKnuckle: Common Check C passed - Circle C mean {mean_c:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logInfo', _src,
+                    f"CheckKnuckle: Common Check C passed - Circle C mean {mean_c:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.SUCCESS)
 
             # =====================================================================
             # Common Check D: Circular region at (865, 465) radius 13
@@ -516,18 +528,21 @@ class CheckKnuckle():
             circle_pixels_d = cropped_d[mask_d_cropped == 255]
             mean_d = np.mean(circle_pixels_d) if len(circle_pixels_d) > 0 else 255.0
 
-            printBoldBlue(
-                f"Common Check D - Circle ({CheckKnuckle.COMMON_CHECK_D_CENTER_X}, {CheckKnuckle.COMMON_CHECK_D_CENTER_Y}) "
-                f"radius {CheckKnuckle.COMMON_CHECK_D_RADIUS}: "
-                f"mean = {mean_d:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logDebug', _src,
+                    f"Common Check D - Circle ({CheckKnuckle.COMMON_CHECK_D_CENTER_X}, {CheckKnuckle.COMMON_CHECK_D_CENTER_Y}) "
+                    f"radius {CheckKnuckle.COMMON_CHECK_D_RADIUS}: "
+                    f"mean = {mean_d:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.GENERAL)
 
             if mean_d >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
-                printBoldRed(
-                    f"CheckKnuckle: Common Check D failed - Circle D mean {mean_d:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Common Check D failed - Circle D mean {mean_d:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(
-                f"CheckKnuckle: Common Check D passed - Circle D mean {mean_d:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logInfo', _src,
+                    f"CheckKnuckle: Common Check D passed - Circle D mean {mean_d:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.SUCCESS)
 
             # =====================================================================
             # Common Check E: Rectangular region E (600, 600) 50x20
@@ -539,17 +554,21 @@ class CheckKnuckle():
                         ]
             mean_e = np.mean(cropped_e)
 
-            printBoldBlue(f"Common Check E - Region ({CheckKnuckle.COMMON_CHECK_E_X}, {CheckKnuckle.COMMON_CHECK_E_Y}) "
-                          f"{CheckKnuckle.COMMON_CHECK_E_WIDTH}x{CheckKnuckle.COMMON_CHECK_E_HEIGHT}: "
-                          f"mean = {mean_e:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logDebug', _src,
+                    f"Common Check E - Region ({CheckKnuckle.COMMON_CHECK_E_X}, {CheckKnuckle.COMMON_CHECK_E_Y}) "
+                    f"{CheckKnuckle.COMMON_CHECK_E_WIDTH}x{CheckKnuckle.COMMON_CHECK_E_HEIGHT}: "
+                    f"mean = {mean_e:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.GENERAL)
 
             if mean_e >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
-                printBoldRed(
-                    f"CheckKnuckle: Common Check E failed - Region E mean {mean_e:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Common Check E failed - Region E mean {mean_e:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(
-                f"CheckKnuckle: Common Check E passed - Region E mean {mean_e:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}")
+            logBoth('logInfo', _src,
+                    f"CheckKnuckle: Common Check E passed - Region E mean {mean_e:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    MessageType.SUCCESS)
 
             # =====================================================================
             # Step 1A: Check for LHS component in image
@@ -566,7 +585,7 @@ class CheckKnuckle():
             )
             is_lhs_component = lhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
 
-            printBoldBlue(f"LHS region average: {lhs_avg:.2f}, is_LHS: {is_lhs_component}")
+            logBoth('logDebug', _src, f"LHS region average: {lhs_avg:.2f}, is_LHS: {is_lhs_component}", MessageType.GENERAL)
 
             # =====================================================================
             # Step 1B: Check for RHS component in image
@@ -583,14 +602,16 @@ class CheckKnuckle():
             )
             is_rhs_component = rhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
 
-            printBoldBlue(f"RHS region average: {rhs_avg:.2f}, is_RHS: {is_rhs_component}")
+            logBoth('logDebug', _src, f"RHS region average: {rhs_avg:.2f}, is_RHS: {is_rhs_component}", MessageType.GENERAL)
 
             # =====================================================================
             # Validation: At least one side must be detected
             # =====================================================================
             if not is_lhs_component and not is_rhs_component:
-                printBoldRed(f"CheckKnuckle: Invalid component - neither LHS nor RHS detected "
-                             f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f})")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Invalid component - neither LHS nor RHS detected "
+                        f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f})",
+                        MessageType.ISSUE)
                 return anImage, False
 
             # Determine detected side from image
@@ -600,11 +621,13 @@ class CheckKnuckle():
             # Match detected side with QR code side
             # =====================================================================
             if detected_side.upper() != lhs_rhs_from_qr.upper():
-                printBoldRed(f"CheckKnuckle: Side mismatch - QR code says {lhs_rhs_from_qr}, "
-                             f"but image shows {detected_side}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Side mismatch - QR code says {lhs_rhs_from_qr}, "
+                        f"but image shows {detected_side}",
+                        MessageType.ISSUE)
                 return anImage, False
 
-            printBoldGreen(f"CheckKnuckle: Side matched - {detected_side}")
+            logBoth('logInfo', _src, f"CheckKnuckle: Side matched - {detected_side}", MessageType.SUCCESS)
 
             # =====================================================================
             # Step 2: Verify knuckle presence via polygon region check
@@ -613,16 +636,19 @@ class CheckKnuckle():
             # If average < 230, proceed to Step 3
             # =====================================================================
             step2_avg = CheckKnuckle._analyze_polygon_region(anImage, CheckKnuckle.STEP2_POLYGON_POINTS)
-            if modelName == "DOST":
-                step2_passed = step2_avg < CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
-            elif modelName == "DOSTPLUS":
-                step2_passed = step2_avg >= CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
+            step2_passed = False
+            if modelName is not None:
+                if modelName.upper() == "DOST":
+                    step2_passed = step2_avg < CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
+                elif modelName.upper() == "DOSTPLUS":
+                    step2_passed = step2_avg >= CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
 
-            printBoldBlue(f"Step 2 polygon average: {step2_avg:.2f}, passed: {step2_passed}")
+            logBoth('logDebug', _src, f"Step 2 polygon average: {step2_avg:.2f}, passed: {step2_passed}", MessageType.GENERAL)
 
             if not step2_passed:
-                printBoldRed(
-                    f"CheckKnuckle: Step 2 failed - polygon average {step2_avg:.2f} >= {CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Step 2 failed - polygon average {step2_avg:.2f} >= {CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD}",
+                        MessageType.ISSUE)
                 return anImage, False
 
             # =====================================================================
@@ -639,14 +665,16 @@ class CheckKnuckle():
             else:
                 step3_avg = CheckKnuckle._analyze_polygon_region(anImage, CheckKnuckle.STEP3_POLYGON_POINTS)
 
-            if modelName == "DOST":
-                step3_passed = step3_avg < CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
-            elif modelName == "DOSTPLUS":
-                step3_passed = step3_avg >= CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
+            step3_passed = False
+            if modelName is not None:
+                if modelName.upper() == "DOST":
+                    step3_passed = step3_avg < CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
+                elif modelName.upper() == "DOSTPLUS":
+                    step3_passed = step3_avg >= CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD
 
             detected_model = modelName if step3_passed else "Correct model not detected"
 
-            printBoldBlue(f"Step 3 polygon average: {step3_avg:.2f}, detected model: {detected_model}")
+            logBoth('logDebug', _src, f"Step 3 polygon average: {step3_avg:.2f}, detected model: {detected_model}", MessageType.GENERAL)
 
             # Show debug window if enabled
             if CHECK_KNUCKLE_IMAGE_DEBUG:
@@ -664,17 +692,19 @@ class CheckKnuckle():
             # Match detected model with QR code model
             # =====================================================================
             if modelName.upper() != detected_model.upper():
-                printBoldRed(f"CheckKnuckle: Model mismatch - QR code says {modelName}, "
-                             f"but image shows {detected_model}")
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Model mismatch - QR code says {modelName}, "
+                        f"but image shows {detected_model}",
+                        MessageType.ISSUE)
                 return anImage, False
 
             # =====================================================================
             # All checks passed!
             # =====================================================================
-            printBoldGreen(f"CheckKnuckle: SUCCESS - Component matched: {detected_side} {detected_model}")
+            logBoth('logInfo', _src, f"CheckKnuckle: SUCCESS - Component matched: {detected_side} {detected_model}", MessageType.SUCCESS)
             return anImage, True
         except Exception as e:
-            printBoldRed(f"CheckKnuckle: Exception during detection: {e}")
+            logBoth('logCritical', _src, f"CheckKnuckle: Exception during detection: {e}", MessageType.PROBLEM)
             import traceback
             traceback.print_exc()
             return anImage, False
@@ -692,6 +722,8 @@ class CheckKnuckle():
             directory: Path to directory containing images
             qrCode: QR code value to use for validation
         """
+        _src = getFullyQualifiedName(__file__, CheckKnuckle)
+
         print(f"\n{'=' * 60}")
         print(f"CheckKnuckle Test Runner")
         print(f"{'=' * 60}")
@@ -701,7 +733,7 @@ class CheckKnuckle():
 
         # Validate directory exists
         if not os.path.isdir(directory):
-            printBoldRed(f"Error: Directory does not exist: {directory}")
+            logBoth('logError', _src, f"Error: Directory does not exist: {directory}", MessageType.ISSUE)
             return
 
         # Find all image files (case-insensitive extensions)
@@ -720,7 +752,7 @@ class CheckKnuckle():
         knuckle_files = [f for f in image_files]
 
         if not knuckle_files:
-            printBoldRed(f"No files with 'Knuckle' in filename found in {directory}")
+            logBoth('logError', _src, f"No files with 'Knuckle' in filename found in {directory}", MessageType.ISSUE)
             print(f"Total image files found: {len(image_files)}")
             if image_files:
                 print("Available image files:")
@@ -747,7 +779,7 @@ class CheckKnuckle():
             image = cv2.imread(filepath)
 
             if image is None:
-                printBoldRed(f"  Could not load image: {filepath}")
+                logBoth('logError', _src, f"  Could not load image: {filepath}", MessageType.ISSUE)
                 failed_count += 1
                 continue
 
@@ -761,10 +793,10 @@ class CheckKnuckle():
             )
 
             if result:
-                printBoldGreen(f"  Component matched")
+                logBoth('logInfo', _src, f"  Component matched", MessageType.SUCCESS)
                 passed_count += 1
             else:
-                printBoldRed(f"  Component did not match")
+                logBoth('logError', _src, f"  Component did not match", MessageType.ISSUE)
                 failed_count += 1
 
             print()  # Empty line between files

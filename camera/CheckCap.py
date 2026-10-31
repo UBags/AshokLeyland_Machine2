@@ -21,7 +21,6 @@ Parameters (from configuration):
     RB_THRESHOLD: Maximum R-B value for cap (default: -1)
 """
 
-from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import cv2
 import numpy as np
 from typing import Dict, Tuple
@@ -35,6 +34,8 @@ try:
     from BaseUtils import *
     from Configuration import *
     from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage, UNKNOWN
+    from logutils.SlaveLoggers import logBoth
+    from logutils.Logger import MessageType
 
     CosThetaConfigurator.getInstance()
 except ImportError:
@@ -45,14 +46,18 @@ except ImportError:
     topBearingPictureKeyString = "topBearingPicture"
     nutAndPlateWasherPictureKeyString = "nutAndPlateWasherPicture"
 
-    def printBoldBlue(msg):
-        print(f"\033[1;34m{msg}\033[0m")
+    def logBoth(level, source, msg, messageType=None):
+        colours = {'logInfo': '\033[1;32m', 'logError': '\033[1;31m', 'logWarning': '\033[1;33m', 'logDebug': '\033[1;34m', 'logCritical': '\033[1;31m'}
+        reset = '\033[0m'
+        colour = colours.get(level, '')
+        print(f"{colour}{msg}{reset}")
 
-    def printBoldGreen(msg):
-        print(f"\033[1;32m{msg}\033[0m")
-
-    def printBoldRed(msg):
-        print(f"\033[1;31m{msg}\033[0m")
+    class MessageType:
+        GENERAL = 1
+        SUCCESS = 2
+        RISK = 3
+        ISSUE = 4
+        PROBLEM = 5
 
     def getModel_LHSRHS_AndTonnage(qrCode):
         return "DOST", "LHS", "Unknown"
@@ -93,23 +98,20 @@ class CheckCap:
     def _load_parameters_from_config(cls, componentType: str = "DOST"):
         """Load parameters from configuration file."""
         try:
-            cls.CENTER_X = CosThetaConfigurator.getCapCheckCenterX()
-            cls.CENTER_Y = CosThetaConfigurator.getCapCheckCenterY()
-            cls.RADIUS_DOST = CosThetaConfigurator.getCapCheckRadius(DOST)
-            cls.RADIUS_DOSTPLUS = CosThetaConfigurator.getCapCheckRadius(DOSTPLUS)
-            cls.DELTA_THRESHOLD_DOST = CosThetaConfigurator.getCapCheckDeltaThreshold(DOST)
-            cls.RB_THRESHOLD_DOST = CosThetaConfigurator.getCapCheckRBThreshold(DOST)
-            cls.DELTA_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThreshold(DOSTPLUS)
-            cls.RB_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getCapCheckRBThreshold(DOSTPLUS)
+            cls.CENTER_X = CosThetaConfigurator.getInstance().getCapCheckCenterX()
+            cls.CENTER_Y = CosThetaConfigurator.getInstance().getCapCheckCenterY()
+            cls.RADIUS_DOST = CosThetaConfigurator.getInstance().getCapCheckRadius(DOST)
+            cls.RADIUS_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckRadius(DOSTPLUS)
+            cls.DELTA_THRESHOLD_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThreshold(DOST)
+            cls.RB_THRESHOLD_DOST = CosThetaConfigurator.getInstance().getCapCheckRBThreshold(DOST)
+            cls.DELTA_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThreshold(DOSTPLUS)
+            cls.RB_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckRBThreshold(DOSTPLUS)
             # Load component-specific thresholds if available
-            cls.DELTA_THRESHOLD_HUB_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdHub(DOSTPLUS)
-            cls.DELTA_THRESHOLD_TOP_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdTop(DOSTPLUS)
-            cls.DELTA_THRESHOLD_NUT_DOSTPLUS = CosThetaConfigurator.getCapCheckDeltaThresholdNut(DOSTPLUS)
-            cls.DELTA_THRESHOLD_HUB_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdHub(DOST)
-            cls.DELTA_THRESHOLD_TOP_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdTop(DOST)
-            cls.DELTA_THRESHOLD_NUT_DOST = CosThetaConfigurator.getCapCheckDeltaThresholdNut(DOST)
+            cls.DELTA_THRESHOLD_HUB_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdHub(DOSTPLUS)
+            cls.DELTA_THRESHOLD_TOP_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdTop(DOSTPLUS)
+            cls.DELTA_THRESHOLD_NUT_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdNut(DOSTPLUS)
         except:
-            noteSuppressed()
+            pass
 
     @classmethod
     def _get_radius_for_component(cls, componentType: str) -> int:
@@ -246,22 +248,24 @@ class CheckCap:
                 - Annotated image showing the detection result
                 - Boolean indicating if Cap is present (True) or not (False)
         """
-        printBoldBlue(
-            f"CheckCap.checkCap() called with "
-            f"anImage = {anImage.shape if anImage is not None else 'None'}"
-        )
+        _src = getFullyQualifiedName(__file__, CheckCap)
+
+        logBoth('logDebug', _src,
+                f"CheckCap.checkCap() called with "
+                f"anImage = {anImage.shape if anImage is not None else 'None'}",
+                MessageType.GENERAL)
 
         # Basic validation
         if componentQRCode is None:
-            printBoldRed("CheckCap: componentQRCode is None, returning False")
+            logBoth('logError', _src, "CheckCap: componentQRCode is None, returning False", MessageType.ISSUE)
             return anImage, False
 
         if anImage is None:
-            printBoldRed("CheckCap: anImage is None, returning False")
+            logBoth('logError', _src, "CheckCap: anImage is None, returning False", MessageType.ISSUE)
             return anImage, False
 
         if currentPictures is None:
-            printBoldRed("CheckCap: currentPictures is None, returning False")
+            logBoth('logError', _src, "CheckCap: currentPictures is None, returning False", MessageType.ISSUE)
             return anImage, False
 
         # =====================================================================
@@ -269,15 +273,15 @@ class CheckCap:
         # Ensure no operator hands are still in the frame
         # =====================================================================
         # if HandDetector.detectHands(anImage):
-        #     printBoldRed("CheckCap: HAND DETECTION FAILED - Operator hands detected in image!")
-        #     printBoldRed("CheckCap: Please ensure hands are completely out of frame before capturing")
+        #     logBoth('logError', _src, "CheckCap: HAND DETECTION FAILED - Operator hands detected in image!", MessageType.PROBLEM)
+        #     logBoth('logError', _src, "CheckCap: Please ensure hands are completely out of frame before capturing", MessageType.PROBLEM)
         #     return anImage, False
         #
-        # printBoldGreen("CheckCap: Hand detection passed - No hands in frame")
+        # logBoth('logInfo', _src, "CheckCap: Hand detection passed - No hands in frame", MessageType.SUCCESS)
 
         # Get component type from QR code
         modelName, lhs_rhs, _ = getModel_LHSRHS_AndTonnage(componentQRCode)
-        printBoldBlue(f"Got modelName as {modelName}")
+        logBoth('logDebug', _src, f"Got modelName as {modelName}", MessageType.GENERAL)
         if modelName == UNKNOWN:
             modelName = "DOST"
 
@@ -287,7 +291,7 @@ class CheckCap:
         # Get radius based on component type
         radius = CheckCap._get_radius_for_component(modelName)
 
-        printBoldBlue(f"CheckCap: Using radius={radius} for component type={modelName}")
+        logBoth('logDebug', _src, f"CheckCap: Using radius={radius} for component type={modelName}", MessageType.GENERAL)
 
         # Get base images
         hub_bottom_bearing_image = currentPictures.get(hubAndBottomBearingPictureKeyString, None)
@@ -302,7 +306,7 @@ class CheckCap:
 
         missing_images = [name for name, img in base_images if img is None]
         if missing_images:
-            printBoldRed(f"CheckCap: Missing base images: {missing_images}, returning False")
+            logBoth('logError', _src, f"CheckCap: Missing base images: {missing_images}, returning False", MessageType.ISSUE)
             return anImage, False
 
         try:
@@ -324,29 +328,30 @@ class CheckCap:
             #     if modelName == DOST:
             #         if delta_avg < CheckCap.DELTA_THRESHOLD_DOST:
             #             step1_all_pass = step1_all_pass and False
-            #             printBoldRed(
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOST}"
-            #             )
+            #             logBoth('logError', _src,
+            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOST}",
+            #                 MessageType.ISSUE)
             #         else:
-            #             printBoldGreen(
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOST}"
-            #             )
+            #             logBoth('logInfo', _src,
+            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOST}",
+            #                 MessageType.SUCCESS)
             #     elif modelName == DOSTPLUS:
             #         if delta_avg < CheckCap.DELTA_THRESHOLD_DOSTPLUS:
             #             step1_all_pass = step1_all_pass and False
-            #             printBoldRed(
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}"
-            #             )
+            #             logBoth('logError', _src,
+            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}",
+            #                 MessageType.ISSUE)
             #         else:
-            #             printBoldGreen(
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}")
+            #             logBoth('logInfo', _src,
+            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}",
+            #                 MessageType.SUCCESS)
             #
             # step1_passed = step1_all_pass
             #
             # if step1_passed:
-            #     printBoldGreen("CheckCap: Step 1 PASSED - All delta comparisons above threshold")
+            #     logBoth('logInfo', _src, "CheckCap: Step 1 PASSED - All delta comparisons above threshold", MessageType.SUCCESS)
             # else:
-            #     printBoldRed("CheckCap: Step 1 FAILED - Not all delta comparisons above threshold")
+            #     logBoth('logError', _src, "CheckCap: Step 1 FAILED - Not all delta comparisons above threshold", MessageType.ISSUE)
 
             # =====================================================================
             # STEP 1: Color Delta Analysis with Component-Specific Thresholds
@@ -377,20 +382,20 @@ class CheckCap:
 
                 if delta_avg < threshold:
                     step1_all_pass = False
-                    printBoldRed(
-                        f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={threshold}"
-                    )
+                    logBoth('logError', _src,
+                            f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={threshold}",
+                            MessageType.ISSUE)
                 else:
-                    printBoldGreen(
-                        f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={threshold}"
-                    )
+                    logBoth('logInfo', _src,
+                            f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={threshold}",
+                            MessageType.SUCCESS)
 
             step1_passed = step1_all_pass
 
             if step1_passed:
-                printBoldGreen("CheckCap: Step 1 PASSED - All delta comparisons above threshold")
+                logBoth('logInfo', _src, "CheckCap: Step 1 PASSED - All delta comparisons above threshold", MessageType.SUCCESS)
             else:
-                printBoldRed("CheckCap: Step 1 FAILED - Not all delta comparisons above threshold")
+                logBoth('logError', _src, "CheckCap: Step 1 FAILED - Not all delta comparisons above threshold", MessageType.ISSUE)
 
             # =====================================================================
             # STEP 2: Cap Color Verification (R - B)
@@ -402,23 +407,23 @@ class CheckCap:
             if modelName == DOST:
                 step2_passed = rb_average < CheckCap.RB_THRESHOLD_DOST
                 if step2_passed:
-                    printBoldGreen(
-                        f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} < threshold={CheckCap.RB_THRESHOLD_DOST}"
-                    )
+                    logBoth('logInfo', _src,
+                            f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} < threshold={CheckCap.RB_THRESHOLD_DOST}",
+                            MessageType.SUCCESS)
                 else:
-                    printBoldRed(
-                        f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} >= threshold={CheckCap.RB_THRESHOLD_DOST}"
-                    )
+                    logBoth('logError', _src,
+                            f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} >= threshold={CheckCap.RB_THRESHOLD_DOST}",
+                            MessageType.ISSUE)
             elif modelName == DOSTPLUS:
                 step2_passed = rb_average > CheckCap.RB_THRESHOLD_DOSTPLUS
                 if step2_passed:
-                    printBoldGreen(
-                        f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} > threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}"
-                    )
+                    logBoth('logInfo', _src,
+                            f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} > threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}",
+                            MessageType.SUCCESS)
                 else:
-                    printBoldRed(
-                        f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} <= threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}"
-                    )
+                    logBoth('logError', _src,
+                            f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} <= threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}",
+                            MessageType.ISSUE)
 
 
             # =====================================================================
@@ -427,9 +432,9 @@ class CheckCap:
             is_cap_present = step1_passed and step2_passed
 
             if is_cap_present:
-                printBoldGreen("CheckCap: CAP DETECTED - Both steps passed")
+                logBoth('logInfo', _src, "CheckCap: CAP DETECTED - Both steps passed", MessageType.SUCCESS)
             else:
-                printBoldRed("CheckCap: CAP NOT DETECTED - One or more steps failed")
+                logBoth('logError', _src, "CheckCap: CAP NOT DETECTED - One or more steps failed", MessageType.ISSUE)
 
             # Create annotated output image
             annotated_image = CheckCap._create_annotated_image(
@@ -440,7 +445,7 @@ class CheckCap:
             return annotated_image, is_cap_present
 
         except Exception as e:
-            printBoldRed(f"CheckCap: Exception during detection: {e}")
+            logBoth('logCritical', _src, f"CheckCap: Exception during detection: {e}", MessageType.PROBLEM)
             import traceback
             traceback.print_exc()
             return anImage, False

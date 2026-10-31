@@ -22,7 +22,9 @@ import os
 
 from scipy.spatial import KDTree
 
-from BaseUtils import get_project_root
+from BaseUtils import get_project_root, getFullyQualifiedName
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 from camera.ModelManager import ModelManager
 # Import normalization methods
 # Import image normalization methods from shared module
@@ -34,25 +36,24 @@ from utils.ImageNormalisationWithMask import (
     pixBackgroundNorm_masked,
     pixContrastNorm_masked
 )
-from camera.VisionConfig import vInt, vFloat
 
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_10 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.10", 1.3)
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_20 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.20", 1.2)
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_40 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.40", 1.15)
-MAJOR_MINOR_AXIS_CUTOFF_FOR_OTHERS = vFloat("vision.hub.major.minor.axis.cutoff.for.others", 1.10)
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_10 = 1.3
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_20 = 1.2
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_40 = 1.15
+MAJOR_MINOR_AXIS_CUTOFF_FOR_OTHERS = 1.10
 
 # These are applied based on the median radius/major_axis of each group
 # Percentages (12-15% range):
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_10 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.10", 0.25)  # 20%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_20 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.20", 0.20)  # 20%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_40 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.40", 0.15)  # 15%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_MORE_THAN_40 = vFloat("vision.hub.grouping.radius.variance.percentage.more.than.40", 0.10)  # 10%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_10 = 0.25  # 20%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_20 = 0.20  # 20%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_40 = 0.15  # 15%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_MORE_THAN_40 = 0.10  # 10%
 
 # Area ratio thresholds for filtering ill-shaped masks
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_10 = vFloat("vision.hub.area.ratio.threshold.if.less.than.10", 0.5)
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_20 = vFloat("vision.hub.area.ratio.threshold.if.less.than.20", 0.55)
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_40 = vFloat("vision.hub.area.ratio.threshold.if.less.than.40", 0.6)
-AREA_RATIO_THRESHOLD_FOR_OTHERS = vFloat("vision.hub.area.ratio.threshold.for.others", 0.65)
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_10 = 0.5
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_20 = 0.55
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_40 = 0.6
+AREA_RATIO_THRESHOLD_FOR_OTHERS = 0.65
 
 # Model-specific distance configurations for hole counting
 # Format: (distance1, distance2, tolerance_percentage)
@@ -83,28 +84,28 @@ ALL_SPACING_CONFIGURATIONS = [
     {"count": 4, "spacing_min": 175, "spacing_max": 200, "model": "DOST"},
 ]
 
-PERCENTAGE_SPREAD_FOR_GROUPING_FROM_CENTER = vFloat("vision.hub.percentage.spread.for.grouping.from.center", 0.15)  # 12.5%
+PERCENTAGE_SPREAD_FOR_GROUPING_FROM_CENTER = 0.15  # 12.5%
 
 # Equispacing tolerance for circular arrangement validation
-EQUISPACING_STRICT_TOLERANCE = vFloat("vision.hub.equispacing.strict.tolerance", 0.10)  # 10% - strict pass criteria
-EQUISPACING_RELAXED_TOLERANCE = vFloat("vision.hub.equispacing.relaxed.tolerance", 0.20)  # 20% - fallback if no strict pass
+EQUISPACING_STRICT_TOLERANCE = 0.10  # 10% - strict pass criteria
+EQUISPACING_RELAXED_TOLERANCE = 0.20  # 20% - fallback if no strict pass
 
 # =============================================================================
 # NEW v2.0: REGULAR POLYGON FINDER CONSTANTS
 # =============================================================================
 
 # Tolerance for angular deviation (as fraction of expected angle)
-POLYGON_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.polygon.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
+POLYGON_ANGULAR_TOLERANCE = 0.15  # 15%
 
 # Tolerance for radial deviation (as fraction of mean radius)
-POLYGON_RADIAL_TOLERANCE = vFloat("vision.unused.hub.polygon.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
+POLYGON_RADIAL_TOLERANCE = 0.20  # 20%
 
 # Quality thresholds for polygon fit
-GOOD_FIT_THRESHOLD_K4 = vFloat("vision.unused.hub.good.fit.threshold.k4", 0.25)  # Good square fit  # UNUSED by live code
-GOOD_FIT_THRESHOLD_K5 = vFloat("vision.unused.hub.good.fit.threshold.k5", 0.30)  # Good pentagon fit  # UNUSED by live code
+GOOD_FIT_THRESHOLD_K4 = 0.25  # Good square fit
+GOOD_FIT_THRESHOLD_K5 = 0.30  # Good pentagon fit
 
 # Dominance ratio: winner must be this much better than loser
-DOMINANCE_RATIO = vFloat("vision.unused.hub.dominance.ratio", 0.70)  # Winner score must be < 70% of loser score  # UNUSED by live code
+DOMINANCE_RATIO = 0.70  # Winner score must be < 70% of loser score
 
 # =============================================================================
 # STRICT REGULARITY VALIDATION THRESHOLDS (v2.1)
@@ -114,28 +115,13 @@ DOMINANCE_RATIO = vFloat("vision.unused.hub.dominance.ratio", 0.70)  # Winner sc
 # Angular tolerance: how much each angle can deviate from expected (360/K)
 # For K=4: expected 90°, tolerance ±15% means 76.5° to 103.5°
 # For K=5: expected 72°, tolerance ±15% means 61.2° to 82.8°
-REGULARITY_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.regularity.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
+REGULARITY_ANGULAR_TOLERANCE = 0.15  # 15%
 
 # Side length tolerance: how much each side can deviate from mean side length
-REGULARITY_SIDE_TOLERANCE = vFloat("vision.unused.hub.regularity.side.tolerance", 0.15)  # 15%  # UNUSED by live code
+REGULARITY_SIDE_TOLERANCE = 0.15  # 15%
 
 # Radial tolerance: how much each vertex distance from center can deviate from mean
-REGULARITY_RADIAL_TOLERANCE = vFloat("vision.unused.hub.regularity.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
-
-# =============================================================================
-# HUB CHECK ROI / ACCEPTANCE PARAMETERS (configurable via ApplicationConfiguration.properties)
-# =============================================================================
-# Annular region (full-image pixel coordinates) in which the hub holes are segmented; also used to place the overlay
-HUB_SEGMENT_CENTER_X = vInt("vision.hub.segment.center.x", 635)
-HUB_SEGMENT_CENTER_Y = vInt("vision.hub.segment.center.y", 345)
-HUB_SEGMENT_OUTER_RADIUS = vInt("vision.hub.segment.outer.radius", 250)
-HUB_SEGMENT_INNER_RADIUS = vInt("vision.hub.segment.inner.radius", 120)
-# Hole-candidate mask area limits (pixels) and YOLO proposal confidence cut-off
-HUB_MIN_MASK_AREA = vInt("vision.hub.min.mask.area", 100)
-HUB_MAX_MASK_AREA = vInt("vision.hub.max.mask.area", 3000)
-HUB_YOLO_CONF_THRESHOLD = vFloat("vision.hub.yolo.conf.threshold", 0.3)
-# Equal-angle filter: each angular gap may deviate this fraction from 360/K
-HUB_EQUAL_ANGLE_TOLERANCE = vFloat("vision.hub.equal.angle.tolerance", 0.15)
+REGULARITY_RADIAL_TOLERANCE = 0.20  # 20%
 
 
 # =============================================================================
@@ -463,12 +449,11 @@ def filter_masks_by_area_ratio(masks: List[Dict[str, Any]]) -> List[Dict[str, An
     """
     import math
 
+    _src = __name__
     filtered_masks = []
     excluded_count = 0
 
-    print("\n" + "=" * 60)
-    print("AREA RATIO FILTER - Excluding ill-shaped masks")
-    print("=" * 60)
+    logBoth('logDebug', _src, "AREA RATIO FILTER - Excluding ill-shaped masks", MessageType.GENERAL)
 
     for idx, mask_data in enumerate(masks):
         shape_info = mask_data.get('shape_info', {})
@@ -515,12 +500,15 @@ def filter_masks_by_area_ratio(masks: List[Dict[str, Any]]) -> List[Dict[str, An
             filtered_masks.append(mask_data)
         else:
             excluded_count += 1
-            print(f"  Excluded {shape_type} (idx={idx}): size={size_metric:.2f}, "
-                  f"actual_area={actual_area}, expected_area={expected_area:.1f}, "
-                  f"ratio={area_ratio:.3f} < threshold={threshold}")
+            logBoth('logDebug', _src,
+                    f"  Excluded {shape_type} (idx={idx}): size={size_metric:.2f}, "
+                    f"actual_area={actual_area}, expected_area={expected_area:.1f}, "
+                    f"ratio={area_ratio:.3f} < threshold={threshold}",
+                    MessageType.GENERAL)
 
-    print(f"\nArea ratio filter: kept {len(filtered_masks)}, excluded {excluded_count}")
-    print("=" * 60 + "\n")
+    logBoth('logDebug', _src,
+            f"Area ratio filter: kept {len(filtered_masks)}, excluded {excluded_count}",
+            MessageType.GENERAL)
 
     return filtered_masks
 
@@ -541,9 +529,8 @@ def filter_valid_shapes_only(masks: List[Dict[str, Any]]) -> List[Dict[str, Any]
     filtered_masks = []
     excluded_count = 0
 
-    print("\n" + "=" * 60)
-    print("SHAPE FILTER - Keeping only circles and ellipses")
-    print("=" * 60)
+    _src = __name__
+    logBoth('logDebug', _src, "SHAPE FILTER - Keeping only circles and ellipses", MessageType.GENERAL)
 
     for idx, mask_data in enumerate(masks):
         shape_info = mask_data.get('shape_info', {})
@@ -553,10 +540,11 @@ def filter_valid_shapes_only(masks: List[Dict[str, Any]]) -> List[Dict[str, Any]
             filtered_masks.append(mask_data)
         else:
             excluded_count += 1
-            print(f"  Excluded 'other' shape (idx={idx})")
+            logBoth('logDebug', _src, f"  Excluded 'other' shape (idx={idx})", MessageType.GENERAL)
 
-    print(f"\nShape filter: kept {len(filtered_masks)} (circles + ellipses), excluded {excluded_count}")
-    print("=" * 60 + "\n")
+    logBoth('logDebug', _src,
+            f"Shape filter: kept {len(filtered_masks)} (circles + ellipses), excluded {excluded_count}",
+            MessageType.GENERAL)
 
     return filtered_masks
 
@@ -576,9 +564,10 @@ def filter_small_groups(
     Returns:
         Filtered dictionary of groups
     """
-    print("\n" + "=" * 60)
-    print(f"SIZE FILTER - Removing groups with < {min_size} masks")
-    print("=" * 60)
+    _src = __name__
+    logBoth('logDebug', _src,
+            f"SIZE FILTER - Removing groups with < {min_size} masks",
+            MessageType.GENERAL)
 
     filtered_groups = {}
     removed_count = 0
@@ -586,13 +575,18 @@ def filter_small_groups(
     for group_id, mask_indices in groups.items():
         if len(mask_indices) >= min_size:
             filtered_groups[group_id] = mask_indices
-            print(f"  ✓ Group {group_id}: {len(mask_indices)} masks - KEPT")
+            logBoth('logDebug', _src,
+                    f"  ✓ Group {group_id}: {len(mask_indices)} masks - KEPT",
+                    MessageType.SUCCESS)
         else:
             removed_count += 1
-            print(f"  ✗ Group {group_id}: {len(mask_indices)} masks - REMOVED")
+            logBoth('logDebug', _src,
+                    f"  ✗ Group {group_id}: {len(mask_indices)} masks - REMOVED",
+                    MessageType.GENERAL)
 
-    print(f"\nSize filter: {len(groups)} -> {len(filtered_groups)} groups (removed {removed_count})")
-    print("=" * 60 + "\n")
+    logBoth('logDebug', _src,
+            f"Size filter: {len(groups)} -> {len(filtered_groups)} groups (removed {removed_count})",
+            MessageType.GENERAL)
 
     return filtered_groups
 
@@ -619,10 +613,11 @@ def filter_subgroups_by_center_envelope(
     """
     from scipy.spatial import ConvexHull
 
-    print("\n" + "=" * 60)
-    print("ENVELOPE FILTER - Checking if center is within mask envelope")
-    print(f"  Disc center: ({center_x:.1f}, {center_y:.1f})")
-    print("=" * 60)
+    _src = __name__
+    logBoth('logDebug', _src,
+            f"ENVELOPE FILTER - Checking if center is within mask envelope | "
+            f"Disc center: ({center_x:.1f}, {center_y:.1f})",
+            MessageType.GENERAL)
 
     filtered_groups = {}
 
@@ -631,7 +626,9 @@ def filter_subgroups_by_center_envelope(
             # Need at least 3 points to form a convex hull
             # For small groups, check if center is "surrounded" by checking angles
             if len(mask_indices) <= 2:
-                print(f"  Group {group_id}: Only {len(mask_indices)} masks, skipping envelope check")
+                logBoth('logDebug', _src,
+                        f"  Group {group_id}: Only {len(mask_indices)} masks, skipping envelope check",
+                        MessageType.GENERAL)
                 filtered_groups[group_id] = mask_indices
                 continue
 
@@ -645,7 +642,9 @@ def filter_subgroups_by_center_envelope(
                     centers.append(mask_center)
 
         if len(centers) < 3:
-            print(f"  Group {group_id}: Not enough valid centers ({len(centers)}), keeping group")
+            logBoth('logDebug', _src,
+                    f"  Group {group_id}: Not enough valid centers ({len(centers)}), keeping group",
+                    MessageType.GENERAL)
             filtered_groups[group_id] = mask_indices
             continue
 
@@ -660,18 +659,25 @@ def filter_subgroups_by_center_envelope(
             hull_points = centers_array[hull.vertices]
 
             if _point_in_convex_hull(center_x, center_y, hull_points):
-                print(f"  ✓ Group {group_id}: Center IS inside envelope ({len(mask_indices)} masks)")
+                logBoth('logDebug', _src,
+                        f"  ✓ Group {group_id}: Center IS inside envelope ({len(mask_indices)} masks)",
+                        MessageType.SUCCESS)
                 filtered_groups[group_id] = mask_indices
             else:
-                print(f"  ✗ Group {group_id}: Center is OUTSIDE envelope ({len(mask_indices)} masks) - REMOVED")
+                logBoth('logDebug', _src,
+                        f"  ✗ Group {group_id}: Center is OUTSIDE envelope ({len(mask_indices)} masks) - REMOVED",
+                        MessageType.GENERAL)
 
         except Exception as e:
             # If hull computation fails (e.g., collinear points), keep the group
-            print(f"  Group {group_id}: Hull computation failed ({e}), keeping group")
+            logBoth('logDebug', _src,
+                    f"  Group {group_id}: Hull computation failed ({e}), keeping group",
+                    MessageType.GENERAL)
             filtered_groups[group_id] = mask_indices
 
-    print(f"\nEnvelope filter: {len(groups)} -> {len(filtered_groups)} groups")
-    print("=" * 60 + "\n")
+    logBoth('logDebug', _src,
+            f"Envelope filter: {len(groups)} -> {len(filtered_groups)} groups",
+            MessageType.GENERAL)
 
     return filtered_groups
 
@@ -1441,11 +1447,11 @@ def find_best_polygon_with_cross_validation(
         - quality_score: Lower is better (0 = perfect regular polygon)
         - diagnostics: Dict with detailed algorithm information
     """
-    print(f"\n" + "=" * 60)
-    print(f"DUAL POLYGON SEARCH WITH CROSS-VALIDATION")
-    print(f"  Expected model: {expected_model}")
-    print(f"  Input masks: {len(mask_indices)}")
-    print("=" * 60)
+    _src = __name__
+    logBoth('logDebug', _src,
+            f"DUAL POLYGON SEARCH WITH CROSS-VALIDATION | "
+            f"Expected model: {expected_model} | Input masks: {len(mask_indices)}",
+            MessageType.GENERAL)
 
     # Extract centers from masks
     centers = []
@@ -1461,7 +1467,9 @@ def find_best_polygon_with_cross_validation(
 
     n = len(centers)
     if n < 4:
-        print(f"  ERROR: Need at least 4 points, got {n}")
+        logBoth('logError', _src,
+                f"Need at least 4 points, got {n}",
+                MessageType.ISSUE)
         return None, "UNKNOWN", False, float('inf'), {'error': f'Need at least 4 points, got {n}'}
 
     points = np.array(centers)
@@ -1480,7 +1488,7 @@ def find_best_polygon_with_cross_validation(
     diag_k5 = {}
 
     # --- Try K=4 (Square / DOST) ---
-    print(f"\n  [K=4] Trying square detection (DOST)...")
+    logBoth('logDebug', _src, "[K=4] Trying square detection (DOST)...", MessageType.GENERAL)
     if n >= 4:
         point_indices_k4, tse_k4, diag_k4 = find_best_square_diagonal_pair(points, center)
 
@@ -1496,8 +1504,10 @@ def find_best_polygon_with_cross_validation(
             diag_k4['regularity'] = regularity_k4
             diag_k4['normalized_score'] = score_k4
 
-            print(f"    Found: TSE={tse_k4:.2f}, regularity={regularity_k4['combined_score']:.4f}")
-            print(f"    Normalized score: {score_k4:.4f}")
+            logBoth('logDebug', _src,
+                    f"    Found: TSE={tse_k4:.2f}, regularity={regularity_k4['combined_score']:.4f} | "
+                    f"Normalized score: {score_k4:.4f}",
+                    MessageType.GENERAL)
 
             # v2.1: STRICT VALIDATION - reject if not a valid regular polygon
             is_valid_k4, validation_k4 = validate_regular_polygon_strict(
@@ -1506,35 +1516,40 @@ def find_best_polygon_with_cross_validation(
             diag_k4['strict_validation'] = validation_k4
 
             if is_valid_k4:
-                print(f"    ✓ PASSES strict regularity validation")
-                print(f"      Angular spacings: {[f'{a:.1f}°' for a in validation_k4['angular_spacings']]}")
-                print(f"      Side lengths: {[f'{s:.1f}' for s in validation_k4['side_lengths']]}")
+                logBoth('logDebug', _src,
+                        f"    ✓ PASSES strict regularity validation | "
+                        f"Angular spacings: {[f'{a:.1f}°' for a in validation_k4['angular_spacings']]} | "
+                        f"Side lengths: {[f'{s:.1f}' for s in validation_k4['side_lengths']]}",
+                        MessageType.SUCCESS)
             else:
-                print(f"    ✗ FAILS strict regularity validation - REJECTED")
+                msg = "    ✗ FAILS strict regularity validation - REJECTED"
                 if not validation_k4['angular_valid']:
-                    print(f"      Angular failures: {validation_k4['angular_failures']}")
-                    print(f"      Expected: 90° ± 15% (76.5° to 103.5°)")
-                    print(f"      Got: {[f'{a:.1f}°' for a in validation_k4['angular_spacings']]}")
+                    msg += (f" | Angular failures: {validation_k4['angular_failures']}"
+                            f" | Expected: 90° ± 15% (76.5° to 103.5°)"
+                            f" | Got: {[f'{a:.1f}°' for a in validation_k4['angular_spacings']]}")
                 if not validation_k4['side_valid']:
-                    print(f"      Side failures: {validation_k4['side_failures']}")
+                    msg += f" | Side failures: {validation_k4['side_failures']}"
                 if not validation_k4['radial_valid']:
-                    print(f"      Radial failures: {validation_k4['radial_failures']}")
+                    msg += f" | Radial failures: {validation_k4['radial_failures']}"
+                logBoth('logDebug', _src, msg, MessageType.GENERAL)
                 # REJECT this result
                 result_k4 = None
                 score_k4 = float('inf')
         else:
-            print(f"    No valid square found")
+            logBoth('logDebug', _src, "    No valid square found", MessageType.GENERAL)
 
     # --- Try K=5 (Pentagon / DOSTPLUS) ---
-    print(f"\n  [K=5] Trying pentagon detection (DOSTPLUS)...")
+    logBoth('logDebug', _src, "[K=5] Trying pentagon detection (DOSTPLUS)...", MessageType.GENERAL)
     if n >= 5:
         result_k5, score_k5, diag_k5 = find_best_pentagon_center_based(
             points, center, valid_indices
         )
 
         if result_k5 is not None:
-            print(f"    Found: score={score_k5:.4f}")
-            print(f"    Angular spacings: {diag_k5.get('angular_spacings_deg', [])}")
+            logBoth('logDebug', _src,
+                    f"    Found: score={score_k5:.4f} | "
+                    f"Angular spacings: {diag_k5.get('angular_spacings_deg', [])}",
+                    MessageType.GENERAL)
 
             # v2.1: STRICT VALIDATION - reject if not a valid regular polygon
             # Get points for the result (result_k5 contains mask indices, need point indices)
@@ -1546,36 +1561,42 @@ def find_best_polygon_with_cross_validation(
                 diag_k5['strict_validation'] = validation_k5
 
                 if is_valid_k5:
-                    print(f"    ✓ PASSES strict regularity validation")
-                    print(f"      Angular spacings: {[f'{a:.1f}°' for a in validation_k5['angular_spacings']]}")
-                    print(f"      Side lengths: {[f'{s:.1f}' for s in validation_k5['side_lengths']]}")
+                    logBoth('logDebug', _src,
+                            f"    ✓ PASSES strict regularity validation | "
+                            f"Angular spacings: {[f'{a:.1f}°' for a in validation_k5['angular_spacings']]} | "
+                            f"Side lengths: {[f'{s:.1f}' for s in validation_k5['side_lengths']]}",
+                            MessageType.SUCCESS)
                 else:
-                    print(f"    ✗ FAILS strict regularity validation - REJECTED")
+                    msg = "    ✗ FAILS strict regularity validation - REJECTED"
                     if not validation_k5['angular_valid']:
-                        print(f"      Angular failures: {validation_k5['angular_failures']}")
-                        print(f"      Expected: 72° ± 15% (61.2° to 82.8°)")
-                        print(f"      Got: {[f'{a:.1f}°' for a in validation_k5['angular_spacings']]}")
+                        msg += (f" | Angular failures: {validation_k5['angular_failures']}"
+                                f" | Expected: 72° ± 15% (61.2° to 82.8°)"
+                                f" | Got: {[f'{a:.1f}°' for a in validation_k5['angular_spacings']]}")
                     if not validation_k5['side_valid']:
-                        print(f"      Side failures: {validation_k5['side_failures']}")
+                        msg += f" | Side failures: {validation_k5['side_failures']}"
                     if not validation_k5['radial_valid']:
-                        print(f"      Radial failures: {validation_k5['radial_failures']}")
+                        msg += f" | Radial failures: {validation_k5['radial_failures']}"
+                    logBoth('logDebug', _src, msg, MessageType.GENERAL)
                     # REJECT this result
                     result_k5 = None
                     score_k5 = float('inf')
             else:
-                print(f"    ✗ Could not validate - point index mapping failed")
+                logBoth('logDebug', _src,
+                        "    ✗ Could not validate - point index mapping failed",
+                        MessageType.GENERAL)
                 result_k5 = None
                 score_k5 = float('inf')
         else:
-            print(f"    No valid pentagon found")
+            logBoth('logDebug', _src, "    No valid pentagon found", MessageType.GENERAL)
 
     # =========================================================================
     # DECISION LOGIC: Compare K=4 vs K=5 results
     # =========================================================================
 
-    print(f"\n  COMPARISON:")
-    print(f"    K=4 score: {score_k4:.4f} (threshold: {GOOD_FIT_THRESHOLD_K4})")
-    print(f"    K=5 score: {score_k5:.4f} (threshold: {GOOD_FIT_THRESHOLD_K5})")
+    logBoth('logDebug', _src,
+            f"COMPARISON | K=4 score: {score_k4:.4f} (threshold: {GOOD_FIT_THRESHOLD_K4}) | "
+            f"K=5 score: {score_k5:.4f} (threshold: {GOOD_FIT_THRESHOLD_K5})",
+            MessageType.GENERAL)
 
     # Normalize scores against thresholds
     quality_k4 = score_k4 / GOOD_FIT_THRESHOLD_K4 if result_k4 else float('inf')
@@ -1593,27 +1614,31 @@ def find_best_polygon_with_cross_validation(
             detected_model = "DOST"
             chosen_result = result_k4
             chosen_score = score_k4
-            print(f"    → K=4 (DOST) DOMINATES (ratio: {quality_k4/quality_k5:.2f})")
+            logBoth('logDebug', _src,
+                    f"    → K=4 (DOST) DOMINATES (ratio: {quality_k4/quality_k5:.2f})",
+                    MessageType.SUCCESS)
         elif quality_k5 < quality_k4 * DOMINANCE_RATIO:
             # K=5 clearly better
             detected_model = "DOSTPLUS"
             chosen_result = result_k5
             chosen_score = score_k5
-            print(f"    → K=5 (DOSTPLUS) DOMINATES (ratio: {quality_k5/quality_k4:.2f})")
+            logBoth('logDebug', _src,
+                    f"    → K=5 (DOSTPLUS) DOMINATES (ratio: {quality_k5/quality_k4:.2f})",
+                    MessageType.SUCCESS)
         else:
             # Ambiguous - scores too close
             # In ambiguous case, prefer the expected model if both are reasonable
-            print(f"    → AMBIGUOUS (neither dominates)")
+            logBoth('logDebug', _src, "    → AMBIGUOUS (neither dominates)", MessageType.GENERAL)
             if expected_model == "DOST" and score_k4 < GOOD_FIT_THRESHOLD_K4:
                 detected_model = "DOST"
                 chosen_result = result_k4
                 chosen_score = score_k4
-                print(f"    → Preferring expected DOST (score OK)")
+                logBoth('logDebug', _src, "    → Preferring expected DOST (score OK)", MessageType.GENERAL)
             elif expected_model == "DOSTPLUS" and score_k5 < GOOD_FIT_THRESHOLD_K5:
                 detected_model = "DOSTPLUS"
                 chosen_result = result_k5
                 chosen_score = score_k5
-                print(f"    → Preferring expected DOSTPLUS (score OK)")
+                logBoth('logDebug', _src, "    → Preferring expected DOSTPLUS (score OK)", MessageType.GENERAL)
             else:
                 # Pick the one with better absolute score
                 if quality_k4 <= quality_k5:
@@ -1624,25 +1649,27 @@ def find_best_polygon_with_cross_validation(
                     detected_model = "DOSTPLUS"
                     chosen_result = result_k5
                     chosen_score = score_k5
-                print(f"    → Picking {detected_model} (better absolute score)")
+                logBoth('logDebug', _src,
+                        f"    → Picking {detected_model} (better absolute score)",
+                        MessageType.GENERAL)
 
     elif result_k4 is not None:
         # Only K=4 found
         detected_model = "DOST"
         chosen_result = result_k4
         chosen_score = score_k4
-        print(f"    → Only K=4 (DOST) found")
+        logBoth('logDebug', _src, "    → Only K=4 (DOST) found", MessageType.SUCCESS)
 
     elif result_k5 is not None:
         # Only K=5 found
         detected_model = "DOSTPLUS"
         chosen_result = result_k5
         chosen_score = score_k5
-        print(f"    → Only K=5 (DOSTPLUS) found")
+        logBoth('logDebug', _src, "    → Only K=5 (DOSTPLUS) found", MessageType.SUCCESS)
 
     else:
         # Neither found
-        print(f"    → NO VALID POLYGON FOUND")
+        logBoth('logDebug', _src, "    → NO VALID POLYGON FOUND", MessageType.GENERAL)
 
     # =========================================================================
     # CROSS-VALIDATION: Check if detected matches expected
@@ -1653,10 +1680,14 @@ def find_best_polygon_with_cross_validation(
         is_match = (detected_model == expected_model)
 
         if is_match:
-            print(f"\n  ✓ MATCH: Detected {detected_model} matches expected {expected_model}")
+            logBoth('logInfo', _src,
+                    f"✓ MATCH: Detected {detected_model} matches expected {expected_model}",
+                    MessageType.SUCCESS)
         else:
-            print(f"\n  ✗ MISMATCH: Detected {detected_model} but expected {expected_model}")
-            print(f"    This indicates wrong component may be presented!")
+            logBoth('logWarning', _src,
+                    f"✗ MISMATCH: Detected {detected_model} but expected {expected_model} - "
+                    f"This indicates wrong component may be presented!",
+                    MessageType.RISK)
 
     # Build diagnostics
     diagnostics = {
@@ -1678,8 +1709,6 @@ def find_best_polygon_with_cross_validation(
         'is_match': is_match,
         'dominance_ratio': DOMINANCE_RATIO
     }
-
-    print("=" * 60 + "\n")
 
     return chosen_result, detected_model, is_match, chosen_score, diagnostics
 
@@ -1833,12 +1862,13 @@ def try_remove_outlier_mask(
     total_removed = 0
     detected_model = model_type or "UNKNOWN"
     is_match = True
+    _src = __name__
 
     # =========================================================================
     # PHASE 0: Dual Polygon Search with Cross-Validation (NEW in v2.0)
     # =========================================================================
     if len(mask_indices) >= 4:
-        print(f"      [PHASE 0] Running dual polygon search...")
+        logBoth('logDebug', _src, "[PHASE 0] Running dual polygon search...", MessageType.GENERAL)
 
         collapsed_result, detected, match, score, diag = find_best_polygon_with_cross_validation(
             masks, mask_indices, center_x, center_y, expected_model=model_type
@@ -1853,16 +1883,22 @@ def try_remove_outlier_mask(
             )
 
             removed_count = len(mask_indices) - len(collapsed_result)
-            print(f"      [Polygon Finder] Found {detected_model}: "
-                  f"{len(collapsed_result)} masks, max_dev={max_dev:.3f}, is_match={is_match}")
-            print(f"      Distances: {[f'{d:.1f}' for d in new_distances]}")
+            logBoth('logDebug', _src,
+                    f"[Polygon Finder] Found {detected_model}: "
+                    f"{len(collapsed_result)} masks, max_dev={max_dev:.3f}, is_match={is_match} | "
+                    f"Distances: {[f'{d:.1f}' for d in new_distances]}",
+                    MessageType.GENERAL)
 
             if max_dev <= strict_tolerance:
-                print(f"      ✓ PASSES strict tolerance via polygon finder!")
+                logBoth('logDebug', _src,
+                        "✓ PASSES strict tolerance via polygon finder!",
+                        MessageType.SUCCESS)
                 return (collapsed_result, max_dev, new_distances, removed_count,
                         detected_model, is_match)
             elif max_dev <= relaxed_tolerance:
-                print(f"      ~ Passes relaxed tolerance via polygon finder")
+                logBoth('logDebug', _src,
+                        "~ Passes relaxed tolerance via polygon finder",
+                        MessageType.GENERAL)
                 # Continue with this as our starting point
                 current_indices = collapsed_result
                 total_removed = removed_count
@@ -1914,9 +1950,11 @@ def try_remove_outlier_mask(
             intermediate_mask_idx = centers[intermediate_pos][0]
             masks_to_remove.add(intermediate_mask_idx)
 
-            print(f"      [Merge] Removing mask {intermediate_mask_idx}: "
-                  f"{distances[dist_idx1]:.1f} + {distances[dist_idx2]:.1f} = {combined:.1f} "
-                  f"(expected: {expected_spacing:.1f})")
+            logBoth('logDebug', _src,
+                    f"[Merge] Removing mask {intermediate_mask_idx}: "
+                    f"{distances[dist_idx1]:.1f} + {distances[dist_idx2]:.1f} = {combined:.1f} "
+                    f"(expected: {expected_spacing:.1f})",
+                    MessageType.GENERAL)
 
         current_indices = [idx for idx in ordered_indices if idx not in masks_to_remove]
         total_removed += len(masks_to_remove)
@@ -1926,9 +1964,11 @@ def try_remove_outlier_mask(
             masks, current_indices, center_x, center_y
         )
 
-        print(f"      After merge iteration {iteration + 1}: "
-              f"{len(current_indices)} masks, max_dev={max_dev:.3f}")
-        print(f"      Distances: {[f'{d:.1f}' for d in new_distances]}")
+        logBoth('logDebug', _src,
+                f"After merge iteration {iteration + 1}: "
+                f"{len(current_indices)} masks, max_dev={max_dev:.3f} | "
+                f"Distances: {[f'{d:.1f}' for d in new_distances]}",
+                MessageType.GENERAL)
 
         if max_dev <= strict_tolerance:
             return (current_indices, max_dev, new_distances, total_removed,
@@ -2001,8 +2041,10 @@ def try_remove_outlier_mask(
 
         total_removed += 1
         new_max_dev = min(max_dev_a, max_dev_b)
-        print(f"      [Outlier] Removed mask {removed_mask}, "
-              f"now {len(current_indices)} masks, max_dev={new_max_dev:.3f}")
+        logBoth('logDebug', _src,
+                f"[Outlier] Removed mask {removed_mask}, "
+                f"now {len(current_indices)} masks, max_dev={new_max_dev:.3f}",
+                MessageType.GENERAL)
 
     # Final calculation
     max_dev, mean_dev, distances = calculate_equispacing_score(
@@ -2246,39 +2288,41 @@ def filter_subgroups_by_equispacing(
     Returns:
         Tuple of (filtered_groups, winning_group_id, detected_model, is_match)
     """
-    angular_tolerance = HUB_EQUAL_ANGLE_TOLERANCE  # ±15% for angular validation
+    angular_tolerance = 0.15  # ±15% for angular validation
 
-    print("\n" + "=" * 60)
-    print("POLYGON DETECTION PIPELINE v3.0")
-    print(f"  Step 1: Dual Polygon Search (generate K=4 and K=5 candidates)")
-    print(f"  Step 2: Equidistant Filter (tolerance: ±{strict_tolerance * 100:.0f}%)")
-    print(f"  Step 3: Equal Angle Filter (tolerance: ±{angular_tolerance * 100:.0f}%)")
-    print(f"  Step 4: Select Best (least distance variance)")
-    if model_type:
-        print(f"  Expected model: {model_type}")
-    print("=" * 60)
+    _src = __name__
+    logBoth('logDebug', _src,
+            f"POLYGON DETECTION PIPELINE v3.0 | "
+            f"Step 1: Dual Polygon Search | "
+            f"Step 2: Equidistant Filter (±{strict_tolerance * 100:.0f}%) | "
+            f"Step 3: Equal Angle Filter (±{angular_tolerance * 100:.0f}%) | "
+            f"Step 4: Select Best" +
+            (f" | Expected model: {model_type}" if model_type else ""),
+            MessageType.GENERAL)
 
     all_candidates = []
     expected_k = 4 if model_type == "DOST" else 5
 
     # Process each input group
     for group_id, mask_indices in groups.items():
-        print(f"\n  Processing Group {group_id}: {len(mask_indices)} masks")
+        logBoth('logDebug', _src,
+                f"Processing Group {group_id}: {len(mask_indices)} masks",
+                MessageType.GENERAL)
 
         if len(mask_indices) < 4:
-            print(f"    Skipping - need at least 4 masks")
+            logBoth('logDebug', _src, "    Skipping - need at least 4 masks", MessageType.GENERAL)
             continue
 
         # =====================================================================
         # STEP 1: DUAL POLYGON SEARCH - Generate all candidates
         # =====================================================================
-        print(f"\n    [STEP 1] Generating polygon candidates...")
+        logBoth('logDebug', _src, "[STEP 1] Generating polygon candidates...", MessageType.GENERAL)
 
         # Generate K=4 candidates
         candidates_k4 = _generate_all_polygon_candidates(
             masks, mask_indices, center_x, center_y, K=4
         )
-        print(f"      K=4 candidates: {len(candidates_k4)}")
+        logBoth('logDebug', _src, f"      K=4 candidates: {len(candidates_k4)}", MessageType.GENERAL)
 
         # Generate K=5 candidates (if enough masks)
         candidates_k5 = []
@@ -2286,7 +2330,7 @@ def filter_subgroups_by_equispacing(
             candidates_k5 = _generate_all_polygon_candidates(
                 masks, mask_indices, center_x, center_y, K=5
             )
-        print(f"      K=5 candidates: {len(candidates_k5)}")
+        logBoth('logDebug', _src, f"      K=5 candidates: {len(candidates_k5)}", MessageType.GENERAL)
 
         group_candidates = candidates_k4 + candidates_k5
 
@@ -2297,58 +2341,76 @@ def filter_subgroups_by_equispacing(
         # =====================================================================
         # STEP 2: EQUIDISTANT FILTER
         # =====================================================================
-        print(f"\n    [STEP 2] Applying equidistant filter (±{strict_tolerance*100:.0f}%)...")
+        logBoth('logDebug', _src,
+                f"[STEP 2] Applying equidistant filter (±{strict_tolerance*100:.0f}%)...",
+                MessageType.GENERAL)
 
         equidistant_passed = _filter_by_equidistant(group_candidates, strict_tolerance)
-        print(f"      Passed equidistant: {len(equidistant_passed)} candidates")
+        logBoth('logDebug', _src,
+                f"      Passed equidistant: {len(equidistant_passed)} candidates",
+                MessageType.GENERAL)
 
         # If none pass strict, try relaxed tolerance
         if not equidistant_passed:
-            print(f"      Trying relaxed tolerance (±{relaxed_tolerance*100:.0f}%)...")
+            logBoth('logDebug', _src,
+                    f"      Trying relaxed tolerance (±{relaxed_tolerance*100:.0f}%)...",
+                    MessageType.GENERAL)
             equidistant_passed = _filter_by_equidistant(group_candidates, relaxed_tolerance)
-            print(f"      Passed relaxed equidistant: {len(equidistant_passed)} candidates")
+            logBoth('logDebug', _src,
+                    f"      Passed relaxed equidistant: {len(equidistant_passed)} candidates",
+                    MessageType.GENERAL)
 
         if not equidistant_passed:
-            print(f"      No candidates passed equidistant filter")
+            logBoth('logDebug', _src,
+                    "      No candidates passed equidistant filter",
+                    MessageType.GENERAL)
             continue
 
         # =====================================================================
         # STEP 3: EQUAL ANGLE FILTER
         # =====================================================================
-        print(f"\n    [STEP 3] Applying equal angle filter (±{angular_tolerance*100:.0f}%)...")
+        logBoth('logDebug', _src,
+                f"[STEP 3] Applying equal angle filter (±{angular_tolerance*100:.0f}%)...",
+                MessageType.GENERAL)
 
         angular_passed = _filter_by_equal_angles(equidistant_passed, angular_tolerance)
-        print(f"      Passed equal angles: {len(angular_passed)} candidates")
+        logBoth('logDebug', _src,
+                f"      Passed equal angles: {len(angular_passed)} candidates",
+                MessageType.GENERAL)
 
         if not angular_passed:
-            print(f"      No candidates passed angular filter")
+            logBoth('logDebug', _src, "      No candidates passed angular filter", MessageType.GENERAL)
             # Show best equidistant candidate that failed angular
             if equidistant_passed:
                 best_equi = min(equidistant_passed, key=lambda c: c['distance_variance'])
                 expected_angle = 360.0 / best_equi['K']
-                print(f"      Best equidistant candidate (K={best_equi['K']}):")
-                print(f"        Distances: {[f'{d:.1f}' for d in best_equi['distances']]}")
-                print(f"        Angles: {[f'{a:.1f}°' for a in best_equi['angles']]}")
-                print(f"        Expected angle: {expected_angle:.1f}° ± {angular_tolerance*100:.0f}%")
+                logBoth('logDebug', _src,
+                        f"      Best equidistant candidate (K={best_equi['K']}): "
+                        f"Distances: {[f'{d:.1f}' for d in best_equi['distances']]} | "
+                        f"Angles: {[f'{a:.1f}°' for a in best_equi['angles']]} | "
+                        f"Expected angle: {expected_angle:.1f}° ± {angular_tolerance*100:.0f}%",
+                        MessageType.GENERAL)
             continue
 
         # Log passed candidates
         for c in angular_passed:
-            print(f"      ✓ K={c['K']}: distances={[f'{d:.1f}' for d in c['distances']]}, "
-                  f"variance={c['distance_variance']:.2f}")
-            print(f"        angles={[f'{a:.1f}°' for a in c['angles']]}")
+            logBoth('logDebug', _src,
+                    f"      ✓ K={c['K']}: distances={[f'{d:.1f}' for d in c['distances']]}, "
+                    f"variance={c['distance_variance']:.2f} | "
+                    f"angles={[f'{a:.1f}°' for a in c['angles']]}",
+                    MessageType.SUCCESS)
 
         all_candidates.extend(angular_passed)
 
     # =========================================================================
     # STEP 4: SELECT BEST BY VARIANCE
     # =========================================================================
-    print(f"\n  [STEP 4] Selecting best solution...")
-    print(f"    Total candidates passed all filters: {len(all_candidates)}")
+    logBoth('logDebug', _src,
+            f"[STEP 4] Selecting best solution... Total candidates passed all filters: {len(all_candidates)}",
+            MessageType.GENERAL)
 
     if not all_candidates:
-        print(f"\n  ✗ NO VALID CANDIDATES FOUND")
-        print("=" * 60 + "\n")
+        logBoth('logDebug', _src, "✗ NO VALID CANDIDATES FOUND", MessageType.GENERAL)
         return ({}, None, model_type or "UNKNOWN", True)
 
     # Select best by least variance
@@ -2358,20 +2420,20 @@ def filter_subgroups_by_equispacing(
     detected_model = "DOST" if detected_k == 4 else ("DOSTPLUS" if detected_k == 5 else "UNKNOWN")
     is_match = (detected_k == expected_k) if model_type else True
 
-    print(f"\n  ✓ BEST SOLUTION FOUND:")
-    print(f"    K = {detected_k} ({detected_model})")
-    print(f"    Indices: {best['indices']}")
-    print(f"    Distances: {[f'{d:.1f}' for d in best['distances']]}")
-    print(f"    Distance variance: {best['distance_variance']:.4f}")
-    print(f"    Angles: {[f'{a:.1f}°' for a in best['angles']]}")
-
+    match_msg = ""
     if model_type:
         if is_match:
-            print(f"    ✓ MATCH: Detected {detected_model} matches expected {model_type}")
+            match_msg = f" | ✓ MATCH: Detected {detected_model} matches expected {model_type}"
         else:
-            print(f"    ✗ MISMATCH: Detected {detected_model} but expected {model_type}")
+            match_msg = f" | ✗ MISMATCH: Detected {detected_model} but expected {model_type}"
 
-    print("=" * 60 + "\n")
+    logBoth('logInfo', _src,
+            f"✓ BEST SOLUTION FOUND: K={detected_k} ({detected_model}) | "
+            f"Indices: {best['indices']} | "
+            f"Distances: {[f'{d:.1f}' for d in best['distances']]} | "
+            f"Distance variance: {best['distance_variance']:.4f} | "
+            f"Angles: {[f'{a:.1f}°' for a in best['angles']]}{match_msg}",
+            MessageType.SUCCESS if is_match else MessageType.RISK)
 
     # Return in expected format
     winning_group_id = best['group_id']
@@ -2405,21 +2467,23 @@ def select_winning_group(
 
     return (winning_id, winning_count)
 
-
-# =============================================================================
-# MobileSAM IMPORTS
-# =============================================================================
-
-try:
-    from mobile_sam import sam_model_registry, SamPredictor
-except ImportError:
-    # Fallback message if path append didn't work
-    print("Error: Could not import mobile_sam. Make sure the 'MobileSAM' folder is in this directory.")
-    sam_model_registry = None
-    SamPredictor = None
-
-# Ultralytics for YOLOv8 object detection
-from ultralytics import YOLO
+#
+# # =============================================================================
+# # MobileSAM IMPORTS
+# # =============================================================================
+#
+# try:
+#     from mobile_sam import sam_model_registry, SamPredictor
+# except ImportError:
+#     # Fallback message if path append didn't work
+#     logBoth('logError', __name__,
+#             "Could not import mobile_sam. Make sure the 'MobileSAM' folder is in this directory.",
+#             MessageType.PROBLEM)
+#     sam_model_registry = None
+#     SamPredictor = None
+#
+# # Ultralytics for YOLOv8 object detection
+# from ultralytics import YOLO
 
 
 # =============================================================================
@@ -2451,8 +2515,8 @@ class MobileSAMv2AutomaticMaskGenerator:
 
     def __init__(
             self,
-            sam_predictor: SamPredictor,
-            yolo_model: YOLO,
+            sam_predictor: Any,
+            yolo_model: Any,
             conf_threshold: float = 0.25,
             iou_threshold: float = 0.7,
             min_mask_region_area: int = 100,
@@ -2513,7 +2577,8 @@ class MobileSAMv2AutomaticMaskGenerator:
                     "Fix:\n"
                     "Try downgrading ultralytics: pip install ultralytics==8.0.200"
                 )
-                print(error_msg)
+                _src = getFullyQualifiedName(__file__, MobileSAMv2AutomaticMaskGenerator)
+                logBoth('logError', _src, error_msg, MessageType.PROBLEM)
                 raise RuntimeError(error_msg) from e
             raise e
 
@@ -2532,7 +2597,10 @@ class MobileSAMv2AutomaticMaskGenerator:
                         if self.min_mask_region_area <= area <= self.max_mask_region_area:
                             masks.append(mask_data)
                 except Exception as e:
-                    print(f"Warning: Failed to generate mask for box {box}: {e}")
+                    _src = getFullyQualifiedName(__file__, MobileSAMv2AutomaticMaskGenerator)
+                    logBoth('logWarning', _src,
+                            f"Failed to generate mask for box {box}: {e}",
+                            MessageType.RISK)
 
         # Optionally add grid-based point prompts for areas not covered
         if self.use_grid_points and len(masks) < 5:
@@ -2677,17 +2745,18 @@ class HubAndBearingSegmenter:
         if HubAndBearingSegmenter._initialized:
             return  # Already initialized - skip
 
+        _src = getFullyQualifiedName(__file__, HubAndBearingSegmenter)
         self.model_manager = ModelManager.get_instance()
         self.device = self.model_manager.get_device()
-        print(f"Using device: {self.device}")
+        logBoth('logInfo', _src, f"Using device: {self.device}", MessageType.SUCCESS)
 
         self.sam_predictor = self.model_manager.get_sam_predictor()
         self.yolo_model = self.model_manager.get_yolo_model()
 
-        self.conf_thresh = HUB_YOLO_CONF_THRESHOLD
+        self.conf_thresh = 0.3
         self.iou_thresh = 0.7
-        self.min_area = HUB_MIN_MASK_AREA
-        self.max_area = HUB_MAX_MASK_AREA
+        self.min_area = 100
+        self.max_area = 3000
         self.use_grid = True
 
         # Create mask generator
@@ -2703,9 +2772,9 @@ class HubAndBearingSegmenter:
         )
 
         # Annular region parameters (fixed for this application)
-        self.annular_center = (HUB_SEGMENT_CENTER_X, HUB_SEGMENT_CENTER_Y)
-        self.annular_outer_radius = HUB_SEGMENT_OUTER_RADIUS
-        self.annular_inner_radius = HUB_SEGMENT_INNER_RADIUS
+        self.annular_center = (635, 345)
+        self.annular_outer_radius = 250
+        self.annular_inner_radius = 120
 
         # Storage for last run results
         self._last_masks = None
@@ -2838,7 +2907,10 @@ class HubAndBearingSegmenter:
                     results.append((winning_count, result_groups, detected_model, is_match))
 
                 except Exception as e:
-                    print(f"[segment_holes_batch] Error processing image: {e}")
+                    _src = getFullyQualifiedName(__file__, HubAndBearingSegmenter)
+                    logBoth('logError', _src,
+                            f"[segment_holes_batch] Error processing image: {e}",
+                            MessageType.PROBLEM)
                     results.append((0, [], model_type or "UNKNOWN", True))
 
         # Clear CUDA cache after processing entire batch
@@ -3367,8 +3439,8 @@ def paint_masks_on_image(original_image: np.ndarray,
     # TRANSLATION OFFSET: Annular region offset from full image
     # Annular region center is at (635, 345) with outer_radius=250
     # So annular region top-left corner is at:
-    offset_x = HUB_SEGMENT_CENTER_X - HUB_SEGMENT_OUTER_RADIUS  # = 385
-    offset_y = HUB_SEGMENT_CENTER_Y - HUB_SEGMENT_OUTER_RADIUS  # = 95
+    offset_x = 635 - 250  # = 385
+    offset_y = 345 - 250  # = 95
 
     # Create overlay
     overlay = np.zeros_like(result)

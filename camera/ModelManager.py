@@ -90,16 +90,17 @@ print(f"GPU Memory Allocated: {allocated:.2f} GB")
 # ============================================================================
 # Fix for "TypeError: Plain typing.Self is not valid as type argument"
 # This occurs when Nuitka tries to freeze PyTorch/Ultralytics imports
-from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import sys
 import threading
 import typing
+
+from utils.CosThetaPrintUtils import printBoldGreen,printBoldRed,printBoldBlue, printBold
 
 # Patch typing.Self for Python < 3.11 or Nuitka compatibility
 if not hasattr(typing, 'Self'):
     # Python < 3.11: Add Self as TypeVar
     typing.Self = typing.TypeVar('Self')
-    print("✓ Added typing.Self compatibility shim")
+    printBoldBlue("✓ Added typing.Self compatibility shim")
 else:
     # Python >= 3.11: Ensure Self works with Nuitka's frozen imports
     # Check if we're in a frozen/compiled environment (Nuitka)
@@ -107,7 +108,7 @@ else:
         # In Nuitka, replace typing.Self with a simple TypeVar to avoid _type_check errors
         _SelfTypeVar = typing.TypeVar('_SelfTypeVar')
         typing.Self = _SelfTypeVar
-        print("✓ Patched typing.Self for Nuitka frozen environment")
+        printBoldBlue("✓ Patched typing.Self for Nuitka frozen environment")
 
 # Additional Nuitka compatibility: Prevent typing module errors during frozen imports
 if getattr(sys, 'frozen', False) or hasattr(sys, '__compiled__'):
@@ -125,7 +126,7 @@ if getattr(sys, 'frozen', False) or hasattr(sys, '__compiled__'):
             raise
 
     typing._type_check = _lenient_type_check
-    print("✓ Patched typing._type_check for Nuitka compatibility")
+    printBoldBlue("✓ Patched typing._type_check for Nuitka compatibility")
 
 # ============================================================================
 
@@ -135,6 +136,10 @@ import torch
 from typing import Optional
 
 from BaseUtils import get_project_root
+
+from logutils.SlaveLoggers import *
+from logutils.Logger import *
+from logutils.AbstractSlaveLogger import *
 
 # --- Add MobileSAM to path ---
 _PROJECT_ROOT = get_project_root()
@@ -158,8 +163,10 @@ def _patched_torch_load(f, map_location=None, pickle_module=None, *, weights_onl
 
 
 torch.load = _patched_torch_load
-print("✓ torch.load patched to use weights_only=False")
-print("=" * 70)
+printBoldBlue("✓ torch.load patched to use weights_only=False")
+printBold("=" * 70)
+# Load YOLO
+from ultralytics import YOLO
 
 # PyTorch 2.6+ safe globals
 try:
@@ -185,20 +192,20 @@ try:
 
                 safe_classes.extend([SegmentationModel, DetectionModel])
             except ImportError:
-                noteSuppressed()
+                pass
 
         torch.serialization.add_safe_globals(safe_classes)
 except (ImportError, AttributeError):
-    noteSuppressed()
+    pass
 
 try:
     # Load MobileSAM
     from mobile_sam import sam_model_registry, SamPredictor
     MOBILESAM_AVAILABLE = True
-    print("✓ MobileSAM loaded")
+    printBoldGreen("✓ MobileSAM loaded")
 except ImportError as e:
     MOBILESAM_AVAILABLE = False
-    print(f"✗ Failed to load MobileSAM: {e}")
+    printBoldRed(f"✗ Failed to load MobileSAM: {e}")
 
 class ModelManager:
     """
@@ -217,6 +224,7 @@ class ModelManager:
     _instance: Optional['ModelManager'] = None
     _initialized = False
     _load_lock = threading.Lock()
+    logSource: str = ""
 
     def __new__(cls):
         if cls._instance is None:
@@ -228,7 +236,8 @@ class ModelManager:
             return
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[ModelManager] Using device: {self.device}")
+        ModelManager.logSource = getFullyQualifiedName(__file__, __class__)
+        logBoth('logInfo', ModelManager.logSource, f"Using device: {self.device}", Logger.GENERAL)
 
         # Model paths
         self.mobile_sam_path = os.path.join(
@@ -256,7 +265,7 @@ class ModelManager:
         """Load models if not already loaded (thread-safe lazy loading)."""
         with self._load_lock:
             if self.sam_model is not None and self.yolo_model is not None:
-                print("[ModelManager] Models already loaded")
+                logBoth('logInfo', ModelManager.logSource, "Models already loaded", Logger.GENERAL)
                 return
 
             if not MOBILESAM_AVAILABLE:
@@ -265,7 +274,7 @@ class ModelManager:
                     "Ensure MobileSAM is installed and added to sys.path."
                 )
 
-            print("[ModelManager] Loading MobileSAM and YOLO models...")
+            logBoth('logInfo', ModelManager.logSource, "Loading MobileSAM and YOLO models...", Logger.GENERAL)
 
             # Verify model files exist
             if not os.path.exists(self.mobile_sam_path):
@@ -282,7 +291,7 @@ class ModelManager:
                 self.sam_predictor = SamPredictor(self.sam_model)
 
             except Exception as e:
-                print(f"✗ Failed to load MobileSAM: {e}")
+                logBoth('logTakeAction', ModelManager.logSource, f"Failed to load MobileSAM: {e}", Logger.PROBLEM)
                 raise
 
             # Enable TF32 for Ampere GPUs
@@ -290,28 +299,25 @@ class ModelManager:
                 if torch.cuda.get_device_properties(0).major >= 8:
                     torch.backends.cuda.matmul.allow_tf32 = True
                     torch.backends.cudnn.allow_tf32 = True
-                    print("✓ Enabled TF32 for Ampere GPU")
+                    logBoth('logInfo', ModelManager.logSource, "Enabled TF32 for Ampere GPU", Logger.SUCCESS)
 
             try:
-                # Load YOLO
-                from ultralytics import YOLO
 
                 self.yolo_model = YOLO(self.yolo_path, task='detect')
                 self._force_yolo_detection_mode(self.yolo_model)
                 self.yolo_model.to(self.device)
-
-                print("✓ YOLO loaded")
+                logBoth('logInfo', ModelManager.logSource, "YOLO loaded", Logger.SUCCESS)
 
             except Exception as e:
-                print(f"✗ Failed to load YOLO: {e}")
+                logBoth('logTakeAction', ModelManager.logSource, f"Failed to load YOLO: {e}", Logger.PROBLEM)
                 raise
 
-            print("[ModelManager] All models loaded successfully")
+            logBoth('logInfo', ModelManager.logSource, "All models loaded successfully", Logger.SUCCESS)
 
     def _force_yolo_detection_mode(self, yolo_model):
         """Force YOLO model to detection mode (same as BunkSegmenter)."""
         try:
-            print("  Forcing YOLO to detection mode...")
+            logBoth('logInfo', ModelManager.logSource, "Forcing YOLO to detection mode...", Logger.GENERAL)
 
             # Step 1: Patch model head
             if hasattr(yolo_model, 'model') and hasattr(yolo_model.model, 'model'):
@@ -334,12 +340,12 @@ class ModelManager:
                     detect_forward = Detect.forward
                     head.forward = types.MethodType(detect_forward, head)
                     head._patched_for_detection = True
-                    print("  ✓ Replaced forward with Detect.forward()")
+                    logBoth('logInfo', ModelManager.logSource, "Replaced forward with Detect.forward()", Logger.SUCCESS)
 
             # Step 2: Force task in overrides
             if hasattr(yolo_model, 'overrides'):
                 yolo_model.overrides['task'] = 'detect'
-                print("  ✓ Set task='detect' in overrides")
+                logBoth('logInfo', ModelManager.logSource, "Set task='detect' in overrides", Logger.SUCCESS)
 
             # Step 3: Replace sam_predictor
             if hasattr(yolo_model, 'sam_predictor') and yolo_model.sam_predictor is not None:
@@ -356,24 +362,24 @@ class ModelManager:
                     new_predictor.device = old_predictor.device
 
                 yolo_model.sam_predictor = new_predictor
-                print("  ✓ Replaced sam_predictor with DetectPredictor")
+                logBoth('logInfo', ModelManager.logSource, "Replaced sam_predictor with DetectPredictor", Logger.SUCCESS)
 
             # Step 4: Set model.task
             if hasattr(yolo_model, 'task'):
                 yolo_model.task = 'detect'
-                print("  ✓ Set model.task='detect'")
+                logBoth('logInfo', ModelManager.logSource, "Set model.task='detect'", Logger.SUCCESS)
 
             # Step 5: Patch checkpoint metadata
             if hasattr(yolo_model, 'ckpt') and yolo_model.ckpt:
                 if isinstance(yolo_model.ckpt, dict) and 'train_args' in yolo_model.ckpt:
                     if hasattr(yolo_model.ckpt['train_args'], 'task'):
                         yolo_model.ckpt['train_args'].task = 'detect'
-                        print("  ✓ Updated checkpoint metadata task")
+                        logBoth('logInfo', ModelManager.logSource, "Updated checkpoint metadata task", Logger.SUCCESS)
 
-            print("  ✓ Successfully forced detection mode")
+            logBoth('logInfo', ModelManager.logSource, "Successfully forced detection mode", Logger.SUCCESS)
 
         except Exception as e:
-            print(f"  ⚠ Warning during YOLO patching: {e}")
+            logBoth('logTakeNote', ModelManager.logSource, f"Warning during YOLO patching: {e}", Logger.RISK)
             import traceback
             traceback.print_exc()
 

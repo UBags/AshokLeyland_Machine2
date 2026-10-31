@@ -29,9 +29,10 @@ from itertools import combinations
 import sys
 import os
 
-from BaseUtils import get_project_root
+from BaseUtils import get_project_root, getFullyQualifiedName
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat, vTuple
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 
 # Suppress warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -51,30 +52,24 @@ PRINT_BATCH_PROCESSING = False
 # =============================================================================
 
 # Two-stage cropping parameters
-OUTER_DISC_CENTER = vTuple("vision.bunk.outer.disc.center", (630, 350))  # Center in full image
-OUTER_DISC_RADIUS = vInt("vision.bunk.outer.disc.radius", 250)
+OUTER_DISC_CENTER = (630, 350)  # Center in full image
+OUTER_DISC_RADIUS = 250
 
-INNER_DISC_RADIUS = vInt("vision.bunk.inner.disc.radius", 110)  # Radius from center of outer disc
+INNER_DISC_RADIUS = 110  # Radius from center of outer disc
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
-MIN_MASK_AREA = vInt("vision.bunk.min.mask.area", 325)
-MAX_MASK_AREA = vInt("vision.bunk.max.mask.area", 1200)
+MIN_MASK_AREA = 325
+MAX_MASK_AREA = 1200
 
 # Geometric validation thresholds (retained from v1)
-EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bunk.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code
-MINIMUM_INTERIOR_ANGLE = vFloat("vision.unused.bunk.minimum.interior.angle", 65.0)  # degrees  # UNUSED by live code
-ALLOWED_STD_DEVIATION_IN_ANGLES = vFloat("vision.unused.bunk.allowed.std.deviation.in.angles", 20.0)  # degrees  # UNUSED by live code
+EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation
+MINIMUM_INTERIOR_ANGLE = 65.0  # degrees
+ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees
 # Expected radius of hole for morphological filtering
-EXPECTED_RADIUS_OF_HOLE = vInt("vision.bunk.expected.radius.of.hole", 30)
-SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bunk.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
-SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bunk.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
-SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bunk.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
-SQUARE_MAX_ANGLE_STD = vFloat("vision.bunk.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
-DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.bunk.dostplus.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
-DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.bunk.dostplus.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
+EXPECTED_RADIUS_OF_HOLE = 30
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """
@@ -371,10 +366,10 @@ def find_best_equidistant_subset_euclidean_robust(
         points: List[Tuple[float, float]],
         n: int,
         center: Tuple[float, float],  # Still provided but only for angular spacing check
-        tolerance: float = SQUARE_SIDE_LENGTH_TOLERANCE,
-        min_interior_angle: float = SQUARE_MIN_INTERIOR_ANGLE,
-        max_interior_angle: float = SQUARE_MAX_INTERIOR_ANGLE,
-        allowed_angle_std: float = SQUARE_MAX_ANGLE_STD
+        tolerance: float = 0.2,
+        min_interior_angle: float = 65.0,
+        max_interior_angle: float = 115.0,
+        allowed_angle_std: float = 20.0
 ) -> Tuple[Optional[List[int]], float, dict]:
     """
     ROBUST VERSION: Find best subset forming regular polygon.
@@ -398,6 +393,8 @@ def find_best_equidistant_subset_euclidean_robust(
     Returns:
         Tuple of (best_indices, best_score, diagnostics) or (None, inf, {})
     """
+    _src = __name__
+
     if len(points) < n:
         return None, float('inf'), {}
 
@@ -414,9 +411,9 @@ def find_best_equidistant_subset_euclidean_robust(
         ordered_indices = order_polygon_vertices_robust(points, list(combo_indices))
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"\n--- Testing combination #{combo_number}: indices {list(combo_indices)} ---")
-            print(f"  Original order: {list(combo_indices)}")
-            print(f"  Ordered (CCW):  {ordered_indices}")
+            logBoth('logDebug', _src, f"\n--- Testing combination #{combo_number}: indices {list(combo_indices)} ---", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Original order: {list(combo_indices)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Ordered (CCW):  {ordered_indices}", MessageType.GENERAL)
 
         # Extract ordered points
         ordered_points = [points[i] for i in ordered_indices]
@@ -436,28 +433,28 @@ def find_best_equidistant_subset_euclidean_robust(
             distances.append(dist)
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Side lengths: {[f'{d:.2f}' for d in distances]}")
+            logBoth('logDebug', _src, f"  Side lengths: {[f'{d:.2f}' for d in distances]}", MessageType.GENERAL)
 
         median_dist = np.median(distances)
         if median_dist == 0:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✗ REJECTED: Median distance is zero")
+                logBoth('logDebug', _src, f"  ✗ REJECTED: Median distance is zero", MessageType.GENERAL)
             continue
 
         deviations = [abs(d - median_dist) / median_dist for d in distances]
         max_deviation = max(deviations)
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Median distance: {median_dist:.2f}")
-            print(f"  Max deviation: {max_deviation:.1%} (threshold: {tolerance:.1%})")
+            logBoth('logDebug', _src, f"  Median distance: {median_dist:.2f}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Max deviation: {max_deviation:.1%} (threshold: {tolerance:.1%})", MessageType.GENERAL)
 
         if max_deviation > tolerance:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✗ REJECTED: Distance deviation {max_deviation:.1%} > {tolerance:.1%}")
+                logBoth('logDebug', _src, f"  ✗ REJECTED: Distance deviation {max_deviation:.1%} > {tolerance:.1%}", MessageType.GENERAL)
             continue
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  ✓ Distance check passed")
+            logBoth('logDebug', _src, f"  ✓ Distance check passed", MessageType.GENERAL)
 
         # =================================================================
         # 2. CHECK INTERIOR ANGLES
@@ -488,54 +485,54 @@ def find_best_equidistant_subset_euclidean_robust(
             interior_angles.append(angle_deg)
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Interior angles: {[f'{a:.1f}°' for a in interior_angles]}")
+            logBoth('logDebug', _src, f"  Interior angles: {[f'{a:.1f}°' for a in interior_angles]}", MessageType.GENERAL)
 
         min_angle = min(interior_angles)
         max_angle = max(interior_angles)
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Min angle: {min_angle:.1f}° (threshold: ≥{min_interior_angle}°)")
-            print(f"  Max angle: {max_angle:.1f}° (threshold: ≤{max_interior_angle}°)")
+            logBoth('logDebug', _src, f"  Min angle: {min_angle:.1f}° (threshold: ≥{min_interior_angle}°)", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Max angle: {max_angle:.1f}° (threshold: ≤{max_interior_angle}°)", MessageType.GENERAL)
 
         # Check minimum angle requirement
         if min_angle < min_interior_angle:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✗ REJECTED: Min angle {min_angle:.1f}° < {min_interior_angle}°")
+                logBoth('logDebug', _src, f"  ✗ REJECTED: Min angle {min_angle:.1f}° < {min_interior_angle}°", MessageType.GENERAL)
             continue
 
         # Check maximum angle requirement (for squares/rectangles)
         if max_angle > max_interior_angle:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✗ REJECTED: Max angle {max_angle:.1f}° > {max_interior_angle}°")
+                logBoth('logDebug', _src, f"  ✗ REJECTED: Max angle {max_angle:.1f}° > {max_interior_angle}°", MessageType.GENERAL)
             continue
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  ✓ Angle range check passed")
+            logBoth('logDebug', _src, f"  ✓ Angle range check passed", MessageType.GENERAL)
 
         # Special checks for Square (4 holes)
         if n == 4:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  [4-hole square checks]")
+                logBoth('logDebug', _src, f"  [4-hole square checks]", MessageType.GENERAL)
 
             angle_std = np.std(interior_angles)
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  Angle std dev: {angle_std:.1f}° (threshold: ≤{allowed_angle_std}°)")
+                logBoth('logDebug', _src, f"  Angle std dev: {angle_std:.1f}° (threshold: ≤{allowed_angle_std}°)", MessageType.GENERAL)
             if angle_std > allowed_angle_std:
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"  ✗ REJECTED: Angle std {angle_std:.1f}° > {allowed_angle_std}°")
+                    logBoth('logDebug', _src, f"  ✗ REJECTED: Angle std {angle_std:.1f}° > {allowed_angle_std}°", MessageType.GENERAL)
                 continue
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✓ Angle uniformity check passed")
+                logBoth('logDebug', _src, f"  ✓ Angle uniformity check passed", MessageType.GENERAL)
 
             mean_angle = np.mean(interior_angles)
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  Mean angle: {mean_angle:.1f}° (target: 90° ± {allowed_angle_std}°)")
+                logBoth('logDebug', _src, f"  Mean angle: {mean_angle:.1f}° (target: 90° ± {allowed_angle_std}°)", MessageType.GENERAL)
             if abs(mean_angle - 90.0) > allowed_angle_std:
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"  ✗ REJECTED: Mean angle {mean_angle:.1f}° too far from 90°")
+                    logBoth('logDebug', _src, f"  ✗ REJECTED: Mean angle {mean_angle:.1f}° too far from 90°", MessageType.GENERAL)
                 continue
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ✓ Mean angle check passed")
+                logBoth('logDebug', _src, f"  ✓ Mean angle check passed", MessageType.GENERAL)
 
         # =================================================================
         # 3. CHECK ANGULAR SPACING FROM REFERENCE CENTER (optional)
@@ -564,9 +561,9 @@ def find_best_equidistant_subset_euclidean_robust(
         max_angle_deviation = max(angle_deviations)
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Angular spacing from ref center: {[f'{a:.1f}°' for a in angles_between]}")
-            print(f"  Expected: {expected_angle:.1f}° each")
-            print(f"  Max deviation: {max_angle_deviation:.1%}")
+            logBoth('logDebug', _src, f"  Angular spacing from ref center: {[f'{a:.1f}°' for a in angles_between]}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Expected: {expected_angle:.1f}° each", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Max deviation: {max_angle_deviation:.1%}", MessageType.GENERAL)
 
         # =================================================================
         # 4. CALCULATE SCORE
@@ -574,11 +571,11 @@ def find_best_equidistant_subset_euclidean_robust(
         # Combine distance deviation and angular spacing
         score = (0.7 * max_deviation + 0.3 * max_angle_deviation)
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"  Combined score: {score:.4f} (lower is better)")
+            logBoth('logDebug', _src, f"  Combined score: {score:.4f} (lower is better)", MessageType.GENERAL)
 
         if score < best_score:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  ★ NEW BEST! (previous best: {best_score:.4f})")
+                logBoth('logDebug', _src, f"  ★ NEW BEST! (previous best: {best_score:.4f})", MessageType.GENERAL)
             best_score = score
             best_indices = ordered_indices
 
@@ -596,15 +593,15 @@ def find_best_equidistant_subset_euclidean_robust(
             }
         else:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"  Score not better than current best ({best_score:.4f})")
+                logBoth('logDebug', _src, f"  Score not better than current best ({best_score:.4f})", MessageType.GENERAL)
 
     if PRINT_GEOMETRIC_VALIDATION:
-        print(f"\n{'=' * 70}")
+        logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
         if best_indices is None:
-            print(f"FINAL RESULT: No valid combination found after testing {combo_number} combinations")
+            logBoth('logDebug', _src, f"FINAL RESULT: No valid combination found after testing {combo_number} combinations", MessageType.GENERAL)
         else:
-            print(f"FINAL RESULT: Best combination found with score {best_score:.4f}")
-            print(f"  Best indices (CCW ordered): {best_indices}")
+            logBoth('logDebug', _src, f"FINAL RESULT: Best combination found with score {best_score:.4f}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Best indices (CCW ordered): {best_indices}", MessageType.GENERAL)
 
     return best_indices, best_score, best_diagnostics
 
@@ -675,7 +672,7 @@ class MobileSAMv2AutomaticMaskGenerator:
             )
         except Exception as e:
             if PRINT_SAM_SEGMENTATION:
-                print(f"YOLO prediction error: {e}")
+                logBoth('logDebug', __name__, f"YOLO prediction error: {e}", MessageType.GENERAL)
             results = []
 
         # Get bounding boxes from YOLO
@@ -684,7 +681,7 @@ class MobileSAMv2AutomaticMaskGenerator:
             boxes = results[0].boxes.xyxy.cpu().numpy()
 
         if PRINT_SAM_SEGMENTATION:
-            print(f"[YOLO] Detected {len(boxes)} boxes")
+            logBoth('logDebug', __name__, f"[YOLO] Detected {len(boxes)} boxes", MessageType.GENERAL)
 
         # Generate masks using box prompts
         if len(boxes) > 0:
@@ -697,7 +694,7 @@ class MobileSAMv2AutomaticMaskGenerator:
                             masks.append(mask_data)
                 except Exception as e:
                     if PRINT_SAM_SEGMENTATION:
-                        print(f"Warning: Failed to generate mask for box {box}: {e}")
+                        logBoth('logDebug', __name__, f"Warning: Failed to generate mask for box {box}: {e}", MessageType.GENERAL)
 
         # Optionally add grid-based point prompts
         if self.use_grid_points and len(masks) < 5:
@@ -829,8 +826,10 @@ class BunkSegmenter:
         if BunkSegmenter._initialized:
             return  # Already initialized
 
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_PREPROCESSING:
-            print("[BunkSegmenter] Initializing with V0.7 pipeline...")
+            logBoth('logDebug', _src, "[BunkSegmenter] Initializing with V0.7 pipeline...", MessageType.GENERAL)
 
         # Load models using ModelManager
         self.model_manager = ModelManager.get_instance()
@@ -838,12 +837,12 @@ class BunkSegmenter:
 
         # Load SAM
         if PRINT_PREPROCESSING:
-            print("[BunkSegmenter] Loading MobileSAM...")
+            logBoth('logDebug', _src, "[BunkSegmenter] Loading MobileSAM...", MessageType.GENERAL)
         self.sam_predictor = self.model_manager.get_sam_predictor()
 
         # Load YOLO
         if PRINT_PREPROCESSING:
-            print("[BunkSegmenter] Loading YOLO ObjectAwareModel...")
+            logBoth('logDebug', _src, "[BunkSegmenter] Loading YOLO ObjectAwareModel...", MessageType.GENERAL)
         self.yolo_model = self.model_manager.get_yolo_model()
 
         # Create mask generator
@@ -860,7 +859,7 @@ class BunkSegmenter:
 
         # Precompute gamma LUTs for all gamma values
         if PRINT_PREPROCESSING:
-            print(f"[BunkSegmenter] Precomputing gamma LUTs for {GAMMA_SEQUENCE}...")
+            logBoth('logDebug', _src, f"[BunkSegmenter] Precomputing gamma LUTs for {GAMMA_SEQUENCE}...", MessageType.GENERAL)
         self.gamma_luts = {}
         for gamma in GAMMA_SEQUENCE:
             inv_gamma = 1.0 / gamma
@@ -869,7 +868,7 @@ class BunkSegmenter:
             self.gamma_luts[gamma] = lut
 
         if PRINT_PREPROCESSING:
-            print("[BunkSegmenter] ✓ Initialization complete")
+            logBoth('logDebug', _src, "[BunkSegmenter] ✓ Initialization complete", MessageType.GENERAL)
 
         BunkSegmenter._initialized = True
 
@@ -932,11 +931,13 @@ class BunkSegmenter:
             Tuple of (filtered_components, count)
             filtered_components: List of ((cx, cy), contour) in inner disc coordinates
         """
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_MASK_FILTERING:
-            print(f"\n{'=' * 70}")
-            print(f"INNER DISC FILTERING")
-            print(f"{'=' * 70}")
-            print(f"Total SAM masks: {len(all_masks)}")
+            logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"INNER DISC FILTERING", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Total SAM masks: {len(all_masks)}", MessageType.GENERAL)
 
         # Center of outer disc in cropped coordinates
         outer_h, outer_w = outer_disc_image.shape[:2]
@@ -957,10 +958,10 @@ class BunkSegmenter:
         y2 = min(outer_h, cy + INNER_DISC_RADIUS)
 
         if PRINT_MASK_FILTERING:
-            print(f"Inner disc center: {inner_center}")
-            print(f"Inner disc radius: {INNER_DISC_RADIUS}")
-            print(f"Inner disc bbox: x=[{x1}, {x2}], y=[{y1}, {y2}]")
-            print(f"Area filter range: [{MIN_MASK_AREA}, {MAX_MASK_AREA}] pixels")
+            logBoth('logDebug', _src, f"Inner disc center: {inner_center}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Inner disc radius: {INNER_DISC_RADIUS}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Inner disc bbox: x=[{x1}, {x2}], y=[{y1}, {y2}]", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Area filter range: [{MIN_MASK_AREA}, {MAX_MASK_AREA}] pixels", MessageType.GENERAL)
 
         # Crop inner disc mask
         inner_disc_mask_crop = inner_disc_mask[y1:y2, x1:x2]
@@ -970,9 +971,9 @@ class BunkSegmenter:
         dropped_masks = []
 
         if PRINT_MASK_FILTERING:
-            print(f"\n{'─' * 70}")
-            print(f"MASK-BY-MASK FILTERING:")
-            print(f"{'─' * 70}")
+            logBoth('logDebug', _src, f"\n{'─' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"MASK-BY-MASK FILTERING:", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'─' * 70}", MessageType.GENERAL)
 
         for idx, mask_data in enumerate(all_masks):
             mask = mask_data['segmentation']
@@ -986,14 +987,14 @@ class BunkSegmenter:
             pixels_in_inner = mask_in_inner.sum()
 
             if PRINT_MASK_FILTERING:
-                print(f"\nMask #{idx}:")
-                print(f"  Original area: {original_area} pixels")
-                print(f"  Pixels in inner disc: {pixels_in_inner}")
+                logBoth('logDebug', _src, f"\nMask #{idx}:", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"  Original area: {original_area} pixels", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"  Pixels in inner disc: {pixels_in_inner}", MessageType.GENERAL)
 
             # Filter by area
             if pixels_in_inner < MIN_MASK_AREA:
                 if PRINT_MASK_FILTERING:
-                    print(f"  ✗ DROPPED: Too small ({pixels_in_inner} < {MIN_MASK_AREA})")
+                    logBoth('logDebug', _src, f"  ✗ DROPPED: Too small ({pixels_in_inner} < {MIN_MASK_AREA})", MessageType.GENERAL)
                 dropped_masks.append({
                     'index': idx,
                     'reason': 'too_small',
@@ -1004,7 +1005,7 @@ class BunkSegmenter:
 
             if pixels_in_inner > MAX_MASK_AREA:
                 if PRINT_MASK_FILTERING:
-                    print(f"  ✗ DROPPED: Too large ({pixels_in_inner} > {MAX_MASK_AREA})")
+                    logBoth('logDebug', _src, f"  ✗ DROPPED: Too large ({pixels_in_inner} > {MAX_MASK_AREA})", MessageType.GENERAL)
                 dropped_masks.append({
                     'index': idx,
                     'reason': 'too_large',
@@ -1027,11 +1028,11 @@ class BunkSegmenter:
                     cy_inner = M['m01'] / M['m00']
 
                     if PRINT_MASK_FILTERING:
-                        print(f"  ✓ KEPT: area={pixels_in_inner}, center=({cx_inner:.1f}, {cy_inner:.1f})")
+                        logBoth('logDebug', _src, f"  ✓ KEPT: area={pixels_in_inner}, center=({cx_inner:.1f}, {cy_inner:.1f})", MessageType.GENERAL)
                     valid_components.append(((cx_inner, cy_inner), contour))
                 else:
                     if PRINT_MASK_FILTERING:
-                        print(f"  ✗ DROPPED: Invalid moments (M['m00']=0)")
+                        logBoth('logDebug', _src, f"  ✗ DROPPED: Invalid moments (M['m00']=0)", MessageType.GENERAL)
                     dropped_masks.append({
                         'index': idx,
                         'reason': 'invalid_moments',
@@ -1039,7 +1040,7 @@ class BunkSegmenter:
                     })
             else:
                 if PRINT_MASK_FILTERING:
-                    print(f"  ✗ DROPPED: No contours found")
+                    logBoth('logDebug', _src, f"  ✗ DROPPED: No contours found", MessageType.GENERAL)
                 dropped_masks.append({
                     'index': idx,
                     'reason': 'no_contours',
@@ -1047,28 +1048,28 @@ class BunkSegmenter:
                 })
 
         if PRINT_MASK_FILTERING:
-            print(f"\n{'=' * 70}")
-            print(f"FILTERING SUMMARY")
-            print(f"{'=' * 70}")
-            print(f"Total masks: {len(all_masks)}")
-            print(f"Kept: {len(valid_components)}")
-            print(f"Dropped: {len(dropped_masks)}")
+            logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"FILTERING SUMMARY", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Total masks: {len(all_masks)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Kept: {len(valid_components)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Dropped: {len(dropped_masks)}", MessageType.GENERAL)
 
             if dropped_masks:
-                print(f"\nDropped mask breakdown:")
+                logBoth('logDebug', _src, f"\nDropped mask breakdown:", MessageType.GENERAL)
                 reason_counts = {}
                 for dm in dropped_masks:
                     reason = dm['reason']
                     reason_counts[reason] = reason_counts.get(reason, 0) + 1
                 for reason, count in reason_counts.items():
-                    print(f"  {reason}: {count}")
+                    logBoth('logDebug', _src, f"  {reason}: {count}", MessageType.GENERAL)
 
-            print(f"\nKept mask details:")
+            logBoth('logDebug', _src, f"\nKept mask details:", MessageType.GENERAL)
             for i, (center, contour) in enumerate(valid_components):
                 area = cv2.contourArea(contour)
-                print(f"  Component {i}: center=({center[0]:.1f}, {center[1]:.1f}), area={area:.0f}")
+                logBoth('logDebug', _src, f"  Component {i}: center=({center[0]:.1f}, {center[1]:.1f}), area={area:.0f}", MessageType.GENERAL)
 
-            print(f"{'=' * 70}\n")
+            logBoth('logDebug', _src, f"{'=' * 70}\n", MessageType.GENERAL)
 
         return valid_components, len(valid_components)
 
@@ -1098,11 +1099,13 @@ class BunkSegmenter:
         if not components:
             return components
 
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_MASK_FILTERING:
-            print(f"\n{'=' * 70}")
-            print(f"MORPHOLOGICAL FILTERING")
-            print(f"{'=' * 70}")
-            print(f"Input components: {len(components)}")
+            logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"MORPHOLOGICAL FILTERING", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Input components: {len(components)}", MessageType.GENERAL)
 
         h, w = inner_disc_shape
 
@@ -1115,14 +1118,14 @@ class BunkSegmenter:
             cv2.drawContours(black_image, [contour], -1, 255, thickness=1)
 
         if PRINT_MASK_FILTERING:
-            print(f"Drew {len(components)} masks on black image")
+            logBoth('logDebug', _src, f"Drew {len(components)} masks on black image", MessageType.GENERAL)
 
         # Step 3: Morphological opening with elliptical kernel 5
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         opened = cv2.morphologyEx(black_image, cv2.MORPH_OPEN, kernel)
 
         if PRINT_MASK_FILTERING:
-            print(f"Applied morphological opening (ellipse kernel 5)")
+            logBoth('logDebug', _src, f"Applied morphological opening (ellipse kernel 5)", MessageType.GENERAL)
 
         # Step 4: Find connected components
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
@@ -1130,7 +1133,7 @@ class BunkSegmenter:
         )
 
         if PRINT_MASK_FILTERING:
-            print(f"Found {num_labels - 1} connected components (excluding background)")
+            logBoth('logDebug', _src, f"Found {num_labels - 1} connected components (excluding background)", MessageType.GENERAL)
 
         # Step 5 & 6: Filter by bounding box dimensions and area
         filtered_components = []
@@ -1139,29 +1142,29 @@ class BunkSegmenter:
         max_dim = int(1.5 * EXPECTED_RADIUS_OF_HOLE)  # 150% of 30 = 45
 
         if PRINT_MASK_FILTERING:
-            print(f"\nFiltering criteria:")
-            print(f"  Bounding box dimensions: [{min_dim}, {max_dim}] pixels")
-            print(f"  Min area ratio: 40% of bbox area")
-            print(f"\nComponent-by-component:")
+            logBoth('logDebug', _src, f"\nFiltering criteria:", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Bounding box dimensions: [{min_dim}, {max_dim}] pixels", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Min area ratio: 40% of bbox area", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"\nComponent-by-component:", MessageType.GENERAL)
 
         for label_id in range(1, num_labels):  # Skip 0 (background)
             # Get bounding box
             x, y, bbox_w, bbox_h, area = stats[label_id]
 
             if PRINT_MASK_FILTERING:
-                print(f"\n  Component {label_id}:")
-                print(f"    Bbox: ({x}, {y}), size: {bbox_w}x{bbox_h}")
-                print(f"    Area: {area}")
+                logBoth('logDebug', _src, f"\n  Component {label_id}:", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"    Bbox: ({x}, {y}), size: {bbox_w}x{bbox_h}", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"    Area: {area}", MessageType.GENERAL)
 
             # Check dimension constraints
             if bbox_w < min_dim or bbox_h < min_dim:
                 if PRINT_MASK_FILTERING:
-                    print(f"    ✗ DROPPED: Dimension too small (min={min_dim})")
+                    logBoth('logDebug', _src, f"    ✗ DROPPED: Dimension too small (min={min_dim})", MessageType.GENERAL)
                 continue
 
             if bbox_w > max_dim or bbox_h > max_dim:
                 if PRINT_MASK_FILTERING:
-                    print(f"    ✗ DROPPED: Dimension too large (max={max_dim})")
+                    logBoth('logDebug', _src, f"    ✗ DROPPED: Dimension too large (max={max_dim})", MessageType.GENERAL)
                 continue
 
             # Check area constraint
@@ -1170,7 +1173,7 @@ class BunkSegmenter:
 
             if area < min_area:
                 if PRINT_MASK_FILTERING:
-                    print(f"    ✗ DROPPED: Area {area} < 40% of bbox area ({min_area:.0f})")
+                    logBoth('logDebug', _src, f"    ✗ DROPPED: Area {area} < 40% of bbox area ({min_area:.0f})", MessageType.GENERAL)
                 continue
 
             # Extract contour for this component
@@ -1188,16 +1191,16 @@ class BunkSegmenter:
 
                     filtered_components.append(((cx, cy), contour))
                     if PRINT_MASK_FILTERING:
-                        print(f"    ✓ KEPT: center=({cx:.1f}, {cy:.1f})")
+                        logBoth('logDebug', _src, f"    ✓ KEPT: center=({cx:.1f}, {cy:.1f})", MessageType.GENERAL)
 
         if PRINT_MASK_FILTERING:
-            print(f"\n{'=' * 70}")
-            print(f"MORPHOLOGICAL FILTERING RESULT")
-            print(f"{'=' * 70}")
-            print(f"Input: {len(components)} components")
-            print(f"Output: {len(filtered_components)} components")
-            print(f"Dropped: {len(components) - len(filtered_components)} components")
-            print(f"{'=' * 70}\n")
+            logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"MORPHOLOGICAL FILTERING RESULT", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Input: {len(components)} components", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Output: {len(filtered_components)} components", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Dropped: {len(components) - len(filtered_components)} components", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}\n", MessageType.GENERAL)
 
         return filtered_components
 
@@ -1217,39 +1220,41 @@ class BunkSegmenter:
         valid_components = components
         found_definitive_pattern = False
 
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"\n{'#' * 70}")
-            print(f"CASCADE GEOMETRIC VALIDATION")
-            print(f"{'#' * 70}")
-            print(f"Model type: {model_type}")
-            print(f"Expected count: {expected_count}")
-            print(f"Current count: {count}")
+            logBoth('logDebug', _src, f"\n{'#' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"CASCADE GEOMETRIC VALIDATION", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'#' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Model type: {model_type}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Expected count: {expected_count}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Current count: {count}", MessageType.GENERAL)
 
             # Log input components
-            print(f"\nInput components for geometric validation:")
+            logBoth('logDebug', _src, f"\nInput components for geometric validation:", MessageType.GENERAL)
             for i, (center, contour) in enumerate(components):
                 area = cv2.contourArea(contour)
-                print(f"  Component {i}: center=({center[0]:.1f}, {center[1]:.1f}), area={area:.0f}")
+                logBoth('logDebug', _src, f"  Component {i}: center=({center[0]:.1f}, {center[1]:.1f}), area={area:.0f}", MessageType.GENERAL)
 
         # Reference center for inner disc
         reference_center = (INNER_DISC_RADIUS, INNER_DISC_RADIUS)
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"\nReference center for geometry: {reference_center}")
+            logBoth('logDebug', _src, f"\nReference center for geometry: {reference_center}", MessageType.GENERAL)
 
         # FIRST: Check for 4-hole square pattern if count >= 4
         if count >= 4:
             # SPECIAL CASE: If expecting 2 holes but found 4+, this is immediate fail
             if expected_count == 2:
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"[Cascade] Found {count} components but expected 2 (DOSTPLUS)")
-                    print(f"[Cascade] ✗ DEFINITIVE REJECTION: Too many holes for DOSTPLUS")
+                    logBoth('logDebug', _src, f"[Cascade] Found {count} components but expected 2 (DOSTPLUS)", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"[Cascade] ✗ DEFINITIVE REJECTION: Too many holes for DOSTPLUS", MessageType.GENERAL)
                 count = 0
                 valid_components = []
                 found_definitive_pattern = True
             else:
                 # Expected 4, proceed with square validation
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"[Cascade] Checking for 4-hole square pattern...")
+                    logBoth('logDebug', _src, f"[Cascade] Checking for 4-hole square pattern...", MessageType.GENERAL)
                 centers = [center for center, contour in valid_components]
 
                 best_indices, best_score, diagnostics = find_best_equidistant_subset_euclidean_robust(
@@ -1264,17 +1269,17 @@ class BunkSegmenter:
 
                     if PRINT_GEOMETRIC_VALIDATION:
                         if expected_count == 4:
-                            print(f"[Cascade] ✓ Found expected 4-hole square pattern!")
+                            logBoth('logDebug', _src, f"[Cascade] ✓ Found expected 4-hole square pattern!", MessageType.GENERAL)
                         else:
-                            print(f"[Cascade] ✗ Found 4-hole square but expected {expected_count} holes")
+                            logBoth('logDebug', _src, f"[Cascade] ✗ Found 4-hole square but expected {expected_count} holes", MessageType.GENERAL)
                 else:
                     # No valid square found
                     if PRINT_GEOMETRIC_VALIDATION:
-                        print(f"[Cascade] No valid 4-hole square found")
+                        logBoth('logDebug', _src, f"[Cascade] No valid 4-hole square found", MessageType.GENERAL)
 
                     if expected_count == 4:
                         if PRINT_GEOMETRIC_VALIDATION:
-                            print(f"[Cascade] No valid 4-hole square (irregular geometry)")
+                            logBoth('logDebug', _src, f"[Cascade] No valid 4-hole square (irregular geometry)", MessageType.GENERAL)
                         # DO NOT set found_definitive_pattern = True for expected=4
                         # This allows trying next gamma
                         count = 0
@@ -1284,7 +1289,7 @@ class BunkSegmenter:
         # SECOND: Try 2-hole pattern if no definitive pattern and expected==2
         if not found_definitive_pattern and expected_count == 2:
             if PRINT_GEOMETRIC_VALIDATION:
-                print(f"[Cascade] Checking for 2-hole pattern (distance-based)...")
+                logBoth('logDebug', _src, f"[Cascade] Checking for 2-hole pattern (distance-based)...", MessageType.GENERAL)
 
             # NEW LOGIC: Count must be EXACTLY 2
             if count == 2:
@@ -1296,39 +1301,39 @@ class BunkSegmenter:
                 distance = np.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
 
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"  Center 1: ({c1[0]:.1f}, {c1[1]:.1f})")
-                    print(f"  Center 2: ({c2[0]:.1f}, {c2[1]:.1f})")
-                    print(f"  Distance between centers: {distance:.1f} pixels")
-                    print(f"  Required range: [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}] pixels")
+                    logBoth('logDebug', _src, f"  Center 1: ({c1[0]:.1f}, {c1[1]:.1f})", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  Center 2: ({c2[0]:.1f}, {c2[1]:.1f})", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  Distance between centers: {distance:.1f} pixels", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  Required range: [75, 100] pixels", MessageType.GENERAL)
 
                 # Check if distance is in range [75, 100]
-                if DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
+                if 75 <= distance <= 100:
                     found_definitive_pattern = True
                     if PRINT_GEOMETRIC_VALIDATION:
-                        print(f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!")
+                        logBoth('logDebug', _src, f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!", MessageType.GENERAL)
                 else:
                     if PRINT_GEOMETRIC_VALIDATION:
-                        print(f"[Cascade] ✗ Distance {distance:.1f} outside range [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}]")
-                        print(f"[Cascade] Will try next gamma")
+                        logBoth('logDebug', _src, f"[Cascade] ✗ Distance {distance:.1f} outside range [75, 100]", MessageType.GENERAL)
+                        logBoth('logDebug', _src, f"[Cascade] Will try next gamma", MessageType.GENERAL)
                     count = 0
                     valid_components = []
                     # found_definitive_pattern remains False - allows continuing to next gamma
             else:
                 if PRINT_GEOMETRIC_VALIDATION:
-                    print(f"[Cascade] ✗ Count is {count}, expected exactly 2")
-                    print(f"[Cascade] Will try next gamma")
+                    logBoth('logDebug', _src, f"[Cascade] ✗ Count is {count}, expected exactly 2", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"[Cascade] Will try next gamma", MessageType.GENERAL)
                 count = 0
                 valid_components = []
                 # found_definitive_pattern remains False - allows continuing to next gamma
 
         if PRINT_GEOMETRIC_VALIDATION:
-            print(f"\n{'#'*70}")
-            print(f"CASCADE RESULT")
-            print(f"{'#'*70}")
-            print(f"Final count: {count}")
-            print(f"Definitive pattern: {found_definitive_pattern}")
-            print(f"Match expected: {count == expected_count}")
-            print(f"{'#'*70}\n")
+            logBoth('logDebug', _src, f"\n{'#'*70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"CASCADE RESULT", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'#'*70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Final count: {count}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Definitive pattern: {found_definitive_pattern}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Match expected: {count == expected_count}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'#'*70}\n", MessageType.GENERAL)
 
         return count, valid_components, found_definitive_pattern
 
@@ -1347,15 +1352,17 @@ class BunkSegmenter:
         if len(masks) <= 1:
             return masks
 
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_MASK_FILTERING:
-            print(f"\n{'=' * 70}")
-            print(f"MASK MERGING (threshold={overlap_threshold})")
-            print(f"{'=' * 70}")
-            print(f"Input masks: {len(masks)}")
+            logBoth('logDebug', _src, f"\n{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"MASK MERGING (threshold={overlap_threshold})", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"Input masks: {len(masks)}", MessageType.GENERAL)
 
             # Log input masks
             for i, mask_data in enumerate(masks):
-                print(f"  Mask {i}: area={mask_data['area']}")
+                logBoth('logDebug', _src, f"  Mask {i}: area={mask_data['area']}", MessageType.GENERAL)
 
         n = len(masks)
         merged = [False] * n
@@ -1395,7 +1402,7 @@ class BunkSegmenter:
                             masks_to_merge.append(j)
                             changed = True
                             if PRINT_MASK_FILTERING:
-                                print(f"  Merging mask {j} into group {masks_to_merge[0]} (overlap={overlap_ratio:.1%})")
+                                logBoth('logDebug', _src, f"  Merging mask {j} into group {masks_to_merge[0]} (overlap={overlap_ratio:.1%})", MessageType.GENERAL)
 
             # Mark merged
             for idx in masks_to_merge:
@@ -1409,7 +1416,7 @@ class BunkSegmenter:
                     'final_area': merged_area
                 })
                 if PRINT_MASK_FILTERING:
-                    print(f"  ✓ Created merged mask from {masks_to_merge}: area={merged_area}")
+                    logBoth('logDebug', _src, f"  ✓ Created merged mask from {masks_to_merge}: area={merged_area}", MessageType.GENERAL)
 
             result_masks.append({
                 'segmentation': current_mask,
@@ -1421,11 +1428,11 @@ class BunkSegmenter:
             })
 
         if PRINT_MASK_FILTERING:
-            print(f"\nMerge summary:")
-            print(f"  Input masks: {len(masks)}")
-            print(f"  Output masks: {len(result_masks)}")
-            print(f"  Merge operations: {len(merge_log)}")
-            print(f"{'=' * 70}\n")
+            logBoth('logDebug', _src, f"\nMerge summary:", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Input masks: {len(masks)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Output masks: {len(result_masks)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"  Merge operations: {len(merge_log)}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"{'=' * 70}\n", MessageType.GENERAL)
 
         return result_masks
 
@@ -1467,9 +1474,11 @@ class BunkSegmenter:
         if len(preprocessed_images) != len(gamma_values):
             raise ValueError(f"Mismatch: {len(preprocessed_images)} images vs {len(gamma_values)} gammas")
 
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_BATCH_PROCESSING:
-            print(f"[BunkSegmenter] Batch processing {len(preprocessed_images)} gamma values")
-            print(f"[BunkSegmenter] Expected: {expected_count}, Model: {model_type}")
+            logBoth('logDebug', _src, f"[BunkSegmenter] Batch processing {len(preprocessed_images)} gamma values", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[BunkSegmenter] Expected: {expected_count}, Model: {model_type}", MessageType.GENERAL)
 
         best_count = 0
         best_components = []
@@ -1480,31 +1489,31 @@ class BunkSegmenter:
         with torch.inference_mode():
             for idx, (preprocessed, gamma) in enumerate(zip(preprocessed_images, gamma_values)):
                 if PRINT_BATCH_PROCESSING:
-                    print(f"\n[BunkSegmenter] --- Gamma {idx+1}/{len(preprocessed_images)}: {gamma} ---")
+                    logBoth('logDebug', _src, f"\n[BunkSegmenter] --- Gamma {idx+1}/{len(preprocessed_images)}: {gamma} ---", MessageType.GENERAL)
 
                 # Run SAM
                 masks = self.mask_generator.generate(preprocessed)
                 if PRINT_SAM_SEGMENTATION:
-                    print(f"[BunkSegmenter] SAM detected {len(masks)} raw masks")
+                    logBoth('logDebug', _src, f"[BunkSegmenter] SAM detected {len(masks)} raw masks", MessageType.GENERAL)
 
                 # Merge overlapping masks
                 masks = self._merge_overlapping_masks(masks, overlap_threshold=0.15)
                 if PRINT_MASK_FILTERING:
-                    print(f"[BunkSegmenter] After merging: {len(masks)} masks")
+                    logBoth('logDebug', _src, f"[BunkSegmenter] After merging: {len(masks)} masks", MessageType.GENERAL)
 
                 # Extract and filter in inner disc
                 components, count = self._extract_and_filter_masks_in_inner_disc(
                     masks, preprocessed
                 )
                 if PRINT_MASK_FILTERING:
-                    print(f"[BunkSegmenter] After inner disc filtering: {count} components")
+                    logBoth('logDebug', _src, f"[BunkSegmenter] After inner disc filtering: {count} components", MessageType.GENERAL)
 
                 # Apply morphological filtering
                 inner_disc_shape = preprocessed.shape[:2]
                 components = self._morphological_filter_components(components, inner_disc_shape)
                 count = len(components)
                 if PRINT_MASK_FILTERING:
-                    print(f"[BunkSegmenter] After morphological filtering: {count} components")
+                    logBoth('logDebug', _src, f"[BunkSegmenter] After morphological filtering: {count} components", MessageType.GENERAL)
 
                 # Apply cascade geometric validation
                 count, components, definitive = self._apply_cascade_geometric_validation(
@@ -1520,7 +1529,7 @@ class BunkSegmenter:
                     best_gamma = gamma
                     found_definitive = definitive
                     if PRINT_BATCH_PROCESSING:
-                        print(f"[BunkSegmenter] ★ DEFINITIVE result: count={count}, gamma={gamma}")
+                        logBoth('logDebug', _src, f"[BunkSegmenter] ★ DEFINITIVE result: count={count}, gamma={gamma}", MessageType.GENERAL)
                 elif count > best_count:
                     # Better count without definitive result
                     best_count = count
@@ -1528,27 +1537,27 @@ class BunkSegmenter:
                     best_gamma = gamma
                     found_definitive = definitive
                     if PRINT_BATCH_PROCESSING:
-                        print(f"[BunkSegmenter] ★ New best: count={count}, gamma={gamma}")
+                        logBoth('logDebug', _src, f"[BunkSegmenter] ★ New best: count={count}, gamma={gamma}", MessageType.GENERAL)
 
                 # EARLY TERMINATION (now happens AFTER updating best)
                 if definitive:
                     # Any definitive result terminates early
                     if PRINT_BATCH_PROCESSING:
                         if count == expected_count:
-                            print(f"[BunkSegmenter] ✓ EARLY TERMINATION: Found expected definitive pattern!")
+                            logBoth('logDebug', _src, f"[BunkSegmenter] ✓ EARLY TERMINATION: Found expected definitive pattern!", MessageType.GENERAL)
                         else:
-                            print(f"[BunkSegmenter] ✓ EARLY TERMINATION: Definitive rejection!")
-                        print(f"[BunkSegmenter] Skipping remaining {len(preprocessed_images) - idx - 1} gammas")
+                            logBoth('logDebug', _src, f"[BunkSegmenter] ✓ EARLY TERMINATION: Definitive rejection!", MessageType.GENERAL)
+                        logBoth('logDebug', _src, f"[BunkSegmenter] Skipping remaining {len(preprocessed_images) - idx - 1} gammas", MessageType.GENERAL)
                     break
 
         # Clear GPU cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             if PRINT_BATCH_PROCESSING:
-                print("[BunkSegmenter] GPU cache cleared")
+                logBoth('logDebug', _src, "[BunkSegmenter] GPU cache cleared", MessageType.GENERAL)
 
         if PRINT_BATCH_PROCESSING:
-            print(f"\n[BunkSegmenter] === WINNER: gamma={best_gamma}, count={best_count}, definitive={found_definitive} ===")
+            logBoth('logDebug', _src, f"\n[BunkSegmenter] === WINNER: gamma={best_gamma}, count={best_count}, definitive={found_definitive} ===", MessageType.GENERAL)
 
         return best_count, best_components, best_gamma, found_definitive
 
@@ -1577,33 +1586,35 @@ class BunkSegmenter:
             - components: List of (center, contour) tuples
             - found_definitive: True if definitive pattern found (valid geometry)
         """
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+
         if PRINT_BATCH_PROCESSING:
-            print(f"[BunkSegmenter] Processing single gamma {gamma}")
+            logBoth('logDebug', _src, f"[BunkSegmenter] Processing single gamma {gamma}", MessageType.GENERAL)
 
         with torch.inference_mode():
             # Run SAM segmentation
             masks = self.mask_generator.generate(preprocessed_image)
             if PRINT_SAM_SEGMENTATION:
-                print(f"[BunkSegmenter] SAM detected {len(masks)} raw masks")
+                logBoth('logDebug', _src, f"[BunkSegmenter] SAM detected {len(masks)} raw masks", MessageType.GENERAL)
 
             # Merge overlapping masks
             masks = self._merge_overlapping_masks(masks, overlap_threshold=0.15)
             if PRINT_MASK_FILTERING:
-                print(f"[BunkSegmenter] After merging: {len(masks)} masks")
+                logBoth('logDebug', _src, f"[BunkSegmenter] After merging: {len(masks)} masks", MessageType.GENERAL)
 
             # Extract and filter in inner disc
             components, count = self._extract_and_filter_masks_in_inner_disc(
                 masks, preprocessed_image
             )
             if PRINT_MASK_FILTERING:
-                print(f"[BunkSegmenter] After inner disc filtering: {count} components")
+                logBoth('logDebug', _src, f"[BunkSegmenter] After inner disc filtering: {count} components", MessageType.GENERAL)
 
             # Apply morphological filtering
             inner_disc_shape = preprocessed_image.shape[:2]
             components = self._morphological_filter_components(components, inner_disc_shape)
             count = len(components)
             if PRINT_MASK_FILTERING:
-                print(f"[BunkSegmenter] After morphological filtering: {count} components")
+                logBoth('logDebug', _src, f"[BunkSegmenter] After morphological filtering: {count} components", MessageType.GENERAL)
 
             # Apply cascade geometric validation
             count, components, definitive = self._apply_cascade_geometric_validation(
@@ -1611,7 +1622,7 @@ class BunkSegmenter:
             )
 
             if PRINT_BATCH_PROCESSING:
-                print(f"[BunkSegmenter] Result: count={count}, definitive={definitive}")
+                logBoth('logDebug', _src, f"[BunkSegmenter] Result: count={count}, definitive={definitive}", MessageType.GENERAL)
 
         # Clear GPU cache
         if torch.cuda.is_available():

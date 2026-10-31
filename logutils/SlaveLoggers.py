@@ -1,6 +1,7 @@
 """
 Concrete slave logger implementations for file and console logging.
 """
+import sys
 import threading
 import warnings
 from typing import Optional
@@ -164,6 +165,52 @@ class SlaveConsoleLogger(SlaveLogger):
             messageType
         )
         return self.enqueue(formatted_message)   # a full queue is counted and reported, not silently lost
+
+
+# ---------------------------------------------------------------------------------------------- logBoth
+# The production vision modules (camera/*) log with logBoth(level, source, message, messageType), the API of the
+# production logutils. Here it maps onto this logging system: the same message goes to the file logger and the
+# console logger, each applying its own level (per-server levels, production clamp, cycle context, live reload),
+# and the logged function name / line number are those of the logBoth caller.
+#   production level   ->  level here
+#   'logDebug'         ->  DEBUG
+#   'logInfo'          ->  INFO
+#   'logWarning'       ->  TAKE_NOTE
+#   'logError'         ->  CONSIDER_ACTION
+#   'logCritical'      ->  TAKE_ACTION
+# (the names used here, 'logTakeNote', 'logConsiderAction', 'logTakeAction', are accepted too)
+_LOG_BOTH_LEVELS = {
+    'logDebug': Logger.DEBUG,
+    'logInfo': Logger.INFO,
+    'logWarning': Logger.TAKENOTE,
+    'logTakeNote': Logger.TAKENOTE,
+    'logError': Logger.CONSIDERACTION,
+    'logConsiderAction': Logger.CONSIDERACTION,
+    'logCritical': Logger.TAKEACTION,
+    'logTakeAction': Logger.TAKEACTION,
+}
+
+
+def logBoth(level: str, source: str, message: str, messageType: int = Logger.GENERAL) -> None:
+    """Log one message to both the file and the console logger. Never raises."""
+    levelInt = _LOG_BOTH_LEVELS.get(level)
+    if levelInt is None:
+        printRed(f"logBoth(): unknown level {level!r}. Valid options: {sorted(_LOG_BOTH_LEVELS)}")
+        return
+    from logutils.AbstractSlaveLogger import callerOverride
+    try:
+        frame = sys._getframe(1)
+        callerOverride.value = (frame.f_code.co_name, frame.f_lineno)
+    except Exception:
+        callerOverride.value = None
+    try:
+        for loggerClass in (SlaveFileLogger, SlaveConsoleLogger):
+            try:
+                loggerClass.getInstance().logMessage(levelInt, source, str(message), int(messageType))
+            except Exception:
+                pass
+    finally:
+        callerOverride.value = None
 
 
 def stopSlaveLoggingThreads() -> None:

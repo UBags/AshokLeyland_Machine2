@@ -26,7 +26,6 @@ except:
     pass
 
 from camera.HexagonNutDetector import NutDetector
-from camera.VisionConfig import vInt, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -34,6 +33,8 @@ try:
     from BaseUtils import *
     from Configuration import *
     from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage, UNKNOWN
+    from logutils.SlaveLoggers import logBoth
+    from logutils.Logger import MessageType
 
     CosThetaConfigurator.getInstance()
 except ImportError:
@@ -43,14 +44,24 @@ except ImportError:
     hubAndBottomBearingPictureKeyString = "hubAndBottomBearingPicture"
     topBearingPictureKeyString = "topBearingPicture"
 
-    def printBoldBlue(msg):
-        print(f"\033[1;34m{msg}\033[0m")
+    def logBoth(level, source, msg, messageType=None):
+        colours = {
+            'logInfo': '\033[1;32m',
+            'logError': '\033[1;31m',
+            'logWarning': '\033[1;33m',
+            'logDebug': '\033[1;34m',
+            'logCritical': '\033[1;31m',
+        }
+        reset = '\033[0m'
+        colour = colours.get(level, '')
+        print(f"{colour}{msg}{reset}")
 
-    def printBoldGreen(msg):
-        print(f"\033[1;32m{msg}\033[0m")
-
-    def printBoldRed(msg):
-        print(f"\033[1;31m{msg}\033[0m")
+    class MessageType:
+        GENERAL = 1
+        SUCCESS = 2
+        RISK = 3
+        ISSUE = 4
+        PROBLEM = 5
 
     def saveImage(img, name):
         pass
@@ -68,8 +79,8 @@ class CheckNoBunk:
     """
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nobunk.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nobunk.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -78,11 +89,12 @@ class CheckNoBunk:
     @classmethod
     def _get_nut_detector(cls) -> NutDetector:
         """Get or create singleton NutDetector instance."""
+        _src = getFullyQualifiedName(__file__, cls)
         if not cls._detector_initialized or cls._nut_detector is None:
-            printBoldBlue("[CheckNoBunk] Initializing NutDetector...")
+            logBoth('logDebug', _src, "[CheckNoBunk] Initializing NutDetector...", MessageType.GENERAL)
             cls._nut_detector = NutDetector()
             cls._detector_initialized = True
-            printBoldGreen("[CheckNoBunk] NutDetector initialized")
+            logBoth('logInfo', _src, "[CheckNoBunk] NutDetector initialized", MessageType.SUCCESS)
         return cls._nut_detector
 
     @staticmethod
@@ -107,19 +119,21 @@ class CheckNoBunk:
         Returns:
             Tuple of (annotated_image, nut_present)
         """
-        printBoldBlue("="*80)
-        printBoldBlue("[CheckNoBunk] NO BUNK DETECTION START")
-        printBoldBlue("="*80)
+        _src = getFullyQualifiedName(__file__, CheckNoBunk)
+
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
+        logBoth('logDebug', _src, "[CheckNoBunk] NO BUNK DETECTION START", MessageType.GENERAL)
+        logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
 
         # =====================================================================
         # VALIDATION
         # =====================================================================
         if anImage is None:
-            printBoldRed("[CheckNoBunk] anImage is None")
+            logBoth('logError', _src, "[CheckNoBunk] anImage is None", MessageType.ISSUE)
             return anImage, False
 
         if componentQRCode is None:
-            printBoldRed("[CheckNoBunk] componentQRCode is None")
+            logBoth('logError', _src, "[CheckNoBunk] componentQRCode is None", MessageType.ISSUE)
             return anImage, False
 
         # Get component type
@@ -134,7 +148,7 @@ class CheckNoBunk:
         # =====================================================================
         # DETECT NUT USING HexagonNutDetector
         # =====================================================================
-        printBoldBlue("[CheckNoBunk] Detecting nut using HexagonNutDetector...")
+        logBoth('logDebug', _src, "[CheckNoBunk] Detecting nut using HexagonNutDetector...", MessageType.GENERAL)
 
         detector = CheckNoBunk._get_nut_detector()
         image_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
@@ -159,13 +173,13 @@ class CheckNoBunk:
         else:
             hex_center_original = CheckNoBunk.NUT_DETECTION_CENTER
 
-        def _crop180(img: np.ndarray) -> np.ndarray:
+        def _crop240(img: np.ndarray) -> np.ndarray:
             cx, cy = hex_center_original
             h, w = img.shape[:2]
-            x1, y1 = max(cx - 90, 0), max(cy - 90, 0)
-            x2, y2 = min(cx + 90, w), min(cy + 90, h)
+            x1, y1 = max(cx - 120, 0), max(cy - 120, 0)
+            x2, y2 = min(cx + 120, w), min(cy + 120, h)
             cropped = img[y1:y2, x1:x2]
-            result = np.zeros((180, 180, 3), dtype=np.uint8)
+            result = np.zeros((240, 240, 3), dtype=np.uint8)
             ch, cw = cropped.shape[:2]
             result[:ch, :cw] = cropped
             return result
@@ -174,14 +188,14 @@ class CheckNoBunk:
         # RETURN RESULT
         # =====================================================================
         if nut_found:
-            printBoldGreen("[CheckNoBunk] ✓ NUT DETECTED - No Bunk State Present")
-            printBoldBlue("="*80)
+            logBoth('logInfo', _src, "[CheckNoBunk] ✓ NUT DETECTED - No Bunk State Present", MessageType.SUCCESS)
+            logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
             # Return annotated image with green nut outline
-            annotated = _crop180(nut_result.get('annotated_original', anImage))
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, True
         else:
-            printBoldRed("[CheckNoBunk] ✗ NUT NOT DETECTED - No Bunk State Absent")
-            printBoldBlue("="*80)
+            logBoth('logError', _src, "[CheckNoBunk] ✗ NUT NOT DETECTED - No Bunk State Absent", MessageType.ISSUE)
+            logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
             # Return annotated image (or original)
-            annotated = _crop180(nut_result.get('annotated_original', anImage))
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, False

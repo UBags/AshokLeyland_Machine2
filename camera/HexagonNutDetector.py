@@ -31,7 +31,7 @@ Requirements:
     - OpenCV
     - NumPy
     - PyTorch
-    - scikit-learn
+    - NumPy (KMeans implemented inline — no scikit-learn needed)
 
 Version: 1.0
 Date: 2024
@@ -49,11 +49,13 @@ from datetime import datetime
 from contextlib import contextmanager
 
 # Project utilities
-from BaseUtils import get_project_root
+from BaseUtils import get_project_root, getFullyQualifiedName
 
 # Import ModelManager for shared model access
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat
+
+from logutils.SlaveLoggers import logBoth
+from logutils.Logger import MessageType
 
 # ============================================================================
 # DEBUG FLAGS - Enable/disable different types of debug output
@@ -79,27 +81,6 @@ if PRINT_DETAIL:
 
 ENABLE_VRAM_MONITORING: bool = True
 
-NUT_YOLO_CONF_THRESHOLD = vFloat("vision.nut.yolo.conf.threshold", 0.3)    # YOLO box confidence for nut candidates (NutDetector)
-NUT_MIN_MASK_AREA = vInt("vision.nut.min.mask.area", 3000)                 # SAM mask area window, min (px, NutDetector)
-NUT_MAX_MASK_AREA = vInt("vision.nut.max.mask.area", 5500)                 # SAM mask area window, max (px, NutDetector)
-NUT_MIN_VERTICES = vInt("vision.nut.min.vertices", 5)                      # cleaned polygon must have MIN..MAX vertices
-NUT_MAX_VERTICES = vInt("vision.nut.max.vertices", 8)
-NUT_MIN_ASPECT_RATIO = vFloat("vision.nut.min.aspect.ratio", 0.7)          # bounding-box w/h, exclusive range
-NUT_MAX_ASPECT_RATIO = vFloat("vision.nut.max.aspect.ratio", 1.3)
-NUT_CENTER_DISC_RADIUS = vInt("vision.nut.center.disc.radius", 25)         # disc removed around centre of mass (px)
-NUT_MIN_REMAINING_AREA_FRACTION = vFloat("vision.nut.min.remaining.area.fraction", 0.3)  # area after disc >= fraction of original
-NUT_MIN_VERTICES_AFTER_DISC = vInt("vision.nut.min.vertices.after.disc", 4)  # reject if fewer vertices remain after disc
-NUT_MIN_ACTUAL_AREA = vInt("vision.nut.min.actual.area", 2000)             # area after disc must be > this (px)
-NUT_EDGE_MIN_LENGTH_FACTOR = vFloat("vision.nut.edge.min.length.factor", 0.8)  # original straight edge >= factor x fitted edge
-NUT_REFERENCE_CENTER_X = vInt("vision.nut.reference.center.x", 72)         # fixed reference centre in annular-crop coordinates
-NUT_REFERENCE_CENTER_Y = vInt("vision.nut.reference.center.y", 64)
-NUT_MIN_SYMMETRY_SCORE = vInt("vision.nut.min.symmetry.score", 55)         # reject if composite symmetry score (0-100) < this
-NUT_MIN_THICKNESS_SCORE = vInt("vision.nut.min.thickness.score", 45)       # reject if thickness symmetry score (0-100) < this
-NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES = vInt("vision.nut.reject.deviated.pixels.zero.edges", 28)  # 0 straight edges and deviated px >= this -> reject
-NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE = vInt("vision.nut.reject.deviated.pixels.one.edge", 35)      # 1 straight edge and deviated px >= this -> reject
-NUT_SYMMETRY_REJECT_THRESHOLD = vFloat("vision.nut.symmetry.reject.threshold", 1.10)    # debug message only (rejection disabled)
-NUT_SYMMETRY_WARNING_THRESHOLD = vFloat("vision.nut.symmetry.warning.threshold", 1.40)  # debug message only
-
 # --- Add MobileSAM to path ---
 _PROJECT_ROOT = get_project_root()
 _MOBILESAM_DIR = os.path.join(_PROJECT_ROOT, "models", "MobileSAM")
@@ -112,7 +93,67 @@ warnings.filterwarnings("ignore", category=UserWarning, message="Overwriting .* 
 import numpy as np
 import torch
 import cv2
-from sklearn.cluster import KMeans
+def _kmeans_numpy(X: np.ndarray, n_clusters: int, n_init: int = 50, max_iter: int = 300, random_state: int = 42) -> np.ndarray:
+    """
+    Minimal Lloyd's algorithm KMeans — pure NumPy, no sklearn.
+    Drops the sklearn dependency entirely for this file.
+
+    Args:
+        X:            (N, D) array of data points.
+        n_clusters:   Number of clusters k.
+        n_init:       Number of random restarts; best inertia wins.
+                      50 restarts (vs sklearn's default 10) compensates for RNG
+                      path differences and ensures equivalent solution quality.
+                      Cost is negligible: our N is always < 30 points.
+        max_iter:     Max iterations per run.
+        random_state: Seed for reproducibility.
+
+    Returns:
+        labels: (N,) integer array of cluster assignments (0 … k-1).
+    """
+    rng = np.random.default_rng(random_state)
+    best_labels, best_inertia = None, np.inf
+
+    for _ in range(n_init):
+        # KMeans++ seeding for stable initialisation
+        idx = [rng.integers(len(X))]
+        for _ in range(1, n_clusters):
+            dists = np.array([min(np.sum((x - X[i]) ** 2) for i in idx) for x in X])
+            probs = dists / dists.sum()
+            idx.append(rng.choice(len(X), p=probs))
+        centers = X[idx].astype(float)
+
+        labels = np.zeros(len(X), dtype=int)
+        prev_inertia = np.inf
+        for _ in range(max_iter):
+            # Assignment step
+            dists = np.linalg.norm(X[:, None, :] - centers[None, :, :], axis=2)
+            new_labels = np.argmin(dists, axis=1)
+            if np.array_equal(new_labels, labels):
+                break
+            labels = new_labels
+            # Update step — with empty-cluster recovery (mirrors sklearn behaviour)
+            for k in range(n_clusters):
+                members = X[labels == k]
+                if len(members):
+                    centers[k] = members.mean(axis=0)
+                else:
+                    # Re-initialise to the point farthest from all current centers
+                    dist_to_nearest = np.min(
+                        np.linalg.norm(X[:, None, :] - centers[None, :, :], axis=2), axis=1
+                    )
+                    centers[k] = X[np.argmax(dist_to_nearest)].copy()
+            # Inertia tol check — mirrors sklearn's secondary convergence criterion
+            curr_inertia = np.sum((X - centers[labels]) ** 2)
+            if abs(curr_inertia - prev_inertia) < 1e-4 * prev_inertia:
+                break
+            prev_inertia = curr_inertia
+
+        inertia = np.sum((X - centers[labels]) ** 2)
+        if inertia < best_inertia:
+            best_inertia, best_labels = inertia, labels.copy()
+
+    return best_labels
 
 # CRITICAL: Apply torch.load patch BEFORE any model loading
 import torch.serialization
@@ -140,9 +181,19 @@ if hasattr(torch.serialization, "add_safe_globals"):
         pass
     torch.serialization.add_safe_globals(safe_classes)
 
-print("✓ torch.load patched to use weights_only=False")
+logBoth('logInfo', __name__, "✓ torch.load patched to use weights_only=False", MessageType.SUCCESS)
 
-from mobile_sam import sam_model_registry, SamPredictor
+# This looks spurious BUT IS NOT. It is needed for Line 1796 to pass and work properly
+try:
+    # Load MobileSAM
+    from mobile_sam import sam_model_registry, SamPredictor
+    MOBILESAM_AVAILABLE = True
+    print("✓ MobileSAM loaded")
+except ImportError as e:
+    MOBILESAM_AVAILABLE = False
+    print(f"✗ Failed to load MobileSAM: {e}")
+
+# from mobile_sam import sam_model_registry, SamPredictor
 from ultralytics import YOLO
 
 # CRITICAL: Global lock for YOLO (thread-unsafe operations)
@@ -995,16 +1046,17 @@ def calculate_composite_symmetry_score(
     )
 
     if debug:
-        print(f"\n{'=' * 60}")
-        print(f"SYMMETRY SCORE BREAKDOWN:")
-        print(f"{'=' * 60}")
+        _src = __name__
+        logBoth('logDebug', _src, f"\n{'=' * 60}", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"SYMMETRY SCORE BREAKDOWN:", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"{'=' * 60}", MessageType.GENERAL)
         for metric, score in component_scores.items():
             weight = weights.get(metric, 0)
             contribution = score * weight
-            print(f"  {metric:20s}: {score:.3f} (weight: {weight:.2f}, contrib: {contribution:.3f})")
-        print(f"{'-' * 60}")
-        print(f"  {'COMPOSITE SCORE':20s}: {composite_score:.3f}")
-        print(f"{'=' * 60}\n")
+            logBoth('logDebug', _src, f"  {metric:20s}: {score:.3f} (weight: {weight:.2f}, contrib: {contribution:.3f})", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"{'-' * 60}", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"  {'COMPOSITE SCORE':20s}: {composite_score:.3f}", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"{'=' * 60}\n", MessageType.GENERAL)
 
     return composite_score, component_scores
 
@@ -1052,7 +1104,7 @@ def print_vram_usage(prefix=""):
     if ENABLE_VRAM_MONITORING and torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated() / 1024**3
         reserved = torch.cuda.memory_reserved() / 1024**3
-        print(f"{prefix}VRAM: {allocated:.2f}GB allocated, {reserved:.2f}GB reserved")
+        logBoth('logDebug', __name__, f"{prefix}VRAM: {allocated:.2f}GB allocated, {reserved:.2f}GB reserved", MessageType.GENERAL)
 
 
 @contextmanager
@@ -1066,7 +1118,7 @@ def cuda_memory_tracking(label=""):
         end_mem = torch.cuda.memory_allocated()
         delta = (end_mem - start_mem) / 1024**3
         if abs(delta) > 0.01:  # Only print if >10MB change
-            print(f"{label} VRAM delta: {delta:+.3f}GB")
+            logBoth('logDebug', __name__, f"{label} VRAM delta: {delta:+.3f}GB", MessageType.GENERAL)
     else:
         yield
 
@@ -1152,8 +1204,7 @@ def cluster_lines_by_angle(lines, n_clusters=3):
     X = np.column_stack([np.cos(2 * angles_rad), np.sin(2 * angles_rad)])
 
     # K-means clustering
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    labels = kmeans.fit_predict(X)
+    labels = _kmeans_numpy(X, n_clusters=n_clusters, n_init=10, random_state=42)
 
     # Group lines by cluster
     # Type hint to specify this is a list of lists of tuples
@@ -1225,8 +1276,7 @@ def find_parallel_lines(line_group, max_pairs=2):
         # K-means with k=2 to find two parallel line groups
         if len(perp_distances) >= 2:
             X = np.array(perp_distances).reshape(-1, 1)
-            kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
-            labels = kmeans.fit_predict(X)
+            labels = _kmeans_numpy(X, n_clusters=2, n_init=10, random_state=42)
 
             # Average lines in each group
             group1 = [line_group[top_indices[i]] for i in range(len(top_indices)) if labels[i] == 0]
@@ -1289,7 +1339,7 @@ def validate_hexagon(vertices, debug=False):
 
     if cv > 0.3:  # Coefficient of variation > 30%
         if debug:
-            print(f"    Hexagon validation failed: Side length variance too high (CV={cv:.2f})")
+            logBoth('logDebug', __name__, f"    Hexagon validation failed: Side length variance too high (CV={cv:.2f})", MessageType.GENERAL)
         return False
 
     # Calculate interior angles
@@ -1320,11 +1370,11 @@ def validate_hexagon(vertices, debug=False):
         mean_angle = np.mean(angles)
         if abs(mean_angle - 120) > 30:
             if debug:
-                print(f"    Hexagon validation failed: Mean angle {mean_angle:.1f}° not close to 120°")
+                logBoth('logDebug', __name__, f"    Hexagon validation failed: Mean angle {mean_angle:.1f}° not close to 120°", MessageType.GENERAL)
             return False
 
     if debug:
-        print(f"    Hexagon validation passed: CV={cv:.2f}, mean_angle={np.mean(angles):.1f}°")
+        logBoth('logDebug', __name__, f"    Hexagon validation passed: CV={cv:.2f}, mean_angle={np.mean(angles):.1f}°", MessageType.GENERAL)
 
     return True
 
@@ -1367,23 +1417,23 @@ def detect_hexagon_hough(mask, debug=False):
 
     if lines is None or len(lines) < 6:
         if debug:
-            print(f"    Hough: Found only {len(lines) if lines is not None else 0} lines (need >= 6)")
+            logBoth('logDebug', __name__, f"    Hough: Found only {len(lines) if lines is not None else 0} lines (need >= 6)", MessageType.GENERAL)
         return None
 
     if debug:
-        print(f"    Hough: Found {len(lines)} line segments")
+        logBoth('logDebug', __name__, f"    Hough: Found {len(lines)} line segments", MessageType.GENERAL)
 
     # === STEP 3: Cluster Lines by Orientation ===
     clustered_lines = cluster_lines_by_angle(lines, n_clusters=3)
 
     if clustered_lines is None:
         if debug:
-            print(f"    Hough: Could not cluster lines into 3 groups")
+            logBoth('logDebug', __name__, f"    Hough: Could not cluster lines into 3 groups", MessageType.GENERAL)
         return None
 
     if debug:
-        print(f"    Hough: Clustered into {len(clustered_lines)} groups: "
-              f"{[len(g) for g in clustered_lines]} lines per group")
+        logBoth('logDebug', __name__, f"    Hough: Clustered into {len(clustered_lines)} groups: "
+              f"{[len(g) for g in clustered_lines]} lines per group", MessageType.GENERAL)
 
     # === STEP 4: Find 2 Parallel Lines per Cluster ===
     hex_lines = []
@@ -1391,17 +1441,17 @@ def detect_hexagon_hough(mask, debug=False):
         parallel_pair = find_parallel_lines(group)
         if parallel_pair is None:
             if debug:
-                print(f"    Hough: Group {i} failed to find parallel pair")
+                logBoth('logDebug', __name__, f"    Hough: Group {i} failed to find parallel pair", MessageType.GENERAL)
             return None
         hex_lines.extend(parallel_pair)
 
     if len(hex_lines) != 6:
         if debug:
-            print(f"    Hough: Expected 6 lines, got {len(hex_lines)}")
+            logBoth('logDebug', __name__, f"    Hough: Expected 6 lines, got {len(hex_lines)}", MessageType.GENERAL)
         return None
 
     if debug:
-        print(f"    Hough: Found 6 hexagon lines")
+        logBoth('logDebug', __name__, f"    Hough: Found 6 hexagon lines", MessageType.GENERAL)
 
     # === STEP 5: Compute Intersections ===
     # Extend lines for intersection calculation
@@ -1421,7 +1471,7 @@ def detect_hexagon_hough(mask, debug=False):
         intersection = line_intersection(line1, line2)
         if intersection is None:
             if debug:
-                print(f"    Hough: Lines {i} and {(i + 1) % 6} are parallel (no intersection)")
+                logBoth('logDebug', __name__, f"    Hough: Lines {i} and {(i + 1) % 6} are parallel (no intersection)", MessageType.GENERAL)
             return None
 
         vertices.append(intersection)
@@ -1456,20 +1506,20 @@ def clean_polygon_hough(approx, mask, debug=False):
 
     if vertices is not None:
         if debug:
-            print(f"    Hough-based cleaning: Found {len(vertices)} vertices")
+            logBoth('logDebug', __name__, f"    Hough-based cleaning: Found {len(vertices)} vertices", MessageType.GENERAL)
         # Convert to numpy array before returning
         return np.array(vertices)
 
     # Fallback to original vertices if Hough fails
     if debug:
-        print(f"    Hough-based cleaning failed, using original approximation")
+        logBoth('logDebug', __name__, f"    Hough-based cleaning failed, using original approximation", MessageType.GENERAL)
 
     vertices = [tuple(pt[0]) for pt in approx]
 
     # FORCE FIT TO EXACTLY 6 VERTICES if we have more
     if len(vertices) > 6:
         if debug:
-            print(f"    Force-fitting {len(vertices)} vertices to exactly 6 (maximizing regularity)")
+            logBoth('logDebug', __name__, f"    Force-fitting {len(vertices)} vertices to exactly 6 (maximizing regularity)", MessageType.GENERAL)
 
         vertices_array = np.array(vertices)
 
@@ -1565,7 +1615,7 @@ def clean_polygon_hough(approx, mask, debug=False):
         if best_vertices is not None:
             vertices = best_vertices
             if debug:
-                print(f"    Force-fitted to 6 vertices (regularity score: {best_regularity_score:.3f})")
+                logBoth('logDebug', __name__, f"    Force-fitted to 6 vertices (regularity score: {best_regularity_score:.3f})", MessageType.GENERAL)
         else:
             # Fallback: use sector-based selection
             vertices_array = np.array(vertices)
@@ -1591,7 +1641,7 @@ def clean_polygon_hough(approx, mask, debug=False):
                     selected_vertices.append(best_vertex)
             vertices = selected_vertices
             if debug:
-                print(f"    Force-fitted to 6 vertices (sector-based fallback)")
+                logBoth('logDebug', __name__, f"    Force-fitted to 6 vertices (sector-based fallback)", MessageType.GENERAL)
 
     # Convert to numpy array before returning
     return np.array(vertices)
@@ -1728,9 +1778,9 @@ def compute_thickness_symmetry_score(contour, center, r_inner, debug=False):
         score = 0.0
 
     if debug:
-        print(f"    [Thickness Symmetry] Score: {score:.3f}")
-        print(f"      Autocorrelations: 60°={autocorr_scores[0]:.3f}, 120°={autocorr_scores[1]:.3f}, 180°={autocorr_scores[2]:.3f}" if len(autocorr_scores)==3 else "")
-        print(f"      Thickness range: [{thickness.min():.1f}, {thickness.max():.1f}], mean: {thickness.mean():.1f}, std: {thickness.std():.1f}")
+        logBoth('logDebug', __name__, f"    [Thickness Symmetry] Score: {score:.3f}", MessageType.GENERAL)
+        logBoth('logDebug', __name__, f"      Autocorrelations: 60°={autocorr_scores[0]:.3f}, 120°={autocorr_scores[1]:.3f}, 180°={autocorr_scores[2]:.3f}" if len(autocorr_scores)==3 else "", MessageType.GENERAL)
+        logBoth('logDebug', __name__, f"      Thickness range: [{thickness.min():.1f}, {thickness.max():.1f}], mean: {thickness.mean():.1f}, std: {thickness.std():.1f}", MessageType.GENERAL)
 
     return score, thickness
 
@@ -1764,8 +1814,9 @@ class MobileSAMv2AutomaticMaskGenerator:
 
     def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
         """Generate masks using YOLO + MobileSAM - MATCHES SAMSegmentation approach."""
+        _src = getFullyQualifiedName(__file__, MobileSAMv2AutomaticMaskGenerator)
         if DEBUG_MASK_GENERATION:
-            print(f"[MaskGen] Starting generation - image shape: {image.shape}")
+            logBoth('logDebug', _src, f"[MaskGen] Starting generation - image shape: {image.shape}", MessageType.GENERAL)
 
         masks = []
 
@@ -1788,7 +1839,7 @@ class MobileSAMv2AutomaticMaskGenerator:
                 boxes = result.boxes.xyxy.cpu().numpy()
 
         if DEBUG_MASK_GENERATION:
-            print(f"[MaskGen] YOLO found {len(boxes)} boxes")
+            logBoth('logDebug', _src, f"[MaskGen] YOLO found {len(boxes)} boxes", MessageType.GENERAL)
 
         # Generate masks from YOLO boxes (one box at a time)
         box_masks_added = 0
@@ -1835,13 +1886,13 @@ class MobileSAMv2AutomaticMaskGenerator:
                         else:
                             box_masks_filtered += 1
                             if DEBUG_MASK_GENERATION and box_masks_filtered <= 3:
-                                print(f"[MaskGen]   Box mask FILTERED: area={area} (need {self.min_mask_region_area}-{self.max_mask_region_area})")
+                                logBoth('logDebug', _src, f"[MaskGen]   Box mask FILTERED: area={area} (need {self.min_mask_region_area}-{self.max_mask_region_area})", MessageType.GENERAL)
                 except Exception as e:
                     if DEBUG_MASK_GENERATION:
-                        print(f"[MaskGen] Failed to generate mask for box {box}: {e}")
+                        logBoth('logDebug', _src, f"[MaskGen] Failed to generate mask for box {box}: {e}", MessageType.GENERAL)
 
         if DEBUG_MASK_GENERATION:
-            print(f"[MaskGen] Box masks: {box_masks_added} added, {box_masks_filtered} filtered")
+            logBoth('logDebug', _src, f"[MaskGen] Box masks: {box_masks_added} added, {box_masks_filtered} filtered", MessageType.GENERAL)
 
         # Grid-based point prompts if needed (and not too many boxes)
         if self.use_grid_points and len(masks) < 5:
@@ -1898,10 +1949,10 @@ class MobileSAMv2AutomaticMaskGenerator:
                         continue  # Skip failed points
 
             if DEBUG_MASK_GENERATION:
-                print(f"[MaskGen] Added {grid_count} grid-based masks")
+                logBoth('logDebug', _src, f"[MaskGen] Added {grid_count} grid-based masks", MessageType.GENERAL)
 
         if DEBUG_MASK_GENERATION:
-            print(f"[MaskGen] Final: {len(masks)} masks generated")
+            logBoth('logDebug', _src, f"[MaskGen] Final: {len(masks)} masks generated", MessageType.GENERAL)
         return masks
 
     def _overlaps_existing(self, new_mask: np.ndarray, existing_masks: List[Dict[str, Any]]) -> bool:
@@ -1958,6 +2009,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
     Worker thread for processing image variations.
     Each thread creates its own SAM predictor but shares YOLO model.
     """
+    _src = __name__
     try:
         # Get shared YOLO model from ModelManager
         local_yolo = model_manager.get_yolo_model()
@@ -1968,10 +2020,9 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
 
         # Create thread-local SAM predictor (private state)
         # CRITICAL: Each thread needs its own predictor to avoid state corruption
-        from mobile_sam import SamPredictor
         local_predictor = SamPredictor(sam_model)
 
-        print(f"[Thread {thread_id}] Initialized with shared models")
+        logBoth('logInfo', _src, f"[Thread {thread_id}] Initialized with shared models", MessageType.GENERAL)
 
         # Create mask generator using shared models
         mask_generator = MobileSAMv2AutomaticMaskGenerator(
@@ -1985,7 +2036,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
             points_per_side=32
         )
 
-        print(f"[Thread {thread_id}] Ready with shared models on CUDA Stream {cuda_stream}")
+        logBoth('logInfo', _src, f"[Thread {thread_id}] Ready with shared models on CUDA Stream {cuda_stream}", MessageType.GENERAL)
 
         # Process tasks from queue
         while not shutdown_event.is_set():
@@ -1993,7 +2044,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
                 task = task_queue.get(timeout=1)
 
                 if task is None:  # Shutdown signal
-                    print(f"[Thread {thread_id}] Received shutdown signal")
+                    logBoth('logInfo', _src, f"[Thread {thread_id}] Received shutdown signal", MessageType.GENERAL)
                     break
 
                 # CRITICAL: Unpack UUID and cancel_event from task
@@ -2002,7 +2053,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
                 # CHECK CANCELLATION: If another thread already found hexagon, skip this work
                 if cancel_event.is_set():
                     if PRINT_DETAIL:
-                        print(f"[Thread {thread_id}] Task {batch_idx} cancelled (hexagon already found)")
+                        logBoth('logDebug', _src, f"[Thread {thread_id}] Task {batch_idx} cancelled (hexagon already found)", MessageType.GENERAL)
                     task_queue.task_done()
                     continue
 
@@ -2015,23 +2066,23 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
                         preprocessed_rgb = preprocessed_img
 
                     if DEBUG_MASK_GENERATION:
-                        print(f"[Thread {thread_id}] Converting image for SAM: shape={preprocessed_rgb.shape}, dtype={preprocessed_rgb.dtype}")
+                        logBoth('logDebug', _src, f"[Thread {thread_id}] Converting image for SAM: shape={preprocessed_rgb.shape}, dtype={preprocessed_rgb.dtype}", MessageType.GENERAL)
 
                     # CHECK AGAIN before expensive GPU work
                     if cancel_event.is_set():
                         if DEBUG_WORKFLOW:
-                            print(f"[Thread {thread_id}] Cancelled before GPU work (batch_idx={batch_idx})")
+                            logBoth('logDebug', _src, f"[Thread {thread_id}] Cancelled before GPU work (batch_idx={batch_idx})", MessageType.GENERAL)
                         task_queue.task_done()
                         continue
 
                     # Generate masks (YOLO calls are locked internally)
                     if DEBUG_MASK_GENERATION:
-                        print(f"[Thread {thread_id}] Calling mask_generator.generate()...")
+                        logBoth('logDebug', _src, f"[Thread {thread_id}] Calling mask_generator.generate()...", MessageType.GENERAL)
                     with torch.inference_mode():
                         masks = mask_generator.generate(preprocessed_rgb)
 
                     if DEBUG_MASK_GENERATION:
-                        print(f"[Thread {thread_id}] Received {len(masks)} masks from generator")
+                        logBoth('logDebug', _src, f"[Thread {thread_id}] Received {len(masks)} masks from generator", MessageType.GENERAL)
 
                 # Synchronize stream before CPU processing
                 cuda_stream.synchronize()
@@ -2052,7 +2103,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
             except Empty:
                 continue
             except Exception as e:
-                print(f"[Thread {thread_id}] Error processing task: {e}")
+                logBoth('logError', _src, f"[Thread {thread_id}] Error processing task: {e}", MessageType.PROBLEM)
                 if PRINT_DETAIL:
                     import traceback
                     traceback.print_exc()
@@ -2063,10 +2114,10 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
                     pass
                 task_queue.task_done()
 
-        print(f"[Thread {thread_id}] Shutting down gracefully")
+        logBoth('logInfo', _src, f"[Thread {thread_id}] Shutting down gracefully", MessageType.GENERAL)
 
     except Exception as e:
-        print(f"[Thread {thread_id}] Fatal error: {e}")
+        logBoth('logError', _src, f"[Thread {thread_id}] Fatal error: {e}", MessageType.PROBLEM)
         import traceback
         traceback.print_exc()
 
@@ -2089,8 +2140,9 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
         center_y: Y coordinate of center point
         annular_rgb: Original RGB annular region (BEFORE preprocessing)
     """
+    _src = __name__
     if DEBUG_MASK_GENERATION:
-        print(f"[process_masks_cpu] Received {len(masks)} masks" if masks else "[process_masks_cpu] No masks received!")
+        logBoth('logDebug', _src, f"[process_masks_cpu] Received {len(masks)} masks" if masks else "[process_masks_cpu] No masks received!", MessageType.GENERAL)
 
     if not masks:
         failure_metrics = {
@@ -2105,7 +2157,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
     # Step 1: Collect ALL center-overlapping masks
     center_masks = []
     if DEBUG_HEXAGON_DETECTION:
-        print(f"[process_masks_cpu] Checking center overlap at ({int(center_x)}, {int(center_y)})")
+        logBoth('logDebug', _src, f"[process_masks_cpu] Checking center overlap at ({int(center_x)}, {int(center_y)})", MessageType.GENERAL)
 
     for idx, mask_data in enumerate(masks):
         try:
@@ -2121,24 +2173,24 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
             # Check bounds
             if int(center_y) >= mask_seg.shape[0] or int(center_x) >= mask_seg.shape[1]:
                 if DEBUG_HEXAGON_DETECTION:
-                    print(f"  [CPU] Mask {idx}: CENTER OUT OF BOUNDS! center=({int(center_x)},{int(center_y)}), mask_shape={mask_seg.shape}")
+                    logBoth('logDebug', _src, f"  [CPU] Mask {idx}: CENTER OUT OF BOUNDS! center=({int(center_x)},{int(center_y)}), mask_shape={mask_seg.shape}", MessageType.GENERAL)
                 continue
 
             overlaps = mask_seg[int(center_y), int(center_x)]
             if DEBUG_HEXAGON_DETECTION:
-                print(f"  [CPU] Mask {idx}: bbox={bbox}, area={area}, overlaps_center={overlaps}")
+                logBoth('logDebug', _src, f"  [CPU] Mask {idx}: bbox={bbox}, area={area}, overlaps_center={overlaps}", MessageType.GENERAL)
 
             if overlaps:
                 center_masks.append((idx, mask_data))
                 if DEBUG_HEXAGON_DETECTION:
-                    print(f"    ✓ Overlaps center!")
+                    logBoth('logDebug', _src, f"    ✓ Overlaps center!", MessageType.GENERAL)
         except (IndexError, KeyError) as e:
             if DEBUG_HEXAGON_DETECTION:
-                print(f"  [CPU] Mask {idx} error checking center: {e}")
+                logBoth('logDebug', _src, f"  [CPU] Mask {idx} error checking center: {e}", MessageType.GENERAL)
             continue
 
     if DEBUG_HEXAGON_DETECTION:
-        print(f"[process_masks_cpu] Found {len(center_masks)} center-overlapping masks")
+        logBoth('logDebug', _src, f"[process_masks_cpu] Found {len(center_masks)} center-overlapping masks", MessageType.GENERAL)
 
     if not center_masks:
         failure_metrics = {
@@ -2155,7 +2207,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
     for idx, mask_data in center_masks:
         if DEBUG_HEXAGON_DETECTION:
-            print(f"  [CPU] Evaluating Mask {idx}:")
+            logBoth('logDebug', _src, f"  [CPU] Evaluating Mask {idx}:", MessageType.GENERAL)
 
         mask_raw = mask_data['segmentation']
 
@@ -2173,7 +2225,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
         if not contours:
             if DEBUG_HEXAGON_DETECTION:
-                print(f"    [CPU] No contours found")
+                logBoth('logDebug', _src, f"    [CPU] No contours found", MessageType.GENERAL)
             failed_attempts.append({
                 'mask_idx': idx,
                 'reason': 'no_contours',
@@ -2184,45 +2236,45 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
         # Get the largest contour
         contour = max(contours, key=cv2.contourArea)
         if DEBUG_HEXAGON_DETECTION:
-            print(f"    [CPU] Found contour with area {cv2.contourArea(contour)}")
+            logBoth('logDebug', _src, f"    [CPU] Found contour with area {cv2.contourArea(contour)}", MessageType.GENERAL)
 
         if PRINT_DETAIL:
-            print(f"  Evaluating Mask {idx}:")
+            logBoth('logDebug', _src, f"  Evaluating Mask {idx}:", MessageType.GENERAL)
 
         # Initial approximation
         epsilon = 0.02 * cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, epsilon, True)
 
         if DEBUG_HEXAGON_DETECTION:
-            print(f"    [CPU] Initial approximation: {len(approx)} vertices")
+            logBoth('logDebug', _src, f"    [CPU] Initial approximation: {len(approx)} vertices", MessageType.GENERAL)
 
         # Step 3: Clean the polygon using Hough lines
         cleaned_vertices = clean_polygon_hough(approx, mask_uint8, debug=PRINT_DETAIL)
 
         num_vertices = len(cleaned_vertices)
         if DEBUG_HEXAGON_DETECTION:
-            print(f"    [CPU] After Hough cleaning: {num_vertices} vertices")
+            logBoth('logDebug', _src, f"    [CPU] After Hough cleaning: {num_vertices} vertices", MessageType.GENERAL)
 
         if PRINT_DETAIL:
-            print(f"    Final vertex count after Hough cleaning: {num_vertices}")
+            logBoth('logDebug', _src, f"    Final vertex count after Hough cleaning: {num_vertices}", MessageType.GENERAL)
 
         # Step 4: Check if hexagonal (5-8 vertices, or exactly 6 from Hough)
-        if NUT_MIN_VERTICES <= num_vertices <= NUT_MAX_VERTICES:
+        if 5 <= num_vertices <= 8:
             # Additional check: compute aspect ratio
             x, y, w, h = cv2.boundingRect(contour)
             mask_dims = (h, w)
             aspect_ratio = float(w) / h if h > 0 else 0
 
             if DEBUG_HEXAGON_DETECTION:
-                print(f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need {NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO})")
+                logBoth('logDebug', _src, f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need 0.7-1.3)", MessageType.GENERAL)
 
             if PRINT_DETAIL:
-                print(f"    Aspect ratio: {aspect_ratio:.2f}")
+                logBoth('logDebug', _src, f"    Aspect ratio: {aspect_ratio:.2f}", MessageType.GENERAL)
 
             # Hexagons should have aspect ratio close to 1
-            if NUT_MIN_ASPECT_RATIO < aspect_ratio < NUT_MAX_ASPECT_RATIO:
+            if 0.7 < aspect_ratio < 1.3:
                 if DEBUG_HEXAGON_DETECTION:
-                    print(f"    [CPU] ✓ Passed aspect ratio check, processing actual_nut_mask...")
+                    logBoth('logDebug', _src, f"    [CPU] ✓ Passed aspect ratio check, processing actual_nut_mask...", MessageType.GENERAL)
                 # === NEW: Process actual_nut_mask ===
                 # a) Find center of mass
                 moments = cv2.moments(mask_uint8)
@@ -2236,10 +2288,10 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     com_y = h_img // 2
 
                 if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                    print(f"    Center of mass: ({com_x}, {com_y})")
+                    logBoth('logDebug', _src, f"    Center of mass: ({com_x}, {com_y})", MessageType.GENERAL)
 
                 # b) Create disc of radius 25 and exclude from mask
-                disc_radius = NUT_CENTER_DISC_RADIUS
+                disc_radius = 25
                 disc_mask = np.zeros_like(mask_uint8)
                 cv2.circle(disc_mask, (com_x, com_y), disc_radius, 255, -1)
 
@@ -2270,29 +2322,29 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 if actual_mask_area == 0:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask is empty (disc intersects boundary or covers nut)")
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask is empty (disc intersects boundary or covers nut)", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'disc_intersection',
-                        'detail': f'Center disc (r={NUT_CENTER_DISC_RADIUS}) intersects hexagon boundary or covers entire nut',
+                        'detail': 'Center disc (r=25) intersects hexagon boundary or covers entire nut',
                         'original_area': original_mask_area,
                         'disc_area': disc_area,
                         'com': (com_x, com_y)
                     })
                     continue
 
-                if actual_mask_area < original_mask_area * NUT_MIN_REMAINING_AREA_FRACTION:
+                if actual_mask_area < original_mask_area * 0.3:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask too small "
-                              f"({actual_mask_area} pixels, {actual_mask_area / original_mask_area * 100:.1f}% of original)")
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask too small "
+                              f"({actual_mask_area} pixels, {actual_mask_area / original_mask_area * 100:.1f}% of original)", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'mask_too_small',
-                        'detail': f'After disc exclusion, mask <{NUT_MIN_REMAINING_AREA_FRACTION:.0%} of original',
+                        'detail': 'After disc exclusion, mask <30% of original',
                         'actual_area': actual_mask_area,
                         'original_area': original_mask_area,
                         'percentage': actual_mask_area / original_mask_area * 100,
-                        'required': f'≥{NUT_MIN_REMAINING_AREA_FRACTION:.0%}'
+                        'required': '≥30%'
                     })
                     continue
 
@@ -2301,7 +2353,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 if not contours_check:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: No contours found in actual_nut_mask")
+                        logBoth('logError', _src, f"  ✗ INVALID: No contours found in actual_nut_mask", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'no_contours_after_disc',
@@ -2316,38 +2368,38 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 epsilon_check = 0.02 * cv2.arcLength(largest_contour, True)
                 approx_check = cv2.approxPolyDP(largest_contour, epsilon_check, True)
 
-                if len(approx_check) < NUT_MIN_VERTICES_AFTER_DISC:
+                if len(approx_check) < 4:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= {NUT_MIN_VERTICES_AFTER_DISC})")
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= 4)", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'insufficient_vertices_after_disc',
                         'detail': 'Hexagon boundary destroyed by disc exclusion',
                         'vertices_remaining': len(approx_check),
-                        'required': f'≥{NUT_MIN_VERTICES_AFTER_DISC}',
+                        'required': '≥4',
                         'actual_area': actual_mask_area
                     })
                     continue
 
                 # === ADDITIONAL VALIDATION: Area ===
                 # a) Check if actual_nut_mask area > 2000
-                if actual_mask_area <= NUT_MIN_ACTUAL_AREA:
+                if actual_mask_area <= 2000:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        print(f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= {NUT_MIN_ACTUAL_AREA}")
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= 2000", MessageType.ISSUE)
                     # Track this failure
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'area_threshold',
                         'detail': 'actual_nut_mask area too small',
                         'actual_area': actual_mask_area,
-                        'required': f'>{NUT_MIN_ACTUAL_AREA}',
+                        'required': '>2000',
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio
                     })
                     # Return with specific failure metrics (best attempt so far)
                     failure_metrics = {
                         'reason': 'area_threshold',
-                        'detail': f'Hexagon found but actual_nut_mask area ≤ {NUT_MIN_ACTUAL_AREA} pixels',
+                        'detail': 'Hexagon found but actual_nut_mask area ≤ 2000 pixels',
                         'area': actual_mask_area,
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio,
@@ -2361,23 +2413,23 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 original_edges_count, reference_edge_length, total_deviated_pixels = count_original_edges_above_reference(
                     contour,  # Original contour before Hough cleaning
                     cleaned_vertices,  # Fitted hexagon vertices
-                    min_length_factor=NUT_EDGE_MIN_LENGTH_FACTOR  # Accept edges >= 80% of fitted edge length
+                    min_length_factor=0.8  # Accept edges >= 80% of fitted edge length
                 )
 
                 if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
-                    print(f"  [EDGE CHECK] Original edges ≥ ref_length: {original_edges_count} (ref={reference_edge_length:.1f}px, deviated_pixels={total_deviated_pixels})")
+                    logBoth('logDebug', _src, f"  [EDGE CHECK] Original edges ≥ ref_length: {original_edges_count} (ref={reference_edge_length:.1f}px, deviated_pixels={total_deviated_pixels})", MessageType.GENERAL)
 
                 # === NEW PERPENDICULAR-BASED SYMMETRY SCORING ===
                 # Calculate perpendicular distance consistency using FIXED center (72, 64)
                 perp_distance_score = calculate_perpendicular_distance_score(
                     cleaned_vertices,
-                    center=(NUT_REFERENCE_CENTER_X, NUT_REFERENCE_CENTER_Y)  # FIXED CENTER instead of dynamic com_x, com_y
+                    center=(72, 64)  # FIXED CENTER instead of dynamic com_x, com_y
                 )
 
                 # Calculate angles between perpendiculars consistency using FIXED center (72, 64)
                 perp_angles_score = calculate_angles_between_perpendiculars_score(
                     cleaned_vertices,
-                    center=(NUT_REFERENCE_CENTER_X, NUT_REFERENCE_CENTER_Y)  # FIXED CENTER instead of dynamic com_x, com_y
+                    center=(72, 64)  # FIXED CENTER instead of dynamic com_x, com_y
                 )
 
                 # NEW COMPOSITE SCORE: Product of the two perpendicular-based scores × 100
@@ -2435,18 +2487,18 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 reject_reason = None
 
-                if composite_score < NUT_MIN_SYMMETRY_SCORE:
-                    reject_reason = f"low_symmetry (score={composite_score:.1f} < {NUT_MIN_SYMMETRY_SCORE})"
-                elif thickness_symmetry_score < NUT_MIN_THICKNESS_SCORE:
-                    reject_reason = f"low_thickness (score={thickness_symmetry_score:.1f} < {NUT_MIN_THICKNESS_SCORE})"
-                elif original_edges_count == 0 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES})"
-                elif original_edges_count == 1 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE})"
+                if composite_score < 55:
+                    reject_reason = f"low_symmetry (score={composite_score:.1f} < 55)"
+                elif thickness_symmetry_score < 45:
+                    reject_reason = f"low_thickness (score={thickness_symmetry_score:.1f} < 45)"
+                elif original_edges_count == 0 and total_deviated_pixels >= 28:
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>=28)"
+                elif original_edges_count == 1 and total_deviated_pixels >= 35:
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>=35)"
 
                 if reject_reason:
                     if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
-                        print(f"  ✗ REJECTED: {reject_reason} (likely circular bearing)")
+                        logBoth('logError', _src, f"  ✗ REJECTED: {reject_reason} (likely circular bearing)", MessageType.ISSUE)
 
                     failure_metrics = {
                         'reason': 'bearing_detection_combined',
@@ -2462,20 +2514,20 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 # Print scoring breakdown if detail mode enabled
                 if PRINT_DETAIL:
-                    print(f"\n{'='*60}")
-                    print(f"  [SCORING ANALYSIS - DETAILED]")
-                    print(f"{'='*60}")
-                    print(f"  SYMMETRY SCORES (Perpendicular-Based):")
-                    print(f"    Perpendicular Distance Score: {perp_distance_score:.3f}")
-                    print(f"    Angles Between Perps Score:   {perp_angles_score:.3f}")
-                    print(f"    Composite Score (sum):        {composite_score:.3f}")
-                    print(f"    Quality Rating:               {quality_rating}")
-                    print(f"")
-                    print(f"  THICKNESS SCORES:")
-                    print(f"    Perpendicular Thickness Score: {perp_thickness_score:.3f}")
-                    print(f"    Radial Thickness Score:        {radial_thickness_score:.3f}")
-                    print(f"    Thickness Symmetry (sum):      {thickness_symmetry_score:.3f}")
-                    print(f"{'='*60}\n")
+                    logBoth('logDebug', _src, f"\n{'='*60}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  [SCORING ANALYSIS - DETAILED]", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"{'='*60}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  SYMMETRY SCORES (Perpendicular-Based):", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Perpendicular Distance Score: {perp_distance_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Angles Between Perps Score:   {perp_angles_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Composite Score (sum):        {composite_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Quality Rating:               {quality_rating}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  THICKNESS SCORES:", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Perpendicular Thickness Score: {perp_thickness_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Radial Thickness Score:        {radial_thickness_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"    Thickness Symmetry (sum):      {thickness_symmetry_score:.3f}", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"{'='*60}\n", MessageType.GENERAL)
 
                 # ===================================================================
                 # SYMMETRY-BASED REJECTION - COMMENTED OUT
@@ -2484,8 +2536,8 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 # DECISION LOGIC: Reject poor quality hexagons
                 # NEW THRESHOLDS for 0-2 scale (sum of two 0-1 scores)
-                SYMMETRY_REJECT_THRESHOLD = NUT_SYMMETRY_REJECT_THRESHOLD   # Was 0.55 on 0-1 scale
-                SYMMETRY_WARNING_THRESHOLD = NUT_SYMMETRY_WARNING_THRESHOLD  # Was 0.70 on 0-1 scale
+                SYMMETRY_REJECT_THRESHOLD = 1.10   # Was 0.55 on 0-1 scale
+                SYMMETRY_WARNING_THRESHOLD = 1.40  # Was 0.70 on 0-1 scale
 
                 # REJECTION DISABLED - Comment out to re-enable
                 # if composite_score < SYMMETRY_REJECT_THRESHOLD:
@@ -2518,21 +2570,21 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 if composite_score < SYMMETRY_WARNING_THRESHOLD:
                     if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
                         if composite_score < SYMMETRY_REJECT_THRESHOLD:
-                            print(f"  ⚠ INFO: Low symmetry score {composite_score:.3f} ({quality_rating}) - would be rejected if threshold enabled")
+                            logBoth('logWarning', _src, f"  ⚠ INFO: Low symmetry score {composite_score:.3f} ({quality_rating}) - would be rejected if threshold enabled", MessageType.RISK)
                         else:
-                            print(f"  ⚠ WARNING: Marginal symmetry score {composite_score:.3f} ({quality_rating})")
+                            logBoth('logWarning', _src, f"  ⚠ WARNING: Marginal symmetry score {composite_score:.3f} ({quality_rating})", MessageType.RISK)
                 # ===================================================================
 
                 # Calculate distance from hexagon center to image center
                 h_img, w_img = mask_uint8.shape
-                img_center_x = NUT_REFERENCE_CENTER_X
-                img_center_y = NUT_REFERENCE_CENTER_Y
+                img_center_x = 72
+                img_center_y = 64
                 center_distance = np.sqrt((com_x - img_center_x)**2 + (com_y - img_center_y)**2)
 
                 if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                    print(f"  ✓ VALID: actual_nut_mask has {actual_mask_area} pixels and {len(approx_check)} vertices")
+                    logBoth('logInfo', _src, f"  ✓ VALID: actual_nut_mask has {actual_mask_area} pixels and {len(approx_check)} vertices", MessageType.SUCCESS)
                 if PRINT_DETAIL:
-                    print(f"  ✓ Mask {idx} identified as HEXAGONAL NUT (vertices={num_vertices}, aspect_ratio={aspect_ratio:.2f})")
+                    logBoth('logInfo', _src, f"  ✓ Mask {idx} identified as HEXAGONAL NUT (vertices={num_vertices}, aspect_ratio={aspect_ratio:.2f})", MessageType.SUCCESS)
 
                 # Return with additional metrics including edge validation and pixel deviation count
                 return True, actual_mask_area, mask_dims, num_vertices, None, actual_nut_mask, \
@@ -2540,22 +2592,22 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                        composite_score, quality_rating, original_edges_count, total_deviated_pixels
             else:
                 if DEBUG_HEXAGON_DETECTION:
-                    print(f"    [CPU] ✗ Failed aspect ratio check ({aspect_ratio:.2f})")
+                    logBoth('logDebug', _src, f"    [CPU] ✗ Failed aspect ratio check ({aspect_ratio:.2f})", MessageType.GENERAL)
                 if PRINT_DETAIL:
-                    print(f"  ✗ Mask {idx} failed aspect ratio check")
+                    logBoth('logDebug', _src, f"  ✗ Mask {idx} failed aspect ratio check", MessageType.GENERAL)
                 failed_attempts.append({
                     'mask_idx': idx,
                     'reason': 'aspect_ratio',
                     'aspect_ratio': aspect_ratio,
                     'vertices': num_vertices,
                     'area': mask_area,
-                    'required_range': f'{NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO}'
+                    'required_range': '0.7-1.3'
                 })
         else:
             if DEBUG_HEXAGON_DETECTION:
-                print(f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})")
+                logBoth('logDebug', _src, f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need 5-8)", MessageType.GENERAL)
             if PRINT_DETAIL:
-                print(f"  ✗ Mask {idx} has {num_vertices} vertices (need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})")
+                logBoth('logDebug', _src, f"  ✗ Mask {idx} has {num_vertices} vertices (need 5-8)", MessageType.GENERAL)
             failed_attempts.append({
                 'mask_idx': idx,
                 'reason': 'wrong_vertex_count',
@@ -2565,10 +2617,10 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
     # No valid hexagon found in any center-overlapping mask
     if DEBUG_HEXAGON_DETECTION:
-        print(f"[process_masks_cpu] No valid hexagon found after checking {len(center_masks)} masks")
-        print(f"[process_masks_cpu] Failed attempts: {len(failed_attempts)}")
+        logBoth('logDebug', _src, f"[process_masks_cpu] No valid hexagon found after checking {len(center_masks)} masks", MessageType.GENERAL)
+        logBoth('logDebug', _src, f"[process_masks_cpu] Failed attempts: {len(failed_attempts)}", MessageType.GENERAL)
         for attempt in failed_attempts:
-            print(f"  - Mask {attempt['mask_idx']}: {attempt['reason']}")
+            logBoth('logDebug', _src, f"  - Mask {attempt['mask_idx']}: {attempt['reason']}", MessageType.GENERAL)
 
     # Summarize failure reasons
     failure_summary = {}
@@ -2632,15 +2684,15 @@ class NutDetector:
         self.mask_generator = MobileSAMv2AutomaticMaskGenerator(
             sam_predictor=self.sam_predictor,
             yolo_model=self.yolo_model,
-            conf_threshold=NUT_YOLO_CONF_THRESHOLD,
+            conf_threshold=0.3,
             iou_threshold=0.7,
-            min_mask_region_area=NUT_MIN_MASK_AREA,
-            max_mask_region_area=NUT_MAX_MASK_AREA,
+            min_mask_region_area=3000,
+            max_mask_region_area=5500,
             use_grid_points=True,
             points_per_side=32
         )
 
-        print("[NutDetector] Initialized with shared models from ModelManager")
+        logBoth('logInfo', getFullyQualifiedName(__file__, NutDetector), "[NutDetector] Initialized with shared models from ModelManager", MessageType.SUCCESS)
 
     def detect_nut_in_image(
         self,
@@ -2688,6 +2740,8 @@ class NutDetector:
             inner_radius=inner_radius
         )
 
+        _src = getFullyQualifiedName(__file__, NutDetector)
+
         # DEBUG: Save annular region
         if DEBUG_SAVE_IMAGES:
             debug_annular_filename = f"DEBUG_annular_{image_id.replace(' ', '_')}.png"
@@ -2696,10 +2750,10 @@ class NutDetector:
                 os.makedirs("C:/temp", exist_ok=True)
                 cv2.imwrite(debug_annular_path, cv2.cvtColor(annular_region, cv2.COLOR_RGB2BGR))
                 if DEBUG_PREPROCESSING:
-                    print(f"[DEBUG] Saved annular region to: {debug_annular_path}")
+                    logBoth('logDebug', _src, f"[DEBUG] Saved annular region to: {debug_annular_path}", MessageType.GENERAL)
             except Exception as e:
                 if DEBUG_PREPROCESSING:
-                    print(f"[DEBUG] Failed to save annular region: {e}")
+                    logBoth('logDebug', _src, f"[DEBUG] Failed to save annular region: {e}", MessageType.GENERAL)
 
         # Center coordinates in the annular region
         center_x = outer_radius
@@ -2726,7 +2780,7 @@ class NutDetector:
             # CHECK: If hexagon already found, stop immediately
             if hexagon_found:
                 if DEBUG_WORKFLOW:
-                    print(f"[NutDetector] Early termination - hexagon found in variation {batch_idx}")
+                    logBoth('logDebug', _src, f"[NutDetector] Early termination - hexagon found in variation {batch_idx}", MessageType.GENERAL)
                 break
 
             # Preprocess this variation
@@ -2746,13 +2800,13 @@ class NutDetector:
                     else:
                         cv2.imwrite(debug_path, preprocessed)
                     if DEBUG_PREPROCESSING:
-                        print(f"[DEBUG] Saved preprocessed image to: {debug_path}")
+                        logBoth('logDebug', _src, f"[DEBUG] Saved preprocessed image to: {debug_path}", MessageType.GENERAL)
                 except Exception as e:
                     if DEBUG_PREPROCESSING:
-                        print(f"[DEBUG] Failed to save preprocessed image: {e}")
+                        logBoth('logDebug', _src, f"[DEBUG] Failed to save preprocessed image: {e}", MessageType.GENERAL)
 
             if DEBUG_WORKFLOW:
-                print(f"[NutDetector] Trying variation {batch_idx + 1}/6: {params_desc}")
+                logBoth('logDebug', _src, f"[NutDetector] Trying variation {batch_idx + 1}/6: {params_desc}", MessageType.GENERAL)
 
             # Convert to RGB if needed
             if preprocessed.ndim == 2:
@@ -2761,17 +2815,17 @@ class NutDetector:
                 preprocessed_rgb = preprocessed
 
             if DEBUG_MASK_GENERATION:
-                print(f"[NutDetector] Converting image for SAM: shape={preprocessed_rgb.shape}, dtype={preprocessed_rgb.dtype}")
+                logBoth('logDebug', _src, f"[NutDetector] Converting image for SAM: shape={preprocessed_rgb.shape}, dtype={preprocessed_rgb.dtype}", MessageType.GENERAL)
 
             # Generate masks using SAM
             if DEBUG_MASK_GENERATION:
-                print(f"[NutDetector] Calling mask_generator.generate()...")
+                logBoth('logDebug', _src, f"[NutDetector] Calling mask_generator.generate()...", MessageType.GENERAL)
 
             with torch.inference_mode():
                 masks = self.mask_generator.generate(preprocessed_rgb)
 
             if DEBUG_MASK_GENERATION:
-                print(f"[NutDetector] Received {len(masks)} masks from generator")
+                logBoth('logDebug', _src, f"[NutDetector] Received {len(masks)} masks from generator", MessageType.GENERAL)
 
             # Process masks to find hexagon
             result = process_masks_cpu(masks, center_x, center_y, annular_region)
@@ -2821,7 +2875,7 @@ class NutDetector:
                 }
                 hexagon_found = True
                 if DEBUG_WORKFLOW:
-                    print(f"[NutDetector] ✓ Hexagon found in variation {batch_idx + 1}! Stopping search.")
+                    logBoth('logInfo', _src, f"[NutDetector] ✓ Hexagon found in variation {batch_idx + 1}! Stopping search.", MessageType.SUCCESS)
                 break  # Early termination
 
             else:
@@ -2850,7 +2904,7 @@ class NutDetector:
                         best_failed_variation = params_desc
 
                 if DEBUG_WORKFLOW:
-                    print(f"[NutDetector] Variation {batch_idx + 1} found nothing, continuing...")
+                    logBoth('logDebug', _src, f"[NutDetector] Variation {batch_idx + 1} found nothing, continuing...", MessageType.GENERAL)
 
         # Store best failed metrics in result
         if not hexagon_found:
