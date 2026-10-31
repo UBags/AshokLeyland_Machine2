@@ -413,3 +413,11 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
 
 - `setInProcessDefaultDisplay()` tested `elif AshokLeylandFrontEnd.finalResult:`. `finalResult` is the string ok / notok, and both strings count as true, so the success screen was shown even for a NOT OK component. It now tests `== ok`.
 - FE dry run F5, which failed on purpose to expose this, now passes: 48/48.
+
+## 19. `costhetaio/siemens/s7_read_all_tags.py` (2026-10-31)
+
+- **New read-only tool.** It reads every tag in `IOServerProperties.yaml` from the real PLC: all 46, in both directions. A PC→PLC tag can be read too; it shows what is held at that address.
+- **How it reads.** Each tag is read separately, and any exception is caught and reported against that tag, so the run continues past it. The output is a table sorted by address (address, type, direction, tag, value) followed by a summary.
+- **Options:** `--ip`, `--repeat N`, `--interval s`.
+- **Exit codes:** 0 = every tag read; 1 = some reads failed; 2 = the PLC could not be reached.
+- **Verified** against the simulated S7 (including one forced read failure, which was reported while the rest were read) and against an unreachable address (exit code 2).
