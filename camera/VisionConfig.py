@@ -9,7 +9,9 @@ Every parameter is declared where it is used, with its default equal to the valu
 * Key missing            -> the default is used (identical behaviour to the hard-coded version).
 * Key present but invalid (wrong type / wrong number of elements) -> the default is used and a warning is printed.
 
-All keys start with "vision.". Values:
+Keys are written here without the machine prefix ("vision.nut.detection.radius"); the value is read from the
+property for THIS machine: allenbradley.vision.<name> (Machine 1) or siemens.vision.<name> (Machine 2), chosen by
+the PLC vendor (CosThetaConfigurator.getVisionKeyPrefix / getVisionValue). Values:
     int / float / bool / str      ->  vision.x=80  |  0.55  |  True  |  text
     tuple of numbers (e.g. x,y)   ->  vision.x=632,360            (element count must match the default)
     list of numbers               ->  vision.x=7.75,6.5,4.0,2.0,1.0
@@ -25,10 +27,19 @@ from typing import Any, Dict, List, Sequence, Tuple
 _registry: Dict[str, Dict[str, Any]] = {}   # key -> {"default", "value", "source"}
 
 
+def machinePrefix() -> str:
+    """'allenbradley.' or 'siemens.' (the properties prefix of this machine's vision keys); '' standalone."""
+    try:
+        from Configuration import CosThetaConfigurator
+        return CosThetaConfigurator.getVisionKeyPrefix()
+    except Exception:
+        return ""
+
+
 def _raw(key: str):
     try:
         from Configuration import CosThetaConfigurator
-        value = CosThetaConfigurator.getValue(key, default=None)
+        value = CosThetaConfigurator.getVisionValue(key, default=None)      # <vendor>.<key>
     except Exception:
         return None     # running standalone without Configuration: defaults apply
     if value is None:
@@ -164,6 +175,7 @@ def vPoints(key: str, default: List) -> List:
 
 
 def describeVisionParameters(onlyChanged: bool = False) -> List[str]:
+    prefix = machinePrefix()
     lines = []
     for key in sorted(_registry):
         entry = _registry[key]
@@ -172,7 +184,7 @@ def describeVisionParameters(onlyChanged: bool = False) -> List[str]:
         if onlyChanged and not changed:
             continue
         flag = "  <-- differs from built-in default" if changed else ""
-        lines.append(f"{key} = {entry['value']!r} [{entry['source']}]{flag}")
+        lines.append(f"{prefix}{key} = {entry['value']!r} [{entry['source']}]{flag}")
     return lines
 
 

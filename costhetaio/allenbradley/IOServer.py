@@ -293,7 +293,7 @@ class IOServer:
     PC_PLC_TighteningTorque2Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque2SetpointTagName()  # REAL Nm
     PC_PLC_RotationRPM1: str = CosThetaConfigurator.getInstance().getPcPlcRotation1RPMTagName()           # INT rpm
     PC_PLC_RotationRPM2: str = CosThetaConfigurator.getInstance().getPcPlcRotation2RPMTagName()           # INT rpm
-    # Siemens: one rotation RPM and the two rotation counts (REAL). An empty tag name = not on this PLC, not written.
+    # One rotation RPM and the two rotation counts (REAL), both PLCs. An empty tag name = not on this PLC, not written.
     PC_PLC_RotationRPM: str = CosThetaConfigurator.getInstance().getPcPlcRotationRPMTagName()             # REAL rpm
     PC_PLC_NoOfRotation1CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CCWTagName()   # REAL 1 / 2
     PC_PLC_NoOfRotation1CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CWTagName()     # REAL 1 / 2
@@ -513,11 +513,11 @@ class IOServer:
         State 2 (WRITE_QR_CODE): write the cycle settings to the PLC. Only tags with a configured name are written
         (an empty tag name means the PLC does not have that setting).
           LH_RH_Selection             INT   1 = LHS, 2 = RHS              (from the QR code)
-          ModelSelection              INT   1 = DOST, 2 = DOSTPLUS        (from the QR code; Allen-Bradley only)
-        cycle.settings.source = database (Siemens): the settings in force in machine_settings (frontend: Machine
+          ModelSelection              INT   1 = DOST, 2 = DOSTPLUS        (from the QR code; only if its tag is set)
+        cycle.settings.source = database (both PLCs): the settings in force in machine_settings (frontend: Machine
         Settings), all REAL:
           TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
-        cycle.settings.source = properties (Allen-Bradley; TO-DO: move to the database too):
+        cycle.settings.source = properties (the earlier Allen-Bradley set-up, not used now):
           TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
         Every value is worked out BEFORE anything is written: if any is unavailable (unknown side/model, no machine
         settings in the database) nothing is written. Each write is retried (SETTINGS_WRITE_ATTEMPTS).

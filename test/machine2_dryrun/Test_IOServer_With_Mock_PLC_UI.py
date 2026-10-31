@@ -11,11 +11,10 @@ What it does:
 2. The GUI plays the PLC (sets trigger / torque / press-done tags in MockPLC), the QR-code server and the camera
    server (sends results on the Redis queues IOServer reads), so IOServer's own code walks the cycle.
 3. The "PLC Tag Monitor" tab shows every MockPLC tag, including the cycle settings IOServer writes in state 2
-   (WRITE_QR_CODE). Only tags with a configured name are written:
-     Allen-Bradley (cycle.settings.source=properties): LH_RH_Selection (1=LHS, 2=RHS), ModelSelection
-       (1=DOST, 2=DOSTPLUS), TighteningTorque1/2Setpoint (REAL Nm) and RotationRPM1/2 (INT; -1 = not written).
-     Siemens (cycle.settings.source=database): LH_RH_Selection, and TighteningTorque1/2Setpoint, RotationRPM,
-       NoOfRotation1CCW / 1CW (all REAL) from machine_settings (frontend: Machine Settings).
+   (WRITE_QR_CODE), before QRCodeCheckOK / Done. Only tags with a configured name are written. Both PLCs
+   (cycle.settings.source=database): PC_PLC_LH_RH_Selection (1=LHS, 2=RHS, from the QR code), and
+   PC_PLC_TighteningTorque1/2Setpoint, PC_PLC_RotationRPM, PC_PLC_NoOfRotation1CCW / 1CW (all REAL) from
+   machine_settings (frontend: Machine Settings).
 4. "Auto Cycle (All OK)" drives one complete cycle (15 process steps, states 1 -> 28 -> 1) and reports the state
    trace IOServer actually walked and the state-2 settings it wrote.
 

@@ -219,7 +219,9 @@ def driver():
         check("F1 torque 1 tile: value on the first line, 'Rotation Done' below it in a smaller font",
               "19.08" in t1 and "Rotation Done" in t1 and t1.index("19.08") < t1.index("Rotation Done")
               and "font-size:16pt" in t1, t1)
-        check("F1 torque 2 tile: value, then 'Rotation Not Done'", "19.03" in t2 and "Rotation Not Done" in t2, t2)
+        check("F1 torque 2 tile: value, then 'Rotation Not Done' in red", "19.03" in t2 and "Rotation Not Done" in t2
+              and "color:#d00000" in t2, t2)
+        check("F1 'Rotation Done' not in red", "color:#d00000" not in t1, t1)
         check("F1 rotationDone passed to the two tightening tiles (True / False)",
               (TILE_ROTATION.get("setTighteningTorque1Data"), TILE_ROTATION.get("setTighteningTorque2Data")) == (True, False),
               str(TILE_ROTATION))

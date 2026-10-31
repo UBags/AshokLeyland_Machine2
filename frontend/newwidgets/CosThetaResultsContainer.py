@@ -11,6 +11,7 @@ app = getAppInstance()
 populateMonitorDimensions() # needs to be called to ensure that a QtGui context is there for some calls to work
 
 class CosThetaResultsContainer(QFrame):
+    ROTATION_NOT_DONE_COLOR = "#d00000"      # red: "Rotation Not Done" on the tightening-torque tiles
 
     averageLabelHeight = 40.
     horizontalSpacing : int = 4
@@ -176,7 +177,8 @@ class CosThetaResultsContainer(QFrame):
         rotationDone None (PLC does not provide it): the torque value alone."""
         if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
             self.tightening_torque1_check_container.setTwoLineTextAndResult(
-                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result)
+                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result,
+                secondLineColor="" if rotationDone else CosThetaResultsContainer.ROTATION_NOT_DONE_COLOR)
         elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque1_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
@@ -221,7 +223,8 @@ class CosThetaResultsContainer(QFrame):
         rotationDone None (PLC does not provide it): the torque value alone."""
         if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
             self.tightening_torque2_check_container.setTwoLineTextAndResult(
-                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result)
+                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result,
+                secondLineColor="" if rotationDone else CosThetaResultsContainer.ROTATION_NOT_DONE_COLOR)
         elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque2_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):

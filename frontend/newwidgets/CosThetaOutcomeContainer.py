@@ -238,8 +238,10 @@ class CosThetaOutcomeContainer(QFrame):
         self.setResult(result)
         self.update()
 
-    def setTwoLineTextAndResult(self, mainText: str | float | int, secondLine: str, result: str):
-        """Two lines in the display: mainText in the number font, secondLine below it in a smaller font."""
+    def setTwoLineTextAndResult(self, mainText: str | float | int, secondLine: str, result: str,
+                                secondLineColor: str = ""):
+        """Two lines in the display: mainText in the number font, secondLine below it in a smaller font
+        (in secondLineColor, e.g. "#d00000", if given; otherwise the display's text colour)."""
         import html
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
@@ -248,7 +250,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setText(
             f"<div align='center' style='font-size:{mainSize}pt; font-weight:bold;'>{html.escape(str(mainText))}</div>"
             f"<div align='center' style='font-size:{CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE}pt; "
-            f"font-weight:bold;'>{html.escape(str(secondLine))}</div>")
+            f"font-weight:bold;{(' color:' + secondLineColor + ';') if secondLineColor else ''}'>"
+            f"{html.escape(str(secondLine))}</div>")
         self.setResult(result)
         self.update()
 

@@ -16,7 +16,7 @@ TAGS[tag] reads / writes a tag as the PLC sees it (the test plays the PLC); WRIT
 writes; LOCK is the lock the tests hold while changing several tags together.
 
 State-2 cycle settings: setting_tags(IOServer) gives the settings tags configured for the vendor (empty names = not on
-this PLC). Siemens takes the settings from machine_settings in the database (cycle.settings.source=database), so
+this PLC). Both PLCs take the settings from machine_settings in the database (cycle.settings.source=database), so
 setup(mode) creates that database and puts the default settings (30 rpm, 19 / 19 Nm, 1 / 1 rotations) in force;
 use_machine_settings(mode, ...) puts other values in force (as the frontend's Machine Settings dialog does).
 """
@@ -49,7 +49,11 @@ def use_machine_settings(mode="Test", **values):
 def setup(mode="Test"):
     vendor = (os.environ.get("COSTHETA_PLC_VENDOR") or "allenbradley").strip().lower()
     if vendor == "siemens":
+        os.environ["COSTHETA_PLC_VENDOR"] = "siemens"
+    from Configuration import CosThetaConfigurator
+    if CosThetaConfigurator.getInstance().getCycleSettingsSource() == "database":
         use_machine_settings(mode)
+    if vendor == "siemens":
         return _setup_siemens()
     return _setup_allenbradley()
 

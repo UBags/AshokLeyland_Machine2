@@ -1242,7 +1242,7 @@ def CameraServer(mode : str = "Test"):
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
 
-    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (vision.* keys), so a site
+    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.
     try:
         from camera.VisionConfig import describeVisionParameters, getRegistry

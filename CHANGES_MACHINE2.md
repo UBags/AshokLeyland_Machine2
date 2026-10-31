@@ -514,3 +514,47 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   | Integrated DB row | rotation NULL / NULL | rotation True / False |
 
   A screenshot of the full frontend window at 1920×1080 shows both two-line tiles fitting.
+
+## 24. Allen-Bradley aligned with Siemens; per-machine vision parameters; "Rotation Not Done" in red (2026-11-01)
+
+- **Frontend.** "Rotation Not Done" on the tightening tiles is now red (`#d00000`). "Rotation Done" keeps the display's text colour. `setTwoLineTextAndResult` takes a `secondLineColor`.
+- **Allen-Bradley IOServer: same behaviour and tag names as Siemens.** Both PLCs run the same IOServer code; the Siemens one only swaps the client. So the alignment is in the configuration:
+  - **Tag names are shared.** The 50 tag and settings keys that the `siemens.*` section used to override now hold the Siemens values in the shared keys, and the `siemens.*` copies are removed. Examples:
+    - `PLC_PC_CheckHub`, `PLC_PC_CheckBearing`;
+    - `PLC_PC_CheckBunkForComponentPress`, `PLC_PC_CheckNoBunk`, `PLC_PC_CheckBunkForCapPress`;
+    - `PLC_PC_Station4CapPressDone`, `PLC_PC_Station3TorqueValueSet`;
+    - `PC_PLC_ConnectionStatusTag`;
+    - `PC_PLC_LH_RH_Selection`, `PC_PLC_TighteningTorque1/2Setpoint`, `PC_PLC_RotationRPM`, `PC_PLC_NoOfRotation1CCW/1CW`;
+    - `PLC_PC_Station2RotationDuringTighteningDone`.
+
+    The `siemens.` section now holds only `siemens.plc.ip`. The `Configuration.py` getter defaults were changed to the same names.
+  - **`cycle.settings.source=database` for both PLCs.** The Allen-Bradley machine writes side, setpoints, RPM and rotation counts from `machine_settings`, before QRCodeCheckOK / Done. It no longer writes a model or RPM 1/2: those tag names are empty. The earlier properties-based path is still in the code but isn't used. This resolves the §17 TO-DO.
+  - **Rotation-during-tightening done** is read, shown and stored on the Allen-Bradley machine too, and reset with the torque tags.
+  - **The Allen-Bradley PLC programme must provide these tag names**: pycomm3 reads and writes Logix tags by name.
+- **Vision parameters are per machine.** Each of the 135 keys is written twice in `ApplicationConfiguration.properties`:
+  - `allenbradley.vision.<name>` is Machine 1, and `siemens.vision.<name>` is Machine 2. The unused-constants section is duplicated the same way.
+  - Both sets start with today's values. There are no unprefixed `vision.*` keys any more.
+  - `CosThetaConfigurator.getVisionKeyPrefix()` returns `<plc.vendor>.`, and `getVisionValue(key)` reads `<vendor>.<key>` with no fallback to the other machine.
+  - `camera/VisionConfig.py` reads every parameter through `getVisionValue`.
+  - The vision modules keep their logical keys (`vInt("vision.nut.detection.radius", 80)`), so their code is unchanged.
+  - The camera-server start-up log shows the full prefixed key of any re-tuned value.
+- **`Verify_Vision_Config_Equivalence.py`** now checks:
+  - every key exists for both machines;
+  - Machine 1 values equal the built-in (baseline) defaults;
+  - Machine 2 values are valid; re-tuned ones are listed as INFO, not as errors;
+  - there are no unprefixed `vision.` keys, and no key that no module reads.
+- **Properties copies.** `ApplicationConfiguration.Machine1.properties` and `ApplicationConfiguration.Machine2.properties` were re-copied from `ApplicationConfiguration.properties`, with `plc.vendor=allenbradley` and `plc.vendor=siemens` respectively.
+- **Tests.** `_plc_sim.setup()` puts the default machine settings in force whenever the source is the database (now both PLCs). The Mock-PLC and Real-PLC test windows describe the shared settings, and the FE dry run checks the red "Rotation Not Done".
+- **Verified (both PLCs):**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Vision verifier (both folders) | ALL EQUIVALENT | ALL EQUIVALENT |
+  | DB dry run | 49/49 | |
+  | FE dry run | 55/55 | |
+  | Fault scenarios | 55/55 | 56/56 (the extra check is the Siemens raw-byte check) |
+  | Two full cycles | exact; writes 1 / 19 / 19 / 30 / 1 / 1; rotation True / False to the frontend; bit reset after reading | same |
+  | Mock-PLC test window | 14/14 | 14/14 |
+  | Integrated DB row | settings 30 / 19 / 19 / 1 / 1, rotation True / False | identical |
+
+  A negative test of the verifier and VisionConfig: changing `siemens.vision.nobunk.nut.detection.radius` changed the value only on Siemens, and was reported as INFO; changing an `allenbradley.` value is reported as a PROBLEM.

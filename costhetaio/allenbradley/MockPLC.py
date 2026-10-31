@@ -154,16 +154,16 @@ class MockPLC:
             config.getPcPlcConnectionStatusTagName(): False,
         }
 
-        # Station 2 rotation-during-tightening done: only when the PLC provides it (Siemens)
+        # Station 2 rotation-during-tightening done: only when its tag name is set
         rotationDone = config.getPlcPcStation2RotationDuringTighteningDoneTagName()
         if rotationDone:
             default_tags[rotationDone] = False
-        # Siemens-only settings (REAL); empty names = not on this PLC
+        # Rotation RPM and rotation counts (REAL); empty names = not on this PLC
         for name in (config.getPcPlcRotationRPMTagName(), config.getPcPlcNoOfRotation1CCWTagName(),
                      config.getPcPlcNoOfRotation1CWTagName()):
             if name:
                 default_tags[name] = 0.0
-        default_tags.pop("", None)       # settings with an empty tag name (e.g. no ModelSelection on Siemens)
+        default_tags.pop("", None)       # settings with an empty tag name (e.g. no ModelSelection)
 
         with self._tag_lock:
             self._tags = default_tags.copy()

@@ -249,6 +249,19 @@ class CosThetaConfigurator():
         return vendor if vendor in CosThetaConfigurator.PLC_VENDORS else "allenbradley"
 
     @classmethod
+    def getVisionKeyPrefix(cls) -> str:
+        """The vision-check parameters are per machine: 'allenbradley.' (Machine 1) or 'siemens.' (Machine 2), chosen
+        by the PLC vendor (plc.vendor / COSTHETA_PLC_VENDOR). Every vision key in ApplicationConfiguration.properties
+        is written with this prefix: allenbradley.vision.<name> and siemens.vision.<name>."""
+        return f"{cls.getPlcVendor()}."
+
+    @classmethod
+    def getVisionValue(cls, key: str, default: Any = None) -> Any:
+        """Value of the vision parameter `key` (e.g. 'vision.nut.detection.radius') for this machine:
+        the property <vendor>.<key>. No fallback to another machine's value; `default` if absent."""
+        return cls.getValue(f"{cls.getVisionKeyPrefix()}{key}", default=default)
+
+    @classmethod
     def getValue(cls, key: str, default: str = '') -> Any:
         """
         Get a configuration value by key with optional default.
@@ -2643,17 +2656,17 @@ class CosThetaConfigurator():
     @classmethod
     def getPlcPcCheckHubAndSecondBearingTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_HUB_AND_SECOND_BEARING_KEY,
-                                             default="PLC_PC_CheckHubAndSecondBearing")
+                                             default="PLC_PC_CheckBearing")
 
     @classmethod
     def getPcPlcHubAndSecondBearingCheckOKTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_HUB_AND_SECOND_BEARING_CHECK_OK_KEY,
-                                             default="PC_PLC_HubAndSecondBearingCheckOK")
+                                             default="PC_PLC_BearingCheckOK")
 
     @classmethod
     def getPcPlcHubAndSecondBearingCheckDoneTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_HUB_AND_SECOND_BEARING_CHECK_DONE_KEY,
-                                             default="PC_PLC_HubAndSecondBearingCheckDone")
+                                             default="PC_PLC_BearingCheckDone")
 
     # ==================== Nut and Plate Washer Methods (Step 4) ====================
 
@@ -2693,17 +2706,17 @@ class CosThetaConfigurator():
     @classmethod
     def getPlcPcCheckNoCapBunkTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_NO_CAP_BUNK_KEY,
-                                             default="PLC_PC_CheckNoCapBunk")
+                                             default="PLC_PC_CheckBunkForComponentPress")
 
     @classmethod
     def getPcPlcNoCapBunkCheckOKTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNK_CHECK_OK_KEY,
-                                             default="PC_PLC_NoCapBunkCheckOK")
+                                             default="PC_PLC_BunkForComponentPressCheckOK")
 
     @classmethod
     def getPcPlcNoCapBunkCheckDoneTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNK_CHECK_DONE_KEY,
-                                             default="PC_PLC_NoCapBunkCheckDone")
+                                             default="PC_PLC_BunkForComponentPressCheckDone")
 
     # ==================== Component Press Done Method (Step 8) ====================
     @classmethod
@@ -2714,7 +2727,7 @@ class CosThetaConfigurator():
     @classmethod
     def getPlcPcStation2RotationDuringTighteningDoneTagName(cls) -> str:
         return str(CosThetaConfigurator.getValue(
-            CosThetaConfigurator.PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY, default="") or "").strip()
+            CosThetaConfigurator.PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY, default="PLC_PC_Station2RotationDuringTighteningDone") or "").strip()
 
     # ==================== No Bunk Methods (Step 9) ====================
     @classmethod
@@ -2768,23 +2781,23 @@ class CosThetaConfigurator():
     @classmethod
     def getPlcPcCheckBunkTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_BUNK_KEY,
-                                             default="PLC_PC_CheckBunk")
+                                             default="PLC_PC_CheckBunkForCapPress")
 
     @classmethod
     def getPcPlcBunkCheckOKTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNK_CHECK_OK_KEY,
-                                             default="PC_PLC_BunkCheckOK")
+                                             default="PC_PLC_BunkForCapPressCheckOK")
 
     @classmethod
     def getPcPlcBunkCheckDoneTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNK_CHECK_DONE_KEY,
-                                             default="PC_PLC_BunkCheckDone")
+                                             default="PC_PLC_BunkForCapPressCheckDone")
 
     # ==================== Cap Press Done Method (Step 14) ====================
     @classmethod
     def getPlcPcCapPressDoneTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CAP_PRESS_DONE_KEY,
-                                             default="PLC_PC_CapPressDone")
+                                             default="PLC_PC_Station4CapPressDone")
 
     # ==================== Station 3 Torque Methods (Step 15) ====================
     @classmethod
@@ -2811,7 +2824,7 @@ class CosThetaConfigurator():
     @classmethod
     def getPcPlcConnectionStatusTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_CONNECTION_STATUS_KEY,
-                                             default="PC_PLC_ConnectionStatus")
+                                             default="PC_PLC_ConnectionStatusTag")
 
     @classmethod
     def getPlcIP(cls) -> str:
@@ -2905,15 +2918,15 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPcPlcRotationRPMTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION_RPM_KEY, default="") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION_RPM_KEY, default="PC_PLC_RotationRPM") or "").strip()
 
     @classmethod
     def getPcPlcNoOfRotation1CCWTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CCW_KEY, default="") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CCW_KEY, default="PC_PLC_NoOfRotation1CCW") or "").strip()
 
     @classmethod
     def getPcPlcNoOfRotation1CWTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CW_KEY, default="") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CW_KEY, default="PC_PLC_NoOfRotation1CW") or "").strip()
 
     @classmethod
     def getCycleSettingsSource(cls) -> str:
@@ -2922,25 +2935,25 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPcPlcModelSelectionTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_MODEL_SELECTION_KEY, default="ModelSelection") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_MODEL_SELECTION_KEY, default="") or "").strip()
 
     @classmethod
     def getPcPlcTighteningTorque1SetpointTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_TIGHTENING_TORQUE1_SETPOINT_KEY,
-                                             default="TighteningTorque1Setpoint")
+                                             default="PC_PLC_TighteningTorque1Setpoint")
 
     @classmethod
     def getPcPlcTighteningTorque2SetpointTagName(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_TIGHTENING_TORQUE2_SETPOINT_KEY,
-                                             default="TighteningTorque2Setpoint")
+                                             default="PC_PLC_TighteningTorque2Setpoint")
 
     @classmethod
     def getPcPlcRotation1RPMTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION1_RPM_KEY, default="RotationRPM1") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION1_RPM_KEY, default="") or "").strip()
 
     @classmethod
     def getPcPlcRotation2RPMTagName(cls) -> str:
-        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION2_RPM_KEY, default="RotationRPM2") or "").strip()
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION2_RPM_KEY, default="") or "").strip()
 
     @classmethod
     def _getNumericSetpoint(cls, key: str) -> float:

@@ -6,7 +6,9 @@ call in the live vision modules it verifies:
   1. the default equals the value the same name had in the BASELINE commit (before parameters were made
      configurable), with the same Python type; for parameters that were extracted from inline literals, the
      manifest (vision_config_manifest.json) must point at the baseline line, and that line must contain the literal;
-  2. ApplicationConfiguration.properties contains the key and its value parses (VisionConfig rules) to exactly the default;
+  2. ApplicationConfiguration.properties contains the key for each machine (allenbradley.<key> and siemens.<key>):
+     the Machine 1 (allenbradley.) value parses (VisionConfig rules) to exactly the default; the Machine 2 (siemens.)
+     value must be valid - if it differs from the default (re-tuned for Machine 2) that is reported, not an error;
   3. a key used in more than one place always has the same default.
 Exit code 0 = all equivalent.
 
@@ -19,6 +21,8 @@ import argparse, ast, json, pathlib, subprocess, sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 FUNCS = {"vInt", "vFloat", "vBool", "vStr", "vTuple", "vList", "vPoints"}
+MACHINE_PREFIXES = ("allenbradley.", "siemens.")     # Machine 1, Machine 2 (CosThetaConfigurator.getVisionKeyPrefix)
+EQUIVALENCE_PREFIX = "allenbradley."                  # must equal the pre-configurable (baseline) values
 
 _ap = argparse.ArgumentParser()
 _ap.add_argument("--baseline", default=None)
@@ -213,7 +217,7 @@ def load_properties():
         s = line.strip()
         if s and not s.startswith("#") and "=" in s:
             k, v = s.split("=", 1)
-            if k.strip() in props and k.strip().startswith("vision."):
+            if k.strip() in props and ".vision." in k.strip():
                 print("PROBLEM: duplicate properties key", k.strip())
             props[k.strip()] = v.strip()
     return props
@@ -224,7 +228,7 @@ def main() -> int:
         str(p.relative_to(ROOT)) for p in (ROOT / "camera").glob("*.py")
         if p.name != "VisionConfig.py" and any(f + "(" in p.read_text(encoding="utf-8") for f in FUNCS))
     props = load_properties()
-    problems, checked, seen = [], 0, {}
+    problems, checked, seen, retuned = [], 0, {}, set()
     extracted = manifest.get("extracted", {})
     for rel in files:
         new_src = (ROOT / rel).read_text(encoding="utf-8")
@@ -266,15 +270,31 @@ def main() -> int:
                     problems.append(f"{where}: no baseline assignment for '{tgt}' and no manifest entry (extracted literal?)")
                 elif not any(same(c, default) for c in cand):
                     problems.append(f"{where}: default {default!r} != baseline value(s) {cand!r}")
-            # 2. properties value == default
-            if key not in props:
-                problems.append(f"{where}: key missing from ApplicationConfiguration.properties")
-            else:
-                parsed, source = parse_like(props[key], default, fn)
+            # 2. per-machine properties: Machine 1 (allenbradley.) value == default; Machine 2 (siemens.) value valid
+            for prefix in MACHINE_PREFIXES:
+                pkey = prefix + key
+                if pkey not in props:
+                    problems.append(f"{where}: {pkey} missing from ApplicationConfiguration.properties")
+                    continue
+                parsed, source = parse_like(props[pkey], default, fn)
                 if source != "config":
-                    problems.append(f"{where}: properties value {props[key]!r} is not valid for {fn} (would fall back to default)")
+                    problems.append(f"{where}: {pkey}={props[pkey]!r} is not valid for {fn} (would fall back to default)")
                 elif not same(parsed if not isinstance(default, tuple) else tuple(parsed), default):
-                    problems.append(f"{where}: properties value {props[key]!r} parses to {parsed!r}, default is {default!r}")
+                    if prefix == EQUIVALENCE_PREFIX:
+                        problems.append(f"{where}: {pkey}={props[pkey]!r} parses to {parsed!r}, default is {default!r}")
+                    else:
+                        retuned.add(pkey)
+    stray = sorted(k for k in props if ".vision." in k and not any(k.startswith(p) for p in MACHINE_PREFIXES))
+    stray += sorted(k for k in props if k.startswith("vision."))
+    if stray:
+        problems.append(f"vision keys without a machine prefix (not read by VisionConfig): {stray[:5]}")
+    unread = sorted(k for k in props if any(k.startswith(p + "vision.") and not k.startswith(p + "vision.unused.")
+                                              for p in MACHINE_PREFIXES) and k.split(".", 1)[1] not in seen)
+    if unread:
+        problems.append(f"{len(unread)} properties keys not read by any vision module: {unread[:5]}")
+    if retuned:
+        print(f"INFO: {len(retuned)} Machine 2 (siemens.) value(s) differ from the built-in defaults (re-tuned): "
+              + ", ".join(sorted(retuned)))
     print(f"Baseline {BASELINE}: {checked} parameters in {len(files)} files, {len(seen)} distinct keys")
     for p in problems:
         print("PROBLEM:", p)
