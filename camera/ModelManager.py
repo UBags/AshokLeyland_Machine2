@@ -90,6 +90,7 @@ print(f"GPU Memory Allocated: {allocated:.2f} GB")
 # ============================================================================
 # Fix for "TypeError: Plain typing.Self is not valid as type argument"
 # This occurs when Nuitka tries to freeze PyTorch/Ultralytics imports
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import sys
 import threading
 import typing
@@ -184,11 +185,11 @@ try:
 
                 safe_classes.extend([SegmentationModel, DetectionModel])
             except ImportError:
-                pass
+                noteSuppressed()
 
         torch.serialization.add_safe_globals(safe_classes)
 except (ImportError, AttributeError):
-    pass
+    noteSuppressed()
 
 try:
     # Load MobileSAM

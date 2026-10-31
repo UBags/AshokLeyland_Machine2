@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import threading
 import requests
 from requests import Response
@@ -704,7 +705,7 @@ class RTSPCam():
                     try:
                         time.sleep(sleepTime)
                     except:
-                        pass
+                        noteSuppressed()
 
             SlaveFileLogger.getInstance().logTakeNote(RTSPCam.logSource,
                                                       f"In RTSPCam.{objRef.name}, monitoring thread exited",
@@ -750,7 +751,7 @@ class RTSPCam():
                 try:
                     self.camProcess.kill()
                 except:
-                    pass
+                    noteSuppressed()
             self.camProcess = None
         self.camAvailable = False
         self.connected = False
@@ -1214,7 +1215,7 @@ def testToSeeFrames():
                     if cv2.waitKey(1) == ord('q'):
                         break
             except:
-                pass
+                noteSuppressed()
             time.sleep(0.05)
     except Exception as e:
         printBoldRed(e)

@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import time
 from typing import Literal, Union, Tuple, Optional
 
@@ -252,7 +253,7 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
     except ConnectionError as e1:
         # raise e1
         # return False
-        pass
+        noteSuppressed()
     return False
 
 # ***********************************************************************************
@@ -487,7 +488,7 @@ def getStopCommandFromQueue(redisConnection: redis.client.Redis, block : int = 1
     try:
         stopNow = newData[genericdataKeyString].decode('utf-8')
     except:
-        pass
+        noteSuppressed()
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'in getStopCommand()')} {stopNow =}")
     if stopNow is not None:
         if stopNow == stopCommand:
@@ -528,7 +529,7 @@ def getStoppedResponseFromQueue(redisConnection: redis.client.Redis, block : int
         producer = newData[producerKeyString].decode('utf-8')
         stoppedNow = newData[genericdataKeyString].decode('utf-8')
     except:
-        pass
+        noteSuppressed()
     if (producer is not None) and (stoppedNow is not None):
         if stoppedNow == stoppedResponse:
             return timeOfMessage, producer, stoppedResponse
@@ -615,7 +616,7 @@ def getRequestResultCommandFromIOServer(redisConnection: redis.client.Redis, req
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
     except:
-        pass
+        noteSuppressed()
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == requestCommand):
             return timeOfMessage, True
@@ -655,7 +656,7 @@ def getTakeNextPictureCommandFromCameraQ(redisConnection: redis.client.Redis, ca
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
     except:
-        pass
+        noteSuppressed()
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == TAKE_NEXT_PICTURE):
             return timeOfMessage, True
@@ -741,7 +742,7 @@ def getDiscInterlockMessage(redisConnection: redis.client.Redis, block : int = 1
     try:
         currentStatus = newData[genericdataKeyString].decode('utf-8')
     except:
-        pass
+        noteSuppressed()
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'in getStopCommand()')} {stopNow =}")
     if currentStatus is not None:
         if currentStatus == ok:
@@ -817,7 +818,7 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return MachineState.INVALID_STATE, False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[currentMachineStateKeyString] is not None) and (newData[resultKeyString] is not None):
@@ -862,7 +863,7 @@ def readDataInIOServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False, ""
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[qrCodeStatusKeyString] is not None):
@@ -905,7 +906,7 @@ def readDataInIOServerFromFEServer(redisConnection: redis.client.Redis, block : 
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[connectionStatusKeyString] is not None):
@@ -1163,7 +1164,7 @@ def readDataInFEServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, None, False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[qrCodeKeyString] is not None) and (newData[qrCodeDisplayKeyString] is not None):
@@ -1331,7 +1332,7 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[currentMachineStateKeyString] is not None):
@@ -1343,7 +1344,7 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
             try:
                 value = float(value)
             except:
-                pass
+                noteSuppressed()
 
             return _withRotation(withRotationDone, (currentMachineState, moveToState, action, value, result),
                                  decodeOptionalBool(newData.get(rotationDoneKeyString)))
@@ -1379,7 +1380,7 @@ def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis
                 redisConnection.xdel(emergencyq, last_id)
                 redisConnection.xtrim(emergencyq, 0)
             except:
-                pass
+                noteSuppressed()
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
         printBoldRed(f"Got exception - {e1}")
@@ -1388,7 +1389,7 @@ def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[emergencyStatusKeyString] is not None) and (newData[emergencyStatusKeyString] == ok):
@@ -1456,7 +1457,7 @@ def readDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis, bloc
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == readQRCodeCommand):
@@ -1493,7 +1494,7 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
                 redisConnection.xdel(io2qrcodeabortq, last_id)
                 redisConnection.xtrim(io2qrcodeabortq, 0)
             except:
-                pass
+                noteSuppressed()
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
         printBoldRed(f"Got exception - {e1}")
@@ -1503,13 +1504,13 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == ABORT):
             return True
     except:
-        pass
+        noteSuppressed()
 
     return False
 
@@ -1523,7 +1524,7 @@ def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, ori
             if buffer is not None:
                 originalImageAsMessage = np.array(buffer).tobytes()
     except:
-        pass
+        noteSuppressed()
 
     processedImageAsMessage = ""
     try:
@@ -1532,7 +1533,7 @@ def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, ori
             if buffer is not None:
                 processedImageAsMessage = np.array(buffer).tobytes()
     except:
-        pass
+        noteSuppressed()
 
     data = {originalImageKeyString: originalImageAsMessage, processedImageKeyString: processedImageAsMessage, resultKeyString : result, currentMachineStateKeyString : currentMachineState}
     if not handshake:
@@ -1585,7 +1586,7 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, None, False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == takePictureCommand):
@@ -1633,7 +1634,7 @@ def readComponentQRCodeInCameraServerFromQRCodeServer(redisConnection: redis.cli
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
     except:
-        pass
+        noteSuppressed()
 
     try:
         if (newData[componentQRCodeKeyString] is not None):
@@ -2448,7 +2449,7 @@ def clearKeyCommunicationQueuesOnAbort():
         try:
             redisConnection.xtrim(q,0)
         except:
-            pass
+            noteSuppressed()
 
 # ================================================================================
 

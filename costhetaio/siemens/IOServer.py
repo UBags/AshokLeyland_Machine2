@@ -15,6 +15,7 @@ each key by its siemens.* counterpart when plc.vendor=siemens). Start-up stops w
 IOServer uses has no address in IOServerProperties.yaml, or if two addresses clash.
 """
 
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import os
 import sys
 
@@ -68,7 +69,7 @@ class IOServer(_ab.IOServer):
                         if client is not None:
                             client.close()
                     except Exception:
-                        pass
+                        noteSuppressed()
                 self.clientForReads = None
                 self.clientForWrites = None
             self.clientForReads = PyS7PLCBackend(ip=self.plc_ip, properties_path=PROPERTIES_PATH)
@@ -89,7 +90,7 @@ class IOServer(_ab.IOServer):
                     if client is not None:
                         client.close()
                 except Exception:
-                    pass
+                    noteSuppressed()
             self.clientForReads = None
             self.clientForWrites = None
             self.connectionInProgress = False

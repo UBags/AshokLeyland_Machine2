@@ -595,6 +595,7 @@ Author: Production Ready Version
 Date: 2024
 """
 
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from datetime import datetime
 import subprocess
 import os
@@ -716,12 +717,12 @@ def check_database_exists(config: Dict[str, str]) -> bool:
             try:
                 cur.close()
             except:
-                pass
+                noteSuppressed()
         if conn:
             try:
                 conn.close()
             except:
-                pass
+                noteSuppressed()
 
 # ============================================================================
 # File Compression Functions
@@ -1091,7 +1092,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
                 try:
                     os.remove(local_file_path)
                 except:
-                    pass
+                    noteSuppressed()
             return False
 
         # Compress
@@ -1100,7 +1101,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
             try:
                 os.remove(local_file_path)
             except:
-                pass
+                noteSuppressed()
             final_file = compressed
         else:
             final_file = local_file_path
@@ -1118,7 +1119,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
                         os.remove(os.path.join(backup_dir, old_file))
                         printBoldBlue(f"  Removed: {old_file}")
                     except:
-                        pass
+                        noteSuppressed()
         except Exception as e:
             printBoldYellow(f"Warning: Cleanup failed: {e}")
 
@@ -1136,7 +1137,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
             try:
                 os.remove(local_file_path)
             except:
-                pass
+                noteSuppressed()
         return False
 
     except Exception as e:
@@ -1150,7 +1151,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
             try:
                 os.remove(local_file_path)
             except:
-                pass
+                noteSuppressed()
         return False
 
 
@@ -1206,7 +1207,7 @@ def doRestore(backup_file_path: str,
                 try:
                     os.remove(working_file)
                 except:
-                    pass
+                    noteSuppressed()
             return False
 
         # Drop schema (now safe - backup validated)
@@ -1215,7 +1216,7 @@ def doRestore(backup_file_path: str,
                 try:
                     os.remove(working_file)
                 except:
-                    pass
+                    noteSuppressed()
             return False
 
         # Restore
@@ -1225,7 +1226,7 @@ def doRestore(backup_file_path: str,
                 try:
                     os.remove(working_file)
                 except:
-                    pass
+                    noteSuppressed()
             return False
 
         # Cleanup temp file
@@ -1233,7 +1234,7 @@ def doRestore(backup_file_path: str,
             try:
                 os.remove(working_file)
             except:
-                pass
+                noteSuppressed()
 
         printBoldBlue("=" * 70)
         printBoldGreen("✓ RESTORE COMPLETE")

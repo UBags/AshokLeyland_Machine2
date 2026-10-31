@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import random
 import sys
 import threading
@@ -11,6 +12,7 @@ from psycopg2.pool import ThreadedConnectionPool
 
 from logutils import Logger
 from logutils.SlaveLoggers import SlaveConsoleLogger, SlaveFileLogger
+from logutils.LogSettings import setLogProcess, publishCycleContext, auditPLC, auditConnectionToggle
 from utils.CosThetaPrintUtils import *
 from utils.RedisUtils import *
 
@@ -87,6 +89,40 @@ def addTagUpdateRequest(request: Dict[str, Any]) -> bool:
         return result is not None
     return False
 
+
+
+class _FileLogAdapter:
+    """The IOServer's self.logger: messages go to the central log file at the matching level (before, they went to
+    pycomm3's logger, which is set to CRITICAL with no handler, so they were lost). pycomm3 itself stays silent."""
+
+    def __init__(self, source: str):
+        self.source = source
+
+    def _log(self, level: int, msg, *args) -> None:
+        try:
+            text = (str(msg) % args) if args else str(msg)
+        except Exception:
+            text = f"{msg} {args}"
+        try:
+            from logutils.AbstractSlaveLogger import callerOverride
+            frame = sys._getframe(2)
+            callerOverride.value = (frame.f_code.co_name, frame.f_lineno)
+            try:
+                SlaveFileLogger.getInstance().logMessage(level, self.source, text,
+                                                         Logger.PROBLEM if level >= Logger.CONSIDERACTION else Logger.GENERAL)
+            finally:
+                callerOverride.value = None
+        except Exception:
+            noteSuppressed()
+
+    def debug(self, msg, *args, **kw): self._log(Logger.DEBUG, msg, *args)
+    def info(self, msg, *args, **kw): self._log(Logger.INFO, msg, *args)
+    def warning(self, msg, *args, **kw): self._log(Logger.TAKENOTE, msg, *args)
+    warn = warning
+    def error(self, msg, *args, **kw): self._log(Logger.CONSIDERACTION, msg, *args)
+    def critical(self, msg, *args, **kw): self._log(Logger.TAKEACTION, msg, *args)
+    fatal = critical
+    exception = error
 
 class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
     """
@@ -328,7 +364,11 @@ class IOServer:
     def __init__(self, plc_ip: Union[str, None] = None, mode : str = "TEST", mockInstance: bool = False):
         # Class variables
         IOServer.logSource = getFullyQualifiedName(__file__, __class__)
+        setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
+        self.machineState.stateChangeListener = self._auditStateChange
+        self.cycleId: int = 0              # incremented at each accepted QR code (log context "[QR=... cycle=N]")
+        self._lastAuditedRead = None
         self.shutdown = False
 
         self.mode = mode
@@ -337,6 +377,7 @@ class IOServer:
         self.read_interval = CosThetaConfigurator.getInstance().getPlcReadInterval()  # 200 ms
         self.write_loop_interval = CosThetaConfigurator.getInstance().getPlcWriteInterval()  # 100 ms
         self.CONNECTION_CHECK_INTERVAL = CosThetaConfigurator.getInstance().getPlcConnectionCheckInterval()  # seconds
+        CosThetaConfigurator.addReloadListener(self._applyLiveConfiguration)
 
         self.redisHostname: str = CosThetaConfigurator.getInstance().getRedisHost()
         self.redisPort: int = CosThetaConfigurator.getInstance().getRedisPort()
@@ -379,9 +420,9 @@ class IOServer:
         self.currentQRCode: str = ""
         self.lastStation2RotationDuringTighteningDone: Optional[bool] = None
 
-        # Initialize logging
-        self.logger = logging.getLogger("pycomm3")
-        self.logger.setLevel(logging.CRITICAL)
+        # Initialize logging: pycomm3's own logger stays silent; the IOServer's messages go to the log file
+        logging.getLogger("pycomm3").setLevel(logging.CRITICAL)
+        self.logger = _FileLogAdapter(IOServer.logSource)
 
         # Start PLC connection and threads
         self.connectionInProgress: bool = False
@@ -392,6 +433,11 @@ class IOServer:
         self.resetAll()
 
         time.sleep(3)
+        # no cycle yet: clear the log context left by a previous run (until the first QR code is accepted)
+        try:
+            publishCycleContext(Redis(self.redisHostname, self.redisPort), None, None)
+        except Exception:
+            noteSuppressed()
         self.startThreads()
 
     def connectToRedis(self, forceRenew=False):
@@ -872,12 +918,12 @@ class IOServer:
                     try:
                         self.clientForReads.close()
                     except:
-                        pass
+                        noteSuppressed()
                 if self.clientForWrites is not None:
                     try:
                         self.clientForWrites.close()
                     except:
-                        pass
+                        noteSuppressed()
                 self.clientForReads = None
                 self.clientForWrites = None
 
@@ -907,11 +953,11 @@ class IOServer:
             try:
                 self.clientForReads.close()
             except:
-                pass
+                noteSuppressed()
             try:
                 self.clientForWrites.close()
             except:
-                pass
+                noteSuppressed()
             self.clientForReads = None
             self.clientForWrites = None
             self.connectionInProgress = False
@@ -972,7 +1018,7 @@ class IOServer:
                 try:
                     time.sleep(ioHeartbeatGap)
                 except:
-                    pass
+                    noteSuppressed()
 
         self.heartbeatThread = threading.Thread(name=f"IO Heartbeat Thread", target=reportHeartbeat, args=(),
                                                 daemon=True)
@@ -1013,7 +1059,7 @@ class IOServer:
                 try:
                     time.sleep(heartbeatGap)
                 except:
-                    pass
+                    noteSuppressed()
 
         combinedHeartbeatThread = threading.Thread(name=f"Combined Heartbeat Update Thread", target=updateHeartbeat,
                                                    args=(), daemon=True)
@@ -1048,7 +1094,7 @@ class IOServer:
                 try:
                     time.sleep(1.0)
                 except:
-                    pass
+                    noteSuppressed()
 
         emergencyMonitoringThread = threading.Thread(name=f"Emergency Monitoring Thread", target=monitorEmergency,
                                                      args=(), daemon=True)
@@ -1068,7 +1114,7 @@ class IOServer:
                     else:
                         objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(False)
                 except:
-                    pass
+                    noteSuppressed()
                 if not objRef.shutdown:
                     time.sleep(2)
 
@@ -1120,6 +1166,7 @@ class IOServer:
                                     allok = allok and valueRead
 
                     if goAheadToProcessing:
+                        objRef._auditRead(tagsToBeRead, allok if typeOfValues == "bool" else finalValue)
                         if typeOfValues == "bool":
                             returnValue = objRef.process_current_read_state(allok)
                             if returnValue:
@@ -1156,6 +1203,9 @@ class IOServer:
                             success, qrCode = readDataInIOServerFromQRCodeServer(self.redisConnectionForWrites)
                             if success:
                                 objRef.currentQRCode = qrCode  # Store the QR code for this cycle
+                                objRef.cycleId += 1
+                                publishCycleContext(objRef.redisConnectionForWrites, qrCode, objRef.cycleId)
+                                objRef._audit(f"CYCLE {objRef.cycleId} START: QR code accepted by the QR server: {qrCode}")
                                 printBoldGreen(f"Received QR Code: {qrCode}")
                                 # 1. Populate the cycle settings (side, model, setpoints) FIRST ...
                                 settingsWritten = objRef.writeCycleSettingsToPLC(qrCode)
@@ -1494,6 +1544,65 @@ class IOServer:
 
         printLight("Started read tag, connection monitoring, write tag and update tag threads")
 
+    # ==================== PLC audit trail (log.audit.plc) ====================
+    # Every PC->PLC write (with its value, or the error), every PLC->PC signal the IOServer acts on (trigger raised,
+    # value read) and every state change, with the cycle context [QR=... cycle=N]. Written whatever the log level.
+
+    def _audit(self, text: str) -> None:
+        try:
+            if auditPLC():
+                SlaveFileLogger.getInstance().logAudit(IOServer.logSource, text)
+        except Exception:
+            noteSuppressed()
+
+    def _auditWrite(self, tag: str, value, error: Optional[Exception] = None) -> None:
+        if tag == IOServer.PC_PLC_ConnectionStatusTag and error is None and not auditConnectionToggle():
+            return
+        if error is None:
+            self._audit(f"PC->PLC {tag} = {value!r}  (state {self.machineState.getCurrentState().name})")
+        else:
+            self._audit(f"PC->PLC {tag} = {value!r} FAILED: {error}  (state {self.machineState.getCurrentState().name})")
+
+    def _auditRead(self, tags, value) -> None:
+        """PLC->PC: logged when a trigger is seen raised or a value is read (once per state, not every 0.2 s)."""
+        if value is None or value is False or (isinstance(value, float) and value == IOServer.FALSE_FLOAT_VALUE):
+            self._lastAuditedRead = None
+            return
+        key = (self.machineState.getCurrentState(), tuple(tags or ()), value)
+        if key == self._lastAuditedRead:
+            return
+        self._lastAuditedRead = key
+        self._audit(f"PLC->PC {' & '.join(tags or ())} = {value!r}  (state {key[0].name})")
+
+    def _auditStateChange(self, oldState, newState) -> None:
+        self._audit(f"STATE {getattr(oldState, 'name', oldState)} -> {getattr(newState, 'name', newState)}")
+
+    def _applyLiveConfiguration(self, changedKeys) -> None:
+        """Properties that the IOServer caches, re-applied when ApplicationConfiguration.properties changes."""
+        config = CosThetaConfigurator.getInstance()
+        applied = []
+        try:
+            for attr, getter in (("read_interval", config.getPlcReadInterval),
+                                 ("write_loop_interval", config.getPlcWriteInterval),
+                                 ("CONNECTION_CHECK_INTERVAL", config.getPlcConnectionCheckInterval)):
+                value = getter()
+                if value != getattr(self, attr):
+                    setattr(self, attr, value); applied.append(f"{attr}={value}")
+            value = config.getPlcSleepTimeBetweenOKAndDone()
+            if value != IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE:
+                IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE = value; applied.append(f"PLC_SLEEPTIME_BETWEEN_OK_AND_DONE={value}")
+            value = config.getLogDisconnectionsAfterNSecs()
+            if value != IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS:
+                IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS = value; applied.append(f"LOG_CONNECTION_PROBLEM_EVERY_N_SECS={value}")
+        except Exception as e:
+            self.logger.error(f"Could not apply the changed configuration: {e}")
+        tagKeys = [k for k in changedKeys if k.endswith(".tagname") or k in ("plc.ip", "siemens.plc.ip", "plc.vendor")]
+        if applied:
+            self.logger.warning(f"Configuration applied while running: {', '.join(applied)}")
+        if tagKeys:
+            self.logger.critical(f"PLC tag names / IP / vendor changed in the properties file ({', '.join(tagKeys)}): "
+                                 f"these take effect only after the IOServer is restarted")
+
     # ==================== Read functions ====================
 
     def read_bool(self, tag: str, expected_value: bool = True, debug: bool = False) -> Optional[bool]:
@@ -1569,7 +1678,7 @@ class IOServer:
             with self.readingLock:
                 value = self.clientForReads.read(aTag).value
         except:
-            pass
+            noteSuppressed()
         return value
 
     def read_multiple(self, listOfTags: list) -> Any:
@@ -1582,7 +1691,7 @@ class IOServer:
             with self.readingLock:
                 value = self.clientForReads.read(*listOfTags)
         except:
-            pass
+            noteSuppressed()
         return value
 
     def read_array(self, arrayName: str, numberOfElements: int) -> Any:
@@ -1595,7 +1704,7 @@ class IOServer:
             with self.readingLock:
                 value = self.clientForReads.read(f"{arrayName}" + "{" + f"{numberOfElements}" + "}")
         except:
-            pass
+            noteSuppressed()
         return value
 
     def read_array_slice(self, arrayName: str, index: int, numberOfElements: int) -> Any:
@@ -1604,7 +1713,7 @@ class IOServer:
             with self.readingLock:
                 value = self.clientForReads.read(f"{arrayName}[{index}]" + "{" + f"{numberOfElements}" + "}")
         except:
-            pass
+            noteSuppressed()
         return value
 
     # ==================== Write functions ====================
@@ -1618,10 +1727,12 @@ class IOServer:
         try:
             with self.writingLock:
                 self.clientForWrites.write(tag, value)
+            self._auditWrite(tag, value)
             if debug:
                 printBoldYellow(f"Wrote to bool tag {tag}: {value} in write_bool()")
             return True
         except Exception as e:
+            self._auditWrite(tag, value, error=e)
             printBoldRed(f"Error writing bool tag {tag}: {e}")
             return False
 
@@ -1634,11 +1745,13 @@ class IOServer:
         try:
             with self.writingLock:
                 self.clientForWrites.write(tag, value)
+            self._auditWrite(tag, value)
             if debug:
                 self.logger.info(f"Wrote float tag {tag}: {value}")
                 printBoldYellow(f"Wrote to float tag {tag}: {value} in write_float()")
             return True
         except Exception as e:
+            self._auditWrite(tag, value, error=e)
             self.logger.error(f"Error writing float tag {tag}: {e}")
             printBoldRed(f"Error writing float tag {tag}: {e}")
             return False
@@ -1655,11 +1768,13 @@ class IOServer:
         try:
             with self.writingLock:
                 self.clientForWrites.write(tag, value)
+            self._auditWrite(tag, value)
             if debug:
                 self.logger.info(f"Wrote integer tag {tag}: {value}")
                 printBoldGreen(f"Wrote integer tag {tag}: {value}")
             return True
         except Exception as e:
+            self._auditWrite(tag, value, error=e)
             self.logger.error(f"Error writing integer tag {tag}: {e}")
             printBoldRed(f"Error writing integer tag {tag}: {e}")
             return False
@@ -1915,7 +2030,7 @@ class IOServer:
                         objRef.redisConnectionForReads.rpush(RECEIVE_TAGS_QUEUE, json.dumps(tag_values))
 
                 except Exception as e:
-                    pass  # Silently ignore errors to not disrupt main operation
+                    noteSuppressed()  # Silently ignore errors to not disrupt main operation
 
         self.tagRequestThread = threading.Thread(name='Tag Request Listener Thread',
                                                  target=listenForTagRequests,
@@ -1930,16 +2045,16 @@ class IOServer:
             try:
                 self.updateTagsProcessor.stop()
             except:
-                pass
+                noteSuppressed()
         if self.clientForReads and self.clientForReads.connected:
             try:
                 self.clientForReads.close()
             except:
-                pass
+                noteSuppressed()
             try:
                 self.clientForWrites.close()
             except:
-                pass
+                noteSuppressed()
         self.logger.info(f"IOServer shutdown")
         printBoldRed(f"IOServer shutdown")
 

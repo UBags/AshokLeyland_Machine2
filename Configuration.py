@@ -13,7 +13,8 @@ from typing import Optional, Any, List, Tuple
 
 # ***********************************
 
-configFilePath = str(BaseUtils.get_project_root()) + '/ApplicationConfiguration.properties'
+# COSTHETA_CONFIG_FILE (environment) points to another properties file (used by the dry runs)
+configFilePath = os.environ.get("COSTHETA_CONFIG_FILE") or (str(BaseUtils.get_project_root()) + '/ApplicationConfiguration.properties')
 
 
 # ***********************************
@@ -131,30 +132,121 @@ class CosThetaConfigurator():
     # CONFIGURATION LOADING METHODS
     # =============================================================================
 
+    # ---- live configuration -------------------------------------------------------------------------------------
+    # The properties file is re-read when it changes (checked at most every config.reload.check.interval.sec, by any
+    # getValue() call and by the watcher thread every server starts). A new version replaces the old one only if it
+    # parses and has at least RELOAD_MIN_KEY_FRACTION of the keys (a file caught half-written by an editor is skipped
+    # and picked up on the next check). Listeners (addReloadListener) are told which keys changed, so values that
+    # were cached at start-up (vision constants, IOServer intervals, ...) can be refreshed.
+    RELOAD_MIN_KEY_FRACTION: float = 0.8
+    _reloadLock = threading.RLock()
+    _lastCheck: float = 0.0
+    _reloadListeners: list = []
+    _watcherStarted: bool = False
+    lastChangedKeys: list = []
+
+    @classmethod
+    def _reloadCheckInterval(cls) -> float:
+        try:
+            return max(0.5, float(CosThetaConfigurator._configs['config.reload.check.interval.sec'] or 2.0))
+        except Exception:
+            return 2.0
+
     @classmethod
     def _loadConfig(cls) -> None:
-        """Load or reload the configuration file if needed."""
+        """Load the configuration file; afterwards re-load it whenever it changes (see above)."""
+        import time as _time
         if not CosThetaConfigurator._loaded:
-            try:
-                with open(configFilePath, 'r') as config_file:
-                    CosThetaConfigurator._configs.load(config_file)
-                    CosThetaConfigurator._loaded = True
-                    CosThetaConfigurator._lastTimeLoaded = pathlib.Path(configFilePath).stat().st_mtime
-            except Exception as e:
-                print(f"Warning: Could not load config file: {e}")
-            CosThetaConfigurator._reloaded = False
-        else:
-            try:
-                lastUpdatedTime = pathlib.Path(configFilePath).stat().st_mtime
-                if lastUpdatedTime > CosThetaConfigurator._lastTimeLoaded:
-                    with open(configFilePath, 'r') as config_file:
-                        CosThetaConfigurator._configs.load(config_file)
-                    CosThetaConfigurator._lastTimeLoaded = lastUpdatedTime
-                    CosThetaConfigurator._reloaded = True
-                else:
+            with CosThetaConfigurator._reloadLock:
+                if not CosThetaConfigurator._loaded:
+                    try:
+                        with open(configFilePath, 'r') as config_file:
+                            CosThetaConfigurator._configs.load(config_file)
+                            CosThetaConfigurator._loaded = True
+                            CosThetaConfigurator._lastTimeLoaded = pathlib.Path(configFilePath).stat().st_mtime
+                    except Exception as e:
+                        print(f"Warning: Could not load config file: {e}")
                     CosThetaConfigurator._reloaded = False
+                    CosThetaConfigurator._lastCheck = _time.time()
+            return
+        now = _time.time()
+        if now - CosThetaConfigurator._lastCheck < CosThetaConfigurator._reloadCheckInterval():
+            CosThetaConfigurator._reloaded = False
+            return
+        if not CosThetaConfigurator._reloadLock.acquire(blocking=False):
+            return                                    # another thread is reloading; it will notify
+        changed = None
+        try:
+            CosThetaConfigurator._lastCheck = now
+            CosThetaConfigurator._reloaded = False
+            lastUpdatedTime = pathlib.Path(configFilePath).stat().st_mtime
+            if CosThetaConfigurator._lastTimeLoaded is not None and lastUpdatedTime <= CosThetaConfigurator._lastTimeLoaded:
+                return
+            fresh = Properties()
+            with open(configFilePath, 'r') as config_file:
+                fresh.load(config_file)
+            old = dict(CosThetaConfigurator._configs.getPropertyDict())
+            new = dict(fresh.getPropertyDict())
+            if len(new) < CosThetaConfigurator.RELOAD_MIN_KEY_FRACTION * max(1, len(old)):
+                print(f"Warning: {configFilePath} has {len(new)} keys (was {len(old)}); not applied - will retry")
+                return
+            CosThetaConfigurator._configs = fresh
+            CosThetaConfigurator._lastTimeLoaded = lastUpdatedTime
+            CosThetaConfigurator._reloaded = True
+            changed = sorted(k for k in set(old) | set(new) if old.get(k) != new.get(k))
+            CosThetaConfigurator.lastChangedKeys = changed
+        except Exception as e:
+            print(f"Warning: could not re-load {configFilePath}: {e}")
+        finally:
+            CosThetaConfigurator._reloadLock.release()
+        if changed:
+            CosThetaConfigurator._notifyReload(changed)
+
+    @classmethod
+    def _notifyReload(cls, changed: list) -> None:
+        shown = ", ".join(changed[:20]) + (f" ... (+{len(changed) - 20})" if len(changed) > 20 else "")
+        hidden = {k for k in changed if k.endswith(".pwd") or "password" in k.lower()}
+        message = f"Configuration file changed; {len(changed)} key(s) now in effect: {shown}"
+        for k in hidden:
+            message = message.replace(k, f"{k} (value not logged)")
+        try:
+            from logutils.LogSettings import getLogProcess
+            if getLogProcess():
+                from logutils.SlaveLoggers import SlaveFileLogger
+                from logutils.Logger import Logger
+                SlaveFileLogger.getInstance().logTakeAction("Configuration", message, Logger.ISSUE)
+        except Exception:
+            pass
+        print(message)
+        for listener in list(CosThetaConfigurator._reloadListeners):
+            try:
+                listener(changed)
             except Exception as e:
-                CosThetaConfigurator._reloaded = False
+                print(f"Warning: configuration reload listener {listener} failed: {e}")
+
+    @classmethod
+    def addReloadListener(cls, listener) -> None:
+        """listener(changedKeys) is called after the properties file has been re-loaded with changes."""
+        if listener not in CosThetaConfigurator._reloadListeners:
+            CosThetaConfigurator._reloadListeners.append(listener)
+
+    @classmethod
+    def startConfigWatcher(cls) -> None:
+        """Background thread that checks the properties file even when nothing calls getValue()."""
+        if CosThetaConfigurator._watcherStarted:
+            return
+        CosThetaConfigurator._watcherStarted = True
+        import time as _time
+
+        def watch():
+            while True:
+                _time.sleep(CosThetaConfigurator._reloadCheckInterval())
+                try:
+                    CosThetaConfigurator._loadConfig()
+                except Exception:
+                    pass
+
+        threading.Thread(target=watch, name="Configuration watcher", daemon=True).start()
 
     @classmethod
     def _getReloaded(cls) -> bool:

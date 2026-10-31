@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import signal
 import sys
 import typing
@@ -93,22 +94,32 @@ except:
     printBoldRed(f"Could not flush the redis db")
 
 def startTheLoggingServer():
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("logging")      # per-server logging settings, crash capture, live configuration
     from logutils.CentralLoggers import startLoggers
     startLoggers()
 
 def startTheHeartbeatServer():
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("heartbeatserver")      # per-server logging settings, crash capture, live configuration
     from monitorAllConnections.HeartbeatAndAlarmServer import startHeartbeatAndAlarmServer
     startHeartbeatAndAlarmServer()
 
 def startTheDBServer(mode : str, username : str):
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("dbserver")      # per-server logging settings, crash capture, live configuration
     from persistence.DBServer import startDBServer
     startDBServer(mode=mode, username=username)
 
 def startTheQRCodeServer(mode : str):
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("qrcodeserver")      # per-server logging settings, crash capture, live configuration
     from costhetaio.qrcodescanner.QRCodeScanningServer import startQRCodeServer
     startQRCodeServer(mode=mode)
 
 def startTheIOServer(mode : str):
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("ioserver")      # per-server logging settings, crash capture, live configuration
     # plc.vendor in ApplicationConfiguration.properties: allenbradley (pycomm3) or siemens (pyS7, S7-1515)
     from Configuration import CosThetaConfigurator
     if CosThetaConfigurator.getPlcVendor() == "siemens":
@@ -118,10 +129,14 @@ def startTheIOServer(mode : str):
     startIOServer(mode = mode)
 
 def startTheCameraServer(mode : str):
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("cameraserver")      # per-server logging settings, crash capture, live configuration
     from camera.CameraProcessorServer import startCameraServer
     startCameraServer(mode=mode)
 
 def startTheFrontendServer(mode : str, username : str, role : str):
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("frontend")      # per-server logging settings, crash capture, live configuration
     from frontend.AshokLeylandFrontEnd import startFrontEnd
     startFrontEnd(mode=mode,username=username, role=role)
 
@@ -167,13 +182,13 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
                 # p = psutil.Process(pid)
                 # p.terminate()
         except:
-            pass
+            noteSuppressed()
         # Close Redis connections
         try:
             if redisConnection:
                 redisConnection.close()
         except:
-            pass
+            noteSuppressed()
     printBoldGreen("All processes shut down. Closing terminal window.")
     sys.exit(1)
 
@@ -293,6 +308,8 @@ def printRedisQueueLengths(redis_connection):
 
 def main():
     # global showSplash
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("mainprogram")
 
     printBoldBlue("Clearing up queues. Please wait...")
 
@@ -342,7 +359,7 @@ def main():
             stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
             os.system("taskkill /f /im cmd.exe")
         except:
-            pass
+            noteSuppressed()
         sys.exit(0)
 
     printBoldBlue("Ensuring databases and file folders are created and available for saving data...")
@@ -376,7 +393,7 @@ def main():
                 try:
                     os.system("taskkill /f /im cmd.exe")
                 except:
-                    pass
+                    noteSuppressed()
                 sys.exit(0)
 
     if not successfullyLoggedIn:
@@ -385,7 +402,7 @@ def main():
         try:
             os.system("taskkill /f /im cmd.exe")
         except:
-            pass
+            noteSuppressed()
         sys.exit(0)
 
     # if currentRole == allowed_roles[2] and currentMode.upper() == "TEST":
@@ -513,7 +530,7 @@ def main():
     try:
         os.system("taskkill /f /im cmd.exe")
     except:
-        pass
+        noteSuppressed()
     time.sleep(3)
     sys.exit(0)
 

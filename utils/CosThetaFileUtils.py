@@ -1,6 +1,7 @@
 """
 File system utilities for file operations, directory management, and image saving.
 """
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import os
 import os.path
 import shutil
@@ -91,7 +92,7 @@ def listFiles(directory: str) -> List[str]:
             if os.path.isfile(os.path.join(directory, path)):
                 response.append(path)
     except (OSError, PermissionError):
-        pass
+        noteSuppressed()
     return response
 
 
@@ -200,7 +201,7 @@ def archiveFile(sourceDirectory: str, file: str) -> None:
     try:
         os.makedirs(destinationDirectory, exist_ok=True)
     except Exception:
-        pass
+        noteSuppressed()
     moveFile(sourceDirectory, destinationDirectory, file)
 
 
@@ -210,7 +211,7 @@ def forceArchiveFile(sourceDirectory: str, file: str) -> None:
     try:
         os.makedirs(destinationDirectory, exist_ok=True)
     except Exception:
-        pass
+        noteSuppressed()
     forceMoveFile(sourceDirectory, destinationDirectory, file)
 
 
@@ -220,7 +221,7 @@ def archiveFiles(sourceDirectory: str, files: List[str]) -> None:
     try:
         os.makedirs(destinationDirectory, exist_ok=True)
     except Exception:
-        pass
+        noteSuppressed()
     moveFiles(sourceDirectory, destinationDirectory, files)
 
 
@@ -230,7 +231,7 @@ def forceArchiveFiles(sourceDirectory: str, files: List[str]) -> None:
     try:
         os.makedirs(destinationDirectory, exist_ok=True)
     except Exception:
-        pass
+        noteSuppressed()
     forceMoveFiles(sourceDirectory, destinationDirectory, files)
 
 
@@ -289,7 +290,7 @@ def saveFile(img: Optional[np.ndarray], directory: str = "") -> bool:
     try:
         os.makedirs(os.path.dirname(saveFolder + '/sample.jpg'), exist_ok=True)
     except Exception:
-        pass
+        noteSuppressed()
 
     saveFileName = f"{saveFolder}/{getFileNameForSaving()}"
 

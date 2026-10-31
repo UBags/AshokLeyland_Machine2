@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from enum import IntEnum
 from typing import *
 from Configuration import *
@@ -55,7 +56,7 @@ class MachineState(IntEnum):
             state_value = int(state_str.split(':')[-1].strip('>'))
             return cls(state_value)
         except (ValueError, IndexError, KeyError):
-            pass  # Proceed to name-based parsing
+            noteSuppressed()  # Proceed to name-based parsing
 
         # Try parsing based on enum name
         try:
@@ -66,7 +67,7 @@ class MachineState(IntEnum):
                 state_name = state_str.strip()
             return cls.__members__[state_name]
         except (KeyError, IndexError):
-            pass  # Return INVALID_STATE
+            noteSuppressed()  # Return INVALID_STATE
 
         return cls.INVALID_STATE
 
@@ -92,9 +93,34 @@ MAX_SECONDS_TO_WAIT_FOR_CAMERA_FEEDBACK: float = CosThetaConfigurator.getInstanc
 
 class MachineStateMachine:
     def __init__(self):
-        self.currentState: MachineState = MachineState.READ_QR_CODE
+        self._currentState: MachineState = MachineState.READ_QR_CODE
+        self.stateChangeListener = None      # listener(oldState, newState), e.g. the IOServer's audit trail
         # Instruction text comes from properties key state.<N>.instruction, N = the state's integer value
         self._instructions: Dict[MachineState, str] = {
+            aState: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=aState.value)
+            for aState in MachineState if aState != MachineState.INVALID_STATE
+        }
+        CosThetaConfigurator.addReloadListener(self._refreshInstructions)
+
+    @property
+    def currentState(self) -> MachineState:
+        return self._currentState
+
+    @currentState.setter
+    def currentState(self, newState: MachineState) -> None:
+        old, self._currentState = getattr(self, "_currentState", None), newState
+        listener = getattr(self, "stateChangeListener", None)
+        if listener is not None and old != newState:
+            try:
+                listener(old, newState)
+            except Exception:
+                noteSuppressed()
+
+    def _refreshInstructions(self, changedKeys=None) -> None:
+        """Instruction texts are re-read when the properties file changes (state.<N>.instruction)."""
+        if changedKeys is not None and not any(k.startswith("state.") for k in changedKeys):
+            return
+        self._instructions = {
             aState: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=aState.value)
             for aState in MachineState if aState != MachineState.INVALID_STATE
         }

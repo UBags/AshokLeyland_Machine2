@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from abc import ABC, abstractmethod
 
 from logutils.SlaveLoggers import *
@@ -185,7 +186,7 @@ class GenericQueueProcessor(Thread, ABC):
                             # This call is put inside try block to ensure that exception is caught if addItem does not exist
                             self.consumer.addItem(processed_item)
                         except:
-                            pass
+                            noteSuppressed()
                     if (self.consumer is not None) and isinstance(self.consumer, list) and (processed_item is not None):
                         # SlaveConsoleLogger.getInstance().logTakeNote(GenericQueueProcessor.logSource,
                         #                                              f"Adding processed_item as {'None' if processed_item is None else 'an startingImage'} in GenericQueueProcessor.{self.name}",
@@ -196,7 +197,7 @@ class GenericQueueProcessor(Thread, ABC):
                                     # This call is put inside try block to ensure that exception is caught if addItem does not exist
                                     aConsumer.addItem(processed_item)
                                 except:
-                                    pass
+                                    noteSuppressed()
                 except Exception as e:
                     if self.debugOtherExceptions:
                         printBoldRed(f"Did not process item due to Exception {e}")

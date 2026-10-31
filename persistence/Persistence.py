@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import csv
 import base64
 from io import StringIO
@@ -205,7 +206,7 @@ def checkIfDatabaseExists(dbname: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error checking if database exists: {error}, {type(error)}")
@@ -213,7 +214,7 @@ def checkIfDatabaseExists(dbname: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         # raise error
     return exists
 
@@ -240,14 +241,14 @@ def createDatabase(db_name: str) -> None:
         aConnection.close()
     except psycopg2.errors.DuplicateDatabase:
         # Database already exists, this is fine
-        pass
+        noteSuppressed()
     except psycopg2.OperationalError as error:
         printBoldRed(f"Connection error while creating database {db_name}: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error creating database {db_name}: {error}, {type(error)}")
@@ -255,7 +256,7 @@ def createDatabase(db_name: str) -> None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         # raise error
 
 
@@ -282,7 +283,7 @@ def showAllDatabases() -> None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
 
 
 # *********************************Check Connection Statements******************************
@@ -315,7 +316,7 @@ def checkConnection(db_name: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         return False
 
 
@@ -342,14 +343,14 @@ def createSchema(db_name: str) -> None:
         aConnection.close()
     except psycopg2.errors.DuplicateSchema:
         # Schema already exists, this is fine
-        pass
+        noteSuppressed()
     except psycopg2.OperationalError as error:
         printBoldRed(f"Connection error while creating schema {schema_name}: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error creating schema {schema_name}: {error}, {type(error)}")
@@ -357,7 +358,7 @@ def createSchema(db_name: str) -> None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         # raise error
 
 
@@ -591,7 +592,7 @@ def createAllTables(db_name: str) -> None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error creating tables in schema {schema_name}: {error}, {type(error)}")
@@ -599,7 +600,7 @@ def createAllTables(db_name: str) -> None:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
 
 
 # *********************************Constants defining user actions******************************
@@ -661,7 +662,7 @@ def insertRole(db_name: str, role_name: str, module_access="") -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error inserting role {role_name}: {error}, {type(error)}")
@@ -669,7 +670,7 @@ def insertRole(db_name: str, role_name: str, module_access="") -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         # raise error
     return done
 
@@ -703,7 +704,7 @@ def checkIfRecordExists(selectStatement: str, db_name: str) -> tuple[bool, int]:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     return False, 0
 
 
@@ -819,7 +820,7 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
             printBoldRed(f"Error inserting role {role_name}: {error}, {type(error)}")
@@ -827,7 +828,7 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         # False == not executed; 0 == no existing record found
         return False, 0
     # True == executed; 0 == no record found
@@ -870,7 +871,7 @@ def getIdAndUsernamesAndPasswordsAndRolesForActiveUsers(db_name: str):
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     return resultRecords
 
 
@@ -910,7 +911,7 @@ def getIdAndUsernamesAndPasswordsForInactiveUsers(db_name: str) -> List[List]:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     return resultRecords
 
 
@@ -950,7 +951,7 @@ def getIdAndUsernamesAndPasswordsForAllUsers(db_name: str) -> List[List]:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
     return resultRecords
 
 
@@ -982,7 +983,7 @@ def updatePassword(username: str, password: str, db_name: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         return False
     return True
 
@@ -1015,7 +1016,7 @@ def updateRole(username: str, role_name: str, db_name: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         return False
     return True
 
@@ -1048,7 +1049,7 @@ def inactivateUserInDatabase(username: str, db_name: str) -> bool:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         return False
     return True
 
@@ -1081,7 +1082,7 @@ def activateInactiveUserInDatabase(username: str, db_name: str):
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         return False
     return True
 
@@ -1801,12 +1802,12 @@ def getDataByModelName(modelName: str, db_name: str, debug: bool = False) -> str
             try:
                 aCursor.close()
             except:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         csv_output.close()
     if debug:
         printBoldYellow(csv_string)
@@ -2024,12 +2025,12 @@ def getDataByModelNameAndDateLimits(
             try:
                 aCursor.close()
             except:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         csv_output.close()
 
 
@@ -2085,12 +2086,12 @@ def getComponentsProducedToday(db_name: str, debug: bool = False) -> int:
             try:
                 aCursor.close()
             except Exception:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
     return count
 
 
@@ -2140,12 +2141,12 @@ def getComponentsProducedThisWeek(db_name: str, debug: bool = False) -> int:
             try:
                 aCursor.close()
             except Exception:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
     return count
 
 
@@ -2195,12 +2196,12 @@ def getComponentsProducedThisMonth(db_name: str, debug: bool = False) -> int:
             try:
                 aCursor.close()
             except Exception:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
     return count
 
 
@@ -2405,12 +2406,12 @@ def getDataByDateLimits(
             try:
                 aCursor.close()
             except:
-                pass
+                noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
             except:
-                pass
+                noteSuppressed()
         csv_output.close()
 
 
@@ -2517,12 +2518,12 @@ def reindexHubAndDiscAssemblyData(db_name: str, verbose: bool = True) -> bool:
             try:
                 cursor.close()
             except:
-                pass
+                noteSuppressed()
         if connection:
             try:
                 connection.close()
             except:
-                pass
+                noteSuppressed()
 
     return success
 
@@ -2666,7 +2667,7 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
         return False
 
 
@@ -2703,7 +2704,7 @@ def getMachineSettings(db_name: str) -> dict:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
         return {}
 
 
@@ -2740,7 +2741,7 @@ def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torqu
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
         return False
 
 
@@ -2763,7 +2764,7 @@ def getMachineSettingsHistory(db_name: str, limit: int = 10) -> list:
             try:
                 aConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
         return []
 
 # ************************* END - MACHINE_SETTINGS TABLE ******************************************

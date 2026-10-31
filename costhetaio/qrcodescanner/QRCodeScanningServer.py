@@ -1,5 +1,6 @@
 ### Understanding the Requirement
 
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import re
 import copy
 from typing import Union, Any
@@ -387,7 +388,7 @@ class QRCodeScanningServer:
             try:
                 self.qrCodeSerialConnection.close()
             except Exception:
-                pass
+                noteSuppressed()
             self.qrCodeSerialConnection = None
         self.connectionAttempts += 1
         self.connected = False
@@ -507,7 +508,7 @@ class QRCodeScanningServer:
                 try:
                     objRef.qrCodeSerialConnection.close()
                 except Exception:
-                    pass
+                    noteSuppressed()
                 objRef.qrCodeSerialConnection = None
         self.monitorStopThread = Thread(name=f'Monitor Stop Thread - {self.name}',
                                         target=lookForStop, daemon=True)

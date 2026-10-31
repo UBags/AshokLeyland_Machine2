@@ -1,6 +1,7 @@
 """
 Utility class for clearing Redis queues used by the application.
 """
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from typing import List, Optional
 
 from redis import Redis
@@ -109,7 +110,7 @@ class ClearQueues:
                 self.redisConnection.xtrim(queue, 0)
                 cleared += 1
             except Exception:
-                pass
+                noteSuppressed()
 
         return cleared
 

@@ -22,9 +22,11 @@ Every parameter read is recorded; describeVisionParameters() lists them and flag
 built-in defaults (CameraProcessorServer logs this at start-up so a site re-tune is always visible in the logs).
 """
 
+import sys
 from typing import Any, Dict, List, Sequence, Tuple
 
 _registry: Dict[str, Dict[str, Any]] = {}   # key -> {"default", "value", "source"}
+_modules = set()                              # modules that declared parameters (re-bound on a live reload)
 
 
 def machinePrefix() -> str:
@@ -36,7 +38,15 @@ def machinePrefix() -> str:
         return ""
 
 
+def _noteCaller() -> None:
+    try:
+        _modules.add(sys._getframe(3).f_globals.get("__name__"))     # the module that called vInt/vFloat/...
+    except Exception:
+        pass
+
+
 def _raw(key: str):
+    _noteCaller()
     try:
         from Configuration import CosThetaConfigurator
         value = CosThetaConfigurator.getVisionValue(key, default=None)      # <vendor>.<key>
@@ -190,3 +200,80 @@ def describeVisionParameters(onlyChanged: bool = False) -> List[str]:
 
 def getRegistry() -> Dict[str, Dict[str, Any]]:
     return dict(_registry)
+
+
+# ------------------------------------------------------------------ live reload
+# When ApplicationConfiguration.properties changes, every module-level or class-level constant declared as
+#     NAME = vInt("vision.x", default)        (or vFloat / vBool / vStr / vTuple / vList / vPoints)
+# is re-evaluated and re-bound in its module / class, so the next picture is checked with the new value - no restart.
+# Not refreshed: copies made with "from module import NAME" in another module, and values derived from these
+# constants at import time (computed once). The camera server log lists every value changed.
+_FUNCS = {"vInt": vInt, "vFloat": vFloat, "vBool": vBool, "vStr": vStr, "vTuple": vTuple, "vList": vList,
+          "vPoints": vPoints}
+
+
+def _declarations(module):
+    """(owner object, attribute name, function name, key) for each NAME = vX("key", ...) at module / class level."""
+    import ast
+    import inspect
+    try:
+        tree = ast.parse(inspect.getsource(module))
+    except Exception:
+        return []
+    found = []
+
+    def scan(body, owner):
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                inner = getattr(owner, node.name, None)
+                if inner is not None:
+                    scan(node.body, inner)
+                continue
+            value = getattr(node, "value", None)
+            targets = node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+            if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id in _FUNCS
+                    and value.args and isinstance(value.args[0], ast.Constant) and isinstance(value.args[0].value, str)):
+                for t in targets:
+                    if isinstance(t, ast.Name):
+                        found.append((owner, t.id, value.func.id, value.args[0].value))
+    scan(tree.body, module)
+    return found
+
+
+def reloadVisionParameters(changedKeys=None) -> List[str]:
+    """Re-bind the vision constants to the values now in the properties file. Returns 'module.NAME: old -> new'."""
+    prefix = machinePrefix()
+    if changedKeys is not None and not any(k.startswith(f"{prefix}vision.") for k in changedKeys):
+        return []
+    changes = []
+    for name in sorted(m for m in _modules if m):
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        for owner, attr, fn, key in _declarations(module):
+            if key not in _registry:
+                continue
+            old = getattr(owner, attr, None)
+            new = _FUNCS[fn](key, _registry[key]["default"])
+            if new != old:
+                setattr(owner, attr, new)
+                changes.append(f"{getattr(owner, '__name__', name)}.{attr} [{prefix}{key}]: {old!r} -> {new!r}")
+    if changes:
+        message = "Vision parameters changed while running:\n  " + "\n  ".join(changes)
+        print(message)
+        try:
+            from logutils.SlaveLoggers import SlaveFileLogger
+            from logutils.Logger import Logger
+            from logutils.LogSettings import getLogProcess
+            if getLogProcess():
+                SlaveFileLogger.getInstance().logTakeAction("camera.VisionConfig", message, Logger.ISSUE)
+        except Exception:
+            pass
+    return changes
+
+
+try:
+    from Configuration import CosThetaConfigurator as _Cfg
+    _Cfg.addReloadListener(reloadVisionParameters)
+except Exception:
+    pass

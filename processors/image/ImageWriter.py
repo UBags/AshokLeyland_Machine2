@@ -1,5 +1,6 @@
 # Writes the images that have been processed by the Image Processor.
 # Uses the ffmpeg library to write compressed images at good speed
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import threading
 
 import ffmpeg
@@ -23,7 +24,7 @@ class ImageWriter(GenericQueueProcessor):
 		try :
 			os.makedirs(os.path.dirname(self.path))
 		except Exception as e:
-			pass
+			noteSuppressed()
 		self.fps = fps 	# Though fps does not mean anything for a writer,
 						# this is being specified so that an appropriate sleep time can be given
 						# to enable other threads to get CPU time

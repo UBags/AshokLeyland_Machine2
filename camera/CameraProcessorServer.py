@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import copy
 import time
 from threading import Thread
@@ -179,7 +180,7 @@ def resetResults():
             resultsFromPictureAssessment = [[INVALID_RESULT, None],[INVALID_RESULT, None],[INVALID_RESULT, None]]
             resultsStatus = [False, False, False]
         except:
-            pass
+            noteSuppressed()
         resultsLock.release()
     # printBold("Exiting reset results")
 
@@ -198,7 +199,7 @@ def addAResult(anImage : np.ndarray, aResult : bool, index: int):
             resultsFromPictureAssessment[index] = (aResult, anImage)
             resultsStatus[index] = aResult
         except:
-            pass
+            noteSuppressed()
 
 
 # *******************************Results Tracking End*********************************************
@@ -221,6 +222,27 @@ class TakePictures(GenericQueueProcessor):
         self.cameraPwd = CosThetaConfigurator.getInstance().getCameraPwd()
         self.gapBetweenPictures = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
         self.camera = RTSPCam(IP=self.cameraIP, port=self.cameraPort, uid=self.cameraUID, password=self.cameraPwd, name=self.cameraID)
+        CosThetaConfigurator.addReloadListener(self._applyLiveConfiguration)
+
+    def _applyLiveConfiguration(self, changedKeys) -> None:
+        """Live configuration: the gap between pictures and the missing-frame limit apply at once; a change to the
+        camera connection (IP, port, user, password, id) needs a restart of the camera server."""
+        prefix = CosThetaConfigurator.getVisionKeyPrefix()
+        gap = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
+        if gap != self.gapBetweenPictures:
+            self.gapBetweenPictures = gap
+            printBoldYellow(f"Configuration applied while running: gap between pictures = {gap} s")
+        try:
+            limit = CosThetaConfigurator.getInstance().getMaxAllowedNoneFrameCountsInCamera()
+            if getattr(self.camera, "maxAllowedNoneFrameCountsInCamera", limit) != limit:
+                self.camera.maxAllowedNoneFrameCountsInCamera = limit
+                printBoldYellow(f"Configuration applied while running: max allowed missing frames = {limit}")
+        except Exception:
+            noteSuppressed()
+        connection = [k for k in changedKeys if k.startswith(f"{prefix}vision.camera.")]
+        if connection:
+            printBoldRed(f"Camera connection settings changed ({', '.join(connection)}): restart the camera server "
+                         f"for them to take effect")
         self.redisConnectionForHeartbeat = None
         self.clientRedisConnectedForHeartbeat = False
         self.connectToRedisForHeartbeat()
@@ -342,7 +364,7 @@ class TakePictures(GenericQueueProcessor):
                 try:
                     time.sleep(cameraHeartbeatGap)
                 except:
-                    pass
+                    noteSuppressed()
         heartbeatThread = threading.Thread(name=f"Camera Heartbeat Thread", target=reportHeartbeat, args=(), daemon = True)
         heartbeatThread.start()
 

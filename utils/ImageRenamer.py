@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import os
 import sys
 from pathlib import Path
@@ -194,7 +195,7 @@ def rename_images(folder_path: str, prefix: str, auto_confirm: bool = False):
                 if os.path.exists(temp_path):
                     os.rename(temp_path, old_path)
             except:
-                pass
+                noteSuppressed()
 
         print("Rollback attempted. Please check your files.")
 

@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from PySide6 import QtCore
 from PySide6.QtGui import QLinearGradient
 from PySide6.QtWidgets import QWidget, QHBoxLayout
@@ -40,7 +41,7 @@ class CosThetaControlBar(QWidget):
             x_w = self.offset.x()
             y_w = self.offset.y()
             self.move(x-x_w, y-y_w)
-        except: pass
+        except: noteSuppressed()
 
     def paintEvent(self, ev):
         painter = QPainter(self)

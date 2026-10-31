@@ -1,6 +1,7 @@
 """
 IP/Network utilities for checking host connectivity.
 """
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from icmplib import ping
 from icmplib.exceptions import NameLookupError
 
@@ -101,8 +102,8 @@ def checkIPWithStats(hostname: str, count: int = 8) -> dict:
             result['max_rtt'] = host.max_rtt
 
     except NameLookupError:
-        pass
+        noteSuppressed()
     except Exception:
-        pass
+        noteSuppressed()
 
     return result

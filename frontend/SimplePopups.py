@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import FreeSimpleGUI as sg
 from persistence.Persistence import *
 from BaseUtils import *
@@ -728,7 +729,7 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                                     #                   remarks=f"Could not create user {username} with role {role}")
                                     sg.theme('LightBlue3')
                                 except:
-                                    pass
+                                    noteSuppressed()
                         except:
                             username = ''
                             password = ''
@@ -840,7 +841,7 @@ def login(modal: bool = True):
                             sg.theme("LightBlue2")
                             # insertAuditRecord(db_name=db_name, action=LOGGED_IN, user=username, role=rolename, remarks=f"Successfully logged in")
                         except:
-                            pass
+                            noteSuppressed()
                     else:
                         try:
                             showErrorMessage(
@@ -849,7 +850,7 @@ def login(modal: bool = True):
                             #                   remarks=f"Could not log into system due to wrong password")
                             sg.theme("LightBlue2")
                         except:
-                            pass
+                            noteSuppressed()
                         username: str = ''
                         password: str = ''
                         rolename: str = ''
@@ -919,7 +920,7 @@ def changePasswordForSelf(currentUser: str, currentRole: str, modal: bool = True
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OWN_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed own password")
                     except:
-                        pass
+                        noteSuppressed()
                     break
                 elif len(password1) < 6:
                     submitted = False
@@ -1076,7 +1077,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OTHERS_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed password for {chosenUser}")
                     except:
-                        pass
+                        noteSuppressed()
                     break
     window.close()
     aWindowIsInProgress = False
@@ -1157,7 +1158,7 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
                         #                   remarks=f"Successfully inactivated user {username}")
                         progressBar(f"Inactivating user {username}", theme="LightBrown6")
                     except:
-                        pass
+                        noteSuppressed()
                     break
                 else:
                     showErrorMessage(f"Leaving {username} activated", auto_close_duration=2)

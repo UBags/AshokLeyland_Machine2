@@ -181,3 +181,71 @@ def printInColor(message: str, messageType: int) -> None:
         printBoldRed(message, includeTime=False)
     else:
         printBold(message, includeTime=False)
+
+# ------------------------------------------------------------------ mirror the console prints into the log file
+# (log.mirror.prints.to.file, see logutils/LogSettings.py). The console output is unchanged. Active only in a
+# server process (after setLogProcess); command-line tools and tests that never call it are not affected.
+# Level of a mirrored line: red = CONSIDER_ACTION, yellow = TAKE_NOTE, grey (printLight) = DEBUG, others = INFO.
+import sys as _sys
+import threading as _threading
+
+_mirrorState = _threading.local()
+_MIRROR_LEVELS = {
+    "printRed": "CONSIDERACTION", "printBoldRed": "CONSIDERACTION",
+    "printYellow": "TAKENOTE", "printBoldYellow": "TAKENOTE",
+    "printGreen": "INFO", "printBoldGreen": "INFO", "printBlue": "INFO", "printBoldBlue": "INFO",
+    "printBold": "INFO", "printPlain": "INFO",
+    "printLight": "DEBUG",
+}
+
+
+def _mirror(levelName: str, args) -> None:
+    if getattr(_mirrorState, "busy", False):
+        return
+    _mirrorState.busy = True
+    try:
+        from logutils.LogSettings import mirrorPrintsToFile
+        if not mirrorPrintsToFile():
+            return
+        from logutils.Logger import Logger
+        from logutils.SlaveLoggers import SlaveFileLogger
+        from logutils.AbstractSlaveLogger import callerOverride
+        try:
+            frame = _sys._getframe(2)
+            source = frame.f_globals.get("__name__", "")
+            callerOverride.value = (frame.f_code.co_name, frame.f_lineno)
+        except Exception:
+            source = ""
+        text = " ".join(str(a) for a in args)
+        try:
+            SlaveFileLogger.getInstance().logMessage(getattr(Logger, levelName), source, text,
+                                                     Logger.PROBLEM if levelName == "CONSIDERACTION" else Logger.GENERAL)
+        finally:
+            callerOverride.value = None
+    except Exception:
+        pass
+    finally:
+        _mirrorState.busy = False
+
+
+def _mirrored(function, levelName: str):
+    def wrapper(*args: Any, includeTime: bool = True) -> None:
+        function(*args, includeTime=includeTime)
+        _mirror(levelName, args)
+    wrapper.__name__, wrapper.__doc__ = function.__name__, function.__doc__
+    return wrapper
+
+
+for _name, _level in _MIRROR_LEVELS.items():
+    globals()[_name] = _mirrored(globals()[_name], _level)
+
+_printInColorPlain = printInColor
+
+
+def printInColor(message: str, messageType: int) -> None:      # noqa: F811 - log output itself: never mirrored
+    previous = getattr(_mirrorState, "busy", False)
+    _mirrorState.busy = True
+    try:
+        _printInColorPlain(message, messageType)
+    finally:
+        _mirrorState.busy = previous

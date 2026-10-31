@@ -28,7 +28,7 @@ class SlaveFileLogger(SlaveLogger):
     _lock: threading.Lock = threading.Lock()
     logSource: str = ""
 
-    def __init__(self, max_size: int = 256, **kwargs) -> None:
+    def __init__(self, max_size: int = 5000, **kwargs) -> None:
         if SlaveFileLogger._instance is not None:
             raise Exception(
                 f"{getFullyQualifiedName(__file__, __class__)} is a singleton class! "
@@ -79,16 +79,21 @@ class SlaveFileLogger(SlaveLogger):
         formatted_message = self.makeLoggingMessage(
             Logger.getLoggingLevelText(messageLogLevel),
             source,
-            message,
+            self.contextualise(message),
             messageType
         )
+        return self.enqueue(formatted_message)   # a full queue is counted and reported, not silently lost
 
-        try:
-            self.processingQueue.put_nowait(formatted_message)
-            return True
-        except Exception:
-            # Queue is full - lose the message rather than block
+
+    def logAudit(self, source: str, message: str) -> bool:
+        """PLC audit trail (log.audit.plc): written whatever the logging level."""
+        if self.stopped:
             return False
+        return self.enqueue(self.makeLoggingMessage("AUDIT", source, self.contextualise(message), Logger.GENERAL))
+
+    def logCrash(self, source: str, message: str) -> bool:
+        """Uncaught exception / crash: written whatever the logging level (and even after a stop)."""
+        return self.enqueue(self.makeLoggingMessage("CRASH", source, self.contextualise(message), Logger.PROBLEM))
 
 
 class SlaveConsoleLogger(SlaveLogger):
@@ -103,7 +108,7 @@ class SlaveConsoleLogger(SlaveLogger):
     _lock: threading.Lock = threading.Lock()
     logSource: str = ""
 
-    def __init__(self, max_size: int = 256, **kwargs) -> None:
+    def __init__(self, max_size: int = 5000, **kwargs) -> None:
         if SlaveConsoleLogger._instance is not None:
             raise Exception(
                 f"{getFullyQualifiedName(__file__, __class__)} is a singleton class! "
@@ -155,16 +160,10 @@ class SlaveConsoleLogger(SlaveLogger):
         formatted_message = self.makeLoggingMessage(
             Logger.getLoggingLevelText(messageLogLevel),
             source,
-            message,
+            self.contextualise(message),
             messageType
         )
-
-        try:
-            self.processingQueue.put_nowait(formatted_message)
-            return True
-        except Exception:
-            # Queue is full - lose the message rather than block
-            return False
+        return self.enqueue(formatted_message)   # a full queue is counted and reported, not silently lost
 
 
 def stopSlaveLoggingThreads() -> None:

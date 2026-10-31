@@ -62,7 +62,13 @@ class MasterFileLogger(Thread):
 
         self.connectToRedis()
         self.createLoggingFile()
-        self.clearQueue()
+        # Messages sent before this logger started (other servers starting up, or still queued from the previous
+        # run) are written, not discarded.
+        self._discardStaleQueuedMessages()
+        waiting = self._getMessageCount()
+        if waiting and self.fileHandle:
+            self.fileHandle.write(f"{getCurrentTime()} : MasterFileLogger started; {waiting} message(s) were queued "
+                                  f"before it started and follow\n")
         self.start()
 
         SlaveConsoleLogger.getInstance().logTakeNote(
@@ -77,10 +83,29 @@ class MasterFileLogger(Thread):
             Logger.SUCCESS
         )
 
+    def _discardStaleQueuedMessages(self) -> None:
+        """Queued messages older than log.file.keep.queued.minutes (default 10) are left over from an earlier run or
+        from tests run without the logging server: they are counted in the new file, not written."""
+        try:
+            minutes = float(CosThetaConfigurator.getValue("log.file.keep.queued.minutes", "10") or 10)
+            if not self.redisConnection:
+                return
+            before = self._getMessageCount()
+            cutoffMs = int((time.time() - minutes * 60) * 1000)
+            self.redisConnection.xtrim(self.loggingQ, minid=f"{cutoffMs}-0", approximate=False)
+            discarded = before - self._getMessageCount()
+            if discarded and self.fileHandle:
+                self.fileHandle.write(f"{getCurrentTime()} : {discarded} queued log message(s) older than {minutes:g} "
+                                      f"minutes (an earlier run / tests) were not written\n")
+        except Exception as e:
+            print(f"Could not check for stale queued log messages: {e}")
+
     def createLoggingFile(self) -> None:
-        """Create a new log file with timestamp in filename."""
+        """Create a new log file with timestamp in filename; keep only the newest backuplogs.count files."""
         suffix = CosThetaConfigurator.getInstance().getFileLoggingSuffix()
         self.fileName = f"{self.loggingDirectory}/{getCurrentTime()}.{suffix}"
+        self.fileDate = time.strftime("%Y-%m-%d")
+        self._removeOldLogFiles(suffix)
 
         try:
             self.fileHandle = open(self.fileName, 'a', encoding='utf-8')
@@ -141,7 +166,10 @@ class MasterFileLogger(Thread):
             pass
         return 0
 
-    def _getData(self) -> Optional[dict]:
+    BATCH: int = 200
+    STOP_CHECK_INTERVAL: float = 0.5        # s between checks of the stop queue (each check can take ~100 ms)
+
+    def _getData(self) -> Optional[list]:
         """
         Get data from Redis queue.
 
@@ -152,23 +180,15 @@ class MasterFileLogger(Thread):
             if not self.redisConnection:
                 return None
 
-            resp = self.redisConnection.xread(
-                {self.loggingQ: 0},
-                count=1,
-                block=1000
-            )
-
+            # Up to BATCH messages per read (one message per read limited the logger to ~50 lines/s)
+            resp = self.redisConnection.xread({self.loggingQ: 0}, count=MasterFileLogger.BATCH, block=1000)
             if resp:
                 key, messages = resp[0]
-                last_id, data = messages[0]
-
-                # Decode keys
-                newData = {}
-                for k in data.keys():
-                    newData[k.decode("utf-8")] = data[k]
-
-                self.redisConnection.xdel(self.loggingQ, last_id)
-                return newData
+                batch = []
+                for _id, data in messages:
+                    batch.append({k.decode("utf-8"): v for k, v in data.items()})
+                self.redisConnection.xdel(self.loggingQ, *[_id for _id, _ in messages])
+                return batch
 
         except Exception as e:
             SlaveConsoleLogger.getInstance().logTakeAction(
@@ -200,6 +220,36 @@ class MasterFileLogger(Thread):
 
         return False
 
+    def _removeOldLogFiles(self, suffix: str) -> None:
+        """Retention: keep the newest backuplogs.count log files (the one being opened included)."""
+        try:
+            keep = max(1, int(CosThetaConfigurator.getInstance().getBackupLogsCount()))
+            files = sorted((f for f in os.listdir(self.loggingDirectory) if f.endswith(f".{suffix}")),
+                           key=lambda f: os.path.getmtime(os.path.join(self.loggingDirectory, f)))
+            for old in files[:max(0, len(files) - (keep - 1))]:
+                os.remove(os.path.join(self.loggingDirectory, old))
+        except Exception as e:
+            print(f"Could not remove old log files: {e}")
+
+    def _rotateIfNeeded(self) -> None:
+        """New file at midnight (log.file.rotate.daily) or when the file exceeds log.file.max.size.mb."""
+        try:
+            daily = str(CosThetaConfigurator.getValue("log.file.rotate.daily", "True")).strip().lower() in ("true", "1", "yes", "on")
+            maxMb = float(CosThetaConfigurator.getValue("log.file.max.size.mb", "50") or 50)
+            newDay = daily and time.strftime("%Y-%m-%d") != getattr(self, "fileDate", time.strftime("%Y-%m-%d"))
+            tooBig = self.fileHandle is not None and maxMb > 0 and self.fileHandle.tell() > maxMb * 1024 * 1024
+            if newDay or tooBig:
+                old = self.fileName
+                if self.fileHandle:
+                    self.fileHandle.write(f"{getCurrentTime()} : continued in a new log file "
+                                          f"({'new day' if newDay else f'size limit {maxMb} MB'})\n")
+                self._safeCloseFile()
+                self.createLoggingFile()
+                if self.fileHandle:
+                    self.fileHandle.write(f"{getCurrentTime()} : continued from {os.path.basename(old)}\n")
+        except Exception as e:
+            print(f"Log rotation check failed: {e}")
+
     def _writeToFile(self, data: str) -> bool:
         """
         Write data to log file.
@@ -210,6 +260,7 @@ class MasterFileLogger(Thread):
         Returns:
             True if successful, False otherwise
         """
+        self._rotateIfNeeded()
         if not self.fileHandle:
             return False
 
@@ -257,28 +308,32 @@ class MasterFileLogger(Thread):
         count: int = 0
         flushAfter: int = 3
 
+        lastStopCheck = 0.0
         while not (self.stopped and self._getMessageCount() == 0):
-            aMessage = self._getData()
-
-            if aMessage and MESSAGE_KEY in aMessage:
+            for aMessage in (self._getData() or []):
+                if MESSAGE_KEY not in aMessage:
+                    continue
                 data = aMessage[MESSAGE_KEY]
                 if isinstance(data, bytes):
                     data = data.decode('utf-8')
-                data = data + "\n"
-
-                if self._writeToFile(data):
+                if self._writeToFile(data + "\n"):
                     count += 1
-                    if count % flushAfter == 0:
-                        self._flushFile()
-                        count = 0
 
-            # Check for stop command
-            if self._checkStopCommand():
+            # Check for stop command (at most every STOP_CHECK_INTERVAL)
+            if time.time() - lastStopCheck < MasterFileLogger.STOP_CHECK_INTERVAL:
+                stopNow = False
+            else:
+                lastStopCheck = time.time()
+                stopNow = self._checkStopCommand()
+            if stopNow:
                 printBoldRed(f"Just after getting Stop Command in {MasterFileLogger.logSource}")
                 self.stop()
 
-            # Sleep if queue is empty
+            # Queue empty: flush (so the file is always up to date for whoever reads it) and wait
             if self._getMessageCount() == 0:
+                if count:
+                    self._flushFile()
+                    count = 0
                 time.sleep(timeout)
 
         # Final cleanup
@@ -287,8 +342,7 @@ class MasterFileLogger(Thread):
                 self.fileHandle.write(f"{getCurrentTime()} : Closing down MasterFileLogger\n")
             except Exception:
                 pass
-        self._safeCloseFile()
-        self.clearQueue()
+        self._safeCloseFile()     # (the loop above has written every queued message before stopping)
 
     def run(self) -> None:
         """Thread entry point."""
@@ -471,6 +525,8 @@ class MasterConsoleLogger(Thread):
 
 def startLoggers() -> None:
     """Start both master loggers and wait for them to complete."""
+    from logutils.LogSettings import setLogProcess
+    setLogProcess("logging")                 # the logging server itself: its prints are not mirrored
     mcl = MasterConsoleLogger()
     mfl = MasterFileLogger()
     printBoldBlue("******************")

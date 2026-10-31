@@ -89,6 +89,8 @@ class DataPersistence():
 
     def __init__(self, mode: str, username: str | None, **kwargs) -> None:
         super().__init__()
+        from logutils.LogSettings import setLogProcess
+        setLogProcess("dbserver")         # per-server log level, crash capture, live configuration
         self.mode : str = mode
         self.username : str = username
         DataPersistence.logSource = getFullyQualifiedName(__file__, __class__)
@@ -370,6 +372,8 @@ class DataPersistence():
                                                           Logger.SUCCESS)
                     # tStamp = getYMDHMSmFormatFromTimeDotTime(timeOfMessage)[:-4]
                     tStamp = datetime.fromtimestamp(float(timeOfMessage)).strftime('%Y-%m-%d %H:%M:%S')
+                    from logutils.LogSettings import setLocalCycleContext
+                    setLocalCycleContext(qrCode)      # this record's QR code on every log line while storing it
                     qrCodeExists = checkIfQRCodeExists(qr_code=qrCode, db_name=getDatabaseName())
 
                     # print("=" * 80)

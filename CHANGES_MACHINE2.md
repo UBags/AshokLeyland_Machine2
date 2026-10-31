@@ -583,3 +583,97 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - The verifier reports ALL EQUIVALENT.
   - `ApplicationConfiguration.Machine1/Machine2.properties` were re-copied (`plc.vendor` allenbradley / siemens).
   - Integrated runs (both PLCs): DB rows unchanged. FE dry run: 55/55.
+
+## 26. Logging strengthened (A–G), per-server logging settings, live configuration (2026-11-01)
+
+**Findings that led to this.**
+- The IOServer's `self.logger` was pycomm3's logger, set to CRITICAL with no handler, so its messages were lost.
+- About 2,350 coloured prints reached the console only.
+- Messages were dropped silently, both when the 256-entry queue was full and when Redis was down.
+- Messages queued before the logging server started were cleared.
+- Uncaught exceptions in threads were not recorded.
+- Log lines had no QR code or cycle number.
+- There was one log file per start, never rotated (`backuplogs.count` was unused).
+- 150 `except: pass` blocks left no trace.
+
+**A. IOServer messages and the PLC audit trail.**
+- `self.logger` is now an adapter that writes to the central log file at the matching level. pycomm3 stays silent.
+- The PLC audit trail (`log.audit.plc`) is written whatever the logging level, each line with `[QR=... cycle=N]`. It records:
+  - every PC→PLC write (value, or the error);
+  - every PLC→PC trigger seen raised and every value read, once per state, not every 0.2 s;
+  - every state change, via a `stateChangeListener` on `MachineStateMachine`;
+  - "CYCLE n START" with the QR code.
+- The connection-status toggle is included only with `log.audit.plc.connection.toggle=True`.
+
+**B. Console prints go to the file too.** `printBold…` and the other coloured prints are also written to the log file (`log.mirror.prints.to.file`):
+- red = CONSIDER_ACTION, yellow = TAKE_NOTE, grey = DEBUG, others = INFO;
+- the real caller's function and line are recorded;
+- the console output itself is unchanged;
+- this applies only in server processes, so command-line tools are unaffected.
+
+**C. No silent loss.**
+- The in-process queue holds 5,000 messages.
+- Messages that can't be sent are kept, up to 20,000, and re-sent when Redis is back.
+- Any message that has to be dropped is counted and reported in the log ("LOG MESSAGES LOST …").
+- The logging server writes messages queued before it started. Only ones older than `log.file.keep.queued.minutes` (10) are counted and not written; these are leftovers from an earlier run or from tests.
+- It still writes everything queued before it stops.
+- **Fixed on the way:** the logging server and each server's logger checked the stop queue after every message, with a blocking `XREAD` that Redis resolves on its 100 ms timer. That limited logging to about 50 lines per second (5,000 lines took over 90 s). The check now runs at most every 0.5 s, and the logging server reads up to 200 messages at a time. The file is flushed whenever the queue is empty, so it is always current.
+
+**D. Crash capture.**
+- `sys.excepthook` and `threading.excepthook` write uncaught exceptions to the log file with the full traceback. The thread name is included, and the line notes that the thread has stopped.
+- `faulthandler` writes hard crashes to `logs/faults/<server>-<pid>.log`.
+
+**E. Cycle context.**
+- When the IOServer accepts a QR code it publishes `[QR=… cycle=N]` (Redis key `log:cycleContext`).
+- Every line any server writes then carries it, together with `<server>`.
+- The DB server uses the QR code of the record it is storing.
+
+**F. Log file rotation.**
+- A new file starts at midnight (`log.file.rotate.daily`) and when the file exceeds `log.file.max.size.mb` (50). Each file notes where it continues and where it continued from.
+- The newest `backuplogs.count` files are kept.
+
+**G. Suppressed exceptions.** In 150 places across 23 files, `except …: pass` became `noteSuppressed()` (`utils/SuppressedExceptions.py`):
+- the exception is still ignored;
+- the log gets one DEBUG line per place, then one every 100th time, with the count;
+- controlled by `log.suppressed.exceptions`.
+
+Not changed: the vision modules (they are checked by the equivalence verifier), `logutils`, and the standalone Siemens tools.
+
+**Per-server logging settings** (`ApplicationConfiguration.properties`, all applied while running):
+- `log.file.level.<server>` and `log.console.level.<server>` for `mainprogram`, `ioserver`, `cameraserver`, `qrcodeserver`, `frontend`, `dbserver` and `heartbeatserver`. An empty value means the global level.
+- In PRODUCTION mode, a level below CONSIDER_ACTION is raised to CONSIDER_ACTION, as `checkIntegrity` requires for the global levels.
+- Each server identifies itself at start-up (`setLogProcess`, in each `MainProgram.startThe…` function and in the IOServer, DB server and frontend).
+
+**Live configuration.**
+- The properties file is re-read when it changes. Checks happen at most every `config.reload.check.interval.sec` (2 s), both from `getValue()` and from a watcher thread in each server.
+- A new version is applied only if it parses and keeps at least 80% of the keys. A file caught half-written by an editor is skipped, and the next check picks it up.
+- Every change is logged; password values are not.
+- Listeners (`CosThetaConfigurator.addReloadListener`) refresh values cached at start-up:
+
+  | Area | Live behaviour |
+  |---|---|
+  | Logging levels and options | applied while running |
+  | Vision constants | re-bound in their modules and classes (`VisionConfig.reloadVisionParameters`); the next picture uses them, and each change is logged |
+  | State instructions | applied while running |
+  | IOServer | PLC read, write and connection-check intervals, the OK→Done delay and the disconnection-log interval are applied; a change to tag names, the PLC IP or the vendor logs "restart needed" |
+  | Camera server | the gap between pictures and the missing-frame limit are applied; a change to the camera connection logs "restart needed" |
+  | Image target sizes and machine settings | already read at use, so live |
+
+- `COSTHETA_CONFIG_FILE` can point to another properties file; the dry runs use this.
+
+**New dry run.** `test/*_dryrun/DryRun_Logging_And_Live_Config.py`, 34 checks (L1–L12). It runs on a copy of the properties file, edited while the code is running, with the real central logger and the real IOServer.
+- **Also.**
+  - The IOServer clears the previous run's cycle context at start.
+  - `ApplicationConfiguration.Machine1/Machine2.properties` were re-copied.
+- **Verified:**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Logging dry run | 34/34 | 34/34 |
+  | Fault scenarios | 55/55 | 56/56 |
+  | Two full cycles | exact | exact |
+  | Mock-PLC test window | 14/14 | 14/14 |
+  | Integrated DB rows | unchanged | unchanged |
+  | DB dry run | 49/49 | |
+  | FE dry run | 55/55 | |
+  | Vision verifier | ALL EQUIVALENT | |

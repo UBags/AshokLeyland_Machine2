@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from datetime import datetime
 from typing import Union, Optional
 
@@ -248,6 +249,8 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def __init__(self, mode : str = 'Test', username : str = 'default', role : str = 'Operator'):
         super().__init__()
+        from logutils.LogSettings import setLogProcess
+        setLogProcess("frontend")         # per-server log level, crash capture, live configuration
 
         self.mode = mode
         setDatabaseName(mode=self.mode, createDB=False)
@@ -762,7 +765,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                 thread.wait()
                 thread.deleteLater()
         except:
-            pass
+            noteSuppressed()
 
     def goToClose(self):
         # print("Entered goToClose()")
@@ -774,7 +777,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 pass
             except:
-                pass
+                noteSuppressed()
 
             AshokLeylandFrontEnd.shutdownThreads = True
             sendStopToAll()
@@ -790,7 +793,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                 self.heartbeatWorker.stop()
                 self.stopAndCleanThread(self.heartbeatThread)
             except Exception as e:
-                pass
+                noteSuppressed()
             self.stopAndCleanThread(self.timeDurationUpdateThread)
             self.stopAndCleanThread(self.getQRCodeThread)
             self.stopAndCleanThread(self.getPictureAndResultThread)
@@ -829,7 +832,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 pass
             except:
-                pass
+                noteSuppressed()
             AshokLeylandFrontEnd.shutdownThreads = True
             sendStopToAll()
             endSplash = CosThetaExitingSplashScreen(self.splashScreenPath,
@@ -838,13 +841,13 @@ class AshokLeylandFrontEnd(QMainWindow):
                 try:
                     self.largeImageWindow.close()
                 except Exception as e:
-                    pass
+                    noteSuppressed()
             endSplash.display()
             try:
                 self.heartbeatWorker.stop()
                 self.stopAndCleanThread(self.heartbeatThread)
             except Exception as e:
-                pass
+                noteSuppressed()
             self.stopAndCleanThread(self.timeDurationUpdateThread)
             self.stopAndCleanThread(self.getQRCodeThread)
             self.stopAndCleanThread(self.getPictureAndResultThread)
@@ -1065,7 +1068,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         try:
             QThread.msleep(200)
         except:
-            pass
+            noteSuppressed()
         clearKeyCommunicationQueuesOnAbort()
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         printYellow(f"About to call doFinalProcessing() from manualAbort()")
