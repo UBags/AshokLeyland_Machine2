@@ -2,6 +2,7 @@
 # IOServerProperties.yaml - Siemens S7-1515: tag name -> address, for costhetaio/siemens/IOServer.py
 # ---------------------------------------------------------------------------------------------------------------------
 # Source: 'HUb_and_Knuckle_Revised_Assembly_Process.xlsx', last column (DB500); final addresses as agreed 2026-10-31.
+# The six state-2 cycle settings are in DB101 (addresses given 2026-10-31); everything else is in DB500.
 # The KEYS are the tag names the IOServer uses when plc.vendor=siemens: the siemens.*.tagname values in
 # ApplicationConfiguration.properties (they are the names in the spreadsheet). Every one of those names must be here.
 #
@@ -11,8 +12,8 @@
 #
 # PLC-SIDE PREREQUISITES
 #   * CPU -> Protection & Security -> permit PUT/GET communication from remote partner.
-#   * DB500 -> Properties -> "Optimized block access" UNCHECKED (absolute offsets).
-#   * DB500 elements at I<n> declared Int (not DInt), at R<n> declared Real.
+#   * DB500 and DB101 -> Properties -> "Optimized block access" UNCHECKED (absolute offsets).
+#   * DB500 / DB101 elements at I<n> declared Int (not DInt), at R<n> declared Real.
 #   * PLC->PC and PC->PLC bits share bytes in DB500. The PC writes single bits (pyS7 BIT transport), never whole
 #     bytes, so it does not overwrite the PLC's bits; the PLC program must likewise set / reset single bits only.
 # =====================================================================================================================
@@ -31,14 +32,14 @@ tags:
   PLC_PC_CheckQRCode:                        { address: "DB500,X2.5", type: bool,  dir: r }
   PC_PLC_QRCodeCheckOK:                      { address: "DB500,X0.1", type: bool,  dir: w }
   PC_PLC_QRCodeCheckDone:                    { address: "DB500,X0.2", type: bool,  dir: w }
-  # State 2 cycle settings: side from the QR code; the rest from machine_settings in the database (frontend:
-  # Machine Settings, Administrator / Supervisor). No model / component type: the PLC does not need it.
-  PC_PLC_LH_RH_Selection:                    { address: "DB500,I34",  type: int,   dir: w }   # 1 = LHS, 2 = RHS
-  PC_PLC_TighteningTorque1Setpoint:          { address: "DB500,R40",  type: float, dir: w }   # Nm, > 0 and < 20
-  PC_PLC_TighteningTorque2Setpoint:          { address: "DB500,R44",  type: float, dir: w }   # Nm, > 0 and < 20
-  PC_PLC_RotationRPM:                        { address: "DB500,R36",  type: float, dir: w }   # 20 - 40 rpm
-  PC_PLC_NoOfRotation1CCW:                   { address: "DB500,R18",  type: float, dir: w }   # 1 or 2
-  PC_PLC_NoOfRotation1CW:                    { address: "DB500,R22",  type: float, dir: w }   # 1 or 2
+  # State 2 cycle settings (in DB101): side from the QR code; the rest from machine_settings in the database
+  # (frontend: Machine Settings, Administrator / Supervisor). No model / component type: the PLC does not need it.
+  PC_PLC_LH_RH_Selection:                    { address: "DB101,I246",  type: int,    dir: w }   # 1 = LHS, 2 = RHS
+  PC_PLC_TighteningTorque1Setpoint:          { address: "DB101,R200",  type: float,  dir: w }   # Nm, > 0 and < 20
+  PC_PLC_TighteningTorque2Setpoint:          { address: "DB101,R204",  type: float,  dir: w }   # Nm, > 0 and < 20
+  PC_PLC_RotationRPM:                        { address: "DB101,R96",   type: float,  dir: w }   # 20 - 40 rpm
+  PC_PLC_NoOfRotation1CCW:                   { address: "DB101,R144",  type: float,  dir: w }   # 1 or 2
+  PC_PLC_NoOfRotation1CW:                    { address: "DB101,R120",  type: float,  dir: w }   # 1 or 2
 
   # --- Step 3: knuckle ---------------------------------------------------------------------------------------------
   PLC_PC_CheckKnuckle:                       { address: "DB500,X3.3", type: bool,  dir: r }
@@ -108,3 +109,4 @@ tags:
 # Unused on Machine 2 (in the spreadsheet, not used by the IOServer):
 #   PC_PLC_NoOfRotation2CCW DB500,R26   PC_PLC_NoOfRotation2CW DB500,R30
 #   PLC_PC_Station4CapPressValueSet DB500,X4.6 (spurious)
+# Freed when the cycle settings moved to DB101: DB500,I34 R18 R22 R36 R40 R44.

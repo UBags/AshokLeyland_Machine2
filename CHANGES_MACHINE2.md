@@ -445,3 +445,20 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - Mock-PLC test window: Allen-Bradley 13/13, Siemens 14/14.
   - One Allen-Bradley mock-window run failed (3/13, stuck in state 1) because it started straight after the integrated run, whose processes were still running against the same Redis. It passed 13/13 on two reruns by itself.
 - **Open: frontend out of step when the QR is answered NOT OK because of the settings.** The QR server sends the QR code to the frontend at the same moment as to the IOServer, so the frontend moves on to the knuckle step while the IOServer goes back to the QR code. The operator's re-scan then stays queued for the frontend; it is picked up when the frontend next returns to READ_QR_CODE, which starts a cycle the IOServer is not in.
+
+## 21. Siemens: state-2 cycle settings moved to DB101 (2026-10-31)
+
+- **New addresses in `IOServerProperties.yaml`:**
+
+  | Tag | Address |
+  |---|---|
+  | `PC_PLC_LH_RH_Selection` | `DB101,I246` (INT) |
+  | `PC_PLC_TighteningTorque1Setpoint` | `DB101,R200` |
+  | `PC_PLC_TighteningTorque2Setpoint` | `DB101,R204` |
+  | `PC_PLC_RotationRPM` | `DB101,R96` |
+  | `PC_PLC_NoOfRotation1CCW` | `DB101,R144` |
+  | `PC_PLC_NoOfRotation1CW` | `DB101,R120` |
+
+  The other 40 tags stay in DB500. DB500's I34, R18, R22, R36, R40 and R44 are now free.
+- **PLC prerequisites:** DB101 must also have "Optimized block access" off.
+- **Verified:** the tag map loads (46 tags across DB101 and DB500, no clashes), and the Siemens fault scenarios pass 55/55 on the simulated S7.
