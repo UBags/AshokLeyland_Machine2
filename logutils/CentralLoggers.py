@@ -90,10 +90,14 @@ class MasterFileLogger(Thread):
             minutes = float(CosThetaConfigurator.getValue("log.file.keep.queued.minutes", "10") or 10)
             if not self.redisConnection:
                 return
-            before = self._getMessageCount()
             cutoffMs = int((time.time() - minutes * 60) * 1000)
-            self.redisConnection.xtrim(self.loggingQ, minid=f"{cutoffMs}-0", approximate=False)
-            discarded = before - self._getMessageCount()
+            # XRANGE + XDEL rather than XTRIM MINID, which needs Redis 6.2 (older Redis on Windows: "syntax error")
+            discarded = 0
+            while True:
+                old = self.redisConnection.xrange(self.loggingQ, min="-", max=f"{cutoffMs}-0", count=1000)
+                if not old:
+                    break
+                discarded += self.redisConnection.xdel(self.loggingQ, *[_id for _id, _ in old])
             if discarded and self.fileHandle:
                 self.fileHandle.write(f"{getCurrentTime()} : {discarded} queued log message(s) older than {minutes:g} "
                                       f"minutes (an earlier run / tests) were not written\n")

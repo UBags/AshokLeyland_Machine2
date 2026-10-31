@@ -677,3 +677,10 @@ Not changed: the vision modules (they are checked by the equivalence verifier), 
   | DB dry run | 49/49 | |
   | FE dry run | 55/55 | |
   | Vision verifier | ALL EQUIVALENT | |
+
+## 27. Logging server: works with Redis older than 6.2 (2026-11-01)
+
+- On the Windows machine, discarding stale queued log messages at logging-server start failed with "syntax error". The cause was `XTRIM ... MINID`, which needs Redis 6.2 or later.
+- It now uses `XRANGE` and `XDEL`, which work on Redis 5 or later.
+- Nothing else in the logging or live-configuration code needs a newer Redis.
+- Logging dry run: 34/34 (Siemens).
