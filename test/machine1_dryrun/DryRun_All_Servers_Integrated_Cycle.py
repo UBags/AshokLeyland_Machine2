@@ -65,8 +65,12 @@ def check(trig, done):
     assert wait_for(lambda: TAGS[done] is True), f"timeout {done}"
     time.sleep(1.5)                      # leave time for the frontend to show the image
     with LOCK: TAGS[trig] = False; TAGS[done] = False
-def value(setT, valT, v):
-    with LOCK: TAGS[valT] = v; TAGS[setT] = True
+def value(setT, valT, v, rotationDone=None):
+    with LOCK:
+        TAGS[valT] = v
+        if rotationDone is not None and IOServer.PLC_PC_Station2RotationDuringTighteningDone:   # Siemens only
+            TAGS[IOServer.PLC_PC_Station2RotationDuringTighteningDone] = rotationDone
+        TAGS[setT] = True
     time.sleep(2.5)
 def pulse(t):
     with LOCK: TAGS[t] = True
@@ -86,11 +90,11 @@ def plc():
     check(IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone)
     check(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone)
     check(IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone)
-    value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.08)
+    value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.08, rotationDone=True)
     check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
     pulse(IOServer.PLC_PC_ComponentPressDone)
     check(IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckDone)
-    value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.03)
+    value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.03, rotationDone=False)
     check(IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone)
     check(IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone)
     check(IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone)
@@ -124,7 +128,8 @@ cur.execute("""select model_name, lhs_rhs, model_tonnage, nut_tightening_torque_
                check_knuckle_result, check_bunk_for_component_press_result, component_press_done, check_no_bunk_result,
                check_splitpin_and_washer_result, check_cap_result, check_bunk_cap_press_result, cap_press_done,
                ok_notok_result, username, setting_rotation_rpm, setting_tightening_torque1_setpoint,
-               setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
+               setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+               nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
                where qr_code = %s order by record_id desc limit 1""", (QR,))
 print("RESULT plc sequence completed:", RESULT.get('plc_done'))
 print("RESULT state-2 settings written:", RESULT.get('settings'))

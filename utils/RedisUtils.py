@@ -1,5 +1,5 @@
 import time
-from typing import Literal, Union, Tuple
+from typing import Literal, Union, Tuple, Optional
 
 import numpy as np
 import cv2
@@ -105,6 +105,22 @@ freeRotationTorque1ValueKeyString : str = "rotation1Value"
 freeRotationTorque1ResultKeyString : str = "rotation1Result"
 freeRotationTorque1DatetimeKeyString : str = "rotationTorque1Datetime"
 overallResultKeyString : str = "overallResult"
+tighteningTorque1RotationDoneKeyString : str = "torque1RotationDone"
+tighteningTorque2RotationDoneKeyString : str = "torque2RotationDone"
+rotationDoneKeyString : str = "rotationDone"           # io2fe: with a Station 2 torque value
+
+
+def encodeOptionalBool(value) -> str:
+    """True / False / None -> "True" / "False" / "" (Redis stream fields are strings)."""
+    return "" if value is None else ("True" if bool(value) else "False")
+
+
+def decodeOptionalBool(value):
+    """"True" / "False" / "" (str or bytes) -> True / False / None."""
+    if isinstance(value, bytes):
+        value = value.decode("utf-8", errors="ignore")
+    value = (value or "").strip().lower()
+    return True if value == "true" else False if value == "false" else None
 connectionStatusKeyString : str = "connectionStatus"
 
 cameraServerStatusKeyString : str = "camerastatus"
@@ -735,8 +751,11 @@ def getDiscInterlockMessage(redisConnection: redis.client.Redis, block : int = 1
 
 # ********************************** COMMUNICATION OUTWARD FROM IO SERVER *************************
 
-def sendDataFromIOServerToFEServer(redisConnection : redis.client.Redis, currentMachineState : MachineState, moveToState : MachineState = MachineState.INVALID_STATE, result : ResultType = ok, action : ActionType = updateValueCommand, value : Union[str, float] = -1., aProducer : str = "IOServer", handshake : bool = False):
+def sendDataFromIOServerToFEServer(redisConnection : redis.client.Redis, currentMachineState : MachineState, moveToState : MachineState = MachineState.INVALID_STATE, result : ResultType = ok, action : ActionType = updateValueCommand, value : Union[str, float] = -1., aProducer : str = "IOServer", handshake : bool = False, rotationDone : Optional[bool] = None):
+    # rotationDone: with a Station 2 torque value, PLC_PC_Station2RotationDuringTighteningDone (None = not provided)
     data = {currentMachineStateKeyString: currentMachineState, move2StateKeyString: moveToState, actionKeyString: action, valueKeyString: value, resultKeyString : result}
+    if rotationDone is not None:
+        data[rotationDoneKeyString] = encodeOptionalBool(rotationDone)
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=io2feq, aProducer=f"{aProducer}")
     else:
@@ -951,7 +970,9 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
                                          pressDone: ResultType, capPressDoneDatetime : str,
                                          freeRotationTorque1: Union[str, float], freeRotationTorque1Result: ResultType, freeRotationTorque1Datetime : str,
                                          overallResult : ResultType,
-                                         aProducer : str = "FEServer"):
+                                         aProducer : str = "FEServer",
+                                         tighteningTorque1RotationDone : Optional[bool] = None,
+                                         tighteningTorque2RotationDone : Optional[bool] = None):
 
     # print("Reached here - 1")
     if (qrCode is None) or (qrCode == ""):
@@ -1091,7 +1112,9 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
         capPressDoneDatetimeKeyString: capPressDoneDatetime,
         freeRotationTorque1ValueKeyString: str(freeRotationTorque1), freeRotationTorque1ResultKeyString: freeRotationTorque1Result,
         freeRotationTorque1DatetimeKeyString: freeRotationTorque1Datetime,
-        overallResultKeyString : overallResult
+        overallResultKeyString : overallResult,
+        tighteningTorque1RotationDoneKeyString : encodeOptionalBool(tighteningTorque1RotationDone),
+        tighteningTorque2RotationDoneKeyString : encodeOptionalBool(tighteningTorque2RotationDone),
     }
     # print(f"size of data is {sys.getsizeof(data)}")
     # print(f"{data = }")
@@ -1262,8 +1285,13 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
         return cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus
 
 
-def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : int = 500):
+def _withRotation(withRotationDone: bool, result: tuple, rotationDone):
+    return result + (rotationDone,) if withRotationDone else result
+
+
+def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : int = 500, withRotationDone : bool = False):
     # returns 5 things - currentMachineState, moveToState, action, value, result
+    # withRotationDone=True: a 6th, rotationDone (True / False, or None if the message does not carry it)
 
     # If 'moveToState' != -1, it implies that this message is ONLY for changing the currentMachineState of the machine to the new state.
     # Ignore the other values.
@@ -1276,7 +1304,7 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
     if redisConnection is None:
         printBoldRed(f"Redis connection is None in readDataInFEServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
-        return MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok
+        return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
     last_id = 0
     newData = {}
@@ -1297,11 +1325,11 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
         printBoldRed(f"Got exception - {e1}")
-        return MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok
+        return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
-            return MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok
+            return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
     except:
         pass
 
@@ -1317,11 +1345,12 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
             except:
                 pass
 
-            return currentMachineState, moveToState, action, value, result
+            return _withRotation(withRotationDone, (currentMachineState, moveToState, action, value, result),
+                                 decodeOptionalBool(newData.get(rotationDoneKeyString)))
     except:
-        return MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok
+        return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
-    return MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok
+    return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
 # returns a boolean value indicating that emergency button has been pressed
 def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis, block : int = 500):
@@ -1853,12 +1882,15 @@ def readAlarmInHeartbeatServer(redisConnection: redis.client.Redis, block : int 
 # ********************************** COMMUNICATION INWARD INTO DATABASE SERVER *************************
 
 def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False,
-                                         deleteAfterRead : bool = True, returnMessageId : bool = False):
+                                         deleteAfterRead : bool = True, returnMessageId : bool = False,
+                                         returnRotationDone : bool = False):
     # Reads the OLDEST pending cycle record on fe2db.q (FIFO). The queue is never trimmed here, so records that arrive
     # while the DB server is busy are kept, not discarded.
     #   deleteAfterRead=False + returnMessageId=True: the caller deletes the record with
     #   acknowledgeRecordInDatabaseServer() only after it has been stored, so a failed insert is retried, not lost.
     #   With returnMessageId=True the message id (or None) is appended as the last element of the returned tuple.
+    #   With returnRotationDone=True, tighteningTorque1RotationDone and tighteningTorque2RotationDone (True / False /
+    #   None) are appended after overallResult (before the message id).
 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
@@ -1907,6 +1939,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     freeRotationTorque1Result: str = notok
     freeRotationTorque1Datetime : str = '1970-01-01 00:00:00'
     overallResult: str = notok
+    tighteningTorque1RotationDone = None
+    tighteningTorque2RotationDone = None
     timeOfMessage = None
     aProducer = None
 
@@ -1929,6 +1963,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
+        if returnRotationDone:
+            _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
         return (_result + (messageId,)) if returnMessageId else _result
 
     last_id = 0
@@ -2206,6 +2242,9 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             except:
                 overallResult = notok
 
+            tighteningTorque1RotationDone = decodeOptionalBool(newData.get(tighteningTorque1RotationDoneKeyString))
+            tighteningTorque2RotationDone = decodeOptionalBool(newData.get(tighteningTorque2RotationDoneKeyString))
+
             if deleteAfterRead:
                 redisConnection.xdel(fe2dbq, last_id)
             messageId = last_id
@@ -2228,6 +2267,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
+        if returnRotationDone:
+            _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
         return (_result + (messageId,)) if returnMessageId else _result
 
     _result = (genuineDataReceived, timeOfMessage, qrCode,
@@ -2246,6 +2287,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             capPressDone, capPressDoneDatetime,
             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
             overallResult)
+    if returnRotationDone:
+        _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
     return (_result + (messageId,)) if returnMessageId else _result
 
 

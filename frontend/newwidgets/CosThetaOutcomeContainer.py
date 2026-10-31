@@ -24,6 +24,7 @@ class CosThetaOutcomeContainer(QFrame):
     RESULT_AWAITED_STYLESHEET = noResultLabelStylesheet.format(QColor(Qt.GlobalColor.white).name())
     EMPTY_IMAGE_FONT = QFont('Courier', pointSize=18, weight=QFont.Weight.Bold)
     NUMBER_DISPLAY_FONT = QFont('Courier', pointSize=36, weight=QFont.Weight.Bold)
+    SECOND_LINE_POINT_SIZE = 16             # second line of a two-line display (e.g. "Rotation Done")
 
     def __init__(self, title : str, imageHint : str, bg_color = Qt.GlobalColor.black, fg_color = Qt.GlobalColor.white,
                  default_status = "Result Awaited", forceTopLabelFontSizeTo : int = 0,
@@ -190,6 +191,7 @@ class CosThetaOutcomeContainer(QFrame):
         # self.setImageAndResult(self.default_pixmap, self.default_status)
         self.image_label.setStyleSheet(emptyImageStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.EMPTY_IMAGE_FONT)
+        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
         self.image_label.setText(self.imageHint)
         self.setResult(self.default_status)
         self.update()
@@ -213,6 +215,7 @@ class CosThetaOutcomeContainer(QFrame):
         # self.setImage(image)
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
         self.image_label.setText(f"{text}")
         self.update()
 
@@ -230,7 +233,22 @@ class CosThetaOutcomeContainer(QFrame):
         # printPlain("Reached here - 2")
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
         self.image_label.setText(f"{text}")
+        self.setResult(result)
+        self.update()
+
+    def setTwoLineTextAndResult(self, mainText: str | float | int, secondLine: str, result: str):
+        """Two lines in the display: mainText in the number font, secondLine below it in a smaller font."""
+        import html
+        self.image_label.setStyleSheet(numberDisplayStylesheet)
+        self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+        self.image_label.setTextFormat(Qt.TextFormat.RichText)
+        mainSize = CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT.pointSize()
+        self.image_label.setText(
+            f"<div align='center' style='font-size:{mainSize}pt; font-weight:bold;'>{html.escape(str(mainText))}</div>"
+            f"<div align='center' style='font-size:{CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE}pt; "
+            f"font-weight:bold;'>{html.escape(str(secondLine))}</div>")
         self.setResult(result)
         self.update()
 
@@ -247,6 +265,7 @@ class CosThetaOutcomeContainer(QFrame):
         # self.setImageAndResult(image, result)
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
         self.image_label.setText(f"{text}")
         self.setResult(result)
         self.update()

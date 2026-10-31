@@ -43,9 +43,9 @@ FE_MSGS = []
 def fe():
     rf = Redis('localhost', 6379)
     while True:
-        cur, mv, action, value, result = readDataInFEServerFromIOServer(rf, block=200)
+        cur, mv, action, value, result, rotationDone = readDataInFEServerFromIOServer(rf, block=200, withRotationDone=True)
         if cur != MS.INVALID_STATE:
-            FE_MSGS.append((cur.name, value, action))
+            FE_MSGS.append((cur.name, value, action) + ((rotationDone,) if rotationDone is not None else ()))
 threading.Thread(target=fe, daemon=True).start()
 
 io = IOServer(mode="Test")
@@ -64,9 +64,16 @@ def plc_check(trigger, done):
     time.sleep(0.3)
     with LOCK: TAGS[trigger] = False; TAGS[done] = False
 
-def plc_value(setTag, valTag, value):
-    with LOCK: TAGS[valTag] = value; TAGS[setTag] = True
+ROTATION_TAG = IOServer.PLC_PC_Station2RotationDuringTighteningDone     # "" on Allen-Bradley (not provided)
+ROTATION_RESET = []      # rotation-done bit after the IOServer's reset of the Station 2 torque tags
+
+def plc_value(setTag, valTag, value, rotationDone=None):
+    with LOCK:
+        TAGS[valTag] = value
+        if ROTATION_TAG and rotationDone is not None: TAGS[ROTATION_TAG] = rotationDone   # PLC: with the torque value
+        TAGS[setTag] = True
     time.sleep(2.5)      # IOServer resets these after 1.5/2.0 s via UpdateTagsToDefaultProcessor
+    if ROTATION_TAG and rotationDone is not None: ROTATION_RESET.append(TAGS[ROTATION_TAG])
 
 def plc_pulse(tag):
     with LOCK: TAGS[tag] = True
@@ -95,11 +102,11 @@ def one_cycle(n, t1, t2, frt):
     plc_check(IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone)
     plc_check(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone)
     plc_check(IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone)
-    plc_value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, t1)
+    plc_value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, t1, rotationDone=True)
     plc_check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
     plc_pulse(IOServer.PLC_PC_ComponentPressDone)
     plc_check(IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckDone)
-    plc_value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, t2)
+    plc_value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, t2, rotationDone=False)
     plc_check(IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone)
     plc_check(IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone)
     plc_check(IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone)
@@ -121,5 +128,6 @@ print("RESULT state trace cycle 2:", trace2)
 print("RESULT expected            :", list(range(1, 29)) + [1])
 print("RESULT cycle-settings written in state 2:", settings)
 print("RESULT IO->FE messages cycle 1:", fe1)
+print("RESULT rotation-done bit after the IOServer reset the Station 2 torque tags (expect all False):", ROTATION_RESET)
 print("RESULT CheckQRCode re-armed by PC at end:", TAGS[IOServer.PLC_PC_CheckQRCode])
 import os; os._exit(0)

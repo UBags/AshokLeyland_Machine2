@@ -21,8 +21,9 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
   C. Emergency abort part-way through a cycle (after tightening torque 1, waiting for the bunk picture)
      Stale messages are placed on every queue first. After the PLC raises PLC_PC_EmergencyAbort, IOServer must:
      send ABORT to the QR server (io2qrcodeabort.q) and the emergency message to the frontend (emergency.q); clear the
-     7 key communication queues (no stale message left); write False / 0.0 to all 37 per-cycle handshake tags (an
-     explicit list in this script, independent of resetAll(); each is set to True / 12.34 first), including
+     7 key communication queues (no stale message left); write False / 0.0 to all 37 per-cycle handshake tags, 38 on Siemens (an
+     explicit list in this script, independent of resetAll(); each is set to True / 12.34 first; on Siemens also
+     PLC_PC_Station2RotationDuringTighteningDone), including
      PLC_PC_EmergencyAbort; go back to READ_QR_CODE and re-arm
      PLC_PC_CheckQRCode=True (so it moves straight on to WRITE_QR_CODE and asks the QR server for a code).
      A full normal cycle must then complete.
@@ -279,11 +280,15 @@ def run_scenarios():
         "PLC_PC_CapPressDone",
         "PLC_PC_Station3TorqueValueSet", "PLC_PC_Station3TorqueValue",
         "PLC_PC_EmergencyAbort")}
+    # Station 2 rotation-during-tightening done: reset with the Station 2 torque tags when the PLC provides it
+    if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+        RESET_TAGS["PLC_PC_Station2RotationDuringTighteningDone"] = "bool"
     NOT_RESET_ON_ABORT = {"PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
-                          "PLC_PC_Station2RotationDuringTighteningDone",   # PLC-owned, read only (no action yet)
                           "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                           "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
                           "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW"}
+    if not IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+        NOT_RESET_ON_ABORT.add("PLC_PC_Station2RotationDuringTighteningDone")      # not on this PLC (empty name)
     all_tag_attrs = {a for a in dir(IOServer) if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
     unclassified = all_tag_attrs - set(RESET_TAGS) - NOT_RESET_ON_ABORT
     check("C: every IOServer PLC tag is classified (reset on abort, or deliberately not)", unclassified == set(), str(sorted(unclassified)))

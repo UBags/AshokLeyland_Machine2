@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 from numpy import ndarray
@@ -188,6 +188,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     currentTighteningTorque1: float = 0.0
     currentTighteningTorque1CheckResult: str = notok
     currentTighteningTorque1Datetime: str = defaultTime
+    currentTighteningTorque1RotationDone: Optional[bool] = None     # PLC_PC_Station2RotationDuringTighteningDone
 
 
     originalBunkForComponentPressCheckImage: Union[np.ndarray, None] = None
@@ -206,6 +207,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     currentTighteningTorque2: float = 0.0
     currentTighteningTorque2CheckResult: str = notok
     currentTighteningTorque2Datetime: str = defaultTime
+    currentTighteningTorque2RotationDone: Optional[bool] = None
 
     originalSplitPinAndWasherCheckImage: Union[np.ndarray, None] = None
     processedSplitPinAndWasherCheckImage: Union[np.ndarray, None] = None
@@ -884,6 +886,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.currentTighteningTorque1 = 0.0
         AshokLeylandFrontEnd.currentTighteningTorque1CheckResult = notok
         AshokLeylandFrontEnd.currentTighteningTorque1Datetime = defaultTime
+        AshokLeylandFrontEnd.currentTighteningTorque1RotationDone = None
 
 
         AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage = None
@@ -902,6 +905,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.currentTighteningTorque2 = 0.0
         AshokLeylandFrontEnd.currentTighteningTorque2CheckResult = notok
         AshokLeylandFrontEnd.currentTighteningTorque2Datetime = defaultTime
+        AshokLeylandFrontEnd.currentTighteningTorque2RotationDone = None
 
         AshokLeylandFrontEnd.originalSplitPinAndWasherCheckImage = None
         AshokLeylandFrontEnd.processedSplitPinAndWasherCheckImage = None
@@ -1331,7 +1335,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     def _handleTighteningTorque1(self):
         if AshokLeylandFrontEnd.currentTighteningTorque1CheckResult == ok:
             self.resultsContainer.setTighteningTorque1Data(
-                value=f"{AshokLeylandFrontEnd.currentTighteningTorque1:.2f}", result=ok
+                value=f"{AshokLeylandFrontEnd.currentTighteningTorque1:.2f}", result=ok,
+                rotationDone=AshokLeylandFrontEnd.currentTighteningTorque1RotationDone
             )
             # Machine 2: no separate free-rotation step; next is the bunk check before component press
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
@@ -1356,7 +1361,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     def _handleTighteningTorque2(self):
         if AshokLeylandFrontEnd.currentTighteningTorque2CheckResult == ok:
             self.resultsContainer.setTighteningTorque2Data(
-                value=f"{AshokLeylandFrontEnd.currentTighteningTorque2:.2f}", result=ok
+                value=f"{AshokLeylandFrontEnd.currentTighteningTorque2:.2f}", result=ok,
+                rotationDone=AshokLeylandFrontEnd.currentTighteningTorque2RotationDone
             )
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
             self.requestPictureAndResult()
@@ -1490,7 +1496,9 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              freeRotationTorque1=AshokLeylandFrontEnd.currentRotationTorque1,
                                              freeRotationTorque1Result=self.okNotokResult(AshokLeylandFrontEnd.currentRotationTorque1CheckResult),
                                              freeRotationTorque1Datetime=AshokLeylandFrontEnd.currentRotationTorque1Datetime,
-                                             overallResult=ok if AshokLeylandFrontEnd.finalResult == ok else notok
+                                             overallResult=ok if AshokLeylandFrontEnd.finalResult == ok else notok,
+                                             tighteningTorque1RotationDone=AshokLeylandFrontEnd.currentTighteningTorque1RotationDone,
+                                             tighteningTorque2RotationDone=AshokLeylandFrontEnd.currentTighteningTorque2RotationDone
                                              )
         self.resetAllDataPoints()
         self.setCurrentState(MachineState.READ_QR_CODE)
@@ -1796,8 +1804,8 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
         if currentState not in self.validStates:
             return
 
-        currentMachineState, moveToState, action, value, result = readDataInFEServerFromIOServer(
-            AshokLeylandFrontEnd.processUpdationRedisConnection
+        currentMachineState, moveToState, action, value, result, rotationDone = readDataInFEServerFromIOServer(
+            AshokLeylandFrontEnd.processUpdationRedisConnection, withRotationDone=True
         )
 
         if currentMachineState == MachineState.INVALID_STATE:
@@ -1813,6 +1821,7 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
 
         try:
             handler = self.validStates[currentState]
+            self.lastRotationDone = rotationDone       # with the Station 2 torque values (None if not provided)
             handler(value, result)
             self.gotTorqueReadingPlusCapPressAndResult.emit()
         except Exception as e:
@@ -1828,6 +1837,7 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
             AshokLeylandFrontEnd.currentTighteningTorque1 = 0.0
             AshokLeylandFrontEnd.currentTighteningTorque1CheckResult = notok
         AshokLeylandFrontEnd.currentTighteningTorque1Datetime = getPostgresDatetimeFromString(getCurrentTime())
+        AshokLeylandFrontEnd.currentTighteningTorque1RotationDone = getattr(self, "lastRotationDone", None)
 
     def _handleComponentPress(self, value, result):
         if result == ok:
@@ -1844,6 +1854,7 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
             AshokLeylandFrontEnd.currentTighteningTorque2 = 0.0
             AshokLeylandFrontEnd.currentTighteningTorque2CheckResult = notok
         AshokLeylandFrontEnd.currentTighteningTorque2Datetime = getPostgresDatetimeFromString(getCurrentTime())
+        AshokLeylandFrontEnd.currentTighteningTorque2RotationDone = getattr(self, "lastRotationDone", None)
 
     def _handleCapPress(self, value, result):
         if result == ok:

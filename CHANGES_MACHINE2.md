@@ -478,3 +478,39 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - Allen-Bradley: 47/47.
 - **Resolved 2026-10-31.** Uddi confirmed that the defaults (30 rpm, 19.0 / 19.0 Nm, rotations 1 / 1) and the limits are correct. The 200.0 and 3.0 found at LR96 / LR120 were old values in the PLC.
 - **Real PLC.** The six settings were written with the LREAL code and read back as LR96 = 30.000, LR120 = 1.000, LR144 = 1.000, R200 = 19.000, R204 = 19.000, I246 = 1. An earlier IOServer run with the old 4-byte REAL code had left LR96 ≈ 1.5e10 and LR120 = 0.0078, which matched the expected corruption exactly; this write repaired them.
+
+## 23. Station 2 rotation-during-tightening done: frontend display and database record (2026-10-31)
+
+- **IOServer.**
+  - At both tightening steps (torque 1 and torque 2), `PLC_PC_Station2RotationDuringTighteningDone` (Siemens `DB500,X3.6`) is read with the torque value and sent to the frontend in the same message: new optional field `rotationDone` on `sendDataFromIOServerToFEServer`.
+  - The bit is reset to False with the Station 2 torque tags 1.5 s after reading, the same way `Station2TorqueValueSet` and the torque value are reset, and in `resetAll()` on abort. This means torque 2 can't see a value left over from torque 1.
+  - On Allen-Bradley the tag name is empty: nothing is read, sent or reset.
+- **Redis.**
+  - `readDataInFEServerFromIOServer(..., withRotationDone=True)` returns a 6th value: True, False, or None if the message doesn't carry it.
+  - The FE→DB record carries `tighteningTorque1RotationDone` and `tighteningTorque2RotationDone` (new optional arguments of `sendDataFromFEServerToDatabaseServer`). `readDataInDatabaseServerFromFEServer(..., returnRotationDone=True)` appends them after `overallResult`.
+  - Existing callers are unchanged.
+- **Frontend.**
+  - Each tightening-torque tile shows the torque on the first line (36 pt) and "Rotation Done" or "Rotation Not Done" below it in a smaller font (16 pt). A new method, `CosThetaOutcomeContainer.setTwoLineTextAndResult`, renders it.
+  - When the PLC doesn't provide the bit (Allen-Bradley), the tile shows the torque alone, as before.
+  - Both values go into the cycle record and are cleared at the start of each cycle.
+- **Database.**
+  - `hub_and_disc_assembly_data` gains two boolean columns: `nut_tightening_torque_1_rotation_done` and `nut_tightening_torque_2_rotation_done`. They are NULL when not provided. They are added with `ADD COLUMN IF NOT EXISTS`, so existing databases get them at start-up.
+  - The new columns are also in `insertData` and in the CSV reports.
+  - `DBServer` stores them from the FE record.
+- **Tests (both dry-run folders):**
+  - **Two full cycles:** the PLC simulator sets the bit True at torque 1 and False at torque 2. The frontend messages carry it, and the bit is reset after reading.
+  - **Fault scenarios:** on Siemens the bit is in the reset-on-abort list (38 tags).
+  - **DB dry run:** columns present; values stored from a direct insert and from an FE record; NULL for an aborted record; columns in the CSV header.
+  - **FE dry run:** the tile text (value on the first line, then Rotation Done / Rotation Not Done in the smaller font) and the record values.
+  - **Integrated run:** the DB row carries them.
+- **Verified:**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | DB dry run | 49/49 | |
+  | FE dry run | 54/54 | |
+  | Fault scenarios | 47/47 | 56/56 |
+  | Two full cycles | exact | exact; IO→FE messages carry rotation True / False |
+  | Integrated DB row | rotation NULL / NULL | rotation True / False |
+
+  A screenshot of the full frontend window at 1920×1080 shows both two-line tiles fitting.

@@ -171,8 +171,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.nut_and_plate_washer_check_container.setDefault()
 
-    def setTighteningTorque1Data(self, value, result):
-        if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
+    def setTighteningTorque1Data(self, value, result, rotationDone=None):
+        """Torque value; with rotationDone (True / False) a second, smaller line: Rotation Done / Rotation Not Done.
+        rotationDone None (PLC does not provide it): the torque value alone."""
+        if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
+            self.tightening_torque1_check_container.setTwoLineTextAndResult(
+                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result)
+        elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque1_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
             self.tightening_torque1_check_container.setImageAndResult(value, result)
@@ -211,8 +216,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.no_bunk_after_component_press_check_container.setDefault()
 
-    def setTighteningTorque2Data(self, value, result):
-        if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
+    def setTighteningTorque2Data(self, value, result, rotationDone=None):
+        """Torque value; with rotationDone (True / False) a second, smaller line: Rotation Done / Rotation Not Done.
+        rotationDone None (PLC does not provide it): the torque value alone."""
+        if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
+            self.tightening_torque2_check_container.setTwoLineTextAndResult(
+                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result)
+        elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque2_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
             self.tightening_torque2_check_container.setImageAndResult(value, result)

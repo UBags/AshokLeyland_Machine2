@@ -1334,10 +1334,11 @@ class IOServer:
                     # Step 5B: Tightening Torque 1 Value
                     if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
                         printBoldGreen(f"Read Station 2 Torque Value (1st time): {valueRead}")
-                        self._readStation2RotationDuringTighteningDone()
+                        rotationDone = self._readStation2RotationDuringTighteningDone()
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_1,
-                                                                          value=valueRead)
+                                                                          value=valueRead,
+                                                                          rotationDone=rotationDone)
                         if successfullySent:
                             self._recordOpEnd(IOServer.OP_NUT_WASHER)   # END of T4 (M2: no separate free-rotation step)
                         # Reset Station 2 torque tags after reading (so Step 10 doesn't auto-trigger)
@@ -1347,6 +1348,9 @@ class IOServer:
                                 "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
                                 "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
+                            if IOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
+                                updateRequest["tag3"] = {"tag": IOServer.PLC_PC_Station2RotationDuringTighteningDone,
+                                                         "type": "bool", "value": False}
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
@@ -1356,16 +1360,20 @@ class IOServer:
                     # Step 10B: Tightening Torque 2 Value
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2:
                         printBoldGreen(f"Read Station 2 Torque Value (2nd time): {valueRead}")
-                        self._readStation2RotationDuringTighteningDone()
+                        rotationDone = self._readStation2RotationDuringTighteningDone()
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_2,
-                                                                          value=valueRead)
+                                                                          value=valueRead,
+                                                                          rotationDone=rotationDone)
                         if successfullySent:
                             updateRequest : dict = {
                                 "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM,  # Seconds to wait before writing tags
                                 "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
                                 "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
+                            if IOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
+                                updateRequest["tag3"] = {"tag": IOServer.PLC_PC_Station2RotationDuringTighteningDone,
+                                                         "type": "bool", "value": False}
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
@@ -1698,6 +1706,8 @@ class IOServer:
         # Step 5 & 10: Station 2 Torque
         self.resetTagToFalse(IOServer.PLC_PC_Station2TorqueValueSet)
         self.resetTagToZero(IOServer.PLC_PC_Station2TorqueValue)
+        if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+            self.resetTagToFalse(IOServer.PLC_PC_Station2RotationDuringTighteningDone)
 
         # Step 7: No Cap Bunk
         self.resetTagToFalse(IOServer.PLC_PC_CheckNoCapBunk)
@@ -1739,7 +1749,8 @@ class IOServer:
 
     def _readStation2RotationDuringTighteningDone(self) -> Optional[bool]:
         """Read PLC_PC_Station2RotationDuringTighteningDone, which the PLC provides with the Station 2 torque value.
-        Logged and kept in self.lastStation2RotationDuringTighteningDone; no action is taken on it yet."""
+        Sent to the frontend with each torque value (shown as Rotation Done / Not Done, stored with the record).
+        Returns None if this PLC does not provide it (empty tag name, Allen-Bradley)."""
         if not IOServer.PLC_PC_Station2RotationDuringTighteningDone:
             return None
         value = self.read_bool(IOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)

@@ -113,6 +113,8 @@ def full_record(code, reached=len(STEPS), seed=0):
         kw[k] = v if step < reached else 0.0
         expected[col] = kw[k]
     kw["overallResult"] = ok if reached == len(STEPS) else notok
+    if reached == len(STEPS):        # rotation during tightening done, sent with each tightening torque
+        kw["tighteningTorque1RotationDone"], kw["tighteningTorque2RotationDone"] = True, False
     expected["ok_notok_result"] = OKS if reached == len(STEPS) else NOTOKS
     return kw, expected, images
 
@@ -129,6 +131,8 @@ cols = {r[0] for r in cur.fetchall()}
 m2_cols = {"check_bunk_for_component_press_result", "component_press_done", "check_no_bunk_result", "nut_tightening_torque_2",
            "check_bunk_cap_press_result", "cap_press_done", "free_rotation_torque_1", "free_rotation_torque_1_result"}
 check("1 table has the Machine 2 columns", m2_cols <= cols, str(sorted(m2_cols - cols)))
+check("1 rotation-during-tightening columns present (boolean)",
+      {"nut_tightening_torque_1_rotation_done", "nut_tightening_torque_2_rotation_done"} <= cols)
 check("1 dropped free-rotation columns are absent", not ({"free_rotations_done", "free_rotations_datetime"} & cols))
 cur.execute(f"select role_name from {SCHEMA}.roles"); roles = {r[0] for r in cur.fetchall()}
 check("1 roles Administrator / Supervisor / Operator exist", {"Administrator", "Supervisor", "Operator"} <= roles, str(roles))
@@ -145,6 +149,7 @@ direct = dict(qr_code=code, model_name=model, lhs_rhs=side, model_tonnage=tonnag
               check_knuckle_imagefile="k.png", check_knuckle_result="ok", check_knuckle_datetime="2026-10-30 09:00:01",
               nut_tightening_torque_1=19.08, nut_tightening_torque_1_result="OK", nut_tightening_torque_1_datetime="2026-10-30 09:00:02",
               check_cap_result="notok", nut_tightening_torque_2="bad-value",
+              nut_tightening_torque_1_rotation_done=True,
               ok_notok_result="Not OK", username="admin", remarks="direct")
 check("2 insertData() returns True", P.insertData(db_name=DB, **direct))
 rs = rows_for(code)
@@ -157,6 +162,9 @@ if rs:
             "ok_notok_result": NOTOKS, "username": "admin", "remarks": "direct"}
     bad = {k: (row[k], v) for k, v in want.items() if row[k] != v}
     check("2 stored values (results normalised; unparsable torque -> -1.0; unset step 'Not Checked')", bad == {}, str(bad))
+    check("2 rotation done stored: torque 1 True, torque 2 not given -> NULL",
+          (row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"]) == (True, None),
+          str((row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"])))
     check("2 datetimes stored", str(row["check_knuckle_datetime"]) == "2026-10-30 09:00:01"
           and str(row["component_assembly_start_datetime"]) == "2026-10-30 09:00:00" and row["created_on"] is not None)
 check("3 checkIfQRCodeExists() true for the stored code", P.checkIfQRCodeExists(qr_code=code, db_name=DB))
@@ -187,6 +195,9 @@ if rs:
     check(f"4 all {len(expected)} result / torque / datetime / overall fields stored exactly", bad == {}, str(bad))
     check("4 model / side / tonnage from the QR code", (row["model_name"], row["lhs_rhs"], row["model_tonnage"]) == ("DOST", "LHS", "2.0T"),
           str((row["model_name"], row["lhs_rhs"], row["model_tonnage"])))
+    check("4 rotation done with torque 1 / 2 stored from the FE record (True / False)",
+          (row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"]) == (True, False),
+          str((row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"])))
     stored = {k: row[f"setting_{k}"] for k in SETTINGS4}
     check("4 machine settings used for the component stored with it (setting_* columns)", stored == SETTINGS4, str(stored))
     check("4 username admin, remarks empty", row["username"] == "admin" and (row["remarks"] or "") == "", str((row["username"], row["remarks"])))
@@ -218,6 +229,8 @@ if rs:
         got = row[col]; got = str(got) if col.endswith("_datetime") else got
         if got != v: bad[col] = (got, v)
     check("6 reached steps OK, unreached NOTOK with 1970 datetimes, torques 0.0, overall NOTOK", bad == {}, str(bad))
+    check("6 aborted before the tightening steps -> rotation-done columns NULL",
+          (row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"]) == (None, None))
     check("6 no settings published for this QR -> setting_* columns NULL",
           all(row[f"setting_{k}"] is None for k in P.MACHINE_SETTINGS_KEYS))
     unreached_files = {s[0]: row[f"{s[0]}_imagefile"] for s in STEPS[4:] if s[1]}
@@ -229,6 +242,8 @@ print("\n=== 7. Reports and counters ===", flush=True)
 today = P.getAllDataOfToday(db_name=DB)
 check("7 getAllDataOfToday CSV contains today's records", all(c_ in today for c_ in (code4, code6)), f"{len(today)} chars")
 check("7 CSV header has no free-rotation-done column", "free_rotations_done" not in today.splitlines()[0] if today else False)
+check("7 CSV header has the two rotation-done columns", all(c_ in today.splitlines()[0] for c_ in
+      ("nut_tightening_torque_1_rotation_done", "nut_tightening_torque_2_rotation_done")) if today else False)
 byModel = P.getDataByModelName(modelName="DOST", db_name=DB)
 check("7 getDataByModelName('DOST') contains the DOST records and not the DOSTPLUS one",
       code4 in byModel and code6 in byModel and code not in byModel)

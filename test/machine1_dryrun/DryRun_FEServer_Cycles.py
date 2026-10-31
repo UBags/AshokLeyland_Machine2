@@ -17,6 +17,9 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
       READ_QR_CODE; the next cycle then runs normally.
   F5. Final free-rotation torque reported NOT OK: the record's overall result is NOT OK and the failure screen
       (not the success screen) is shown.
+  F1 also: PLC_PC_Station2RotationDuringTighteningDone sent with each tightening torque (True at torque 1, False at
+      torque 2) -> each tightening tile shows the torque on the first line and "Rotation Done" / "Rotation Not Done"
+      below it in a smaller font; the record carries both values.
   F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
       the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
       (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
@@ -49,10 +52,13 @@ P.setDatabaseName("Test")
 # ---------- record what the frontend shows (wrap its display methods before the window is built) ----------
 from frontend.newwidgets.CosThetaResultsContainer import CosThetaResultsContainer
 TILES = []                     # (method name, result)
+TILE_ROTATION = {}             # tightening-torque tile -> rotationDone passed with it
 for name in [n for n in dir(CosThetaResultsContainer) if n.startswith("set") and (n.endswith("Data") or n == "setNoBunkAfterComponentPress")]:
     orig = getattr(CosThetaResultsContainer, name)
-    def wrapper(self, value, result, _orig=orig, _name=name):
-        TILES.append((_name, result)); return _orig(self, value, result)
+    def wrapper(self, value, result, *args, _orig=orig, _name=name, **kwargs):
+        TILES.append((_name, result))
+        if "rotationDone" in kwargs: TILE_ROTATION[_name] = kwargs["rotationDone"]
+        return _orig(self, value, result, *args, **kwargs)
     setattr(CosThetaResultsContainer, name, wrapper)
 
 from frontend.AshokLeylandFrontEnd import AshokLeylandFrontEnd as FE, LargeImageWindow, app
@@ -109,6 +115,9 @@ SEQUENCE = [
     (MS.READ_FREE_ROTATION_TORQUE_1, "io", 2.411),
 ]
 SENT_ORIGINALS = {}
+# PLC_PC_Station2RotationDuringTighteningDone sent by the IOServer with each tightening torque
+ROTATION = {MS.READ_TIGHTENING_TORQUE_1: True, MS.READ_TIGHTENING_TORQUE_2: False}
+TORQUE_TEXT = {}               # tightening-torque state -> text shown on its tile right after the value arrived
 
 def scan(code, display):
     assert wait_for(lambda: state() == MS.READ_QR_CODE and consumed(qrcode2feq), 15), f"FE not waiting for a QR code ({state().name})"
@@ -125,11 +134,17 @@ def send_step(st, kind, value, result=ok, expect_next=True, seed=0):
         q = camera2feq
     else:
         action = moveAheadToNextComponent if st == MS.READ_FREE_ROTATION_TORQUE_1 else updateValueCommand
-        sendDataFromIOServerToFEServer(r, currentMachineState=st, value=value, action=action, result=result)
+        sendDataFromIOServerToFEServer(r, currentMachineState=st, value=value, action=action, result=result,
+                                       rotationDone=ROTATION.get(st))
         q = io2feq
     assert wait_for(lambda: consumed(q)), f"{q} not consumed in {st.name}"
     if expect_next:
         assert wait_for(lambda: state() != st), f"FE stayed in {st.name}"
+    if st in ROTATION and result == ok:
+        tile = (fe.resultsContainer.tightening_torque1_check_container if st == MS.READ_TIGHTENING_TORQUE_1
+                else fe.resultsContainer.tightening_torque2_check_container)
+        time.sleep(0.2)
+        TORQUE_TEXT[st] = tile.image_label.text()
 
 def run_steps(upto=None, skip=0, notok_once=(), wrong_state_at=None, final_result=ok):
     for i, (st, kind, value) in enumerate(SEQUENCE[skip:upto], start=skip):
@@ -149,7 +164,7 @@ def run_steps(upto=None, skip=0, notok_once=(), wrong_state_at=None, final_resul
 def take_record(timeout=8):
     t0 = time.time()
     while time.time() - t0 < timeout:
-        rec = readDataInDatabaseServerFromFEServer(r, block=200)
+        rec = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True)
         if rec[0]: return rec
     return None
 
@@ -163,6 +178,7 @@ RESULT_IDX = [4, 7, 10, 13, 16, 19, 21, 24, 27, 30, 33, 36, 38, 41]            #
 DATETIME_IDX = [5, 8, 11, 14, 17, 20, 22, 25, 28, 31, 34, 37, 39, 42]
 TORQUE_IDX = {"torque1": 15, "torque2": 26, "freeRotation": 40}
 OVERALL_IDX = 43
+ROTATION_IDX = (44, 45)        # tightening torque 1 / 2 rotation done (returnRotationDone=True)
 
 def check_full_record(tag, rec, code):
     check(f"{tag} one record sent to fe2db.q", rec is not None)
@@ -176,6 +192,8 @@ def check_full_record(tag, rec, code):
     same = [st.name for st, i in PIC_IDX.items() if rec[i] is not None and np.array_equal(rec[i], SENT_ORIGINALS.get(st))]
     check(f"{tag} the 9 original pictures pixel-identical to what the camera sent", len(same) == 9, f"{len(same)}/9")
     check(f"{tag} overall result OK", rec[OVERALL_IDX] == ok, rec[OVERALL_IDX])
+    check(f"{tag} rotation done with torque 1 / torque 2 in the record (True / False)",
+          (rec[ROTATION_IDX[0]], rec[ROTATION_IDX[1]]) == (True, False), str(rec[44:46]))
 
 QR1 = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
 QR2 = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"
@@ -197,6 +215,14 @@ def driver():
         rec = take_record()
         check_full_record("F1", rec, QR1)
         check("F1 success screen shown", wait_for(lambda: "showSuccess" in SCREENS, 5), str(SCREENS))
+        t1, t2 = TORQUE_TEXT.get(MS.READ_TIGHTENING_TORQUE_1, ""), TORQUE_TEXT.get(MS.READ_TIGHTENING_TORQUE_2, "")
+        check("F1 torque 1 tile: value on the first line, 'Rotation Done' below it in a smaller font",
+              "19.08" in t1 and "Rotation Done" in t1 and t1.index("19.08") < t1.index("Rotation Done")
+              and "font-size:16pt" in t1, t1)
+        check("F1 torque 2 tile: value, then 'Rotation Not Done'", "19.03" in t2 and "Rotation Not Done" in t2, t2)
+        check("F1 rotationDone passed to the two tightening tiles (True / False)",
+              (TILE_ROTATION.get("setTighteningTorque1Data"), TILE_ROTATION.get("setTighteningTorque2Data")) == (True, False),
+              str(TILE_ROTATION))
         check("F1 every tile set with OK (14 tiles: 9 pictures, 2 tightening torques, 2 presses, free-rotation torque)", len(TILES) == 14 and all(res == ok for _, res in TILES), str(TILES))
         check("F1 back to READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE), state().name)
         check("F1 exactly one record per cycle", take_record(timeout=2) is None)

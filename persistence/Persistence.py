@@ -510,6 +510,9 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     setting_tightening_torque2_setpoint real,
     setting_no_of_rotation1_ccw real,
     setting_no_of_rotation1_cw real,
+    -- PLC_PC_Station2RotationDuringTighteningDone read with each Station 2 torque (NULL if the PLC does not provide it)
+    nut_tightening_torque_1_rotation_done boolean,
+    nut_tightening_torque_2_rotation_done boolean,
     ok_notok_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not OK',
     username character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Default User',
     remarks character varying(255) COLLATE pg_catalog."default",
@@ -536,6 +539,8 @@ ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUM
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_tightening_torque2_setpoint real;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_ccw real;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_cw real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS nut_tightening_torque_1_rotation_done boolean;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS nut_tightening_torque_2_rotation_done boolean;
 
 -- Machine 2 settings, edited in the frontend (Machine Settings menu, Administrator / Supervisor) and written by the
 -- IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row; the latest row is in force.
@@ -1362,6 +1367,9 @@ def insertData(
         setting_tightening_torque2_setpoint: Optional[float] = None,
         setting_no_of_rotation1_ccw: Optional[float] = None,
         setting_no_of_rotation1_cw: Optional[float] = None,
+        # rotation during tightening done (PLC_PC_Station2RotationDuringTighteningDone) at torque 1 / torque 2
+        nut_tightening_torque_1_rotation_done: Optional[bool] = None,
+        nut_tightening_torque_2_rotation_done: Optional[bool] = None,
 
         ok_notok_result: str = "Not OK",
         username: str = "Default User",
@@ -1529,6 +1537,10 @@ def insertData(
                   setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw):
             params.append(None if v is None else float(v))
             placeholders.append("%s")
+        # Rotation during tightening done at torque 1 / 2 (NULL when not provided by the PLC)
+        for v in (nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done):
+            params.append(None if v is None else bool(v))
+            placeholders.append("%s")
 
         # Final fields
         params.extend([ok_notok_result, username, remarks])
@@ -1557,6 +1569,7 @@ def insertData(
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 ok_notok_result, username, remarks, created_on
             ) VALUES ({ph})
         """).format(
@@ -1633,6 +1646,8 @@ all_columns_record_header = [
     "setting_tightening_torque2_setpoint",
     "setting_no_of_rotation1_ccw",
     "setting_no_of_rotation1_cw",
+    "nut_tightening_torque_1_rotation_done",
+    "nut_tightening_torque_2_rotation_done",
     "ok_notok_result",
     "username",
     "remarks",
@@ -1692,6 +1707,8 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    nut_tightening_torque_1_rotation_done,
+    nut_tightening_torque_2_rotation_done,
     ok_notok_result,
     username,
     remarks,
@@ -1849,6 +1866,8 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    nut_tightening_torque_1_rotation_done,
+    nut_tightening_torque_2_rotation_done,
     ok_notok_result,
     username,
     remarks,
@@ -1955,6 +1974,7 @@ def getDataByModelNameAndDateLimits(
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE model_name = %s
@@ -2238,6 +2258,8 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    nut_tightening_torque_1_rotation_done,
+    nut_tightening_torque_2_rotation_done,
     ok_notok_result,
     username,
     remarks,
@@ -2334,6 +2356,7 @@ def getDataByDateLimits(
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE created_on::date BETWEEN %s AND %s
