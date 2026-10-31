@@ -34,6 +34,13 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      are published to Redis (cycleSettings:<QR>) for the DB record. Siemens: settings changed while a cycle runs
      (as from the frontend's Machine Settings dialog) are written in the NEXT cycle.
 
+  E. Values before Done
+     Every Done=True the PC writes comes after its OK tag; in state 2 all settings are written before
+     QRCodeCheckOK and QRCodeCheckDone. If a setting cannot be written (PLC refuses it) or the machine settings are
+     not available from the database (Siemens; then nothing at all is written), the PC writes QRCodeCheckOK=False
+     and Done=True and goes back to the QR code; after the fault is gone a re-scan writes the settings, OK=True,
+     Done, and the cycle runs.
+
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -371,6 +378,96 @@ def run_scenarios():
         run_steps()
         check("D: that cycle completed", wrapped())
         use_machine_settings("Test")          # back to the defaults
+
+    # =====================================================================================================
+    print("\n=== E. Values before Done: every OK / setting is written before its Done; settings not writable -> QR NOT OK ===", flush=True)
+    QR_OK, QR_DONE = IOServer.PC_PLC_QRCodeCheckOK, IOServer.PC_PLC_QRCodeCheckDone
+    PAIRS = [(QR_DONE, QR_OK)] + [(done, okTag) for _, trig, done, okTag in VISION if done]
+    DONE_TO_OK = dict(PAIRS)
+
+    def order_problems(since):
+        """For every Done=True the PC wrote after `since`: its OK tag must have been written after the previous
+        handshake and before this Done; in state 2, every settings tag too."""
+        problems, last = [], since
+        w = WRITES[since:]
+        for i, (tag, value) in enumerate(w):
+            if tag in DONE_TO_OK and value is True:
+                window = [t for t, v in w[last - since:i]]
+                if DONE_TO_OK[tag] not in window:
+                    problems.append(f"{tag}=True without {DONE_TO_OK[tag]} written first")
+                if tag == QR_DONE:
+                    okIdx = max(k for k, t in enumerate(window) if t == QR_OK) if QR_OK in window else -1
+                    late = [t for k, t in enumerate(window) if t in SETTING_TAGS and k > okIdx]
+                    if late:
+                        problems.append(f"settings written after QRCodeCheckOK: {late}")
+                last = since + i + 1
+        return problems
+
+    # E1: a normal cycle - every Done preceded by its OK, settings before QR OK / Done
+    TRACE.clear(); mark = len(WRITES)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("E1 cycle completed", wrapped())
+    seq = [t for t, v in WRITES[mark:] if t in SETTING_TAGS or t in (QR_OK, QR_DONE)]
+    qrDoneAt = next((k for k, t in enumerate(seq) if t == QR_DONE), -1)
+    check("E1 state 2: all settings, then QRCodeCheckOK, then QRCodeCheckDone",
+          qrDoneAt > 0 and seq[qrDoneAt - 1] == QR_OK and IOServer.PC_PLC_LH_RH_Selection in seq[:qrDoneAt - 1]
+          and set(seq[:qrDoneAt - 1]) <= set(SETTING_TAGS)
+          and (not fromDatabase or set(seq[:qrDoneAt - 1]) == set(SETTING_TAGS)), str(seq[:qrDoneAt + 1]))
+    p_ = order_problems(mark)
+    check("E1 every Done=True of the cycle written only after its OK (and settings) were written", p_ == [], str(p_))
+
+    # E2: a settings write fails (PLC refuses one setting) -> nothing says OK: QR OK=False, Done=True, back to state 1
+    import types
+    failTag = IOServer.PC_PLC_LH_RH_Selection
+    origWriteInt = io.write_int
+    io.write_int = types.MethodType(lambda self, tag, value, debug=False: False if tag == failTag else origWriteInt(tag, value, debug), io)
+    TRACE.clear(); mark = len(WRITES)
+    r.delete("cycleSettings:" + QR_DOSTPLUS_RHS)
+    plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+    qrw = writes_of((QR_OK, QR_DONE), mark)
+    check("E2 setting not writable -> QRCodeCheckOK=False, then QRCodeCheckDone=True (no OK=True)",
+          (QR_OK, False) in qrw and (QR_OK, True) not in qrw and qrw.index((QR_OK, False)) < qrw.index((QR_DONE, True))
+          if (QR_DONE, True) in qrw else False, str(qrw))
+    check("E2 not moved on to the knuckle; back to the QR code", MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE.value not in TRACE
+          and wait_for(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE)), f"trace {TRACE}")
+    check("E2 settings for that QR not published for the DB record", readCycleSettingsForQRCode(r, QR_DOSTPLUS_RHS) == {})
+    io.write_int = origWriteInt
+    # operator re-scans once the fault is gone -> settings, OK, Done, and the cycle runs
+    mark = len(WRITES)
+    QR_PLAN.append((ok, QR_DOSTPLUS_RHS))
+    wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE)
+    SCAN.set(); finish_qr_handshake()
+    qrw = writes_of((QR_OK, QR_DONE), mark)
+    check("E2 after the fault: re-scan -> settings written, QRCodeCheckOK=True, Done=True",
+          (QR_OK, True) in qrw and dict(writes_of(SETTING_TAGS, mark)).get(failTag) == 2 and order_problems(mark) == [],
+          f"{qrw} {order_problems(mark)}")
+    run_steps()
+    check("E2 cycle then completes", wrapped())
+
+    if fromDatabase:
+        # E3: machine settings not available from the database -> NOTHING written, QR OK=False, Done=True
+        import costhetaio.allenbradley.IOServer as ABIO
+        origGet = ABIO.getMachineSettings
+        ABIO.getMachineSettings = lambda db: {}
+        TRACE.clear(); mark = len(WRITES)
+        r.delete("cycleSettings:" + QR_DOST_LHS)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        qrw = writes_of((QR_OK, QR_DONE), mark)
+        check("E3 no machine settings in the database -> no settings tag written at all", writes_of(SETTING_TAGS, mark) == [],
+              str(writes_of(SETTING_TAGS, mark)))
+        check("E3 -> QRCodeCheckOK=False then QRCodeCheckDone=True", (QR_OK, False) in qrw and (QR_OK, True) not in qrw
+              and (QR_DONE, True) in qrw and qrw.index((QR_OK, False)) < qrw.index((QR_DONE, True)), str(qrw))
+        check("E3 nothing published for the DB record", readCycleSettingsForQRCode(r, QR_DOST_LHS) == {})
+        ABIO.getMachineSettings = origGet
+        mark = len(WRITES)
+        QR_PLAN.append((ok, QR_DOST_LHS))
+        wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE)
+        SCAN.set(); finish_qr_handshake()
+        check("E3 settings back -> re-scan writes them, then OK=True / Done", (QR_OK, True) in writes_of((QR_OK,), mark)
+              and len(writes_of(SETTING_TAGS, mark)) == len(SETTING_TAGS) and order_problems(mark) == [], str(order_problems(mark)))
+        run_steps()
+        check("E3 cycle then completes", wrapped())
 
 
 try:

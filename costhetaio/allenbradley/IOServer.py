@@ -316,6 +316,8 @@ class IOServer:
     FALSE_FLOAT_VALUE: float = -1234.
     FALSE_INT_VALUE: int = -1234
     WATCH_TAG_VALUE: int = 1234
+    SETTINGS_WRITE_ATTEMPTS: int = 3        # per cycle-setting tag, in state 2
+    WRITE_RETRY_INTERVAL: float = 0.2       # s between write attempts
     NO_CONNECTION: int = -1986754392
     CONSECUTIVE_CONNECTION_DOWN_COUNT: int = 0
 
@@ -517,7 +519,11 @@ class IOServer:
           TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
         cycle.settings.source = properties (Allen-Bradley; TO-DO: move to the database too):
           TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
-        The settings actually written are published for the DB server (stored with the component's record).
+        Every value is worked out BEFORE anything is written: if any is unavailable (unknown side/model, no machine
+        settings in the database) nothing is written. Each write is retried (SETTINGS_WRITE_ATTEMPTS).
+        The caller writes QRCodeCheckOK / Done only AFTER this returns (OK = False if it returned False), so the PLC
+        never sees Done before the settings are in place.
+        The settings written are published for the DB server (stored with the component's record).
         Returns True only if every tag that had to be written was written.
         """
         if not qrCode:
@@ -547,10 +553,10 @@ class IOServer:
                     "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None}
             if config.getCycleSettingsSource() == "database":
                 settings = getMachineSettings(getDatabaseName())
-                if not settings:
-                    printBoldRed("Cannot write cycle settings: no machine settings in the database")
-                    for tag, value, kind in writes:
-                        (self.write_int if kind is int else self.write_float)(tag, value)
+                missing = [k for k in used if settings.get(k) is None] if settings else list(used)
+                if missing:
+                    printBoldRed(f"Cannot write cycle settings: machine settings not available from the database "
+                                 f"({', '.join(missing)}); nothing written")
                     return False
                 for tag, key in ((IOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
                                  (IOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
@@ -574,16 +580,24 @@ class IOServer:
 
             success = True
             for tag, value, kind in writes:
-                if kind is int:
-                    success = self.write_int(tag, int(value)) and success
-                else:
-                    success = self.write_float(tag, float(value), debug=False) and success
+                writer = (lambda t, v: self.write_int(t, int(v))) if kind is int else \
+                         (lambda t, v: self.write_float(t, float(v), debug=False))
+                ok_ = False
+                for attempt in range(IOServer.SETTINGS_WRITE_ATTEMPTS):
+                    if writer(tag, value):
+                        ok_ = True
+                        break
+                    time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+                if not ok_:
+                    printBoldRed(f"Could not write cycle setting {tag}={value} after "
+                                 f"{IOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
+                success = success and ok_
             written = ", ".join(f"{tag}={value}" for tag, value, kind in writes)
-            try:
-                publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
-            except Exception as e:
-                printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
             if success:
+                try:
+                    publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
+                except Exception as e:
+                    printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
                 printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
             else:
                 printBoldRed(f"Failed to write some cycle settings to PLC ({written})")
@@ -1143,19 +1157,27 @@ class IOServer:
                             if success:
                                 objRef.currentQRCode = qrCode  # Store the QR code for this cycle
                                 printBoldGreen(f"Received QR Code: {qrCode}")
-                                objRef.perform_write_state_action(tags=tagsToBeWritten, result=True)
-                                # Write side, model and tightening/rotation setpoints to PLC
-                                objRef.writeCycleSettingsToPLC(qrCode)
-                                printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
-                                objRef.machineState.incrementState()
-                                printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
+                                # 1. Populate the cycle settings (side, model, setpoints) FIRST ...
+                                settingsWritten = objRef.writeCycleSettingsToPLC(qrCode)
+                                # 2. ... then QRCodeCheckOK, then QRCodeCheckDone. If the settings could not all be
+                                #    written, OK = False (like a NOT OK check): the cycle must not start without them.
+                                if objRef.perform_write_state_action(tags=tagsToBeWritten, result=settingsWritten):
+                                    printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
+                                    if settingsWritten:
+                                        objRef.machineState.incrementState()
+                                    else:
+                                        printBoldRed("Cycle settings not written: QR code check reported NOT OK to the PLC")
+                                        objRef.machineState.decrementState()
+                                    printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                         else:
                             # Capture the WRITE state we are about to act on, BEFORE incrementing
                             stateBeforeWrite = objRef.machineState.getCurrentState()
                             previousMachineState, evaluation = readDataInIOServerFromCameraServer(
                                 self.redisConnectionForWrites)
                             if evaluation:
-                                objRef.perform_write_state_action(tags=tagsToBeWritten, result=True)
+                                if not objRef.perform_write_state_action(tags=tagsToBeWritten, result=True):
+                                    time.sleep(objRef.write_loop_interval)
+                                    continue        # cycle aborted while writing: do not move on
                                 # ── Record op-END timestamps for Done-tag-based operations ──
                                 if stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE:
                                     objRef._recordOpEnd(IOServer.OP_KNUCKLE)
@@ -1173,8 +1195,8 @@ class IOServer:
                                 objRef.machineState.incrementState()
                                 printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                             else:
-                                if previousMachineState != MachineState.INVALID_STATE:
-                                    objRef.perform_write_state_action(tags=tagsToBeWritten, result=False)
+                                if previousMachineState != MachineState.INVALID_STATE and \
+                                        objRef.perform_write_state_action(tags=tagsToBeWritten, result=False):
                                     printBoldRed(
                                         f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
                                     printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
@@ -1387,22 +1409,44 @@ class IOServer:
 
         return returnValue
 
+    def _writeBoolUntilWritten(self, tag: str, value: bool, stateAtStart: MachineState) -> bool:
+        """Write a bool, retrying until it is written. Gives up only on shutdown or if the cycle was reset meanwhile
+        (emergency abort / heartbeat loss changed the state); returns False then."""
+        attempts = 0
+        while not self.shutdown:
+            if self.write_bool(tag, value):
+                return True
+            attempts += 1
+            if self.machineState.getCurrentState() != stateAtStart:
+                printBoldRed(f"Cycle reset while writing {tag}; not written")
+                return False
+            if attempts == 1 or attempts % 25 == 0:
+                self.logger.error(f"Could not write {tag}={value} (attempt {attempts}); retrying")
+                printBoldRed(f"Could not write {tag}={value} (attempt {attempts}); retrying")
+            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+        return False
+
     def perform_write_state_action(self, tags: list[str], result: bool = True) -> bool:
-        """Perform the write action to PLC tags."""
-        print("Entered perform_write_state_action()")
-        success1 = self.write_bool(tags[0], result)
+        """
+        Handshake of a WRITE state: tags = [<Check>OK, <Check>Done, ...].
+        The result (OK tag) is written FIRST and must be written before Done is set: the PLC reads OK when it sees
+        Done, so Done is never written unless OK was written. Each write is retried until it succeeds (or the cycle
+        is reset by an abort). Any values the PLC needs with this step (e.g. the cycle settings in state 2) must be
+        written by the caller BEFORE calling this.
+        Returns True if both OK and Done were written.
+        """
+        stateAtStart = self.machineState.getCurrentState()
+        if not self._writeBoolUntilWritten(tags[0], result, stateAtStart):
+            self.logger.info(f"Could not write {tags[0]}; {tags[1]} NOT written")
+            return False
         printBoldYellow(f"Wrote {result} to {tags[0]}")
         time.sleep(IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
-        success2 = self.write_bool(tags[1], True)
+        if not self._writeBoolUntilWritten(tags[1], True, stateAtStart):
+            self.logger.info(f"Could not write {tags[1]}")
+            return False
         printBoldYellow(f"Wrote True to {tags[1]}")
-
-        if success1 and success2:
-            self.logger.info(f"Performed action for, and wrote to tags {tags}")
-        else:
-            self.logger.info(f"Could not write to tags {tags}")
-            printBoldRed(f"Could not write to tags {tags}")
-
-        return result
+        self.logger.info(f"Performed action for, and wrote to tags {tags}")
+        return True
 
     def startThreads(self):
         """Start the read and connection check threads."""

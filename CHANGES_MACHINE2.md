@@ -421,3 +421,27 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
 - **Options:** `--ip`, `--repeat N`, `--interval s`.
 - **Exit codes:** 0 = every tag read; 1 = some reads failed; 2 = the PLC could not be reached.
 - **Verified** against the simulated S7 (including one forced read failure, which was reported while the rest were read) and against an unreachable address (exit code 2).
+
+## 20. Values before Done in every PC→PLC handshake; settings not written → QR NOT OK (2026-10-31)
+
+- **State 2 (QR code).** The order of writes was wrong. Before, the PC wrote QRCodeCheckOK, then QRCodeCheckDone, and only then the cycle settings, so the PLC could see Done before the settings were in DB500. The order is now:
+  1. **The cycle settings.** These are side, model (Allen-Bradley), the torque setpoints, RPM and rotation counts. All of them are worked out before anything is written: if any is unavailable (unknown side or model, no machine settings in the database), nothing is written. Each settings write gets 3 attempts.
+  2. **QRCodeCheckOK, then QRCodeCheckDone.**
+- **If the settings could not all be written (decision (b)).** The PC writes QRCodeCheckOK = **False**, then QRCodeCheckDone = True, and goes back to the QR code, exactly as for a NOT OK check. The cycle does not start and nothing is published for the DB record. Once the fault is gone, a re-scan writes the settings, OK = True and Done, and the cycle runs.
+- **Every handshake (`perform_write_state_action`, used by the QR step and all 7 vision steps).**
+  - The OK tag is written first and must succeed before Done is written. Before, Done was written even if the OK write had failed.
+  - Each write is retried until it succeeds. It gives up only on shutdown, or if an emergency abort or heartbeat loss resets the cycle in the meantime; in that case Done is not written and the state is not advanced.
+  - The other writes the PC makes to the PLC carry no "Done" with them: the connection-status toggle, re-arming CheckQRCode, resetting the torque or press tags after reading them, and the reset on abort.
+  - `IOServer_ModbusTCP.py` is not used anywhere and was not changed.
+- **New constants:** `IOServer.SETTINGS_WRITE_ATTEMPTS = 3` and `IOServer.WRITE_RETRY_INTERVAL = 0.2` s.
+- **Fault scenarios, new section E (both vendors):**
+  - every Done=True in a cycle is written after its OK, and in state 2 after all the settings;
+  - a settings write refused by the PLC gives QR OK=False then Done=True, a return to the QR code, nothing published, and a re-scan then runs the cycle;
+  - Siemens only: no settings in the database means no settings tag is written at all, then OK=False / Done, and a re-scan runs the cycle.
+- **Verified:**
+  - Fault scenarios: Allen-Bradley 47/47, Siemens 55/55.
+  - Two full cycles: state order exact on both.
+  - Integrated runs: database rows unchanged from before.
+  - Mock-PLC test window: Allen-Bradley 13/13, Siemens 14/14.
+  - One Allen-Bradley mock-window run failed (3/13, stuck in state 1) because it started straight after the integrated run, whose processes were still running against the same Redis. It passed 13/13 on two reruns by itself.
+- **Open: frontend out of step when the QR is answered NOT OK because of the settings.** The QR server sends the QR code to the frontend at the same moment as to the IOServer, so the frontend moves on to the knuckle step while the IOServer goes back to the QR code. The operator's re-scan then stays queued for the frontend; it is picked up when the frontend next returns to READ_QR_CODE, which starts a cycle the IOServer is not in.
