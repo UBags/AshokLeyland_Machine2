@@ -1439,7 +1439,7 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         if AshokLeylandFrontEnd.emergencyButtonPressed:
             self.largeImageWindow.showEmergencyAbort()
-        elif AshokLeylandFrontEnd.finalResult:
+        elif AshokLeylandFrontEnd.finalResult == ok:          # finalResult is the string ok / notok; both are truthy
             self.largeImageWindow.showSuccess()
         else:
             self.largeImageWindow.showFailure()

@@ -406,5 +406,10 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - Allen-Bradley: two cycles exact, fault scenarios 39/39.
   - Siemens: two cycles exact, writing 1 / 19.0 / 19.0 / 30.0 / 1.0 / 1.0; fault scenarios 42/42.
   - DB dry run: 44/44.
-  - FE dry run: 47/48. The F6 checks pass; the one failure is the known F5 failure (R8: the success screen is shown for a NOT OK result).
+  - FE dry run: 48/48 after the R8 fix below.
   - Integrated runs with all servers: the Siemens DB row stores `setting_*` = 30 / 19 / 19 / 1 / 1. The Allen-Bradley row stores the torque setpoints from the properties (19 / 19), with RPM and counts NULL.
+
+## 18. Frontend: failure screen for a NOT OK result (R8 fixed, 2026-10-31)
+
+- `setInProcessDefaultDisplay()` tested `elif AshokLeylandFrontEnd.finalResult:`. `finalResult` is the string ok / notok, and both strings count as true, so the success screen was shown even for a NOT OK component. It now tests `== ok`.
+- FE dry run F5, which failed on purpose to expose this, now passes: 48/48.
