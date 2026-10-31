@@ -18,7 +18,7 @@ from Configuration import CosThetaConfigurator
 from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
-from persistence.Persistence import getDatabaseName, setDatabaseName
+from persistence.Persistence import getDatabaseName, setDatabaseName, getMachineSettings
 
 TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM: float = 1.5
 TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM: float = 2.0
@@ -293,6 +293,10 @@ class IOServer:
     PC_PLC_TighteningTorque2Setpoint: str = CosThetaConfigurator.getInstance().getPcPlcTighteningTorque2SetpointTagName()  # REAL Nm
     PC_PLC_RotationRPM1: str = CosThetaConfigurator.getInstance().getPcPlcRotation1RPMTagName()           # INT rpm
     PC_PLC_RotationRPM2: str = CosThetaConfigurator.getInstance().getPcPlcRotation2RPMTagName()           # INT rpm
+    # Siemens: one rotation RPM and the two rotation counts (REAL). An empty tag name = not on this PLC, not written.
+    PC_PLC_RotationRPM: str = CosThetaConfigurator.getInstance().getPcPlcRotationRPMTagName()             # REAL rpm
+    PC_PLC_NoOfRotation1CCW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CCWTagName()   # REAL 1 / 2
+    PC_PLC_NoOfRotation1CW: str = CosThetaConfigurator.getInstance().getPcPlcNoOfRotation1CWTagName()     # REAL 1 / 2
 
     LHS_CODE: int = 1
     RHS_CODE: int = 2
@@ -504,25 +508,25 @@ class IOServer:
 
     def writeCycleSettingsToPLC(self, qrCode: str) -> bool:
         """
-        Machine 2, state 2 (WRITE_QR_CODE): write side, model and the tightening/rotation setpoints to the PLC.
-
-          LH_RH_Selection   INT   1 = LHS, 2 = RHS          (from QR)
-          ModelSelection    INT   1 = DOST, 2 = DOSTPLUS    (from QR)
-          Torque1/2 setpt   REAL  Nm                         (properties; -1 = do not write)
-          RotationRPM1/2    INT   rpm                        (properties; -1 = do not write)
-
-        Machine 1's rotation counts (NoOfRotation*) and DB-held machine settings are not used on Machine 2.
+        State 2 (WRITE_QR_CODE): write the cycle settings to the PLC. Only tags with a configured name are written
+        (an empty tag name means the PLC does not have that setting).
+          LH_RH_Selection             INT   1 = LHS, 2 = RHS              (from the QR code)
+          ModelSelection              INT   1 = DOST, 2 = DOSTPLUS        (from the QR code; Allen-Bradley only)
+        cycle.settings.source = database (Siemens): the settings in force in machine_settings (frontend: Machine
+        Settings), all REAL:
+          TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
+        cycle.settings.source = properties (Allen-Bradley; TO-DO: move to the database too):
+          TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
+        The settings actually written are published for the DB server (stored with the component's record).
         Returns True only if every tag that had to be written was written.
         """
         if not qrCode:
             printBoldRed("Cannot write cycle settings: QR code is empty")
             return False
-
         try:
             modelName, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(qrCode)
             side = (lhs_rhs or "").strip().upper()
             model = (modelName or "").strip().upper()
-
             if side == "LHS":
                 sideCode = IOServer.LHS_CODE
             elif side == "RHS":
@@ -530,37 +534,60 @@ class IOServer:
             else:
                 printBoldRed(f"Cannot determine LHS/RHS from QR code: {qrCode}")
                 return False
-
-            modelCode = IOServer.MODEL_CODES.get(model)
-            if modelCode is None:
-                printBoldRed(f"Unknown model '{modelName}' from QR code: {qrCode}")
-                return False
+            writes = [(IOServer.PC_PLC_LH_RH_Selection, sideCode, int)]
+            if IOServer.PC_PLC_ModelSelection:
+                modelCode = IOServer.MODEL_CODES.get(model)
+                if modelCode is None:
+                    printBoldRed(f"Unknown model '{modelName}' from QR code: {qrCode}")
+                    return False
+                writes.append((IOServer.PC_PLC_ModelSelection, modelCode, int))
 
             config = CosThetaConfigurator.getInstance()
-            skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
+            used = {"rotation_rpm": None, "tightening_torque1_setpoint": None, "tightening_torque2_setpoint": None,
+                    "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None}
+            if config.getCycleSettingsSource() == "database":
+                settings = getMachineSettings(getDatabaseName())
+                if not settings:
+                    printBoldRed("Cannot write cycle settings: no machine settings in the database")
+                    for tag, value, kind in writes:
+                        (self.write_int if kind is int else self.write_float)(tag, value)
+                    return False
+                for tag, key in ((IOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
+                                 (IOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
+                                 (IOServer.PC_PLC_RotationRPM, "rotation_rpm"),
+                                 (IOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
+                                 (IOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
+                    if tag:
+                        writes.append((tag, float(settings[key]), float))
+                        used[key] = float(settings[key])
+            else:
+                skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
+                for tag, value, key in ((IOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint(), "tightening_torque1_setpoint"),
+                                        (IOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint(), "tightening_torque2_setpoint")):
+                    if tag and value != skip:
+                        writes.append((tag, float(value), float))
+                        used[key] = float(value)
+                for tag, value in ((IOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
+                                   (IOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
+                    if tag and value != skip:
+                        writes.append((tag, int(value), int))
 
             success = True
-            success = self.write_int(IOServer.PC_PLC_LH_RH_Selection, sideCode) and success
-            success = self.write_int(IOServer.PC_PLC_ModelSelection, modelCode) and success
-
-            written = [f"side={sideCode}", f"model={modelCode}"]
-            for tag, value in ((IOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint()),
-                               (IOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint())):
-                if value != skip:
-                    success = self.write_float(tag, float(value), debug=False) and success
-                    written.append(f"{tag}={value}")
-            for tag, value in ((IOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
-                               (IOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
-                if value != skip:
+            for tag, value, kind in writes:
+                if kind is int:
                     success = self.write_int(tag, int(value)) and success
-                    written.append(f"{tag}={value}")
-
+                else:
+                    success = self.write_float(tag, float(value), debug=False) and success
+            written = ", ".join(f"{tag}={value}" for tag, value, kind in writes)
+            try:
+                publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
+            except Exception as e:
+                printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
             if success:
-                printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {', '.join(written)}")
+                printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
             else:
-                printBoldRed(f"Failed to write some cycle settings to PLC ({', '.join(written)})")
+                printBoldRed(f"Failed to write some cycle settings to PLC ({written})")
             return success
-
         except Exception as e:
             printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
@@ -1789,12 +1816,17 @@ class IOServer:
         tag_values[IOServer.PLC_PC_WatchTag] = self.read_int(IOServer.PLC_PC_WatchTag, debug=False)
 
         # Machine 2 cycle settings written by the PC in state 2
-        tag_values[IOServer.PC_PLC_LH_RH_Selection] = self.read_int(IOServer.PC_PLC_LH_RH_Selection, debug=False)
-        tag_values[IOServer.PC_PLC_ModelSelection] = self.read_int(IOServer.PC_PLC_ModelSelection, debug=False)
-        tag_values[IOServer.PC_PLC_TighteningTorque1Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque1Setpoint, debug=False)
-        tag_values[IOServer.PC_PLC_TighteningTorque2Setpoint] = self.read_float(IOServer.PC_PLC_TighteningTorque2Setpoint, debug=False)
-        tag_values[IOServer.PC_PLC_RotationRPM1] = self.read_int(IOServer.PC_PLC_RotationRPM1, debug=False)
-        tag_values[IOServer.PC_PLC_RotationRPM2] = self.read_int(IOServer.PC_PLC_RotationRPM2, debug=False)
+        for tag, reader in ((IOServer.PC_PLC_LH_RH_Selection, self.read_int),
+                            (IOServer.PC_PLC_ModelSelection, self.read_int),
+                            (IOServer.PC_PLC_TighteningTorque1Setpoint, self.read_float),
+                            (IOServer.PC_PLC_TighteningTorque2Setpoint, self.read_float),
+                            (IOServer.PC_PLC_RotationRPM1, self.read_int),
+                            (IOServer.PC_PLC_RotationRPM2, self.read_int),
+                            (IOServer.PC_PLC_RotationRPM, self.read_float),
+                            (IOServer.PC_PLC_NoOfRotation1CCW, self.read_float),
+                            (IOServer.PC_PLC_NoOfRotation1CW, self.read_float)):
+            if tag:                      # empty name = not on this PLC
+                tag_values[tag] = reader(tag, debug=False)
         tag_values[IOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(IOServer.PC_PLC_ConnectionStatusTag, debug=False)
 
         # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)

@@ -15,6 +15,12 @@ with field-by-field checks:
   7. Report / counter functions used by the frontend menus: getAllDataOfToday, getDataByModelName,
      getDataByModelNameAndDateLimits, getUniqueModelNames, getComponentsProducedToday (counts OK rows only).
   8. Clean-up of every row and image file this script created.
+  9. Machine settings (machine_settings table, frontend Machine Settings dialog): the default row (30 rpm, 19 / 19 Nm,
+     1 / 1 rotations) exists; validateMachineSettings / insertNewMachineSettings reject out-of-range values (RPM
+     outside 20-40 or not whole, torques not in (0, 20) or > 2 decimals, counts not 1 / 2); the database CHECK
+     constraints reject them too; a valid change becomes the settings in force, with updated_by, and is in the history.
+     Section 4 also checks that the settings the IOServer published for a QR code (cycleSettings:<QR>) are stored in
+     that component's record (setting_* columns), and section 6 that a record without them stores NULL.
 
 Needs Redis on localhost:6379 and PostgreSQL on 127.0.0.1:5432 (postgres/postgres). Run from a scratch directory
 (image files are written under C:/AshokLeylandImages/Test/... relative to it on non-Windows hosts):
@@ -24,9 +30,9 @@ import os, sys, time, threading, uuid
 import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-import numpy as np, cv2, psycopg2, psycopg2.extras
+import numpy as np, cv2, psycopg2, psycopg2.extras, psycopg2.errors
 from redis import Redis
-from utils.RedisUtils import sendDataFromFEServerToDatabaseServer, ok, notok, clearQueues, fe2dbq
+from utils.RedisUtils import sendDataFromFEServerToDatabaseServer, ok, notok, clearQueues, fe2dbq, publishCycleSettingsForQRCode
 import persistence.Persistence as P
 from persistence.DBServer import DataPersistence
 
@@ -165,6 +171,9 @@ time.sleep(2)
 
 code4 = qr(QR_LHS, 4); CREATED_QRS.append(code4)
 kw, expected, images = full_record(code4, seed=4)
+SETTINGS4 = {"rotation_rpm": 33.0, "tightening_torque1_setpoint": 18.75, "tightening_torque2_setpoint": 17.5,
+             "no_of_rotation1_ccw": 2.0, "no_of_rotation1_cw": 1.0}
+publishCycleSettingsForQRCode(r, code4, SETTINGS4)          # as the IOServer does in state 2
 check("4 FE record sent", sendDataFromFEServerToDatabaseServer(r, **kw))
 rs = wait_rows(code4, 1)
 check("4 stored by DBServer", len(rs) == 1, f"{len(rs)} rows")
@@ -178,6 +187,8 @@ if rs:
     check(f"4 all {len(expected)} result / torque / datetime / overall fields stored exactly", bad == {}, str(bad))
     check("4 model / side / tonnage from the QR code", (row["model_name"], row["lhs_rhs"], row["model_tonnage"]) == ("DOST", "LHS", "2.0T"),
           str((row["model_name"], row["lhs_rhs"], row["model_tonnage"])))
+    stored = {k: row[f"setting_{k}"] for k in SETTINGS4}
+    check("4 machine settings used for the component stored with it (setting_* columns)", stored == SETTINGS4, str(stored))
     check("4 username admin, remarks empty", row["username"] == "admin" and (row["remarks"] or "") == "", str((row["username"], row["remarks"])))
     paths = {stem: row[f"{stem}_imagefile"] for stem in images}
     CREATED_FILES += [p for p in paths.values() if p]
@@ -207,6 +218,8 @@ if rs:
         got = row[col]; got = str(got) if col.endswith("_datetime") else got
         if got != v: bad[col] = (got, v)
     check("6 reached steps OK, unreached NOTOK with 1970 datetimes, torques 0.0, overall NOTOK", bad == {}, str(bad))
+    check("6 no settings published for this QR -> setting_* columns NULL",
+          all(row[f"setting_{k}"] is None for k in P.MACHINE_SETTINGS_KEYS))
     unreached_files = {s[0]: row[f"{s[0]}_imagefile"] for s in STEPS[4:] if s[1]}
     check("6 no image file for the unreached picture steps", all(not v for v in unreached_files.values()), str(unreached_files))
     CREATED_FILES += [row[f"{s}_imagefile"] for s in images if row[f"{s}_imagefile"]]
@@ -236,6 +249,50 @@ for f in CREATED_FILES:
     except OSError: pass
 check("8 test rows deleted (1 direct + 2 duplicate + 1 aborted)", deleted == 4 and all(not rows_for(q_) for q_ in CREATED_QRS), f"{deleted} deleted")
 check("8 test image files removed", not any(os.path.exists(f) for f in CREATED_FILES))
+
+# =====================================================================================================
+print("\n=== 9. Machine settings ===", flush=True)
+c = conn(); cur = c.cursor()
+cur.execute(f"select rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotation1_ccw, "
+            f"no_of_rotation1_cw, updated_by from {SCHEMA}.machine_settings order by setting_id limit 1")
+first = cur.fetchone()
+check("9 default settings row (30, 19, 19, 1, 1, 'system (default)')", first == (30.0, 19.0, 19.0, 1.0, 1.0, "system (default)"), str(first))
+before = P.getMachineSettings(DB)
+check("9 getMachineSettings returns the 5 settings as floats", set(P.MACHINE_SETTINGS_KEYS) <= set(before)
+      and all(isinstance(before[k], float) for k in P.MACHINE_SETTINGS_KEYS), str(before))
+BAD = [dict(rotation_rpm=19), dict(rotation_rpm=41), dict(rotation_rpm=30.5),
+       dict(tightening_torque1_setpoint=0), dict(tightening_torque1_setpoint=20), dict(tightening_torque2_setpoint=12.345),
+       dict(no_of_rotation1_ccw=0), dict(no_of_rotation1_ccw=3), dict(no_of_rotation1_cw=1.5)]
+rejected = []
+for change in BAD:
+    candidate = dict(P.DEFAULT_MACHINE_SETTINGS); candidate.update(change)
+    rejected.append(bool(P.validateMachineSettings(candidate)) and
+                    not P.insertNewMachineSettings(DB, updated_by="dryrun-db", **candidate))
+check(f"9 {len(BAD)} out-of-range settings rejected by validateMachineSettings / insertNewMachineSettings", all(rejected), str(rejected))
+check("9 nothing stored by the rejected attempts", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
+db_rejects = []
+for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("no_of_rotation1_cw", 3)):
+    vals = dict(P.DEFAULT_MACHINE_SETTINGS); vals[col] = value
+    try:
+        cur.execute(f"insert into {SCHEMA}.machine_settings (rotation_rpm, tightening_torque1_setpoint, "
+                    f"tightening_torque2_setpoint, no_of_rotation1_ccw, no_of_rotation1_cw, updated_by) "
+                    f"values (%s, %s, %s, %s, %s, 'dryrun-db')",
+                    tuple(vals[k] for k in P.MACHINE_SETTINGS_KEYS))
+        db_rejects.append(False)
+    except psycopg2.errors.CheckViolation:
+        db_rejects.append(True)
+check("9 database CHECK constraints reject RPM 45, torque 20, count 3", all(db_rejects), str(db_rejects))
+NEW = dict(rotation_rpm=25.0, tightening_torque1_setpoint=15.25, tightening_torque2_setpoint=16.5,
+           no_of_rotation1_ccw=2.0, no_of_rotation1_cw=2.0)
+check("9 valid change saved", P.insertNewMachineSettings(DB, updated_by="dryrun-db", **NEW))
+now = P.getMachineSettings(DB)
+check("9 the change is the settings in force, with updated_by", {k: now[k] for k in NEW} == NEW and now["updated_by"] == "dryrun-db", str(now))
+history = P.getMachineSettingsHistory(DB, 2)
+check("9 history newest first: the change, then the previous settings",
+      len(history) == 2 and history[0]["setting_id"] == now["setting_id"] and history[1]["setting_id"] == before["setting_id"])
+cur.execute(f"delete from {SCHEMA}.machine_settings where updated_by = 'dryrun-db'")
+check("9 clean-up: settings in force back to what they were", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
+c.close()
 
 failed = [n for n, ok_ in RESULTS if not ok_]
 print(f"\nRESULT {len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed" + (f"; FAILED: {failed}" if failed else ""), flush=True)

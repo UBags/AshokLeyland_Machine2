@@ -27,6 +27,13 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      PLC_PC_CheckQRCode=True (so it moves straight on to WRITE_QR_CODE and asks the QR server for a code).
      A full normal cycle must then complete.
 
+  D. State-2 cycle settings
+     Allen-Bradley (cycle.settings.source=properties): side and model from the QR code, torque setpoints from the
+     properties. Siemens (cycle.settings.source=database): side from the QR code and the 5 settings in force in
+     machine_settings (default 30 rpm, 19 / 19 Nm, 1 / 1 rotations), no model. In both cases the settings written
+     are published to Redis (cycleSettings:<QR>) for the DB record. Siemens: settings changed while a cycle runs
+     (as from the frontend's Machine Settings dialog) are written in the NEXT cycle.
+
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -35,7 +42,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+from _plc_sim import setup, setting_tags, use_machine_settings        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
 IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
@@ -174,6 +181,8 @@ def finish_qr_handshake():
     time.sleep(0.3)
     with LOCK: TAGS[IOServer.PLC_PC_CheckQRCode] = False; TAGS[IOServer.PC_PLC_QRCodeCheckDone] = False
 
+SETTING_TAGS = setting_tags(IOServer)      # the state-2 settings tags this PLC has
+
 def writes_of(tags, since):
     return [(t, v) for t, v in WRITES[since:] if t in tags]
 
@@ -205,9 +214,6 @@ def run_scenarios():
     print("\n=== B. QR code rejected, then accepted ===", flush=True)
     TRACE.clear(); mark = len(WRITES)
     QR_TAGS = (IOServer.PC_PLC_QRCodeCheckOK, IOServer.PC_PLC_QRCodeCheckDone)
-    SETTING_TAGS = (IOServer.PC_PLC_LH_RH_Selection, IOServer.PC_PLC_ModelSelection,
-                    IOServer.PC_PLC_TighteningTorque1Setpoint, IOServer.PC_PLC_TighteningTorque2Setpoint,
-                    IOServer.PC_PLC_RotationRPM1, IOServer.PC_PLC_RotationRPM2)
     # the cycle end already re-armed CheckQRCode (state 2); scan a bad code first
     plc_start_cycle(QR_DOSTPLUS_RHS, status_sequence=(notok, ok))
     check("B: waiting in WRITE_QR_CODE before the scan", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE))
@@ -227,7 +233,8 @@ def run_scenarios():
           (IOServer.PC_PLC_QRCodeCheckOK, True) in qr_writes and (IOServer.PC_PLC_QRCodeCheckDone, True) in qr_writes, str(qr_writes))
     settings = dict(writes_of(SETTING_TAGS, mark))
     check("B: settings are those of the accepted DOSTPLUS RHS code",
-          settings.get(IOServer.PC_PLC_LH_RH_Selection) == 2 and settings.get(IOServer.PC_PLC_ModelSelection) == 2, str(settings))
+          settings.get(IOServer.PC_PLC_LH_RH_Selection) == 2 and
+          (not IOServer.PC_PLC_ModelSelection or settings.get(IOServer.PC_PLC_ModelSelection) == 2), str(settings))
     check("B: moved on to the knuckle picture state", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE))
     run_steps()
     check("B: cycle completed and wrapped to state 1", wrapped())
@@ -268,7 +275,8 @@ def run_scenarios():
     NOT_RESET_ON_ABORT = {"PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
                           "PLC_PC_Station2RotationDuringTighteningDone",   # PLC-owned, read only (no action yet)
                           "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
-                          "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2"}
+                          "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
+                          "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW"}
     all_tag_attrs = {a for a in dir(IOServer) if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
     unclassified = all_tag_attrs - set(RESET_TAGS) - NOT_RESET_ON_ABORT
     check("C: every IOServer PLC tag is classified (reset on abort, or deliberately not)", unclassified == set(), str(sorted(unclassified)))
@@ -306,6 +314,63 @@ def run_scenarios():
     run_steps()
     check("C: a full normal cycle completes after the abort", wrapped(), f"trace {TRACE}")
     check("C: that cycle walked every state 1..28", set(range(1, 29)) <= set(TRACE))
+
+    # =====================================================================================================
+    print("\n=== D. State-2 cycle settings: values, published for the DB record, a change applies to the next cycle ===", flush=True)
+    from Configuration import CosThetaConfigurator
+    cfg = CosThetaConfigurator.getInstance()
+    fromDatabase = cfg.getCycleSettingsSource() == "database"
+    KEY_FOR_TAG = ((IOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),   # tag "" = not on this PLC
+                   (IOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
+                   (IOServer.PC_PLC_RotationRPM, "rotation_rpm"),
+                   (IOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
+                   (IOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw"))
+
+    def published_matches(code, written):
+        published = readCycleSettingsForQRCode(r, code)
+        expected = {key: None for tag, key in KEY_FOR_TAG}
+        for tag, key in KEY_FOR_TAG:
+            if tag and tag in written:
+                expected[key] = written[tag]
+        return published == expected, f"published {published}, expected {expected}"
+
+    TRACE.clear(); mark = len(WRITES)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    first = dict(writes_of(SETTING_TAGS, mark))
+    if fromDatabase:
+        expected = {IOServer.PC_PLC_LH_RH_Selection: 1, IOServer.PC_PLC_TighteningTorque1Setpoint: 19.0,
+                    IOServer.PC_PLC_TighteningTorque2Setpoint: 19.0, IOServer.PC_PLC_RotationRPM: 30.0,
+                    IOServer.PC_PLC_NoOfRotation1CCW: 1.0, IOServer.PC_PLC_NoOfRotation1CW: 1.0}
+        check("D: side + the 5 settings in force in the database written (30 rpm, 19 / 19 Nm, 1 / 1 rotations)",
+              first == expected, str(first))
+        check("D: no model written (no ModelSelection tag on this PLC)", not IOServer.PC_PLC_ModelSelection)
+    else:
+        check("D: side + model written from the QR code (1 = LHS, 1 = DOST)",
+              first.get(IOServer.PC_PLC_LH_RH_Selection) == 1 and first.get(IOServer.PC_PLC_ModelSelection) == 1, str(first))
+        t1 = cfg.getTighteningTorque1Setpoint()
+        check("D: torque setpoint 1 from the properties (-1 = not written)",
+              first.get(IOServer.PC_PLC_TighteningTorque1Setpoint) == (None if t1 == -1 else float(t1)), str(first))
+    ok_, detail = published_matches(QR_DOST_LHS, first)
+    check("D: the settings written are published for the DB record (cycleSettings:<QR>)", ok_, detail)
+    if fromDatabase:          # Supervisor changes the settings while this cycle runs: the next cycle uses them
+        use_machine_settings("Test", rotation_rpm=35, tightening_torque1_setpoint=17.5, tightening_torque2_setpoint=18.25,
+                             no_of_rotation1_ccw=2, no_of_rotation1_cw=1)
+    run_steps()
+    check("D: cycle completed", wrapped())
+    if fromDatabase:
+        TRACE.clear(); mark = len(WRITES)
+        plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+        second = dict(writes_of(SETTING_TAGS, mark))
+        expected = {IOServer.PC_PLC_LH_RH_Selection: 2, IOServer.PC_PLC_TighteningTorque1Setpoint: 17.5,
+                    IOServer.PC_PLC_TighteningTorque2Setpoint: 18.25, IOServer.PC_PLC_RotationRPM: 35.0,
+                    IOServer.PC_PLC_NoOfRotation1CCW: 2.0, IOServer.PC_PLC_NoOfRotation1CW: 1.0}
+        check("D: settings changed mid-cycle are written in the NEXT cycle (35 rpm, 17.5 / 18.25 Nm, 2 / 1)",
+              second == expected, str(second))
+        ok_, detail = published_matches(QR_DOSTPLUS_RHS, second)
+        check("D: the new settings are published for that component's record", ok_, detail)
+        run_steps()
+        check("D: that cycle completed", wrapped())
+        use_machine_settings("Test")          # back to the defaults
 
 
 try:

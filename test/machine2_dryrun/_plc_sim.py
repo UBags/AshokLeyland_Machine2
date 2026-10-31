@@ -14,6 +14,11 @@ The IOServer is chosen by the environment variable COSTHETA_PLC_VENDOR (as in Co
 
 TAGS[tag] reads / writes a tag as the PLC sees it (the test plays the PLC); WRITES collects every (tag, value) the PC
 writes; LOCK is the lock the tests hold while changing several tags together.
+
+State-2 cycle settings: setting_tags(IOServer) gives the settings tags configured for the vendor (empty names = not on
+this PLC). Siemens takes the settings from machine_settings in the database (cycle.settings.source=database), so
+setup(mode) creates that database and puts the default settings (30 rpm, 19 / 19 Nm, 1 / 1 rotations) in force;
+use_machine_settings(mode, ...) puts other values in force (as the frontend's Machine Settings dialog does).
 """
 import collections, os, struct, threading
 
@@ -21,9 +26,30 @@ WRITES = []
 LOCK = threading.Lock()
 
 
-def setup():
+SETTING_ATTRS = ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
+                 "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
+                 "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
+                 "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW")
+
+
+def setting_tags(IOServer):
+    """Tag names of the state-2 settings this PLC has (configured, non-empty)."""
+    return tuple(getattr(IOServer, a) for a in SETTING_ATTRS if getattr(IOServer, a, ""))
+
+
+def use_machine_settings(mode="Test", **values):
+    """Create the mode's database if needed and put these settings in force (defaults for any not given)."""
+    from persistence import Persistence as P
+    P.setDatabaseName(mode, createDB=True)
+    settings = dict(P.DEFAULT_MACHINE_SETTINGS); settings.update(values)
+    assert P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", **settings), settings
+    return settings
+
+
+def setup(mode="Test"):
     vendor = (os.environ.get("COSTHETA_PLC_VENDOR") or "allenbradley").strip().lower()
     if vendor == "siemens":
+        use_machine_settings(mode)
         return _setup_siemens()
     return _setup_allenbradley()
 

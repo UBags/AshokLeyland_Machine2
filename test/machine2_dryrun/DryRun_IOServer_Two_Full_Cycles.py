@@ -11,7 +11,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+from _plc_sim import setup, setting_tags        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
 IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
@@ -111,9 +111,7 @@ def one_cycle(n, t1, t2, frt):
 time.sleep(6)            # IOServer __init__ sleeps 5 s before starting threads
 TRACE.clear()
 one_cycle(1, 19.08, 19.03, 2.41)
-settings = {t: v for t, v in WRITES if t in (IOServer.PC_PLC_LH_RH_Selection, IOServer.PC_PLC_ModelSelection,
-            IOServer.PC_PLC_TighteningTorque1Setpoint, IOServer.PC_PLC_TighteningTorque2Setpoint,
-            IOServer.PC_PLC_RotationRPM1, IOServer.PC_PLC_RotationRPM2)}
+settings = {t: v for t, v in WRITES if t in setting_tags(IOServer)}
 trace1 = list(TRACE); TRACE.clear(); fe1 = list(FE_MSGS); FE_MSGS.clear()
 one_cycle(2, 18.97, 19.11, 2.36)
 trace2 = list(TRACE)

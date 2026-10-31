@@ -11,8 +11,11 @@ What it does:
 2. The GUI plays the PLC (sets trigger / torque / press-done tags in MockPLC), the QR-code server and the camera
    server (sends results on the Redis queues IOServer reads), so IOServer's own code walks the cycle.
 3. The "PLC Tag Monitor" tab shows every MockPLC tag, including the cycle settings IOServer writes in state 2
-   (WRITE_QR_CODE): LH_RH_Selection (1=LHS, 2=RHS), ModelSelection (1=DOST, 2=DOSTPLUS),
-   TighteningTorque1/2Setpoint (REAL Nm) and RotationRPM1/2 (INT; not written when the configured value is -1).
+   (WRITE_QR_CODE). Only tags with a configured name are written:
+     Allen-Bradley (cycle.settings.source=properties): LH_RH_Selection (1=LHS, 2=RHS), ModelSelection
+       (1=DOST, 2=DOSTPLUS), TighteningTorque1/2Setpoint (REAL Nm) and RotationRPM1/2 (INT; -1 = not written).
+     Siemens (cycle.settings.source=database): LH_RH_Selection, and TighteningTorque1/2Setpoint, RotationRPM,
+       NoOfRotation1CCW / 1CW (all REAL) from machine_settings (frontend: Machine Settings).
 4. "Auto Cycle (All OK)" drives one complete cycle (15 process steps, states 1 -> 28 -> 1) and reports the state
    trace IOServer actually walked and the state-2 settings it wrote.
 
@@ -118,9 +121,11 @@ TORQUE_TAGS = {
 }
 
 # Cycle settings written by IOServer.writeCycleSettingsToPLC() in state 2 (WRITE_QR_CODE)
-CYCLE_SETTING_ATTRS = ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
-                       "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
-                       "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2")
+CYCLE_SETTING_ATTRS = tuple(a for a in ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
+                                         "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
+                                         "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
+                                         "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW")
+                            if getattr(IOServer, a, ""))          # empty tag name = not on this PLC
 SYSTEM_ATTRS = ("PLC_PC_EmergencyAbort", "PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag")
 
 # QR codes per model/side (part numbers from qrcode.partmapping.* in ApplicationConfiguration.properties)
@@ -393,17 +398,27 @@ class TestIOServerGUI:
 
         info += "Cycle settings written by IOServer in state 2 (WRITE_QR_CODE)\n"
         info += "-" * 78 + "\n"
-        info += f"  PC_PLC_LH_RH_Selection   (INT 1=LHS, 2=RHS):          {IOServer.PC_PLC_LH_RH_Selection}\n"
-        info += f"  PC_PLC_ModelSelection    (INT 1=DOST, 2=DOSTPLUS):     {IOServer.PC_PLC_ModelSelection}\n"
-        info += (f"  PC_PLC_TighteningTorque1Setpoint (REAL Nm):          {IOServer.PC_PLC_TighteningTorque1Setpoint}"
-                 f"  = {config.getTighteningTorque1Setpoint()}\n")
-        info += (f"  PC_PLC_TighteningTorque2Setpoint (REAL Nm):          {IOServer.PC_PLC_TighteningTorque2Setpoint}"
-                 f"  = {config.getTighteningTorque2Setpoint()}\n")
-        info += (f"  PC_PLC_RotationRPM1      (INT rpm):                  {IOServer.PC_PLC_RotationRPM1}"
-                 f"  = {config.getRotation1RPM()}\n")
-        info += (f"  PC_PLC_RotationRPM2      (INT rpm):                  {IOServer.PC_PLC_RotationRPM2}"
-                 f"  = {config.getRotation2RPM()}\n")
-        info += "  (a configured value of -1 means IOServer does not write that tag)\n\n"
+        source = config.getCycleSettingsSource()
+        info += f"  Source of the setpoints: {source}\n"
+        if source == "database":
+            from persistence.Persistence import getMachineSettings, getDatabaseName
+            configured = getMachineSettings(getDatabaseName())
+            values = {"PC_PLC_TighteningTorque1Setpoint": configured.get("tightening_torque1_setpoint"),
+                      "PC_PLC_TighteningTorque2Setpoint": configured.get("tightening_torque2_setpoint"),
+                      "PC_PLC_RotationRPM": configured.get("rotation_rpm"),
+                      "PC_PLC_NoOfRotation1CCW": configured.get("no_of_rotation1_ccw"),
+                      "PC_PLC_NoOfRotation1CW": configured.get("no_of_rotation1_cw")}
+        else:
+            values = {"PC_PLC_TighteningTorque1Setpoint": config.getTighteningTorque1Setpoint(),
+                      "PC_PLC_TighteningTorque2Setpoint": config.getTighteningTorque2Setpoint(),
+                      "PC_PLC_RotationRPM1": config.getRotation1RPM(), "PC_PLC_RotationRPM2": config.getRotation2RPM()}
+        values["PC_PLC_LH_RH_Selection"] = "from the QR code (1=LHS, 2=RHS)"
+        values["PC_PLC_ModelSelection"] = "from the QR code (1=DOST, 2=DOSTPLUS)"
+        for attr in CYCLE_SETTING_ATTRS:
+            info += f"  {attr:<34} {_tag(attr):<34} = {values.get(attr)}\n"
+        if source != "database":
+            info += "  (a configured value of -1 means IOServer does not write that tag)\n"
+        info += "\n"
 
         info += "Tag Names per Process Step\n"
         info += "-" * 78 + "\n"

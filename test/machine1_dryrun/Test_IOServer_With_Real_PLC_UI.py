@@ -33,9 +33,12 @@ Machine 2 process steps (15) and IOServer states (28):
                                                       IOServer then wraps to state 1)
 There is no separate free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
-In state 2 (WRITE_QR_CODE) IOServer writes the cycle settings to the PLC: LH_RH_Selection (1=LHS, 2=RHS),
-ModelSelection (1=DOST, 2=DOSTPLUS), TighteningTorque1/2Setpoint (REAL Nm) and RotationRPM1/2 (INT; not written when
-configured as -1). They are shown in the tag panel when IOServer's tag dump includes them.
+In state 2 (WRITE_QR_CODE) IOServer writes the cycle settings to the PLC (only tags with a configured name):
+  Allen-Bradley: LH_RH_Selection (1=LHS, 2=RHS), ModelSelection (1=DOST, 2=DOSTPLUS), TighteningTorque1/2Setpoint
+  (REAL Nm) and RotationRPM1/2 (INT; not written when configured as -1), from the properties;
+  Siemens: LH_RH_Selection, and TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW / 1CW (REAL) from
+  machine_settings in the database (frontend: Machine Settings).
+They are shown in the tag panel when IOServer's tag dump includes them.
 
 Torque Step Workflow (Steps 5, 9, 14):
 - State X_DONE: IOServer waits for the PLC's "torque value set" signal
@@ -79,7 +82,9 @@ CYCLE_SETTING_TAGS = [
     _cfg.getPcPlcLHRHSelectionTagName(), _cfg.getPcPlcModelSelectionTagName(),
     _cfg.getPcPlcTighteningTorque1SetpointTagName(), _cfg.getPcPlcTighteningTorque2SetpointTagName(),
     _cfg.getPcPlcRotation1RPMTagName(), _cfg.getPcPlcRotation2RPMTagName(),
+    _cfg.getPcPlcRotationRPMTagName(), _cfg.getPcPlcNoOfRotation1CCWTagName(), _cfg.getPcPlcNoOfRotation1CWTagName(),
 ]
+CYCLE_SETTING_TAGS = [t for t in CYCLE_SETTING_TAGS if t]     # empty name = not on this PLC
 TAG_GROUPS = [
     ("Step 0: QR Code", [_cfg.getPlcPcCheckQRCodeTagName(), _cfg.getPcPlcQRCodeOKTagName(),
                          _cfg.getPcPlcQRCodeDoneTagName()]),

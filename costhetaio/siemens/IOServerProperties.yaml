@@ -1,7 +1,7 @@
 # =====================================================================================================================
 # IOServerProperties.yaml - Siemens S7-1515: tag name -> address, for costhetaio/siemens/IOServer.py
 # ---------------------------------------------------------------------------------------------------------------------
-# Source: 'HUb_and_Knuckle_Revised_Assembly_Process.xlsx', last column (DB500), with the corrections of 2026-10-31.
+# Source: 'HUb_and_Knuckle_Revised_Assembly_Process.xlsx', last column (DB500); final addresses as agreed 2026-10-31.
 # The KEYS are the tag names the IOServer uses when plc.vendor=siemens: the siemens.*.tagname values in
 # ApplicationConfiguration.properties (they are the names in the spreadsheet). Every one of those names must be here.
 #
@@ -15,9 +15,6 @@
 #   * DB500 elements at I<n> declared Int (not DInt), at R<n> declared Real.
 #   * PLC->PC and PC->PLC bits share bytes in DB500. The PC writes single bits (pyS7 BIT transport), never whole
 #     bytes, so it does not overwrite the PLC's bits; the PLC program must likewise set / reset single bits only.
-#
-# PROVISIONAL addresses (marked "PROVISIONAL" below) were chosen where the spreadsheet had a clash or no address;
-# confirm them against the PLC programme.
 # =====================================================================================================================
 
 plc:
@@ -34,13 +31,14 @@ tags:
   PLC_PC_CheckQRCode:                        { address: "DB500,X2.5", type: bool,  dir: r }
   PC_PLC_QRCodeCheckOK:                      { address: "DB500,X0.1", type: bool,  dir: w }
   PC_PLC_QRCodeCheckDone:                    { address: "DB500,X0.2", type: bool,  dir: w }
-  # State 2 cycle settings (as on the Allen-Bradley machine)
-  PC_PLC_ComponentType:                      { address: "DB500,I16",  type: int,   dir: w }   # 1 = DOST, 2 = DOSTPLUS
+  # State 2 cycle settings: side from the QR code; the rest from machine_settings in the database (frontend:
+  # Machine Settings, Administrator / Supervisor). No model / component type: the PLC does not need it.
   PC_PLC_LH_RH_Selection:                    { address: "DB500,I34",  type: int,   dir: w }   # 1 = LHS, 2 = RHS
-  PC_PLC_TighteningTorque1Setpoint:          { address: "DB500,R18",  type: float, dir: w }   # PROVISIONAL (sheet: NoOfRotation1CCW)
-  PC_PLC_TighteningTorque2Setpoint:          { address: "DB500,R22",  type: float, dir: w }   # PROVISIONAL (sheet: NoOfRotation1CW)
-  PC_PLC_RotationRPM1:                       { address: "DB500,I40",  type: int,   dir: w }   # PROVISIONAL (not in sheet)
-  PC_PLC_RotationRPM2:                       { address: "DB500,I42",  type: int,   dir: w }   # PROVISIONAL (not in sheet)
+  PC_PLC_TighteningTorque1Setpoint:          { address: "DB500,R40",  type: float, dir: w }   # Nm, > 0 and < 20
+  PC_PLC_TighteningTorque2Setpoint:          { address: "DB500,R44",  type: float, dir: w }   # Nm, > 0 and < 20
+  PC_PLC_RotationRPM:                        { address: "DB500,R36",  type: float, dir: w }   # 20 - 40 rpm
+  PC_PLC_NoOfRotation1CCW:                   { address: "DB500,R18",  type: float, dir: w }   # 1 or 2
+  PC_PLC_NoOfRotation1CW:                    { address: "DB500,R22",  type: float, dir: w }   # 1 or 2
 
   # --- Step 3: knuckle ---------------------------------------------------------------------------------------------
   PLC_PC_CheckKnuckle:                       { address: "DB500,X3.3", type: bool,  dir: r }
@@ -63,7 +61,7 @@ tags:
   PC_PLC_NutAndPlateWasherCheckDone:         { address: "DB500,X1.2", type: bool,  dir: w }
 
   # --- Steps 10 and 18: Station 2 tightening (torque 1 and torque 2) -----------------------------------------------
-  PLC_PC_Station2TorqueValueSet:             { address: "DB500,X2.7", type: bool,  dir: r }
+  PLC_PC_Station2TorqueValueSet:             { address: "DB500,X2.6", type: bool,  dir: r }
   PLC_PC_Station2TorqueValue:                { address: "DB500,R8",   type: float, dir: r }
   PLC_PC_Station2RotationDuringTighteningDone: { address: "DB500,X3.6", type: bool, dir: r }  # read and logged only
 
@@ -73,7 +71,7 @@ tags:
   PC_PLC_BunkForComponentPressCheckDone:     { address: "DB500,X4.2", type: bool,  dir: w }
 
   # --- Steps 14-15: component press done (state READ_COMPONENT_PRESS_DONE) -----------------------------------------
-  PLC_PC_ComponentPressDone:                 { address: "DB500,X3.5", type: bool,  dir: r }   # PROVISIONAL (not in sheet)
+  PLC_PC_ComponentPressDone:                 { address: "DB500,X3.5", type: bool,  dir: r }
 
   # --- Step 17: no bunk --------------------------------------------------------------------------------------------
   PLC_PC_CheckNoBunk:                        { address: "DB500,X4.3", type: bool,  dir: r }
@@ -82,8 +80,8 @@ tags:
 
   # --- Step 21: split pin and washer -------------------------------------------------------------------------------
   PLC_PC_CheckSplitPinAndWasher:             { address: "DB500,X3.0", type: bool,  dir: r }
-  PC_PLC_SplitPinAndWasherCheckOK:           { address: "DB500,X0.6", type: bool,  dir: w }   # PROVISIONAL (X1.4 = CapCheckDone)
-  PC_PLC_SplitPinAndWasherCheckDone:         { address: "DB500,X0.5", type: bool,  dir: w }   # PROVISIONAL (X1.3 = CapCheckOK)
+  PC_PLC_SplitPinAndWasherCheckOK:           { address: "DB500,X0.6", type: bool,  dir: w }
+  PC_PLC_SplitPinAndWasherCheckDone:         { address: "DB500,X0.5", type: bool,  dir: w }
 
   # --- Step 23: cap ------------------------------------------------------------------------------------------------
   PLC_PC_CheckCap:                           { address: "DB500,X3.1", type: bool,  dir: r }
@@ -99,7 +97,7 @@ tags:
   PLC_PC_Station4CapPressDone:               { address: "DB500,X3.2", type: bool,  dir: r }
 
   # --- Step 28: Station 3 free-rotation torque ---------------------------------------------------------------------
-  PLC_PC_Station3TorqueValueSet:             { address: "DB500,X2.6", type: bool,  dir: r }   # PROVISIONAL (X2.7 = Station 2)
+  PLC_PC_Station3TorqueValueSet:             { address: "DB500,X2.7", type: bool,  dir: r }
   PLC_PC_Station3TorqueValue:                { address: "DB500,R12",  type: float, dir: r }
 
   # --- System ------------------------------------------------------------------------------------------------------
@@ -108,5 +106,5 @@ tags:
   PLC_PC_WatchTag:                           { address: "DB500,I6",   type: int,   dir: r }   # must read 1234
 
 # Unused on Machine 2 (in the spreadsheet, not used by the IOServer):
-#   PC_PLC_NoOfRotation2CCW DB500,R26   PC_PLC_NoOfRotation2CW DB500,R30   PC_PLC_RotationUnitRPM DB500,R36
+#   PC_PLC_NoOfRotation2CCW DB500,R26   PC_PLC_NoOfRotation2CW DB500,R30
 #   PLC_PC_Station4CapPressValueSet DB500,X4.6 (spurious)

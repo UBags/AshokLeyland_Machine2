@@ -1762,6 +1762,122 @@ def writeReportToFile(csv_data: str, reportType: str):
 # ****************************************** End - Production Report Generation Methods *************************************
 
 
+# ****************************************** Start - Machine Settings *************************************
+# Settings written to the PLC at the start of each cycle (state 2, Siemens): rotation RPM, tightening torque setpoints
+# 1 and 2, number of rotations 1 CCW and 1 CW. Stored in machine_settings (a new row per change, with who changed it);
+# the IOServer reads the latest row at the start of each component, so a change applies from the next component.
+
+MACHINE_SETTINGS_ROLES = ("administrator", "supervisor")
+MACHINE_SETTINGS_FIELDS = (
+    # key, label, input kind
+    ("rotation_rpm", "Rotation RPM (20 - 40)", "int"),
+    ("tightening_torque1_setpoint", "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)", "torque"),
+    ("tightening_torque2_setpoint", "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)", "torque"),
+    ("no_of_rotation1_ccw", "No. of Rotations 1 CCW (1 or 2)", "count"),
+    ("no_of_rotation1_cw", "No. of Rotations 1 CW (1 or 2)", "count"),
+)
+
+
+def canChangeMachineSettings(role: str) -> bool:
+    return (role or "").strip().lower() in MACHINE_SETTINGS_ROLES
+
+
+def parseMachineSettingsInputs(values: dict):
+    """Frontend entries (text, keyed by setting key) -> (settings as floats, list of error messages).
+    RPM and the rotation counts must be whole numbers; torques at most 2 decimals. Range checks as in the database."""
+    settings, errors = {}, []
+    labels = {key: label for key, label, _ in MACHINE_SETTINGS_FIELDS}
+    for key, label, kind in MACHINE_SETTINGS_FIELDS:
+        text = str(values.get(key, "")).strip()
+        name = label.split(" (")[0].split(",")[0]
+        try:
+            if kind in ("int", "count"):
+                if not text.lstrip("+").isdigit():
+                    raise ValueError
+                settings[key] = float(int(text))
+            else:
+                if text.count(".") > 1 or not text.replace(".", "", 1).isdigit():
+                    raise ValueError
+                if "." in text and len(text.split(".")[1]) > 2:
+                    errors.append(f"{name}: at most 2 decimals")
+                    continue
+                settings[key] = round(float(text), 2)
+        except ValueError:
+            errors.append(f"{name}: '{text}' is not a valid {'whole number' if kind != 'torque' else 'number'}")
+    for problem in validateMachineSettings(settings):
+        key = problem.split(":")[0]
+        if key in settings:                       # unparsable entries are already reported
+            errors.append(problem.replace(key, labels.get(key, key).split(" (")[0], 1))
+    return settings, errors
+
+
+def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool = True):
+    """Machine Settings dialog (Administrator and Supervisor only). Shows the settings in force; Save stores a new row
+    in machine_settings with updated_by = currentUser. Returns True if new settings were saved."""
+    global aWindowIsInProgress
+    if aWindowIsInProgress:
+        return False
+    if not canChangeMachineSettings(currentRole):
+        showErrorMessage("Only an Administrator or a Supervisor can change the machine settings")
+        return False
+    aWindowIsInProgress = True
+    saved = False
+    try:
+        db_name = getDatabaseName()
+        current = getMachineSettings(db_name) or dict(DEFAULT_MACHINE_SETTINGS)
+
+        def shown(key, kind):
+            v = float(current.get(key, DEFAULT_MACHINE_SETTINGS[key]))
+            return f"{v:.2f}" if kind == "torque" else str(int(round(v)))
+
+        sg.theme('DarkBlue15')
+        rows = []
+        for key, label, kind in MACHINE_SETTINGS_FIELDS:
+            if kind == "int":
+                field = sg.Spin([str(i) for i in range(20, 41)], initial_value=shown(key, kind), size=(8, 1), font=16, k=key)
+            elif kind == "count":
+                field = sg.Combo(["1", "2"], default_value=shown(key, kind), readonly=True, size=(8, 1), font=16, k=key)
+            else:
+                field = sg.Input(shown(key, kind), size=(10, 1), font=16, k=key)
+            rows.append([sg.Text(label, size=(44, 1), font=16), field])
+        changed = current.get("updated_on_date")
+        info = (f"In force since {changed:%d-%m-%Y %H:%M} (set by {current.get('updated_by', '-')})"
+                if changed else "Default settings")
+        layout = ([[sg.Text("Machine Settings", font=("Helvetica", 16, "bold"))],
+                   [sg.Text(info, font=12)],
+                   [sg.HorizontalSeparator()]] + rows +
+                  [[sg.Text("New settings apply from the next component.", font=12)],
+                   [sg.Button("Save"), sg.Button("Reset"), sg.Button("Cancel")]])
+        window = sg.Window("Machine Settings", layout, modal=modal, keep_on_top=True, finalize=True,
+                           disable_minimize=True, grab_anywhere=False)
+        while True:
+            event, values = window.read()
+            if event in (sg.WIN_CLOSED, "Cancel"):
+                break
+            if event == "Reset":
+                for key, _, kind in MACHINE_SETTINGS_FIELDS:
+                    window[key].update(shown(key, kind))
+                continue
+            if event == "Save":
+                settings, errors = parseMachineSettingsInputs(values)
+                if errors:
+                    showErrorMessage("\n".join(errors), auto_close_duration=5)
+                    continue
+                if insertNewMachineSettings(db_name, updated_by=currentUser, **settings):
+                    saved = True
+                    showMessage("Machine settings saved.\nThey apply from the next component.")
+                    break
+                showErrorMessage("Could not save the machine settings")
+        window.close()
+    except Exception as e:
+        showErrorMessage(f"Machine settings: {e}")
+    finally:
+        aWindowIsInProgress = False
+    return saved
+
+# ****************************************** End - Machine Settings *************************************
+
+
 
 
 # submitted, successfullyInserted, nExistingRecordsWithSameUsername, username, firstname, middlename, lastname, password, email, mobile, role = createAccount()

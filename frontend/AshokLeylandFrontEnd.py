@@ -69,7 +69,7 @@ from frontend.SimplePopups import (
     changePasswordForSelf, createAccount, changePassword, changeRole, activateUser, inactivateUser,
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
-    getConfirmation)
+    getConfirmation, updateMachineSettingsDialog, canChangeMachineSettings)
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
@@ -731,7 +731,15 @@ class AshokLeylandFrontEnd(QMainWindow):
         info_menu.addAction(help_act)
         info_menu.addAction(info_act)
 
-        # Machine 2: no Machine Settings menu. Tightening/rotation setpoints come from ApplicationConfiguration.properties.
+        # Machine Settings (Administrator / Supervisor): rotation RPM, torque setpoints, rotation counts written to the
+        # PLC in state 2 (stored in machine_settings; used when cycle.settings.source=database)
+        machine_settings_act = QAction(' Machine Settings ', self)
+        machine_settings_act.setShortcut(' Ctrl+Alt+U ')
+        machine_settings_act.triggered.connect(lambda: updateMachineSettingsDialog(currentUser=self.username, currentRole=self.role))
+        machine_settings_menu = menu_bar.addMenu(' Machine Settings ')
+        machine_settings_menu.addAction(machine_settings_act)
+        if not canChangeMachineSettings(self.role):
+            machine_settings_act.setDisabled(True)
 
         if self.role == "Operator":
             addnewuser_act.setDisabled(True)

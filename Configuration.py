@@ -2896,10 +2896,33 @@ class CosThetaConfigurator():
     ROTATION1_RPM_KEY = "rotation1.rpm"
     ROTATION2_RPM_KEY = "rotation2.rpm"
     SETPOINT_NOT_TO_BE_WRITTEN: float = -1
+    # Siemens (Machine 2): one rotation RPM and the two rotation counts (REAL); empty tag name = not on this PLC
+    PC_PLC_ROTATION_RPM_KEY = "pc.plc.rotation.rpm.tagname"
+    PC_PLC_NO_OF_ROTATION1_CCW_KEY = "pc.plc.no.of.rotation1.ccw.tagname"
+    PC_PLC_NO_OF_ROTATION1_CW_KEY = "pc.plc.no.of.rotation1.cw.tagname"
+    # Where the state-2 settings come from: "database" (machine_settings, edited in the frontend) or "properties"
+    CYCLE_SETTINGS_SOURCE_KEY = "cycle.settings.source"
+
+    @classmethod
+    def getPcPlcRotationRPMTagName(cls) -> str:
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION_RPM_KEY, default="") or "").strip()
+
+    @classmethod
+    def getPcPlcNoOfRotation1CCWTagName(cls) -> str:
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CCW_KEY, default="") or "").strip()
+
+    @classmethod
+    def getPcPlcNoOfRotation1CWTagName(cls) -> str:
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CW_KEY, default="") or "").strip()
+
+    @classmethod
+    def getCycleSettingsSource(cls) -> str:
+        v = str(CosThetaConfigurator.getValue(CosThetaConfigurator.CYCLE_SETTINGS_SOURCE_KEY, default="properties")).strip().lower()
+        return v if v in ("database", "properties") else "properties"
 
     @classmethod
     def getPcPlcModelSelectionTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_MODEL_SELECTION_KEY, default="ModelSelection")
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_MODEL_SELECTION_KEY, default="ModelSelection") or "").strip()
 
     @classmethod
     def getPcPlcTighteningTorque1SetpointTagName(cls) -> str:
@@ -2913,11 +2936,11 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPcPlcRotation1RPMTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION1_RPM_KEY, default="RotationRPM1")
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION1_RPM_KEY, default="RotationRPM1") or "").strip()
 
     @classmethod
     def getPcPlcRotation2RPMTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION2_RPM_KEY, default="RotationRPM2")
+        return str(CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_ROTATION2_RPM_KEY, default="RotationRPM2") or "").strip()
 
     @classmethod
     def _getNumericSetpoint(cls, key: str) -> float:

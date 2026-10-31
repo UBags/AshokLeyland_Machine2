@@ -3,6 +3,7 @@ from typing import Literal, Union, Tuple
 
 import numpy as np
 import cv2
+import json
 import redis.client
 from redis import Redis, ConnectionPool, ConnectionError
 
@@ -2369,6 +2370,32 @@ def sendTakeNextPictureCommandToCamera(redisConnection: redis.client.Redis, came
 def sendMessageToDiscInterlockAndConnectionAlarm(redisConnection: redis.client.Redis, status : ConnectionStatusType, aProducer : str = "IOServer"):
     queueName = CosThetaConfigurator.getInstance().getConnectionAlarmQueue()
     return sendData(redisConnection=redisConnection, data={genericdataKeyString: status}, queueName=queueName, aProducer=f"{aProducer}")
+
+# ********************************** CYCLE SETTINGS USED (IOServer -> DBServer) *************************
+# The IOServer publishes the machine settings it wrote to the PLC in state 2, keyed by the component's QR code; the
+# DB server stores them with that component's record. A plain key (not a stream), kept for 2 days.
+
+CYCLE_SETTINGS_KEY_PREFIX: str = "cycleSettings:"
+CYCLE_SETTINGS_TTL_SECS: int = 2 * 24 * 3600
+
+
+def publishCycleSettingsForQRCode(redisConnection: redis.client.Redis, qrCode: str, settings: dict) -> bool:
+    if redisConnection is None or not qrCode:
+        return False
+    redisConnection.set(f"{CYCLE_SETTINGS_KEY_PREFIX}{qrCode}", json.dumps(settings), ex=CYCLE_SETTINGS_TTL_SECS)
+    return True
+
+
+def readCycleSettingsForQRCode(redisConnection: redis.client.Redis, qrCode: str) -> dict:
+    """Settings the IOServer wrote for this QR code, or {} if none were published."""
+    if redisConnection is None or not qrCode:
+        return {}
+    try:
+        raw = redisConnection.get(f"{CYCLE_SETTINGS_KEY_PREFIX}{qrCode}")
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
 
 def clearKeyCommunicationQueuesOnAbort():
     redisConnection = redis.Redis(connection_pool=redisPoolForClearingKeyQueues, retry_on_timeout=True)

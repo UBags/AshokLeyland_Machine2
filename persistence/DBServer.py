@@ -46,6 +46,7 @@ from utils.CosThetaFileUtils import (
     saveFileWithFullPath,
 )
 from utils.RedisUtils import (
+    readCycleSettingsForQRCode,
     readDataInDatabaseServerFromFEServer,
     acknowledgeRecordInDatabaseServer,
     fe2dbq,
@@ -379,6 +380,8 @@ class DataPersistence():
                     # print(f"check_knuckle_datetime = {knuckleCheckDatetime}")
                     # print("=" * 80)
 
+                    # machine settings the IOServer wrote to the PLC for this component (state 2); None if not published
+                    cycleSettings = readCycleSettingsForQRCode(self.redisConnection, qrCode)
                     try:
                         success = insertData(
                             db_name = getDatabaseName(),
@@ -429,7 +432,12 @@ class DataPersistence():
                             free_rotation_torque_1_datetime = freeRotationTorque1Datetime,
                             ok_notok_result = overallResult,
                             username = self.username,
-                            remarks = "DUPLICATE" if qrCodeExists else "")
+                            remarks = "DUPLICATE" if qrCodeExists else "",
+                            setting_rotation_rpm = cycleSettings.get("rotation_rpm"),
+                            setting_tightening_torque1_setpoint = cycleSettings.get("tightening_torque1_setpoint"),
+                            setting_tightening_torque2_setpoint = cycleSettings.get("tightening_torque2_setpoint"),
+                            setting_no_of_rotation1_ccw = cycleSettings.get("no_of_rotation1_ccw"),
+                            setting_no_of_rotation1_cw = cycleSettings.get("no_of_rotation1_cw"))
                         if success:
                             acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
                             self.failedAttempts.pop(messageId, None)

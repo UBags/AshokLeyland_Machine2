@@ -350,3 +350,61 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
   - **Siemens:** fault scenarios 35/35; two full cycles with the state trace exact, the settings written to `PC_PLC_LH_RH_Selection` / `PC_PLC_ComponentType` / the setpoints, and the rotation-done bit read at both tightening steps; integrated run with all servers, giving the DB row DOSTPLUS/RHS/2.5T/19.08/19.03/2.41/all OK.
   - **Allen-Bradley:** unchanged, with the same results. `s7_tag_check.py` passes against the simulated PLC.
   - The tag-map validator catches the spreadsheet's three original clashes.
+
+## 17. Final Siemens tag list; machine settings from the frontend and database (2026-10-31)
+
+- **`costhetaio/siemens/IOServerProperties.yaml`** now holds the final list of 46 tags. All provisional remarks are removed. Changes from §16:
+  - Station 2 torque-set is `X2.6`. Station 3 torque-set is `X2.7`.
+  - Tightening torque setpoints 1 / 2 are at `R40` / `R44`.
+  - New settings tags: `PC_PLC_RotationRPM` `R36`, `PC_PLC_NoOfRotation1CCW` `R18`, `PC_PLC_NoOfRotation1CW` `R22`. All are REAL.
+  - `PC_PLC_ComponentType` is removed (the PLC does not need it). `PC_PLC_RotationRPM1/2` are removed.
+  - Still unused: `NoOfRotation2CCW` `R26`, `NoOfRotation2CW` `R30`, `Station4CapPressValueSet` `X4.6`.
+- **State-2 settings (`IOServer.writeCycleSettingsToPLC`)** now write only the tags that have a configured name. An empty name means the PLC does not have that setting. The source is chosen by `cycle.settings.source`:
+  - **Siemens (`database`).** Writes `LH_RH_Selection` (INT, from the QR code). It also writes `TighteningTorque1/2Setpoint`, `RotationRPM`, `NoOfRotation1CCW` and `NoOfRotation1CW`, all REAL and all taken from the latest row of `machine_settings`. All of them are written every cycle. No model is written.
+  - **Allen-Bradley (`properties`).** Unchanged: side, model, torque setpoints and RPM 1/2 from the properties, with -1 meaning "do not write".
+  - The settings actually written are published to Redis under `cycleSettings:<QR>` (kept for 2 days). The DB server stores them in that component's record.
+- **Database (`persistence/Persistence.py`).**
+  - **New `machine_settings` table.** Every change adds a new row, with `updated_by` and the date. The settings in force are the latest row.
+  - **Limits, enforced by the code and by CHECK constraints:**
+    - RPM 20–40;
+    - torque setpoints above 0 and below 20;
+    - rotation counts 1 or 2.
+
+    The code also requires RPM and counts to be whole numbers and torques to have at most 2 decimals. Values are stored as REAL.
+  - **Default first row:** 30 rpm, 19.0 / 19.0 Nm, 1 / 1 rotations.
+  - The old Machine 1 `machine_settings` table (with column `rotationunitrpm`) is dropped automatically. There is no migration; the old database had no production data.
+  - **Functions:** `getMachineSettings`, `insertNewMachineSettings`, `getMachineSettingsHistory`, `validateMachineSettings`, `insertDefaultMachineSettings`.
+  - **`hub_and_disc_assembly_data`** gains five `setting_*` columns: the settings used for that component, or NULL if none were published. They are added with `ADD COLUMN IF NOT EXISTS`, and they are in the reports.
+- **Frontend.** A new **Machine Settings** menu (Ctrl+Alt+U) opens the Machine Settings dialog. Only Administrators and Supervisors can use it; for an Operator the menu item is disabled and the dialog refuses.
+  - **Inputs:** RPM is a whole-number spin box (20–40); the torques take 2 decimals (0.01–19.99); the counts are a 1 / 2 choice.
+  - The dialog shows the settings in force, and who set them and when.
+  - Saving adds a new row with the user's name. The new settings apply from the next component.
+- **Configuration.**
+  - New keys:
+    - `pc.plc.rotation.rpm.tagname`
+    - `pc.plc.no.of.rotation1.ccw.tagname`
+    - `pc.plc.no.of.rotation1.cw.tagname`
+    - `cycle.settings.source`
+
+    For Allen-Bradley these are empty or `properties`. For Siemens they are set, and the source is `database`.
+  - The model and RPM 1/2 tag names may be empty; on Siemens they are.
+  - `ApplicationConfiguration.Machine2.properties` has been re-copied from `ApplicationConfiguration.properties`.
+- **TO-DO:** align the Allen-Bradley state-2 settings with Siemens later. That means dropping `rotation1/2.rpm` and the model, and taking the settings from the database instead of the properties.
+- **Tests (both dry-run folders).**
+  - `_plc_sim.py` has these additions:
+    - `setting_tags()` returns the settings tags configured for the vendor;
+    - for Siemens, `setup(mode)` creates the database and puts the default settings in force;
+    - `use_machine_settings()` changes the settings.
+  - **Fault scenarios, new section D:**
+    - the settings written for each vendor;
+    - the settings published for the DB record;
+    - on Siemens, a change made during a cycle is written in the next cycle.
+  - **DB dry run, new section 9:** the default row, rejection of invalid values by the code and by the CHECK constraints, a change put in force, the history, and the `setting_*` columns in the record.
+  - **FE dry run, new F6:** the menu, the role restriction and the dialog's input checks.
+  - The Mock-PLC and Real-PLC test windows list the vendor's settings tags.
+- **Verified:**
+  - Allen-Bradley: two cycles exact, fault scenarios 39/39.
+  - Siemens: two cycles exact, writing 1 / 19.0 / 19.0 / 30.0 / 1.0 / 1.0; fault scenarios 42/42.
+  - DB dry run: 44/44.
+  - FE dry run: 47/48. The F6 checks pass; the one failure is the known F5 failure (R8: the success screen is shown for a NOT OK result).
+  - Integrated runs with all servers: the Siemens DB row stores `setting_*` = 30 / 19 / 19 / 1 / 1. The Allen-Bradley row stores the torque setpoints from the properties (19 / 19), with RPM and counts NULL.

@@ -12,8 +12,8 @@ from redis import Redis
 
 # ---------------- fake Allen-Bradley PLC ----------------
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
-IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
+from _plc_sim import setup, setting_tags        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+IOServer, TAGS, WRITES, LOCK, VENDOR = setup("Production")
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
 from utils.RedisUtils import *
@@ -79,9 +79,7 @@ def plc():
     SCAN.set()
     with LOCK: TAGS[IOServer.PLC_PC_CheckQRCode] = True
     assert wait_for(lambda: TAGS[IOServer.PC_PLC_QRCodeCheckDone] is True), "QR"
-    RESULT['settings'] = {t: v for t, v in WRITES if t in (IOServer.PC_PLC_LH_RH_Selection, IOServer.PC_PLC_ModelSelection,
-                          IOServer.PC_PLC_TighteningTorque1Setpoint, IOServer.PC_PLC_TighteningTorque2Setpoint,
-                          IOServer.PC_PLC_RotationRPM1, IOServer.PC_PLC_RotationRPM2)}
+    RESULT['settings'] = {t: v for t, v in WRITES if t in setting_tags(IOServer)}
     time.sleep(1.0)
     with LOCK: TAGS[IOServer.PLC_PC_CheckQRCode] = False; TAGS[IOServer.PC_PLC_QRCodeCheckDone] = False
     check(IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone)
@@ -125,7 +123,8 @@ c = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", dat
 cur.execute("""select model_name, lhs_rhs, model_tonnage, nut_tightening_torque_1, nut_tightening_torque_2, free_rotation_torque_1,
                check_knuckle_result, check_bunk_for_component_press_result, component_press_done, check_no_bunk_result,
                check_splitpin_and_washer_result, check_cap_result, check_bunk_cap_press_result, cap_press_done,
-               ok_notok_result, username from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
+               ok_notok_result, username, setting_rotation_rpm, setting_tightening_torque1_setpoint,
+               setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
                where qr_code = %s order by record_id desc limit 1""", (QR,))
 print("RESULT plc sequence completed:", RESULT.get('plc_done'))
 print("RESULT state-2 settings written:", RESULT.get('settings'))

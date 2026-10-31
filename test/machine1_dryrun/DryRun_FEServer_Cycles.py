@@ -17,6 +17,9 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
       READ_QR_CODE; the next cycle then runs normally.
   F5. Final free-rotation torque reported NOT OK: the record's overall result is NOT OK and the failure screen
       (not the success screen) is shown.
+  F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
+      the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
+      (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
 
 Not covered here (needs real pictures, the models or the camera): running the real camera/Check*.py algorithms on
 image files and the live camera - use the Test_FEServer_*_UI.py programs for that.
@@ -246,6 +249,34 @@ def driver():
               rec is not None and rec[41] == notok and rec[OVERALL_IDX] == notok, str((rec[41], rec[OVERALL_IDX]) if rec else None))
         check("F5 failure screen shown (not the success screen)", wait_for(lambda: SCREENS != [], 5) and SCREENS[-1] == "showFailure", str(SCREENS))
         check("F5 back to READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE), state().name)
+        # ---------------- F6 ----------------
+        print("\n=== F6. Machine Settings menu and role restriction ===", flush=True)
+        import frontend.SimplePopups as SP
+        acts = [a for m in fe.menuBar().actions() if m.menu() for a in m.menu().actions() if "Machine Settings" in a.text()]
+        check("F6 Machine Settings action in the menu, enabled for an Administrator", len(acts) == 1 and acts[0].isEnabled(),
+              str([(a.text(), a.isEnabled()) for a in acts]))
+        check("F6 Administrator and Supervisor may change the settings, Operator may not",
+              (SP.canChangeMachineSettings("Administrator"), SP.canChangeMachineSettings("Supervisor"),
+               SP.canChangeMachineSettings("Operator")) == (True, True, False))
+        shown = []; origErr = SP.showErrorMessage
+        SP.showErrorMessage = lambda msg, *a, **k: shown.append(msg)
+        before = P.getMachineSettings(P.getDatabaseName())
+        try:
+            refused = SP.updateMachineSettingsDialog(currentUser="op1", currentRole="Operator") is False
+        finally:
+            SP.showErrorMessage = origErr
+        check("F6 Operator refused (message shown, dialog not opened, nothing saved)",
+              refused and shown and "Administrator or a Supervisor" in shown[0]
+              and P.getMachineSettings(P.getDatabaseName()).get("setting_id") == before.get("setting_id"), str(shown))
+        good, errors = SP.parseMachineSettingsInputs(dict(rotation_rpm="32", tightening_torque1_setpoint="18.5",
+                       tightening_torque2_setpoint="19.99", no_of_rotation1_ccw="2", no_of_rotation1_cw="1"))
+        check("F6 valid entries accepted as floats", errors == [] and good == dict(rotation_rpm=32.0,
+              tightening_torque1_setpoint=18.5, tightening_torque2_setpoint=19.99, no_of_rotation1_ccw=2.0,
+              no_of_rotation1_cw=1.0), str((good, errors)))
+        _, errors = SP.parseMachineSettingsInputs(dict(rotation_rpm="30.5", tightening_torque1_setpoint="20",
+                    tightening_torque2_setpoint="1.234", no_of_rotation1_ccw="3", no_of_rotation1_cw="x"))
+        check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 3, not a number)",
+              len(errors) == 5, str(errors))
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:

@@ -2,7 +2,7 @@ import csv
 import base64
 from io import StringIO
 from datetime import datetime, date
-from typing import Union, List, Any
+from typing import Union, List, Any, Optional
 
 import psycopg2
 from psycopg2 import Error
@@ -504,6 +504,12 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     free_rotation_torque_1 float DEFAULT -1.0 NOT NULL,
     free_rotation_torque_1_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     free_rotation_torque_1_datetime timestamp without time zone,
+    -- Machine settings written to the PLC in state 2 for this component (traceability; NULL if not written)
+    setting_rotation_rpm real,
+    setting_tightening_torque1_setpoint real,
+    setting_tightening_torque2_setpoint real,
+    setting_no_of_rotation1_ccw real,
+    setting_no_of_rotation1_cw real,
     ok_notok_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not OK',
     username character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Default User',
     remarks character varying(255) COLLATE pg_catalog."default",
@@ -525,16 +531,34 @@ CREATE INDEX IF NOT EXISTS idx_created_on ON al_hub_and_disc_assembly_schema.hub
 -- Drop its columns from databases created by earlier versions (no-op on new databases).
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data DROP COLUMN IF EXISTS free_rotations_done;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data DROP COLUMN IF EXISTS free_rotations_datetime;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_rotation_rpm real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_tightening_torque1_setpoint real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_tightening_torque2_setpoint real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_ccw real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_cw real;
 
--- Create the machine_settings table
+-- Machine 2 settings, edited in the frontend (Machine Settings menu, Administrator / Supervisor) and written by the
+-- IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row; the latest row is in force.
+-- Limits (also checked by the frontend): rotation RPM 20-40, tightening torque setpoints > 0 and < 20 Nm,
+-- rotation counts 1 or 2. All REAL, as the PLC takes them.
+-- A machine_settings table from Machine 1 (rotation counts 1/2 CW/CCW, RotationUnitRPM) is replaced.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'al_hub_and_disc_assembly_schema'
+               AND table_name = 'machine_settings' AND column_name = 'rotationunitrpm') THEN
+        DROP TABLE al_hub_and_disc_assembly_schema.machine_settings;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.machine_settings
 (
     setting_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
-    NoOfRotation1CCW integer NOT NULL DEFAULT 1 CHECK (NoOfRotation1CCW BETWEEN 0 AND 10),
-    NoOfRotation1CW integer NOT NULL DEFAULT 1 CHECK (NoOfRotation1CW BETWEEN 0 AND 10),
-    NoOfRotation2CCW integer NOT NULL DEFAULT 1 CHECK (NoOfRotation2CCW BETWEEN 0 AND 10),
-    NoOfRotation2CW integer NOT NULL DEFAULT 1 CHECK (NoOfRotation2CW BETWEEN 0 AND 10),
-    RotationUnitRPM integer NOT NULL DEFAULT 60 CHECK (RotationUnitRPM BETWEEN 1 AND 200),
+    rotation_rpm real NOT NULL CHECK (rotation_rpm BETWEEN 20 AND 40),
+    tightening_torque1_setpoint real NOT NULL CHECK (tightening_torque1_setpoint > 0 AND tightening_torque1_setpoint < 20),
+    tightening_torque2_setpoint real NOT NULL CHECK (tightening_torque2_setpoint > 0 AND tightening_torque2_setpoint < 20),
+    no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw IN (1, 2)),
+    no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw IN (1, 2)),
+    updated_by character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'system',
     updated_on_date timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT machine_settings_pkey PRIMARY KEY (setting_id)
 );
@@ -1061,44 +1085,6 @@ def activateInactiveUserInDatabase(username: str, db_name: str):
 
 # ************************* BEGIN - DATA TABLE ******************************************
 
-insert_table_data = '''INSERT INTO {}.hub_and_disc_assembly_data (
-    qr_code, model_name, lhs_rhs, model_tonnage, component_assembly_start_datetime,
-    check_knuckle_imagefile,     check_knuckle_result,     check_knuckle_datetime,
-    check_hub_and_bottom_bearing_imagefile, check_hub_and_bottom_bearing_result, check_hub_and_bottom_bearing_datetime,
-    check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
-    check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
-    nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-    check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
-    component_press_done, component_press_datetime,
-    check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
-    nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime,
-    check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime,
-    check_cap_imagefile, check_cap_result, check_cap_datetime,
-    check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
-    cap_press_done, cap_press_datetime,
-    free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
-    ok_notok_result, username, remarks, created_on
-)
-VALUES (
-    '{}', '{}', '{}', '{}',          to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    {},   '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    {},   '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    {},   '{}', to_timestamp('{}', 'DD-MM-YYYY HH24:MI:SS'),
-    '{}', '{}', '{}',
-    NOW()
-);'''
-
-
 def rationaliseOK_NotOK(input: Union[str, bool], includeNotCheckedAsReturnValue: bool = False):
     if not includeNotCheckedAsReturnValue:
         if input is None:
@@ -1371,6 +1357,12 @@ def insertData(
         free_rotation_torque_1_result: str = "Not Checked",
         free_rotation_torque_1_datetime: str = "",
 
+        setting_rotation_rpm: Optional[float] = None,
+        setting_tightening_torque1_setpoint: Optional[float] = None,
+        setting_tightening_torque2_setpoint: Optional[float] = None,
+        setting_no_of_rotation1_ccw: Optional[float] = None,
+        setting_no_of_rotation1_cw: Optional[float] = None,
+
         ok_notok_result: str = "Not OK",
         username: str = "Default User",
         remarks: str = ""
@@ -1532,6 +1524,12 @@ def insertData(
                 placeholders.append(sql_part)
                 params.extend(p)
 
+        # Machine settings written to the PLC for this component (NULL when not written)
+        for v in (setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
+                  setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw):
+            params.append(None if v is None else float(v))
+            placeholders.append("%s")
+
         # Final fields
         params.extend([ok_notok_result, username, remarks])
         placeholders.extend(["%s"] * 3)
@@ -1557,6 +1555,8 @@ def insertData(
                 check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
+                setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 ok_notok_result, username, remarks, created_on
             ) VALUES ({ph})
         """).format(
@@ -1628,6 +1628,11 @@ all_columns_record_header = [
     "free_rotation_torque_1",
     "free_rotation_torque_1_result",
     "free_rotation_torque_1_datetime",
+    "setting_rotation_rpm",
+    "setting_tightening_torque1_setpoint",
+    "setting_tightening_torque2_setpoint",
+    "setting_no_of_rotation1_ccw",
+    "setting_no_of_rotation1_cw",
     "ok_notok_result",
     "username",
     "remarks",
@@ -1682,6 +1687,11 @@ SELECT
     free_rotation_torque_1,
     free_rotation_torque_1_result,
     free_rotation_torque_1_datetime,
+    setting_rotation_rpm,
+    setting_tightening_torque1_setpoint,
+    setting_tightening_torque2_setpoint,
+    setting_no_of_rotation1_ccw,
+    setting_no_of_rotation1_cw,
     ok_notok_result,
     username,
     remarks,
@@ -1834,6 +1844,11 @@ SELECT
     free_rotation_torque_1,
     free_rotation_torque_1_result,
     free_rotation_torque_1_datetime,
+    setting_rotation_rpm,
+    setting_tightening_torque1_setpoint,
+    setting_tightening_torque2_setpoint,
+    setting_no_of_rotation1_ccw,
+    setting_no_of_rotation1_cw,
     ok_notok_result,
     username,
     remarks,
@@ -1938,6 +1953,8 @@ def getDataByModelNameAndDateLimits(
                 check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
+                setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE model_name = %s
@@ -2216,6 +2233,11 @@ SELECT
     free_rotation_torque_1,
     free_rotation_torque_1_result,
     free_rotation_torque_1_datetime,
+    setting_rotation_rpm,
+    setting_tightening_torque1_setpoint,
+    setting_tightening_torque2_setpoint,
+    setting_no_of_rotation1_ccw,
+    setting_no_of_rotation1_cw,
     ok_notok_result,
     username,
     remarks,
@@ -2310,6 +2332,8 @@ def getDataByDateLimits(
                 check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
+                setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE created_on::date BETWEEN %s AND %s
@@ -2546,695 +2570,177 @@ def ensureIndexesExist(db_name: str, verbose: bool = True) -> bool:
 
 
 # ************************* BEGIN - MACHINE_SETTINGS TABLE ******************************************
+#
+# Machine 2 settings, edited in the frontend (Machine Settings menu; Administrator and Supervisor only) and written by
+# the IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row, the latest row is in force.
+# The same limits are enforced here, in the frontend dialog and by CHECK constraints in the table.
+
+MACHINE_SETTINGS_LIMITS = {
+    # key: (minimum, maximum, minimum inclusive, maximum inclusive, decimals shown in the frontend)
+    "rotation_rpm": (20.0, 40.0, True, True, 0),
+    "tightening_torque1_setpoint": (0.0, 20.0, False, False, 2),
+    "tightening_torque2_setpoint": (0.0, 20.0, False, False, 2),
+    "no_of_rotation1_ccw": (1.0, 2.0, True, True, 0),
+    "no_of_rotation1_cw": (1.0, 2.0, True, True, 0),
+}
+MACHINE_SETTINGS_KEYS = tuple(MACHINE_SETTINGS_LIMITS)
+DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 19.0,
+                            "tightening_torque2_setpoint": 19.0, "no_of_rotation1_ccw": 1.0, "no_of_rotation1_cw": 1.0}
+
+
+def validateMachineSettings(settings: dict) -> List[str]:
+    """Returns a list of problems (empty = valid). Rotation RPM and the rotation counts must be whole numbers; the
+    counts must be 1 or 2; the torque setpoints must have at most 2 decimals."""
+    problems = []
+    for key, (lo, hi, lo_incl, hi_incl, decimals) in MACHINE_SETTINGS_LIMITS.items():
+        if key not in settings or settings[key] is None:
+            problems.append(f"{key}: missing")
+            continue
+        try:
+            v = float(settings[key])
+        except (TypeError, ValueError):
+            problems.append(f"{key}: {settings[key]!r} is not a number")
+            continue
+        if (v < lo or (v == lo and not lo_incl)) or (v > hi or (v == hi and not hi_incl)):
+            problems.append(f"{key}: {v:g} outside {'[' if lo_incl else '('}{lo:g}, {hi:g}{']' if hi_incl else ')'}")
+        elif round(v, decimals) != v:
+            problems.append(f"{key}: {v} has more than {decimals} decimal(s)")
+    return problems
+
+
+def _settingsConnection(db_name: str):
+    aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", port="5432",
+                                   database=db_name)
+    aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    return aConnection
 
 
 def insertDefaultMachineSettings(db_name: str) -> bool:
-    """
-    Insert default machine settings if table is empty.
-    Should be called during initial setup in setDatabaseName().
-
-    Args:
-        db_name (str): Database name
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
+    """Insert the default settings (RPM 30, torque setpoints 19.0 / 19.0, rotation counts 1 / 1) if the table is
+    empty. Called from setDatabaseName()."""
     global schema_name
     aConnection = None
     try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-
-        # Check if settings exist
-        check_query = f"SELECT COUNT(*) FROM {schema_name}.machine_settings;"
-        aCursor.execute(check_query)
-        count = aCursor.fetchone()[0]
-
-        if count == 0:
-            # Use parameterized query with ON CONFLICT for idempotency
-            insert_query = f"""
-                INSERT INTO {schema_name}.machine_settings 
-                    (NoOfRotation1CCW, NoOfRotation1CW, NoOfRotation2CCW, NoOfRotation2CW,
-                     RotationUnitRPM, updated_on_date)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT DO NOTHING;
-            """
-            aCursor.execute(insert_query, (5, 5, 5, 5, 60))
-            aConnection.commit()
+        aCursor.execute(f"SELECT COUNT(*) FROM {schema_name}.machine_settings;")
+        if aCursor.fetchone()[0] == 0:
+            d = DEFAULT_MACHINE_SETTINGS
+            aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
+                                    (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
+                                     no_of_rotation1_ccw, no_of_rotation1_cw, updated_by)
+                                VALUES (%s, %s, %s, %s, %s, %s);""",
+                            (d["rotation_rpm"], d["tightening_torque1_setpoint"], d["tightening_torque2_setpoint"],
+                             d["no_of_rotation1_ccw"], d["no_of_rotation1_cw"], "system (default)"))
             if reportMajorDatabaseActions:
                 printBoldGreen(f"Inserted default machine settings in {schema_name}")
-
         aCursor.close()
         aConnection.close()
         return True
-
-    except psycopg2.OperationalError as error:
-        printBoldRed(f"Connection error while inserting default machine settings: {error}")
-        if aConnection is not None:
-            try:
-                aConnection.close()
-            except:
-                pass
-        return False
     except Exception as error:
-        if not isinstance(error, psycopg2.errors.UniqueViolation):
-            printBoldRed(f"Error inserting default machine settings: {error}")
+        printBoldRed(f"Error inserting default machine settings: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 pass
         return False
+
+
+_SETTINGS_COLUMNS = "setting_id, rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, " \
+                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date"
+
+
+def _settingsRowToDict(row) -> dict:
+    keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date")
+    d = dict(zip(keys, row))
+    for k in MACHINE_SETTINGS_KEYS:
+        d[k] = float(d[k])
+    return d
 
 
 def getMachineSettings(db_name: str) -> dict:
-    """
-    Fetch the latest machine settings as a dictionary.
-    Returns the most recent record based on updated_on_date (audit trail support).
-
-    Args:
-        db_name (str): Database name
-
-    Returns:
-        dict: Dictionary containing all machine settings, or empty dict on error
-    """
+    """The settings in force (latest row) as a dict with keys rotation_rpm, tightening_torque1_setpoint,
+    tightening_torque2_setpoint, no_of_rotation1_ccw, no_of_rotation1_cw (floats), setting_id, updated_by,
+    updated_on_date. Empty dict on error / no row."""
     global schema_name
     aConnection = None
     try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-
-        # Get the latest record by updated_on_date descending (for audit trail support)
-        query = f"""SELECT noofrotation1ccw, noofrotation1cw, noofrotation2ccw, noofrotation2cw,
-                           rotationunitrpm, updated_on_date
-                    FROM {schema_name}.machine_settings 
-                    ORDER BY updated_on_date DESC
-                    LIMIT 1;"""
-        aCursor.execute(query)
-        result = aCursor.fetchone()
-
+        aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
+                        f"ORDER BY setting_id DESC LIMIT 1;")
+        row = aCursor.fetchone()
         aCursor.close()
         aConnection.close()
-
-        if result:
-            return {
-                "NoOfRotation1CCW": result[0],
-                "NoOfRotation1CW": result[1],
-                "NoOfRotation2CCW": result[2],
-                "NoOfRotation2CW": result[3],
-                "RotationUnitRPM": result[4],
-                "updated_on_date": result[5]
-            }
-        return {}
-
+        return _settingsRowToDict(row) if row else {}
     except Exception as error:
         printBoldRed(f"Error fetching machine settings: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 pass
         return {}
 
 
-def updateNoOfRotation1CCW(db_name: str, value: int) -> bool:
-    """Update NoOfRotation1CCW setting (0-10)"""
-    if not isinstance(value, int) or value < 0 or value > 10:
-        printBoldRed(f"Invalid value for NoOfRotation1CCW: {value} (must be 0-10)")
-        return False
-    return updateMachineSetting(db_name, 'noofrotation1ccw', value)
-
-
-def updateNoOfRotation1CW(db_name: str, value: int) -> bool:
-    """Update NoOfRotation1CW setting (0-10)"""
-    if not isinstance(value, int) or value < 0 or value > 10:
-        printBoldRed(f"Invalid value for NoOfRotation1CW: {value} (must be 0-10)")
-        return False
-    return updateMachineSetting(db_name, 'noofrotation1cw', value)
-
-
-def updateNoOfRotation2CCW(db_name: str, value: int) -> bool:
-    """Update NoOfRotation2CCW setting (0-10)"""
-    if not isinstance(value, int) or value < 0 or value > 10:
-        printBoldRed(f"Invalid value for NoOfRotation2CCW: {value} (must be 0-10)")
-        return False
-    return updateMachineSetting(db_name, 'noofrotation2ccw', value)
-
-
-def updateNoOfRotation2CW(db_name: str, value: int) -> bool:
-    """Update NoOfRotation2CW setting (0-10)"""
-    if not isinstance(value, int) or value < 0 or value > 10:
-        printBoldRed(f"Invalid value for NoOfRotation2CW: {value} (must be 0-10)")
-        return False
-    return updateMachineSetting(db_name, 'noofrotation2cw', value)
-
-
-def updateRotationUnitRPM(db_name: str, value: int) -> bool:
-    """Update RotationUnitRPM setting (1-120)"""
-    if not isinstance(value, int) or value < 1 or value > 120:
-        printBoldRed(f"Invalid value for RotationUnitRPM: {value} (must be 1-120)")
-        return False
-    return updateMachineSetting(db_name, 'rotationunitrpm', value)
-
-
-def updateMachineSetting(db_name: str, setting_name: str, value) -> bool:
-    """
-    Update a specific machine setting.
-
-    Args:
-        db_name (str): Database name
-        setting_name (str): Name of the setting column (lowercase)
-        value: New value (int)
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
+def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torque1_setpoint: float,
+                             tightening_torque2_setpoint: float, no_of_rotation1_ccw: float,
+                             no_of_rotation1_cw: float, updated_by: str = "unknown") -> bool:
+    """Save a new settings row (it is then in force from the next component). Validated first; returns False and
+    prints the problems if any value is out of range."""
     global schema_name
-
-    # PostgreSQL stores unquoted column names as lowercase
-    valid_settings = {
-        'noofrotation1ccw', 'noofrotation1cw', 'noofrotation2ccw', 'noofrotation2cw',
-        'rotationunitrpm'
-    }
-
-    setting_name_lower = setting_name.lower()
-    if setting_name_lower not in valid_settings:
-        printBoldRed(f"Invalid setting name: {setting_name}")
+    values = {"rotation_rpm": rotation_rpm, "tightening_torque1_setpoint": tightening_torque1_setpoint,
+              "tightening_torque2_setpoint": tightening_torque2_setpoint, "no_of_rotation1_ccw": no_of_rotation1_ccw,
+              "no_of_rotation1_cw": no_of_rotation1_cw}
+    problems = validateMachineSettings(values)
+    if problems:
+        printBoldRed(f"Machine settings not saved: {'; '.join(problems)}")
         return False
-
     aConnection = None
-    updateStatement = ''
     try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-
-        # Use SQL string directly (not Identifier) since PostgreSQL stores columns as lowercase
-        updateStatement = sql.SQL(
-            "UPDATE {schema}.machine_settings SET {field} = %s, updated_on_date = CURRENT_TIMESTAMP").format(
-            schema=sql.Identifier(schema_name),
-            field=sql.SQL(setting_name_lower)
-        )
-        aCursor.execute(updateStatement, (value,))
-        aConnection.commit()
+        aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
+                                (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
+                                 no_of_rotation1_ccw, no_of_rotation1_cw, updated_by)
+                            VALUES (%s, %s, %s, %s, %s, %s);""",
+                        tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS) + (str(updated_by)[:100],))
         aCursor.close()
         aConnection.close()
-
-        if reportMinorDatabaseActions:
-            printBoldGreen(f"Updated {setting_name} to {value}")
-        return True
-
-    except Exception as error:
-        if not isinstance(error, psycopg2.errors.UniqueViolation):
-            printBoldRed(f"Encountered {error}, {type(error)} for statement {updateStatement}")
-        if aConnection is not None:
-            try:
-                aConnection.close()
-            except:
-                pass
-        return False
-
-
-def updateAllMachineSettings(db_name: str, no_of_rotation1_ccw: int, no_of_rotation1_cw: int,
-                             no_of_rotation2_ccw: int, no_of_rotation2_cw: int,
-                             rotation_unit_rpm: int) -> bool:
-    """
-    Update all machine settings at once (updates existing record).
-
-    Args:
-        db_name (str): Database name
-        no_of_rotation1_ccw (int): Number of rotations 1 CCW (0-10)
-        no_of_rotation1_cw (int): Number of rotations 1 CW (0-10)
-        no_of_rotation2_ccw (int): Number of rotations 2 CCW (0-10)
-        no_of_rotation2_cw (int): Number of rotations 2 CW (0-10)
-        rotation_unit_rpm (int): Rotation speed in RPM (1-120)
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    global schema_name
-
-    # Validate rotation counts (0-10)
-    rotation_params = [
-        ('no_of_rotation1_ccw', no_of_rotation1_ccw),
-        ('no_of_rotation1_cw', no_of_rotation1_cw),
-        ('no_of_rotation2_ccw', no_of_rotation2_ccw),
-        ('no_of_rotation2_cw', no_of_rotation2_cw),
-    ]
-    for param_name, param_value in rotation_params:
-        if not isinstance(param_value, int) or param_value < 0 or param_value > 10:
-            printBoldRed(f"Invalid value for {param_name}: {param_value} (must be 0-10)")
-            return False
-
-    # Validate RPM (1-120)
-    if not isinstance(rotation_unit_rpm, int) or rotation_unit_rpm < 1 or rotation_unit_rpm > 120:
-        printBoldRed(f"Invalid value for rotation_unit_rpm: {rotation_unit_rpm} (must be 1-120)")
-        return False
-
-    aConnection = None
-    updateStatement = ''
-    try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        aCursor = aConnection.cursor()
-
-        # Use parameterized query to prevent SQL injection
-        updateStatement = sql.SQL("""
-            UPDATE {schema}.machine_settings 
-            SET noofrotation1ccw = %s, 
-                noofrotation1cw = %s, 
-                noofrotation2ccw = %s, 
-                noofrotation2cw = %s, 
-                rotationunitrpm = %s,
-                updated_on_date = CURRENT_TIMESTAMP
-        """).format(schema=sql.Identifier(schema_name))
-
-        aCursor.execute(updateStatement, (no_of_rotation1_ccw, no_of_rotation1_cw,
-                                          no_of_rotation2_ccw, no_of_rotation2_cw,
-                                          rotation_unit_rpm))
-        aConnection.commit()
-        aCursor.close()
-        aConnection.close()
-
-        if reportMinorDatabaseActions:
-            printBoldGreen(f"Updated all machine settings")
-        return True
-
-    except Exception as error:
-        if not isinstance(error, psycopg2.errors.UniqueViolation):
-            printBoldRed(f"Encountered {error}, {type(error)} for statement {updateStatement}")
-        if aConnection is not None:
-            try:
-                aConnection.close()
-            except:
-                pass
-        return False
-
-
-def insertNewMachineSettings(db_name: str, no_of_rotation1_ccw: int, no_of_rotation1_cw: int,
-                             no_of_rotation2_ccw: int, no_of_rotation2_cw: int,
-                             rotation_unit_rpm: int) -> bool:
-    """
-    Insert a new machine settings record (for audit trail).
-    Each update creates a new record, preserving history.
-
-    Args:
-        db_name (str): Database name
-        no_of_rotation1_ccw (int): Number of rotations 1 CCW (0-10)
-        no_of_rotation1_cw (int): Number of rotations 1 CW (0-10)
-        no_of_rotation2_ccw (int): Number of rotations 2 CCW (0-10)
-        no_of_rotation2_cw (int): Number of rotations 2 CW (0-10)
-        rotation_unit_rpm (int): Rotation speed in RPM (1-120)
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    global schema_name
-
-    # Validate rotation counts (0-10)
-    rotation_params = [
-        ('no_of_rotation1_ccw', no_of_rotation1_ccw),
-        ('no_of_rotation1_cw', no_of_rotation1_cw),
-        ('no_of_rotation2_ccw', no_of_rotation2_ccw),
-        ('no_of_rotation2_cw', no_of_rotation2_cw),
-    ]
-    for param_name, param_value in rotation_params:
-        if not isinstance(param_value, int) or param_value < 0 or param_value > 10:
-            printBoldRed(f"Invalid value for {param_name}: {param_value} (must be 0-10)")
-            return False
-
-    # Validate RPM (1-120)
-    if not isinstance(rotation_unit_rpm, int) or rotation_unit_rpm < 1 or rotation_unit_rpm > 120:
-        printBoldRed(f"Invalid value for rotation_unit_rpm: {rotation_unit_rpm} (must be 1-120)")
-        return False
-
-    aConnection = None
-    insertStatement = ''
-    try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        aCursor = aConnection.cursor()
-
-        # Insert a new record (for audit trail)
-        insertStatement = sql.SQL("""
-            INSERT INTO {schema}.machine_settings 
-                (noofrotation1ccw, noofrotation1cw, noofrotation2ccw, noofrotation2cw,
-                 rotationunitrpm, updated_on_date)
-            VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-        """).format(schema=sql.Identifier(schema_name))
-
-        aCursor.execute(insertStatement, (no_of_rotation1_ccw, no_of_rotation1_cw,
-                                          no_of_rotation2_ccw, no_of_rotation2_cw,
-                                          rotation_unit_rpm))
-        aConnection.commit()
-        aCursor.close()
-        aConnection.close()
-
         if reportMajorDatabaseActions:
-            printBoldGreen(f"Inserted new machine settings record")
+            printBoldGreen(f"Saved new machine settings ({updated_by}): {values}")
         return True
-
     except Exception as error:
-        printBoldRed(f"Encountered {error}, {type(error)} for statement {insertStatement}")
+        printBoldRed(f"Error saving machine settings: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 pass
         return False
 
 
 def getMachineSettingsHistory(db_name: str, limit: int = 10) -> list:
-    """
-    Fetch machine settings history (multiple records for audit trail).
-
-    Args:
-        db_name (str): Database name
-        limit (int): Maximum number of records to return (default 10)
-
-    Returns:
-        list: List of dictionaries containing machine settings history, or empty list on error
-    """
+    """The latest `limit` settings rows, newest first (same dict layout as getMachineSettings)."""
     global schema_name
     aConnection = None
     try:
-        aConnection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                                       port="5432", database=db_name)
-        aConnection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-
-        # Get records ordered by updated_on_date descending
-        query = f"""SELECT setting_id, noofrotation1ccw, noofrotation1cw, noofrotation2ccw, noofrotation2cw,
-                           rotationunitrpm, updated_on_date
-                    FROM {schema_name}.machine_settings 
-                    ORDER BY updated_on_date DESC
-                    LIMIT %s;"""
-        aCursor.execute(query, (limit,))
-        results = aCursor.fetchall()
-
+        aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
+                        f"ORDER BY setting_id DESC LIMIT %s;", (limit,))
+        rows = aCursor.fetchall()
         aCursor.close()
         aConnection.close()
-
-        history = []
-        for result in results:
-            history.append({
-                "setting_id": result[0],
-                "NoOfRotation1CCW": result[1],
-                "NoOfRotation1CW": result[2],
-                "NoOfRotation2CCW": result[3],
-                "NoOfRotation2CW": result[4],
-                "RotationUnitRPM": result[5],
-                "updated_on_date": result[6]
-            })
-        return history
-
+        return [_settingsRowToDict(r) for r in rows]
     except Exception as error:
         printBoldRed(f"Error fetching machine settings history: {error}")
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 pass
         return []
 
-
 # ************************* END - MACHINE_SETTINGS TABLE ******************************************
-
-
-# ************************* TEST ROUTINE FOR MACHINE_SETTINGS ******************************************
-
-def testMachineSettings(db_name: str = None, verbose: bool = True) -> bool:
-    """
-    Test routine for machine_settings table operations.
-    Tests all CRUD operations for machine_settings.
-
-    Args:
-        db_name (str): Database name. If None, uses current database from getDatabaseName()
-        verbose (bool): If True, prints detailed test results
-
-    Returns:
-        bool: True if all tests pass, False otherwise
-    """
-    if db_name is None:
-        db_name = getDatabaseName()
-
-    all_passed = True
-    test_results = []
-
-    def log(message: str, success: bool = True):
-        nonlocal all_passed
-        status = "✓ PASS" if success else "✗ FAIL"
-        if not success:
-            all_passed = False
-        test_results.append(f"{status}: {message}")
-        if verbose:
-            if success:
-                printBoldGreen(f"{status}: {message}")
-            else:
-                printBoldRed(f"{status}: {message}")
-
-    if verbose:
-        printBoldBlue("=" * 60)
-        printBoldBlue("MACHINE SETTINGS TEST ROUTINE")
-        printBoldBlue(f"Database: {db_name}")
-        printBoldBlue("=" * 60)
-
-    # Test 1: Insert default machine settings
-    if verbose:
-        printBoldYellow("\n[Test 1] Insert Default Machine Settings")
-    try:
-        result = insertDefaultMachineSettings(db_name)
-        log("insertDefaultMachineSettings() executed", result)
-    except Exception as e:
-        log(f"insertDefaultMachineSettings() raised exception: {e}", False)
-
-    # Test 2: Get machine settings
-    if verbose:
-        printBoldYellow("\n[Test 2] Get Machine Settings")
-    try:
-        settings = getMachineSettings(db_name)
-        if settings:
-            log(f"getMachineSettings() returned: {settings}", True)
-            # Verify all expected keys exist
-            expected_keys = ['NoOfRotation1CCW', 'NoOfRotation1CW', 'NoOfRotation2CCW',
-                             'NoOfRotation2CW', 'RotationUnitRPM', 'updated_on_date']
-            missing_keys = [k for k in expected_keys if k not in settings]
-            if missing_keys:
-                log(f"Missing keys in settings: {missing_keys}", False)
-            else:
-                log("All expected keys present in settings", True)
-        else:
-            log("getMachineSettings() returned empty dict", False)
-    except Exception as e:
-        log(f"getMachineSettings() raised exception: {e}", False)
-
-    # Test 3: Update individual settings
-    if verbose:
-        printBoldYellow("\n[Test 3] Update Individual Settings")
-
-    # Test updateNoOfRotation1CCW
-    try:
-        result = updateNoOfRotation1CCW(db_name, 5)
-        log(f"updateNoOfRotation1CCW(5) = {result}", result)
-    except Exception as e:
-        log(f"updateNoOfRotation1CCW() raised exception: {e}", False)
-
-    # Test updateNoOfRotation1CW
-    try:
-        result = updateNoOfRotation1CW(db_name, 7)
-        log(f"updateNoOfRotation1CW(7) = {result}", result)
-    except Exception as e:
-        log(f"updateNoOfRotation1CW() raised exception: {e}", False)
-
-    # Test updateNoOfRotation2CCW
-    try:
-        result = updateNoOfRotation2CCW(db_name, 3)
-        log(f"updateNoOfRotation2CCW(3) = {result}", result)
-    except Exception as e:
-        log(f"updateNoOfRotation2CCW() raised exception: {e}", False)
-
-    # Test updateNoOfRotation2CW
-    try:
-        result = updateNoOfRotation2CW(db_name, 9)
-        log(f"updateNoOfRotation2CW(9) = {result}", result)
-    except Exception as e:
-        log(f"updateNoOfRotation2CW() raised exception: {e}", False)
-
-    # Test updateRotationUnitRPM
-    try:
-        result = updateRotationUnitRPM(db_name, 100)
-        log(f"updateRotationUnitRPM(100) = {result}", result)
-    except Exception as e:
-        log(f"updateRotationUnitRPM() raised exception: {e}", False)
-
-    # Test 4: Verify updates were applied
-    if verbose:
-        printBoldYellow("\n[Test 4] Verify Individual Updates")
-    try:
-        settings = getMachineSettings(db_name)
-        if settings:
-            checks = [
-                (settings.get('NoOfRotation1CCW') == 5,
-                 f"NoOfRotation1CCW = {settings.get('NoOfRotation1CCW')} (expected 5)"),
-                (settings.get('NoOfRotation1CW') == 7,
-                 f"NoOfRotation1CW = {settings.get('NoOfRotation1CW')} (expected 7)"),
-                (settings.get('NoOfRotation2CCW') == 3,
-                 f"NoOfRotation2CCW = {settings.get('NoOfRotation2CCW')} (expected 3)"),
-                (settings.get('NoOfRotation2CW') == 9,
-                 f"NoOfRotation2CW = {settings.get('NoOfRotation2CW')} (expected 9)"),
-                (settings.get('RotationUnitRPM') == 100,
-                 f"RotationUnitRPM = {settings.get('RotationUnitRPM')} (expected 100)"),
-            ]
-            for passed, msg in checks:
-                log(msg, passed)
-        else:
-            log("Could not verify updates - getMachineSettings returned empty", False)
-    except Exception as e:
-        log(f"Verification raised exception: {e}", False)
-
-    # Test 5: Update all settings at once
-    if verbose:
-        printBoldYellow("\n[Test 5] Update All Settings At Once")
-    try:
-        result = updateAllMachineSettings(db_name,
-                                          no_of_rotation1_ccw=2,
-                                          no_of_rotation1_cw=4,
-                                          no_of_rotation2_ccw=6,
-                                          no_of_rotation2_cw=8,
-                                          rotation_unit_rpm=80)
-        log(f"updateAllMachineSettings(2, 4, 6, 8, 80) = {result}", result)
-    except Exception as e:
-        log(f"updateAllMachineSettings() raised exception: {e}", False)
-
-    # Test 6: Verify bulk update
-    if verbose:
-        printBoldYellow("\n[Test 6] Verify Bulk Update")
-    try:
-        settings = getMachineSettings(db_name)
-        if settings:
-            checks = [
-                (settings.get('NoOfRotation1CCW') == 2,
-                 f"NoOfRotation1CCW = {settings.get('NoOfRotation1CCW')} (expected 2)"),
-                (settings.get('NoOfRotation1CW') == 4,
-                 f"NoOfRotation1CW = {settings.get('NoOfRotation1CW')} (expected 4)"),
-                (settings.get('NoOfRotation2CCW') == 6,
-                 f"NoOfRotation2CCW = {settings.get('NoOfRotation2CCW')} (expected 6)"),
-                (settings.get('NoOfRotation2CW') == 8,
-                 f"NoOfRotation2CW = {settings.get('NoOfRotation2CW')} (expected 8)"),
-                (settings.get('RotationUnitRPM') == 80,
-                 f"RotationUnitRPM = {settings.get('RotationUnitRPM')} (expected 80)"),
-            ]
-            for passed, msg in checks:
-                log(msg, passed)
-
-            # Verify updated_on_date is recent
-            if settings.get('updated_on_date'):
-                log(f"updated_on_date = {settings.get('updated_on_date')}", True)
-            else:
-                log("updated_on_date is None", False)
-        else:
-            log("Could not verify bulk update - getMachineSettings returned empty", False)
-    except Exception as e:
-        log(f"Verification raised exception: {e}", False)
-
-    # Test 7: Test Invalid Setting Name (should fail gracefully)
-    if verbose:
-        printBoldYellow("\n[Test 7] Test Invalid Setting Name (should fail gracefully)")
-    try:
-        result = updateMachineSetting(db_name, 'InvalidSettingName', 999)
-        log(f"updateMachineSetting('InvalidSettingName', 999) correctly returned False", not result)
-    except Exception as e:
-        log(f"updateMachineSetting() raised exception for invalid name: {e}", False)
-
-    # Test 7a: Test Boundary Validation (values outside valid range should fail)
-    if verbose:
-        printBoldYellow("\n[Test 7a] Test Boundary Validation")
-
-    # Test rotation > 10 should fail
-    try:
-        result = updateNoOfRotation1CCW(db_name, 15)
-        log(f"updateNoOfRotation1CCW(15) correctly returned False (>10)", not result)
-    except Exception as e:
-        log(f"updateNoOfRotation1CCW(15) raised exception: {e}", False)
-
-    # Test rotation < 0 should fail
-    try:
-        result = updateNoOfRotation1CW(db_name, -1)
-        log(f"updateNoOfRotation1CW(-1) correctly returned False (<0)", not result)
-    except Exception as e:
-        log(f"updateNoOfRotation1CW(-1) raised exception: {e}", False)
-
-    # Test RPM > 120 should fail
-    try:
-        result = updateRotationUnitRPM(db_name, 150)
-        log(f"updateRotationUnitRPM(150) correctly returned False (>120)", not result)
-    except Exception as e:
-        log(f"updateRotationUnitRPM(150) raised exception: {e}", False)
-
-    # Test RPM < 1 should fail
-    try:
-        result = updateRotationUnitRPM(db_name, 0)
-        log(f"updateRotationUnitRPM(0) correctly returned False (<1)", not result)
-    except Exception as e:
-        log(f"updateRotationUnitRPM(0) raised exception: {e}", False)
-
-    # Test bulk update with invalid values should fail
-    try:
-        result = updateAllMachineSettings(db_name,
-                                          no_of_rotation1_ccw=20,  # Invalid: > 10
-                                          no_of_rotation1_cw=1,
-                                          no_of_rotation2_ccw=1,
-                                          no_of_rotation2_cw=1,
-                                          rotation_unit_rpm=60)
-        log(f"updateAllMachineSettings with rotation=20 correctly returned False", not result)
-    except Exception as e:
-        log(f"updateAllMachineSettings() raised exception: {e}", False)
-
-    # Test 8: Reset to defaults
-    if verbose:
-        printBoldYellow("\n[Test 8] Reset to Default Values")
-    try:
-        result = updateAllMachineSettings(db_name,
-                                          no_of_rotation1_ccw=1,
-                                          no_of_rotation1_cw=1,
-                                          no_of_rotation2_ccw=1,
-                                          no_of_rotation2_cw=1,
-                                          rotation_unit_rpm=60)
-        log(f"Reset to defaults (1, 1, 1, 1, 60) = {result}", result)
-    except Exception as e:
-        log(f"Reset raised exception: {e}", False)
-
-    # Summary
-    if verbose:
-        printBoldBlue("\n" + "=" * 60)
-        printBoldBlue("TEST SUMMARY")
-        printBoldBlue("=" * 60)
-        passed_count = sum(1 for r in test_results if r.startswith("✓"))
-        failed_count = sum(1 for r in test_results if r.startswith("✗"))
-        printBoldYellow(f"Total Tests: {len(test_results)}")
-        printBoldGreen(f"Passed: {passed_count}")
-        if failed_count > 0:
-            printBoldRed(f"Failed: {failed_count}")
-        else:
-            printLight(f"Failed: {failed_count}")
-
-        if all_passed:
-            printBoldGreen("\n*** ALL TESTS PASSED ***")
-        else:
-            printBoldRed("\n*** SOME TESTS FAILED ***")
-
-    return all_passed
-
-# To run the test, uncomment the following lines:
-# if __name__ == "__main__":
-#     setDatabaseName(mode="Test", createDB=True)
-#     testMachineSettings(verbose=True)
-
-# ************************* END - TEST ROUTINE ******************************************
