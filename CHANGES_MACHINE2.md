@@ -476,4 +476,5 @@ The seven Tkinter test windows (`Test_IOServer_*_UI.py`, `Test_FEServer_*_UI.py`
 - **Verified:**
   - Siemens: fault scenarios 56/56; two full cycles exact (30.0 / 1.0 / 1.0 written as LREAL).
   - Allen-Bradley: 47/47.
-- **Still to confirm with the PLC programmer:** what LR96 means. It currently holds 200.0, while our range is 20–40 rpm. The neighbouring LR88 = 50 and LR104 = 100. LR120/128/136 all hold 3.0, while our counts are 1 or 2.
+- **Resolved 2026-10-31.** Uddi confirmed that the defaults (30 rpm, 19.0 / 19.0 Nm, rotations 1 / 1) and the limits are correct. The 200.0 and 3.0 found at LR96 / LR120 were old values in the PLC.
+- **Real PLC.** The six settings were written with the LREAL code and read back as LR96 = 30.000, LR120 = 1.000, LR144 = 1.000, R200 = 19.000, R204 = 19.000, I246 = 1. An earlier IOServer run with the old 4-byte REAL code had left LR96 ≈ 1.5e10 and LR120 = 0.0078, which matched the expected corruption exactly; this write repaired them.
