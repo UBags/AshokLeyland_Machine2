@@ -1584,6 +1584,7 @@ class CosThetaConfigurator():
         except Exception as e:
             return 100.0
 
+    @classmethod   # was missing (fixed in production): CosThetaConfigurator.getPollingTimeForCounterUpdates() raised TypeError
     def getPollingTimeForCounterUpdates(cls) -> float:
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_COUNTER_UPDATES_KEY,
@@ -2417,6 +2418,7 @@ class CosThetaConfigurator():
             key=f"{CosThetaConfigurator.REPORT_BASE_DIR_KEY}",
             default='C:/Temp/Reports/')
 
+    @classmethod   # was missing (fixed in production): CosThetaConfigurator.getBaseDirForAuditReports() raised TypeError
     def getBaseDirForAuditReports(cls) -> str:
         return CosThetaConfigurator.getValue(key=f"{CosThetaConfigurator.AUDIT_REPORT_BASE_DIR_KEY}",
                                              default='C:/Temp/Reports/')

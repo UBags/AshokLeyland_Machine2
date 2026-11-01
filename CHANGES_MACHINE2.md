@@ -806,3 +806,26 @@ Production's own changes since the common ancestor `6b31dd7` were compared with 
 - On the plant screen the last "e" of "Rotation Not Done" went past the tile edge.
 - The second line of the tightening tiles is now 13 pt (was 16 pt). If the text is still wider than 90% of the tile, as can happen on a smaller screen, with display scaling or with a wider font, it is reduced further, to 8 pt at the least. The check uses the actual font and the tile width.
 - FE dry run: 62 checks. A new check: "Rotation Not Done" fits the tile, at 173 px in a 269 px tile here.
+
+## 32. Production Configuration.py and properties (29-01-2026) compared (2026-11-01)
+
+**Configuration.py.** Production's changes since `6b31dd7`:
+- **Taken:**
+  - `@classmethod` added to `getPollingTimeForCounterUpdates` and `getBaseDirForAuditReports`. Called on the class, they raised TypeError. No live code calls them, but the fix is correct.
+- **Already here:**
+  - A throttle on the properties-file change check. Production uses 5 s; here it is `config.reload.check.interval.sec`, 2 s.
+  - The frontend emergency and heartbeat interval keys (section 30).
+- **Not taken:**
+  - `frontend.logging.level`, which only filters production's `logMessageTo…` functions (not taken, section 29).
+  - `frontend.all.connectionstatus.sleepinterval.sec`; the status refresh stays at `general.connectionstatus.sleepinterval.sec` = 2 s (section 30).
+  - 0.25 s getter defaults. They apply only when a key is missing, and the properties set the values.
+
+**ApplicationConfiguration - Production - 29-01-2026.properties.**
+- It is identical to the copy already in the repo. It is older than the properties file in `For_comparison.zip`: that one has `bunk` instead of `bung`, `C:` instead of `D:`, display times of 0.5/2.5 s and the new interval keys. This branch follows the newer file.
+- Keys in production that are not here: each was checked against the code.
+  - Camera settings: now `<vendor>.vision.camera.*` / `<vendor>.vision.*`.
+  - Image target sizes: now `<vendor>.vision.machine.state.N.*`, numbered for the new states.
+  - The rest (picture-delay tuning, recording, Google Drive, font multipliers, unused queue names, the old bunk / nut-washer / no-bunk check parameters, rotation-2 and rotation-unit tags) are read by no live code. They were removed in sections 10 and 11.
+- Different values:
+  - Tag names and state instructions: the new process.
+  - Interval values: production's shorter heartbeat intervals were not taken, see section 30.
