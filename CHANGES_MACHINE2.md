@@ -1045,3 +1045,17 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   found (green), the check's own result picture as an inset, and a banner: OK with the ring radii and the brightness
   difference against the limit, or NOT OK with "no bearing ring found" / "brighter by only ...". Pictures:
   `test/machine2_dryrun/top_bearing_images/`.
+
+## 40. Top bearing check: repeatable circle fitting (both machines) (2026-11-01)
+- **Change:** `CheckTopBearing._fit_circle_ransac` takes its 3-point samples from `np.random.default_rng(RANSAC_SEED)`
+  (module constant `RANSAC_SEED = 0`; optional `seed` argument) instead of the unseeded global `np.random`. The same
+  picture now always gives the same ring and the same verdict, also with the branches running in parallel threads
+  (each call has its own generator). Signature of `checkTopBearing` unchanged.
+- **Verifier:** reference commit 486904e (production CheckTopBearing with this change) in `baseline_per_file`;
+  manifest lines updated. Both machines: ALL EQUIVALENT.
+- **Results:** Machine 2 (centre 613, 345), 16 pictures x 3 runs for each of seeds 0-4: every run of a picture gives
+  the same ring; 11 bearing pictures OK, 5 open-bore / washer NOT OK with every seed. Machine 1 (production settings),
+  seeds 0-2: 15 bearing OK, 10 open-bore NOT OK. Two full runs of DryRun_TopBearing_Check: identical results.
+- **Note:** a fixed seed makes a verdict repeatable, not right: with the earlier centre (613, 341), DOSTPLUS_bearing_03
+  fails with seeds 0, 2 and 6 every time and passes with the others. The setting must leave margin (section 39);
+  the seed only removes the run-to-run variation.
