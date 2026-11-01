@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from PySide6 import QtCore
 from PySide6.QtWidgets import QWidget, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QSpacerItem, QSizePolicy, \
     QApplication, QMainWindow
@@ -24,7 +25,9 @@ class CosThetaOutcomeContainer(QFrame):
     RESULT_AWAITED_STYLESHEET = noResultLabelStylesheet.format(QColor(Qt.GlobalColor.white).name())
     EMPTY_IMAGE_FONT = QFont('Courier', pointSize=18, weight=QFont.Weight.Bold)
     NUMBER_DISPLAY_FONT = QFont('Courier', pointSize=36, weight=QFont.Weight.Bold)
-    SECOND_LINE_POINT_SIZE = 16             # second line of a two-line display (e.g. "Rotation Done")
+    SECOND_LINE_POINT_SIZE = 13             # second line of a two-line display (e.g. "Rotation Done"); was 16, the
+                                            # last 'e' of "Rotation Not Done" went past the tile edge
+    SECOND_LINE_MIN_POINT_SIZE = 8          # never smaller than this when shrinking to fit
 
     def __init__(self, title : str, imageHint : str, bg_color = Qt.GlobalColor.black, fg_color = Qt.GlobalColor.white,
                  default_status = "Result Awaited", forceTopLabelFontSizeTo : int = 0,
@@ -247,13 +250,33 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.RichText)
         mainSize = CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT.pointSize()
+        secondSize = self._secondLinePointSize(str(secondLine))
         self.image_label.setText(
             f"<div align='center' style='font-size:{mainSize}pt; font-weight:bold;'>{html.escape(str(mainText))}</div>"
-            f"<div align='center' style='font-size:{CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE}pt; "
+            f"<div align='center' style='font-size:{secondSize}pt; "
             f"font-weight:bold;{(' color:' + secondLineColor + ';') if secondLineColor else ''}'>"
             f"{html.escape(str(secondLine))}</div>")
         self.setResult(result)
         self.update()
+
+    def _secondLinePointSize(self, text: str) -> int:
+        """SECOND_LINE_POINT_SIZE, reduced if needed so that the text fits within 90% of the display's width (so it
+        cannot run past the tile edge on a smaller screen or with a wider font)."""
+        size = CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE
+        try:
+            available = self.image_label.width() * 0.9
+            if available <= 0:
+                return size
+            font = QFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+            font.setBold(True)
+            while size > CosThetaOutcomeContainer.SECOND_LINE_MIN_POINT_SIZE:
+                font.setPointSize(size)
+                if QFontMetrics(font).horizontalAdvance(text) <= available:
+                    break
+                size -= 1
+        except Exception:
+            noteSuppressed()
+        return size
 
     def setResultAndText(self, text: str, result : str):
         # if result.upper() == "OK":

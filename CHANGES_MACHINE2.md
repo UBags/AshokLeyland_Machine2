@@ -800,3 +800,9 @@ Production's own changes since the common ancestor `6b31dd7` were compared with 
   | Heartbeat dry run | 16/16 on both vendors |
 
   The heartbeat dry run scored 14/16 once, started straight after the integrated run while that run's processes were still reading the heartbeat streams. Run on its own, it passes.
+
+## 31. "Rotation Done / Not Done": smaller font, always fits the tile (2026-11-01)
+
+- On the plant screen the last "e" of "Rotation Not Done" went past the tile edge.
+- The second line of the tightening tiles is now 13 pt (was 16 pt). If the text is still wider than 90% of the tile, as can happen on a smaller screen, with display scaling or with a wider font, it is reduced further, to 8 pt at the least. The check uses the actual font and the tile width.
+- FE dry run: 62 checks. A new check: "Rotation Not Done" fits the tile, at 173 px in a 269 px tile here.

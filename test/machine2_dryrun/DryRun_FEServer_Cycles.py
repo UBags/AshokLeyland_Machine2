@@ -195,6 +195,13 @@ def check_full_record(tag, rec, code):
     check(f"{tag} rotation done with torque 1 / torque 2 in the record (True / False)",
           (rec[ROTATION_IDX[0]], rec[ROTATION_IDX[1]]) == (True, False), str(rec[44:46]))
 
+import re as _re
+from PySide6.QtGui import QFont, QFontMetrics
+FE_WINDOW = []
+def _secondSize(text):
+    sizes = _re.findall(r"font-size:(\d+)pt", text)
+    return int(sizes[1]) if len(sizes) > 1 else None
+
 QR1 = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
 QR2 = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"
 
@@ -218,9 +225,14 @@ def driver():
         t1, t2 = TORQUE_TEXT.get(MS.READ_TIGHTENING_TORQUE_1, ""), TORQUE_TEXT.get(MS.READ_TIGHTENING_TORQUE_2, "")
         check("F1 torque 1 tile: value on the first line, 'Rotation Done' below it in a smaller font",
               "19.08" in t1 and "Rotation Done" in t1 and t1.index("19.08") < t1.index("Rotation Done")
-              and "font-size:16pt" in t1, t1)
+              and "font-size:36pt" in t1 and _secondSize(t1) is not None and _secondSize(t1) <= 13, t1)
         check("F1 torque 2 tile: value, then 'Rotation Not Done' in red", "19.03" in t2 and "Rotation Not Done" in t2
               and "color:#d00000" in t2, t2)
+        _tile2 = FE_WINDOW[0].resultsContainer.tightening_torque2_check_container.image_label
+        _f = QFont(_tile2.font()); _f.setBold(True); _f.setPointSize(_secondSize(t2) or 99)
+        check("F1 'Rotation Not Done' (13 pt or less) fits inside the tile with a margin",
+              QFontMetrics(_f).horizontalAdvance("Rotation Not Done") <= 0.9 * _tile2.width(),
+              (_secondSize(t2), QFontMetrics(_f).horizontalAdvance("Rotation Not Done"), _tile2.width()))
         check("F1 'Rotation Done' not in red", "color:#d00000" not in t1, t1)
         check("F1 rotationDone passed to the two tightening tiles (True / False)",
               (TILE_ROTATION.get("setTighteningTorque1Data"), TILE_ROTATION.get("setTighteningTorque2Data")) == (True, False),
@@ -355,5 +367,6 @@ def _guiTick():
 _guiProbe = _QTimer(); _guiProbe.timeout.connect(_guiTick); _guiProbe.start(20)
 
 fe = FE(mode="Test", username="admin", role="Administrator")
+FE_WINDOW.append(fe)
 threading.Thread(target=driver, daemon=True).start()
 app.exec()
