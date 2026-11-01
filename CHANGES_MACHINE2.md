@@ -1005,3 +1005,18 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   in the centre, mismatch, no polygon), the gamma and the time; optional saving to `<folder>/hub_check_results/`.
   Pictures in `test/machine2_dryrun/hub_images/`.
 - **Verify_Vision_Config_Equivalence:** `plc.vision.*` (IOServer settings) no longer reported as stray vision keys.
+
+## 38. Hub check: "no bearing in the bore" only on request (enforceBearingAbsenceCheck); limit 140 on both machines (2026-11-01)
+- **Decision (user):** the hub station checks the hub; the next station checks the bearing. The centre check is kept
+  but runs only when the caller asks for it: new last parameter
+  `CheckHubAndBottomBearing.checkHubAndBottomBearing(..., enforceBearingAbsenceCheck: bool = False)`.
+  `CameraProcessorServer` does not pass it, so production now skips the centre check on both machines.
+- **Limit** `<vendor>.vision.hub.centre.check.max.mean` = **140** on both machines (Machine 1 was 144, Machine 2 127):
+  open bore 105–130, bearing 150–178 on the pictures (Machine 1: open 110–129, bearing 167–178; Machine 2, ring
+  35–55: open 110–115, bearing with rollers 150–170). Washer on the bearing (Machine 2): 140–144 - at the limit;
+  only relevant if the check is switched on.
+- **Verifier:** reference commit 88d3a0d (production CheckHubAndBottomBearing with the logic change, limit 140,
+  comments that refer to the keys) in `baseline_per_file`; manifest lines updated. Both machines: ALL EQUIVALENT.
+- **DryRun_Hub_Check:** "Enforce bearing absence check" tick box (off by default = production); the centre value is
+  shown either way ("not enforced" when off). Controls on two rows. Proxy run on the 12 Machine 2 pictures: off -> 12
+  OK; on -> 6 NOT OK "bearing in the centre" except DOSTPLUS_06 (washer, 139.8).

@@ -1,7 +1,8 @@
 {
   "_baseline": "5728def",
   "baseline_per_file": {
-    "camera/CheckKnuckle.py": "637ce4a"
+    "camera/CheckKnuckle.py": "637ce4a",
+    "camera/CheckHubAndBottomBearing.py": "88d3a0d"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
@@ -56,7 +57,7 @@
       "const": "HUB_CENTRE_CHECK_INNER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 157,
+      "old_line": 158,
       "old_literal": "20",
       "old_snippet": "(635, 350), 20,"
     },
@@ -64,15 +65,15 @@
       "const": "HUB_CENTRE_CHECK_MAX_MEAN",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 168,
-      "old_literal": "144",
-      "old_snippet": "average < 144"
+      "old_line": 169,
+      "old_literal": "140",
+      "old_snippet": "average < 140"
     },
     "vision.hub.centre.check.outer.radius": {
       "const": "HUB_CENTRE_CHECK_OUTER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 156,
+      "old_line": 157,
       "old_literal": "60",
       "old_snippet": "(635, 350), 60,"
     },
@@ -80,7 +81,7 @@
       "const": "HUB_CENTRE_CHECK_X",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 156,
+      "old_line": 157,
       "old_literal": "635",
       "old_snippet": "(635, 350)"
     },
@@ -88,7 +89,7 @@
       "const": "HUB_CENTRE_CHECK_Y",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 156,
+      "old_line": 157,
       "old_literal": "350",
       "old_snippet": "(635, 350)"
     },

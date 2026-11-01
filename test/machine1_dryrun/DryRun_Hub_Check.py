@@ -1,14 +1,18 @@
 """
-DryRun_Hub_Check - the real hub and bottom bearing check (CheckHubAndBottomBearing: centre check, then MobileSAMv2
-hole/stud polygon) on a folder of pictures, with this machine's settings, shown one picture at a time.
+DryRun_Hub_Check - the real hub and bottom bearing check (CheckHubAndBottomBearing: MobileSAMv2 hole/stud polygon,
+and - only if "Enforce bearing absence check" is ticked - the "no bearing in centre" check first) on a folder of
+pictures, with this machine's settings, shown one picture at a time.
 
   1. Choose a folder of pictures (jpg / png / bmp) and the model (DOST = 4, DOSTPLUS = 5), then Start.
+     "Enforce bearing absence check" = checkHubAndBottomBearing(..., enforceBearingAbsenceCheck=True). Off by
+     default, as in production (CameraProcessorServer does not pass it). The centre value is shown either way.
   2. Each picture is checked; the result is shown with the program's markings for the chosen number of seconds
      (default 3), then the next picture is checked.
   3. Markings: the painted holes/studs of the winning polygon and "COUNT: n" (from the check itself; red with
      "MISMATCH" if the other model was found), plus, drawn by this window:
        yellow rings  = the area searched for holes/studs   (<vendor>.vision.hub.segment.*)
-       magenta rings = the "no bearing in centre" area     (<vendor>.vision.hub.centre.check.*) with its value
+       magenta rings = the "no bearing in centre" area     (<vendor>.vision.hub.centre.check.*) with its value;
+                       red when the value is at or above the limit (a bearing in the bore)
        banner        = OK / NOT OK, the reason, the winning gamma and the time taken.
   4. At the end: number OK / NOT OK and the list of results. "Save marked pictures" writes each marked picture to
      <folder>/hub_check_results/.
@@ -61,7 +65,7 @@ class HubCheckWindow:
         bar.pack(fill="x")
         ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left")
         self.folder = tk.StringVar(value="")
-        ttk.Label(bar, textvariable=self.folder, width=55).pack(side="left", padx=6)
+        ttk.Label(bar, textvariable=self.folder, width=70).pack(side="left", padx=6)
         ttk.Label(bar, text="Model").pack(side="left")
         self.model = tk.StringVar(value="DOSTPLUS")
         ttk.Combobox(bar, textvariable=self.model, values=("DOST", "DOSTPLUS"), state="readonly",
@@ -69,8 +73,12 @@ class HubCheckWindow:
         ttk.Label(bar, text="Seconds per picture").pack(side="left", padx=(10, 0))
         self.seconds = tk.DoubleVar(value=3.0)
         ttk.Spinbox(bar, from_=0.5, to=30, increment=0.5, textvariable=self.seconds, width=5).pack(side="left", padx=4)
+        bar = ttk.Frame(root, padding=(6, 0, 6, 6))
+        bar.pack(fill="x")
         self.save = tk.BooleanVar(value=False)
-        ttk.Checkbutton(bar, text="Save marked pictures", variable=self.save).pack(side="left", padx=10)
+        ttk.Checkbutton(bar, text="Save marked pictures", variable=self.save).pack(side="left", padx=(0, 10))
+        self.enforce = tk.BooleanVar(value=False)
+        ttk.Checkbutton(bar, text="Enforce bearing absence check", variable=self.enforce).pack(side="left", padx=(0, 10))
         self.startButton = ttk.Button(bar, text="Start", command=self.start, state="disabled")
         self.startButton.pack(side="left")
         self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
@@ -124,7 +132,8 @@ class HubCheckWindow:
         self.startButton.config(state="disabled")
         self.stopButton.config(state="normal")
         outFolder = pathlib.Path(self.folder.get()) / "hub_check_results"
-        self.worker = threading.Thread(target=self.run, args=(files, self.model.get(), self.save.get(), outFolder),
+        self.worker = threading.Thread(target=self.run, args=(files, self.model.get(), self.save.get(), outFolder,
+                                                              self.enforce.get()),
                                        name="Hub check", daemon=True)
         self.worker.start()
 
@@ -138,7 +147,7 @@ class HubCheckWindow:
         self.root.destroy()
 
     # ------------------------------------------------------------------ worker (checks; one picture at a time)
-    def run(self, files, model, save, outFolder):
+    def run(self, files, model, save, outFolder, enforce):
         if save:
             outFolder.mkdir(exist_ok=True)
         for n, path in enumerate(files, 1):
@@ -155,12 +164,13 @@ class HubCheckWindow:
             if segmenter is not None:
                 segmenter._last_detected_model, segmenter._last_is_match = None, True
             try:
-                marked, ok, gamma = self.check.checkHubAndBottomBearing(image.copy(), QR[model])
+                marked, ok, gamma = self.check.checkHubAndBottomBearing(image.copy(), QR[model],
+                                                                        enforceBearingAbsenceCheck=enforce)
             except Exception as e:
                 marked, ok, gamma = image, False, None
                 reason = f"exception: {e}"
             else:
-                if centreMean >= centreLimit:
+                if enforce and centreMean >= centreLimit:
                     reason = f"bearing in the centre (value {centreMean:.0f} >= {centreLimit})"
                 elif ok:
                     reason = f"{4 if model == 'DOST' else 5} found, {model}"
@@ -170,7 +180,7 @@ class HubCheckWindow:
                     reason = f"no regular {4 if model == 'DOST' else 5}-hole/stud polygon found"
             seconds = time.time() - t0
             shown = self.decorate(marked if marked is not None else image, model, ok, reason, gamma, seconds,
-                                  centreMean, centreLimit, path.name)
+                                  centreMean, centreLimit, path.name, enforce)
             if save:
                 cv2.imwrite(str(outFolder / f"{'OK' if ok else 'NOTOK'}_{path.stem}.png"), shown)
             self.advance.clear()
@@ -187,7 +197,7 @@ class HubCheckWindow:
         cv2.circle(mask, (m.HUB_CENTRE_CHECK_X, m.HUB_CENTRE_CHECK_Y), m.HUB_CENTRE_CHECK_INNER_RADIUS, 0, -1)
         return float(gray[mask > 0].mean()), m.HUB_CENTRE_CHECK_MAX_MEAN
 
-    def decorate(self, image, model, ok, reason, gamma, seconds, centreMean, centreLimit, name):
+    def decorate(self, image, model, ok, reason, gamma, seconds, centreMean, centreLimit, name, enforce):
         m, s = self.module, self.segmenterModule
         out = image.copy()
         centre = (s.HUB_SEGMENT_CENTER_X, s.HUB_SEGMENT_CENTER_Y)
@@ -197,7 +207,8 @@ class HubCheckWindow:
         centreColour = (255, 0, 255) if centreMean < centreLimit else (0, 0, 255)
         cv2.circle(out, cc, m.HUB_CENTRE_CHECK_OUTER_RADIUS, centreColour, 1)
         cv2.circle(out, cc, m.HUB_CENTRE_CHECK_INNER_RADIUS, centreColour, 1)
-        cv2.putText(out, f"centre {centreMean:.0f} (limit {centreLimit})", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+        cv2.putText(out, f"centre {centreMean:.0f} (limit {centreLimit}"
+                         f"{'' if enforce else ', not enforced'})", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                     centreColour, 2)
         colour = (0, 170, 0) if ok else (0, 0, 220)
         cv2.rectangle(out, (0, out.shape[0] - 70), (out.shape[1], out.shape[0]), colour, -1)
@@ -252,6 +263,6 @@ class HubCheckWindow:
 
 if __name__ == "__main__":
     window = tk.Tk()
-    window.geometry("1180x900")
+    window.geometry("1180x930")
     HubCheckWindow(window)
     window.mainloop()
