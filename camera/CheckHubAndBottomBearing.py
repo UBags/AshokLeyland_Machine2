@@ -26,7 +26,6 @@ from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
-from camera.VisionConfig import vInt
 from concurrent.futures import ThreadPoolExecutor
 
 # Import the core segmentation engine (STANDALONE VERSION v2.0)
@@ -42,13 +41,6 @@ except ImportError as e:
     logBoth('logWarning', __name__, f"Warning: HubAndBearingSegmenter not available: {e}", MessageType.RISK)
     SAM_AVAILABLE = False
     HubAndBearingSegmenter = None  # Prevents NameError
-
-# "No bearing in centre" check: annulus (full-image pixels) whose mean gray value (after gamma 3.0) must stay below the limit
-HUB_CENTRE_CHECK_X = vInt("vision.hub.centre.check.x", 635)
-HUB_CENTRE_CHECK_Y = vInt("vision.hub.centre.check.y", 350)
-HUB_CENTRE_CHECK_OUTER_RADIUS = vInt("vision.hub.centre.check.outer.radius", 60)
-HUB_CENTRE_CHECK_INNER_RADIUS = vInt("vision.hub.centre.check.inner.radius", 20)
-HUB_CENTRE_CHECK_MAX_MEAN = vInt("vision.hub.centre.check.max.mean", 144)
 
 
 def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
@@ -139,13 +131,14 @@ class CheckHubAndBottomBearing:
     @classmethod
     def ensureNoBearingInCentre(cls, image: np.ndarray) -> bool:
         """
-        Check if there's no bearing present in the center region.
+        Check that no bearing is in the bore: mean gray value (after gamma 3.0) of the ring
+        vision.hub.centre.check.* must stay below vision.hub.centre.check.max.mean.
 
         Args:
             image: Input BGR image
 
         Returns:
-            True if average pixel value < 144 (no bearing), False otherwise
+            True if the mean is below vision.hub.centre.check.max.mean (no bearing), False otherwise
         """
         _src = getFullyQualifiedName(__file__, cls)
 
@@ -158,11 +151,11 @@ class CheckHubAndBottomBearing:
         # Convert to grayscale
         gray = cv2.cvtColor(gamma_corrected, cv2.COLOR_BGR2GRAY)
 
-        # Create annular mask (center: 635, 350; inner: 20; outer: 60)
+        # Annular mask: centre and radii from vision.hub.centre.check.*
         h, w = gray.shape
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_OUTER_RADIUS, 255, -1)  # Outer circle
-        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_INNER_RADIUS, 0, -1)  # Inner circle (hole)
+        cv2.circle(mask, (635, 350), 60, 255, -1)  # Outer circle
+        cv2.circle(mask, (635, 350), 20, 0, -1)  # Inner circle (hole)
 
         # Extract pixels within mask
         masked_pixels = gray[mask > 0]
@@ -172,14 +165,15 @@ class CheckHubAndBottomBearing:
 
         logBoth('logDebug', _src, f"[ensureNoBearingInCentre] Average pixel value: {average:.2f}", MessageType.GENERAL)
 
-        # Return True if average < 144 (no bearing present)
-        return average < HUB_CENTRE_CHECK_MAX_MEAN
+        # True if below the limit (no bearing present)
+        return average < 140
 
     @staticmethod
     def checkHubAndBottomBearing(
             anImage: np.ndarray,
             componentQRCode: str = None,
-            use_smart_gamma: bool = True
+            use_smart_gamma: bool = True,
+            enforceBearingAbsenceCheck: bool = False
     ) -> Tuple[Optional[ndarray], bool, Optional[int]]:
         """
         Test gamma values with TRUE early termination (lazy evaluation).
@@ -192,6 +186,9 @@ class CheckHubAndBottomBearing:
             anImage: Input BGR image from camera
             componentQRCode: QR code string containing component info
             use_smart_gamma: If True, order gamma values based on image brightness
+            enforceBearingAbsenceCheck: If True, first check that no bearing is in the bore
+                (ensureNoBearingInCentre) and fail if one is. Off by default: this station checks the hub; the
+                next station checks the bearing. Kept so that it can be switched on by the caller.
 
         Returns:
             Tuple of (result_image, success, winning_gamma)
@@ -224,12 +221,14 @@ class CheckHubAndBottomBearing:
         expected_count = 4 if model_name == "DOST" else 5
         logBoth('logDebug', _src, f"[CheckHubAndBottomBearing] Expected model: {model_name}, count: {expected_count}", MessageType.GENERAL)
 
-        # Check if bearing is present in center region
-        if not CheckHubAndBottomBearing.ensureNoBearingInCentre(anImage):
-            logBoth('logError', _src, "[CheckHubAndBottomBearing] Bearing detected in center - should not be present", MessageType.ISSUE)
-            return anImage, False, None
-
-        logBoth('logInfo', _src, "[CheckHubAndBottomBearing] No bearing in center - proceeding with verification", MessageType.SUCCESS)
+        # Optional: no bearing in the bore yet - only when the caller asks for it (enforceBearingAbsenceCheck=True)
+        if enforceBearingAbsenceCheck:
+            if not CheckHubAndBottomBearing.ensureNoBearingInCentre(anImage):
+                logBoth('logError', _src, "[CheckHubAndBottomBearing] Bearing detected in center - should not be present", MessageType.ISSUE)
+                return anImage, False, None
+            logBoth('logInfo', _src, "[CheckHubAndBottomBearing] No bearing in center - proceeding with verification", MessageType.SUCCESS)
+        else:
+            logBoth('logDebug', _src, "[CheckHubAndBottomBearing] Bearing absence check not enforced", MessageType.GENERAL)
 
         # Get segmenter
         segmenter = HubAndBearingSegmenter.get_instance() if SAM_AVAILABLE else None
