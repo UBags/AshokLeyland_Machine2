@@ -1076,15 +1076,14 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Machine 2 measured:** nut centre (612, 337-338), outline area about 4350 px (Machine 1 about 4300-4600: same
   size, area limits unchanged). Settings (all three properties files):
   `siemens.vision.nutwasher.nut.detection.center` = 612,349 (11 px below the nut centre, as on Machine 1);
-  `siemens.vision.nut.reference.center.x/y` = 80/69 (the nut centre in the search disc); washer limits
-  `siemens.vision.nutwasher.washer.threshold.r` = 30.0, `.rb` = 7.5 (Machine 1 values 0.55 / 5.57 kept).
+  `siemens.vision.nut.reference.center.x/y` = 80/69 (the nut centre in the search disc). Washer limits unchanged
+  (0.55 / 5.57 on both machines, user decision; 30 / 7.5 were proposed and withdrawn).
 - **Checked here without the models** (the nut outline found by thresholding stands in for MobileSAM; everything after
   it is the real code): 6 of 7 Machine 2 nut pictures OK with symmetry 84-96 (Machine 1 reference point gave 64-70);
   the 7th only because the stand-in outline merged with the washer; washer-only pictures NOT OK (no nut); washer
   differences with a nut and washer: diff_R +63..+69, diff_RB +15..+18; without a washer (same part's bearing
   pictures compared, and nut pictures with the bearing pasted round the nut): diff_R -4.5..+0.8, diff_RB -1.6..+0.8.
-  The new limits sit in the middle of those gaps; the Machine 1 limits (0.55 / 5.57) sit inside the "no washer"
-  spread for diff_R.
+  The limits 0.55 / 5.57 sit inside the "no washer" spread for diff_R; diff_RB still separates.
 - **Found, not changed (for a decision):** the hexagon tests accept a round shape of nut size (a 40 px circle passes
   with symmetry 72): only the area window keeps a washer or other round part out. The nut is far brighter than what
   surrounds it on both machines (+93..+123 grey levels); a minimum contrast would reject dark or round look-alikes.
@@ -1095,3 +1094,4 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   the check's own picture as an inset, and OK / NOT OK with the reason (why no nut, or both washer differences against
   their limits). Pictures: `test/machine2_dryrun/nut_washer_images/` (use `top_bearing_images/DOST_bearing_01.jpg` as
   the bearing picture).
+- Figure of the washer-comparison fix (Machine 1 pair, 10 px between the centres): `docs/nut_washer_comparison_fix.png`.
