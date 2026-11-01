@@ -922,3 +922,28 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   - C (emergency button) still passes, through `abortCycle`.
 - **FE dry run, new F8 (66/66):** a manual abort puts ABORT on `fe2io.q`, the IOServer reader sees it, the abort screen and record appear, and the frontend is back at READ_QR_CODE.
 - **Also passing:** two full cycles exact on both vendors; integrated DB row unchanged on both; FE dry run 66/66 on both.
+
+## 35. Vision OK → OK/Done back to False after a delay; default torque 1 = 15 Nm; recreate the databases (2026-11-01)
+
+**Vision result reset.**
+- After a vision check answers OK, the IOServer writes `<Check>OK=True` and `<Check>Done=True` to the PLC.
+- It then starts a thread (`threading.Timer`) that sets both back to False after `plc.vision.result.reset.delay.sec` seconds (new key, 2.0, in the PLC section of the properties).
+- **Which checks:** the 9 picture checks: knuckle, hub, top bearing, nut + plate washer, bunk for component press, no bunk, split pin + washer, cap, bunk for cap press.
+- **Not:** after a NOT OK, nor for the QR code check.
+- The delay is read at each OK, so a change in the properties applies to the next check without a restart.
+- New method: `IOServer.scheduleVisionResultReset(tags, state)`. The writes go to the log ("Reset [...] to False 2.0 s after the OK of ...") and the PLC audit trail.
+
+**Default machine settings.** Torque setpoint 1: 15.0 Nm (was 19.0). Torque setpoint 2 stays 19.0. The full defaults are now 30 rpm, 15 / 19 Nm, 1 / 1 rotations.
+- **Where:** `Persistence.DEFAULT_MACHINE_SETTINGS`, and `tightening.torque1.setpoint.nm` in the properties (used only with `cycle.settings.source=properties`).
+- **Existing databases:** the default row is inserted only into an empty `machine_settings` table. A database that already exists keeps its settings until they are changed in the frontend (Machine Settings) or the database is recreated.
+
+**`persistence/RecreateDatabases.py` (new).**
+- It drops `ashok_leyland_test` and `ashok_leyland_production` and creates them again, empty, exactly as the application does at start-up: schema, tables, indexes, the default machine settings, roles and default users.
+- It closes open connections first, and asks for YES unless given `--yes`. `--only test|production` limits it to one database.
+- ALL DATA IN THEM IS LOST; stop the application first.
+
+**Dry runs.**
+- **Fault scenarios, new G (Siemens 75/75):** after the knuckle OK, OK/Done are still True 1.4 s later and are set to False after 2.0 s. After a hub NOT OK, Done is NOT reset. The hub retry OK is reset. The cycle completes.
+- **D now expects 15 / 19 Nm.**
+- **DB dry run §9:** the default row is compared with `DEFAULT_MACHINE_SETTINGS`. A database created before today has 19 / 19 Nm and must be recreated for this check to pass.
+- **Also passing:** fault scenarios Allen-Bradley 74/74; DB 49/49 on freshly recreated databases; two full cycles on both vendors (settings 30 / 15 / 19 / 1 / 1); integrated DB row (30, 15, 19, 1, 1) on both; logging 37/37; FE 66/66.

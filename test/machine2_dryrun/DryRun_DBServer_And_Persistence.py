@@ -15,7 +15,7 @@ with field-by-field checks:
   7. Report / counter functions used by the frontend menus: getAllDataOfToday, getDataByModelName,
      getDataByModelNameAndDateLimits, getUniqueModelNames, getComponentsProducedToday (counts OK rows only).
   8. Clean-up of every row and image file this script created.
-  9. Machine settings (machine_settings table, frontend Machine Settings dialog): the default row (30 rpm, 19 / 19 Nm,
+  9. Machine settings (machine_settings table, frontend Machine Settings dialog): the default row (30 rpm, 15 / 19 Nm,
      1 / 1 rotations) exists; validateMachineSettings / insertNewMachineSettings reject out-of-range values (RPM
      outside 20-40 or not whole, torques not in (0, 20) or > 2 decimals, counts not 1 / 2); the database CHECK
      constraints reject them too; a valid change becomes the settings in force, with updated_by, and is in the history.
@@ -271,7 +271,11 @@ c = conn(); cur = c.cursor()
 cur.execute(f"select rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotation1_ccw, "
             f"no_of_rotation1_cw, updated_by from {SCHEMA}.machine_settings order by setting_id limit 1")
 first = cur.fetchone()
-check("9 default settings row (30, 19, 19, 1, 1, 'system (default)')", first == (30.0, 19.0, 19.0, 1.0, 1.0, "system (default)"), str(first))
+_d = P.DEFAULT_MACHINE_SETTINGS
+check(f"9 default settings row ({_d['rotation_rpm']:g}, {_d['tightening_torque1_setpoint']:g}, {_d['tightening_torque2_setpoint']:g}, "
+      f"{_d['no_of_rotation1_ccw']:g}, {_d['no_of_rotation1_cw']:g}, 'system (default)'); a database created before 2026-11-01 "
+      f"has the earlier default 19 / 19 Nm: drop and recreate it",
+      first == tuple(float(_d[k]) for k in P.MACHINE_SETTINGS_KEYS) + ("system (default)",), str(first))
 before = P.getMachineSettings(DB)
 check("9 getMachineSettings returns the 5 settings as floats", set(P.MACHINE_SETTINGS_KEYS) <= set(before)
       and all(isinstance(before[k], float) for k in P.MACHINE_SETTINGS_KEYS), str(before))

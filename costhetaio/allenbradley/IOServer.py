@@ -1138,6 +1138,25 @@ class IOServer:
             self.lastAbortReason = reason
             self.abortCount += 1
 
+    def scheduleVisionResultReset(self, tags: list, checkState: MachineState) -> None:
+        """After a vision check answered OK (OK=True, Done=True written to the PLC), start a thread that sets the
+        check's OK and Done tags back to False after plc.vision.result.reset.delay.sec seconds (read now, so a change
+        in the properties applies to the next check). Not used after a NOT OK."""
+        delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
+        resetTags = [t for t in tags[:2] if t]
+        objRef = self
+
+        def reset():
+            for tag in resetTags:
+                if not objRef.write_bool(tag, False):
+                    printBoldRed(f"Could not reset {tag} to False after the OK of {checkState.name}")
+            printLight(f"Reset {resetTags} to False {delay} s after the OK of {checkState.name}")
+
+        timer = threading.Timer(delay, reset)
+        timer.name = f"Reset {checkState.name} result"
+        timer.daemon = True
+        timer.start()
+
     def launchFrontendAbortListenerThread(self):
         """Frontend -> IOServer: an abort sent by the frontend (manual abort, sendAbortFromFEServerToIOServer) resets
         the cycle to READ_QR_CODE, exactly like the emergency button on the machine."""
@@ -1302,6 +1321,8 @@ class IOServer:
                                                                          expectedState=stateBeforeWrite):
                                     time.sleep(objRef.write_loop_interval)
                                     continue        # cycle aborted while writing: do not move on
+                                # OK: set the check's OK and Done back to False after plc.vision.result.reset.delay.sec
+                                objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite)
                                 # ── Record op-END timestamps for Done-tag-based operations ──
                                 if stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE:
                                     objRef._recordOpEnd(IOServer.OP_KNUCKLE)

@@ -31,7 +31,7 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
   D. State-2 cycle settings
      Allen-Bradley (cycle.settings.source=properties): side and model from the QR code, torque setpoints from the
      properties. Siemens (cycle.settings.source=database): side from the QR code and the 5 settings in force in
-     machine_settings (default 30 rpm, 19 / 19 Nm, 1 / 1 rotations), no model. In both cases the settings written
+     machine_settings (default 30 rpm, 15 / 19 Nm, 1 / 1 rotations), no model. In both cases the settings written
      are published to Redis (cycleSettings:<QR>) for the DB record. Siemens: settings changed while a cycle runs
      (as from the frontend's Machine Settings dialog) are written in the NEXT cycle.
 
@@ -46,6 +46,9 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      real-PLC test window). Part-way through a cycle, and while the IOServer waits for a camera result: it must go
      back to the QR code at once, stop a QR scan in progress, reset the handshake tags, NOT send an emergency message
      back to the frontend, ignore a late camera answer for the aborted step, and then run a full cycle.
+
+  G. Vision OK -> the IOServer sets the check's OK and Done back to False after plc.vision.result.reset.delay.sec
+     (not before, and not after a NOT OK).
 
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
@@ -355,10 +358,10 @@ def run_scenarios():
     plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
     first = dict(writes_of(SETTING_TAGS, mark))
     if fromDatabase:
-        expected = {IOServer.PC_PLC_LH_RH_Selection: 1, IOServer.PC_PLC_TighteningTorque1Setpoint: 19.0,
+        expected = {IOServer.PC_PLC_LH_RH_Selection: 1, IOServer.PC_PLC_TighteningTorque1Setpoint: 15.0,
                     IOServer.PC_PLC_TighteningTorque2Setpoint: 19.0, IOServer.PC_PLC_RotationRPM: 30.0,
                     IOServer.PC_PLC_NoOfRotation1CCW: 1.0, IOServer.PC_PLC_NoOfRotation1CW: 1.0}
-        check("D: side + the 5 settings in force in the database written (30 rpm, 19 / 19 Nm, 1 / 1 rotations)",
+        check("D: side + the 5 settings in force in the database written (30 rpm, 15 / 19 Nm, 1 / 1 rotations)",
               first == expected, str(first))
         check("D: no model written (no ModelSelection tag on this PLC)", not IOServer.PC_PLC_ModelSelection)
         if hasattr(TAGS, "raw"):          # Siemens simulator: check the bytes the PLC CPU actually holds
@@ -564,9 +567,55 @@ def run_frontend_abort():
           sm.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
 
 
+def run_vision_result_reset():
+    """G. After a vision check answered OK, the IOServer sets its OK and Done tags back to False after
+    plc.vision.result.reset.delay.sec (default 2 s); not after a NOT OK."""
+    from Configuration import CosThetaConfigurator
+    delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
+    print(f"\n=== G. Vision OK -> OK and Done set back to False after {delay} s (not after NOT OK) ===", flush=True)
+    KN_OK, KN_DONE = IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone
+    HUB_OK, HUB_DONE = IOServer.PC_PLC_HubCheckOK, IOServer.PC_PLC_HubCheckDone
+    assert wait_for(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 10)
+    TRACE.clear()
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING].append(notok)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    mark = len(WRITES)
+    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = True
+    assert wait_for(lambda: TAGS[KN_DONE] is True), "knuckle Done timeout"
+    tDone = time.time()
+    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = False        # the PLC drops its trigger, NOT the PC's tags
+    time.sleep(max(0.0, delay - 0.6 - (time.time() - tDone)))
+    early = writes_of((KN_OK, KN_DONE), mark)
+    check(f"G knuckle OK: OK / Done still True {delay - 0.6:.1f} s after Done (no reset yet)",
+          (KN_OK, False) not in early and (KN_DONE, False) not in early and TAGS[KN_OK] is True and TAGS[KN_DONE] is True,
+          str(early))
+    reset = wait_for(lambda: TAGS[KN_OK] is False and TAGS[KN_DONE] is False, 2.0)
+    elapsed = time.time() - tDone
+    check(f"G knuckle OK: OK and Done set back to False by the PC about {delay} s after Done ({elapsed:.1f} s)",
+          reset and delay - 0.3 <= elapsed <= delay + 1.0, str(writes_of((KN_OK, KN_DONE), mark)))
+    # hub: NOT OK first -> no reset; then the retry OK -> reset
+    mark = len(WRITES)
+    with LOCK: TAGS[IOServer.PLC_PC_CheckHub] = True
+    assert wait_for(lambda: TAGS[HUB_DONE] is True), "hub NOT OK Done timeout"
+    with LOCK: TAGS[IOServer.PLC_PC_CheckHub] = False
+    time.sleep(delay + 1.0)
+    w = writes_of((HUB_OK, HUB_DONE), mark)
+    check("G hub NOT OK: OK=False, Done=True written, and Done NOT set back to False by the PC",
+          (HUB_OK, False) in w and (HUB_DONE, True) in w and (HUB_DONE, False) not in w and TAGS[HUB_DONE] is True, str(w))
+    with LOCK: TAGS[HUB_DONE] = False                             # the PLC handles the NOT OK, then re-triggers
+    mark = len(WRITES)
+    plc_check(IOServer.PLC_PC_CheckHub, HUB_DONE)
+    check("G hub retry OK: OK and Done set back to False after the delay",
+          wait_for(lambda: (HUB_OK, False) in writes_of((HUB_OK,), mark) and (HUB_DONE, False) in writes_of((HUB_DONE,), mark),
+                   delay + 2.0), str(writes_of((HUB_OK, HUB_DONE), mark)))
+    run_steps(first="TOP")
+    check("G cycle completes", wrapped(), f"trace {TRACE}")
+
+
 try:
     run_scenarios()
     run_frontend_abort()
+    run_vision_result_reset()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

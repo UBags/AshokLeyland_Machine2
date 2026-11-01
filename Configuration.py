@@ -2728,6 +2728,7 @@ class CosThetaConfigurator():
     PLC_IP_KEY = "plc.ip"
     PLC_DEBUG_KEY = "plc.debug"
     PLC_SLEEPTIME_BETWEEN_OK_AND_DONE_KEY = "plc.sleeptime.between.ok.and.done"
+    PLC_VISION_RESULT_RESET_DELAY_KEY = "plc.vision.result.reset.delay.sec"
 
     # ==================== Check QR Methods (Step 1) ====================
     @classmethod
@@ -2962,6 +2963,16 @@ class CosThetaConfigurator():
             return True if val.lower() == "true" else False
         except Exception as e:
             return False
+
+    @classmethod
+    def getPlcVisionResultResetDelay(cls) -> float:
+        """Seconds after a vision check's OK=True / Done=True were written to the PLC before the IOServer sets both
+        back to False (plc.vision.result.reset.delay.sec). Read at each use, so a change applies while running."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_VISION_RESULT_RESET_DELAY_KEY,
+                                                                default="2.0")))
+        except Exception as e:
+            return 2.0
 
     @classmethod
     def getPlcSleepTimeBetweenOKAndDone(cls) -> float:

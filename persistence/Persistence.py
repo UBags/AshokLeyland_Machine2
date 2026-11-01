@@ -2608,7 +2608,7 @@ MACHINE_SETTINGS_LIMITS = {
     "no_of_rotation1_cw": (1.0, 2.0, True, True, 0),
 }
 MACHINE_SETTINGS_KEYS = tuple(MACHINE_SETTINGS_LIMITS)
-DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 19.0,
+DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 15.0,
                             "tightening_torque2_setpoint": 19.0, "no_of_rotation1_ccw": 1.0, "no_of_rotation1_cw": 1.0}
 
 
@@ -2640,7 +2640,7 @@ def _settingsConnection(db_name: str):
 
 
 def insertDefaultMachineSettings(db_name: str) -> bool:
-    """Insert the default settings (RPM 30, torque setpoints 19.0 / 19.0, rotation counts 1 / 1) if the table is
+    """Insert the default settings (RPM 30, torque setpoints 15.0 / 19.0, rotation counts 1 / 1) if the table is
     empty. Called from setDatabaseName()."""
     global schema_name
     aConnection = None
