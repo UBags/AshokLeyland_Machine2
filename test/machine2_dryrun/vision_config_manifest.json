@@ -3,7 +3,8 @@
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "637ce4a",
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
-    "camera/CheckTopBearing.py": "486904e"
+    "camera/CheckTopBearing.py": "486904e",
+    "camera/CheckNutAndPlateWasher.py": "04d147d"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {

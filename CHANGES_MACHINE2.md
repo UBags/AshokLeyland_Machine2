@@ -1059,3 +1059,39 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Note:** a fixed seed makes a verdict repeatable, not right: with the earlier centre (613, 341), DOSTPLUS_bearing_03
   fails with seeds 0, 2 and 6 every time and passes with the others. The setting must leave margin (section 39);
   the seed only removes the run-to-run variation.
+
+## 41. Nut and plate washer check: Machine 2 settings; washer comparison fixed (both machines); DryRun_NutWasher_Check (2026-11-01)
+- **How the check works:** (1) nut: MobileSAMv2 shapes in a disc of radius 80 round `nutwasher.nut.detection.center`
+  that cover the disc centre and lie in the area window (`nut.min/max.mask.area` 3000-5500) are tested as a hexagon
+  (5-8 corners, aspect 0.7-1.3, > 2000 px left after removing a 25 px disc round the centre of mass, symmetry >= 55
+  and thickness >= 45 measured round the fixed `nut.reference.center` in the search disc, straight edges);
+  (2) washer (`check.washers.presence.in.nutandplatewasher=True`, shared by both machines): in the bearing ring found by
+  the top bearing check, minus the nut, the top bearing picture minus the nut picture (gamma 3) must exceed
+  `washer.threshold.r` in red and `washer.threshold.rb` in red-minus-blue (the washer covers the bright bearing race).
+- **Fixed (both machines):** the top bearing picture was cut round the bearing centre, the nut picture round the nut
+  detection centre, and one mask (in the nut crop's coordinates) was applied to both, so the area compared in the
+  bearing picture was shifted by the distance between the two centres (Machine 1: up to about 12 px). The bearing
+  picture is now cut round the nut detection centre too. Machine 1 pairs (same part, nut + washer): diff_R +73..+97,
+  diff_RB +14..+25 after the fix (they passed before too). Verifier: reference commit 04d147d; ALL EQUIVALENT.
+- **Machine 2 measured:** nut centre (612, 337-338), outline area about 4350 px (Machine 1 about 4300-4600: same
+  size, area limits unchanged). Settings (all three properties files):
+  `siemens.vision.nutwasher.nut.detection.center` = 612,349 (11 px below the nut centre, as on Machine 1);
+  `siemens.vision.nut.reference.center.x/y` = 80/69 (the nut centre in the search disc); washer limits
+  `siemens.vision.nutwasher.washer.threshold.r` = 30.0, `.rb` = 7.5 (Machine 1 values 0.55 / 5.57 kept).
+- **Checked here without the models** (the nut outline found by thresholding stands in for MobileSAM; everything after
+  it is the real code): 6 of 7 Machine 2 nut pictures OK with symmetry 84-96 (Machine 1 reference point gave 64-70);
+  the 7th only because the stand-in outline merged with the washer; washer-only pictures NOT OK (no nut); washer
+  differences with a nut and washer: diff_R +63..+69, diff_RB +15..+18; without a washer (same part's bearing
+  pictures compared, and nut pictures with the bearing pasted round the nut): diff_R -4.5..+0.8, diff_RB -1.6..+0.8.
+  The new limits sit in the middle of those gaps; the Machine 1 limits (0.55 / 5.57) sit inside the "no washer"
+  spread for diff_R.
+- **Found, not changed (for a decision):** the hexagon tests accept a round shape of nut size (a 40 px circle passes
+  with symmetry 72): only the area window keeps a washer or other round part out. The nut is far brighter than what
+  surrounds it on both machines (+93..+123 grey levels); a minimum contrast would reject dark or round look-alikes.
+- **`test/machine2_dryrun/DryRun_NutWasher_Check.py`** (and machine1 copy): folder of nut pictures, the top bearing
+  picture of the part (`X_bearing.<ext>` next to X, or one chosen), DOST/DOSTPLUS, seconds per picture, "Check washer"
+  (starts as configured), saving to `<folder>/nut_washer_results/`. The bearing ring comes from the real top bearing
+  check on the bearing picture. Shows the search disc and centre, the reference centre, the bearing ring, the nut found,
+  the check's own picture as an inset, and OK / NOT OK with the reason (why no nut, or both washer differences against
+  their limits). Pictures: `test/machine2_dryrun/nut_washer_images/` (use `top_bearing_images/DOST_bearing_01.jpg` as
+  the bearing picture).

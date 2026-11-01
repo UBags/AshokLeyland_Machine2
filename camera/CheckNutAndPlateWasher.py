@@ -32,6 +32,7 @@ except:
     pass
 
 from camera.HexagonNutDetector import NutDetector
+from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -88,13 +89,13 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = 3.0            # Gamma correction value
+    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = (632, 360)
-    NUT_DETECTION_RADIUS = 80
+    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
+    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
