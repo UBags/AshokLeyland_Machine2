@@ -255,6 +255,70 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
             return False
 
 
+class DelayedJobScheduler:
+    """ONE long-lived thread that runs jobs at a given time (instead of a new thread per job). Jobs have a key; a
+    newer job with the same key replaces the pending one, and a pending job can be cancelled by its key.
+    Jobs run one after the other in this thread, in order of their due time."""
+
+    def __init__(self, name: str):
+        self._cond = threading.Condition()
+        self._heap: list = []                 # (dueTime, sequence, key)
+        self._jobs: Dict[str, tuple] = {}     # key -> (sequence, function, info)
+        self._sequence = 0
+        self._thread = threading.Thread(name=name, target=self._run, daemon=True)
+        self._thread.start()
+
+    def schedule(self, key: str, delaySecs: float, function, info=None):
+        """Run function() after delaySecs; returns the info of a pending job with this key that it replaced."""
+        import heapq
+        with self._cond:
+            self._sequence += 1
+            replaced = self._jobs.get(key)
+            self._jobs[key] = (self._sequence, function, info)
+            heapq.heappush(self._heap, (time.monotonic() + max(0.0, delaySecs), self._sequence, key))
+            self._cond.notify()
+        return replaced[2] if replaced else None
+
+    def cancel(self, key: str):
+        """Cancel the pending job with this key; returns its info (None if there was none)."""
+        with self._cond:
+            job = self._jobs.pop(key, None)
+        return job[2] if job else None
+
+    def cancelAll(self) -> list:
+        with self._cond:
+            infos = [job[2] for job in self._jobs.values()]
+            self._jobs.clear()
+        return infos
+
+    def pending(self) -> int:
+        with self._cond:
+            return len(self._jobs)
+
+    def _run(self):
+        import heapq
+        while True:
+            with self._cond:
+                while True:
+                    while self._heap and self._jobs.get(self._heap[0][2], (None,))[0] != self._heap[0][1]:
+                        heapq.heappop(self._heap)          # cancelled or replaced
+                    if not self._heap:
+                        self._cond.wait()
+                        continue
+                    due, sequence, key = self._heap[0]
+                    wait = due - time.monotonic()
+                    if wait > 0:
+                        self._cond.wait(wait)
+                        continue
+                    heapq.heappop(self._heap)
+                    _, function, _ = self._jobs.pop(key)
+                    break
+            try:
+                function()
+            except Exception as e:
+                printBoldRed(f"Delayed job {key} failed: {e}")
+
+
 class IOServer:
     # ==================== QR Code Tags (Step 0) ====================
     PLC_PC_CheckQRCode: str = CosThetaConfigurator.getInstance().getPlcPcCheckQRCodeTagName()
@@ -368,8 +432,11 @@ class IOServer:
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._auditStateChange
-        self._resetTimers: dict = {}           # <Check>OK tag -> pending OK/Done reset (threading.Timer)
-        self._resetTimersLock = threading.Lock()
+        # Vision result reset: one scheduler thread for all checks; READ states that ignore their trigger until the
+        # PC has reset it after a NOT OK (see scheduleVisionResultReset)
+        self._resultResetScheduler = DelayedJobScheduler("Vision Result Reset Scheduler")
+        self._awaitingTriggerReset: set = set()
+        self._awaitingTriggerResetLock = threading.Lock()
         self._abortLock = threading.RLock()  # one abort at a time (PLC emergency, heartbeat loss, frontend)
         self.abortCount: int = 0
         self.lastAbortReason: str = ""
@@ -1135,69 +1202,117 @@ class IOServer:
             self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
+            self._resultResetScheduler.cancelAll()           # resetAll() resets every tag anyway
+            with self._awaitingTriggerResetLock:
+                self._awaitingTriggerReset.clear()
             self.resetAll()
             self._resetOpTimestamps()  # Clear cycle timing on abort
             self.write_bool(IOServer.PLC_PC_CheckQRCode, True)
             self.lastAbortReason = reason
             self.abortCount += 1
 
+    def _visionTriggerTag(self, readState: MachineState) -> Optional[str]:
+        """The PLC's Check (trigger) tag of a vision check, by its READ (take picture) state."""
+        return {
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: IOServer.PLC_PC_CheckKnuckle,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: IOServer.PLC_PC_CheckHub,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: IOServer.PLC_PC_CheckHubAndSecondBearing,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: IOServer.PLC_PC_CheckNutAndPlateWasher,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: IOServer.PLC_PC_CheckNoCapBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: IOServer.PLC_PC_CheckNoBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: IOServer.PLC_PC_CheckSplitPinAndWasher,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: IOServer.PLC_PC_CheckCap,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: IOServer.PLC_PC_CheckBunk,
+        }.get(readState)
+
+    def _readBoolOrNone(self, tag: str) -> Optional[bool]:
+        """Read a bool from the PLC; None if it could not be read (read_bool cannot tell a failure from a value)."""
+        if not tag or self.clientForReads is None or not self.clientForReads.connected:
+            return None
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(tag).value
+            return None if value is None else bool(value)
+        except Exception as e:
+            printBoldRed(f"Could not read {tag}: {e}")
+            return None
+
+    def _writeFalseWithRetries(self, tag: str, why: str) -> bool:
+        for attempt in range(IOServer.VISION_RESULT_RESET_ATTEMPTS):
+            if self.write_bool(tag, False):
+                return True
+            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+        printBoldRed(f"Could not reset {tag} to False {why} ({IOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
+        self.logger.error(f"Could not reset {tag} to False {why}")
+        return False
+
+    def triggerIgnoredUntilReset(self, readState: MachineState) -> bool:
+        with self._awaitingTriggerResetLock:
+            return readState in self._awaitingTriggerReset
+
+    def _setAwaitingTriggerReset(self, readState: Optional[MachineState], on: bool) -> None:
+        if readState is None:
+            return
+        with self._awaitingTriggerResetLock:
+            if on:
+                self._awaitingTriggerReset.add(readState)
+            else:
+                self._awaitingTriggerReset.discard(readState)
+
     def scheduleVisionResultReset(self, tags: list, checkState: MachineState, result: bool = True) -> None:
-        """After a vision check's result was written to the PLC (<Check>OK = True for OK / False for NOT OK, then
-        <Check>Done = True), start a thread that, after plc.vision.result.reset.delay.sec seconds (read now, so a
-        change in the properties applies to the next check), sets BOTH tags of that check to False: first <Check>OK,
-        then <Check>Done. Done the same way for OK and for NOT OK; not for the QR code check.
-        Each write is retried (VISION_RESULT_RESET_ATTEMPTS) so that a single failed write cannot leave a tag True.
-        If a new result for the same check is written before the delay is over (the retry after a NOT OK), the
-        pending reset is cancelled (cancelVisionResultReset, called by perform_write_state_action), so that it cannot
-        clear the new result; the new result gets its own reset.
-        tags = the check's write tags as used by perform_write_state_action: [<Check>OK, <Check>Done]."""
+        """Called after a vision check's result was written to the PLC (<Check>OK = True for OK / False for NOT OK,
+        then <Check>Done = True). After plc.vision.result.reset.delay.sec seconds (read now, so a change in the
+        properties applies to the next check) the IOServer:
+          1. reads <Check>Done and <Check>OK back from the PLC;
+          2. sets <Check>OK, then <Check>Done, to False;
+          3. if Done was read as True and OK as False (NOT OK), also sets the PLC's <Check> trigger to False, so that
+             the next press of the two-hand buttons (2HB) raises it again and the picture is retaken. (If Done is
+             already False, or a read fails, the result the IOServer wrote decides.)
+        After a NOT OK, the check's READ state ignores the trigger until step 3 has been done; otherwise the trigger
+        still standing from the NOT OK would make the IOServer retake the picture at once, without a 2HB press.
+        (A 2HB press during the delay itself is therefore not seen: press again once the delay is over.)
+        All resets run in ONE scheduler thread (DelayedJobScheduler), not a thread per reset. Each write is retried
+        (VISION_RESULT_RESET_ATTEMPTS). Not used for the QR code check.
+        tags = the check's write tags as used by perform_write_state_action: [<Check>OK, <Check>Done];
+        checkState = the check's WRITE (result) state."""
         delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
         okTag = tags[0] if len(tags) > 0 else None
         doneTag = tags[1] if len(tags) > 1 else None
         if not okTag:
             return
+        readState = MachineState(int(checkState) - 1)
+        triggerTag = self._visionTriggerTag(readState)
         objRef = self
-        label = "OK" if result else "NOT OK"
-
-        def resetToFalse(tag) -> bool:
-            for attempt in range(IOServer.VISION_RESULT_RESET_ATTEMPTS):
-                if objRef.write_bool(tag, False):
-                    return True
-                time.sleep(IOServer.WRITE_RETRY_INTERVAL)
-            printBoldRed(f"Could not reset {tag} to False after the {label} of {checkState.name} "
-                         f"({IOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
-            objRef.logger.error(f"Could not reset {tag} to False after the {label} of {checkState.name}")
-            return False
+        if not result:
+            self._setAwaitingTriggerReset(readState, True)
 
         def reset():
-            with objRef._resetTimersLock:
-                if objRef._resetTimers.get(okTag) is not timer:
-                    return                     # cancelled / replaced by a newer result of this check
-                del objRef._resetTimers[okTag]
-            okReset = resetToFalse(okTag)
-            doneReset = resetToFalse(doneTag) if doneTag else False
-            printLight(f"{delay} s after the {label} of {checkState.name}: {okTag} -> False "
-                       f"({'done' if okReset else 'FAILED'}), {doneTag} -> False ({'done' if doneReset else 'FAILED'})")
+            doneRead = objRef._readBoolOrNone(doneTag) if doneTag else None
+            okRead = objRef._readBoolOrNone(okTag)
+            # OK read is the result only while Done is still True; if Done is already False (the PLC or a cycle reset
+            # cleared it) or a read failed, the result written by the IOServer is used.
+            okResult = okRead if (doneRead is True and okRead is not None) else result
+            why = f"after the {'OK' if result else 'NOT OK'} of {checkState.name}"
+            okReset = objRef._writeFalseWithRetries(okTag, why)
+            doneReset = objRef._writeFalseWithRetries(doneTag, why) if doneTag else False
+            line = (f"{delay} s {why}: read {doneTag}={doneRead}, {okTag}={okRead}; {okTag} -> False "
+                    f"({'done' if okReset else 'FAILED'}), {doneTag} -> False ({'done' if doneReset else 'FAILED'})")
+            if not okResult and triggerTag:
+                checkReset = objRef._writeFalseWithRetries(triggerTag, why)
+                line += f"; NOT OK: {triggerTag} -> False ({'done' if checkReset else 'FAILED'}), waiting for the next 2HB"
+            objRef._setAwaitingTriggerReset(readState, False)
+            printLight(line)
 
-        timer = threading.Timer(delay, reset)
-        timer.name = f"Reset {checkState.name} OK and Done"
-        timer.daemon = True
-        with self._resetTimersLock:
-            previous = self._resetTimers.get(okTag)
-            if previous is not None:
-                previous.cancel()
-            self._resetTimers[okTag] = timer
-        timer.start()
+        replaced = self._resultResetScheduler.schedule(okTag, delay, reset, info=readState)
+        if replaced is not None and replaced != readState:
+            self._setAwaitingTriggerReset(replaced, False)
 
     def cancelVisionResultReset(self, tags: list) -> None:
-        """Cancel a pending OK/Done reset of this check (a new result is about to be written for it)."""
+        """Cancel a pending OK/Done reset of this check (a new result is about to be written for it); its READ state
+        no longer waits for the trigger reset."""
         okTag = tags[0] if tags else None
-        if not okTag:
-            return
-        with self._resetTimersLock:
-            pending = self._resetTimers.pop(okTag, None)
-        if pending is not None:
-            pending.cancel()
+        if okTag:
+            self._setAwaitingTriggerReset(self._resultResetScheduler.cancel(okTag), False)
 
     def launchFrontendAbortListenerThread(self):
         """Frontend -> IOServer: an abort sent by the frontend (manual abort, sendAbortFromFEServerToIOServer) resets
@@ -1409,6 +1524,10 @@ class IOServer:
         currentState = self.machineState.getCurrentState()
 
         if type(valueRead) == bool:
+            if valueRead and self.triggerIgnoredUntilReset(currentState):
+                # NOT OK earlier: this trigger is the one still standing from it; wait until the PC has reset it
+                # (scheduleVisionResultReset) and the operator presses the two-hand buttons again
+                return False
             if valueRead:
                 successfullySent: bool = False
                 try:

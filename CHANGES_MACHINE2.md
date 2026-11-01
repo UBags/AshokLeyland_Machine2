@@ -958,3 +958,25 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   - hub NOT OK: OK/Done reset at 2.0 s; hub retry OK: reset;
   - top bearing NOT OK, then retry OK 1.0 s later: the NOT OK's reset is cancelled; the OK stays True until its own delay, then is reset.
 - **Also passing:** Allen-Bradley fault scenarios 76/76; two full cycles; integrated DB row unchanged.
+
+## 36. Vision result reset: one scheduler thread; Done/OK read back; Check reset after a NOT OK (2026-11-01)
+- **One thread, not one per reset.** The `threading.Timer` per reset (a new short-lived thread each time) is replaced by
+  `DelayedJobScheduler` in `costhetaio/allenbradley/IOServer.py`: ONE long-lived thread ("Vision Result Reset
+  Scheduler") with a time-ordered queue of jobs, keyed by the check's OK tag (a new result for the same check replaces or
+  cancels the pending job).
+- **The job, `plc.vision.result.reset.delay.sec` after the result was written** (OK and NOT OK):
+  1. reads `<Check>Done` and `<Check>OK` back from the PLC;
+  2. writes `<Check>OK` = False, then `<Check>Done` = False (each with retries);
+  3. if Done was read True and OK False (NOT OK), also writes the PLC's trigger `PLC_PC_Check<…>` = False, so the next
+     two-hand-button (2HB) press raises it again and the picture is retaken. If Done is already False (PLC or end-of-cycle
+     reset cleared it) or a read fails, the result the IOServer wrote decides;
+  4. logs one line with the values read and the outcome of each write.
+- **After a NOT OK, the check's READ state ignores the trigger until step 3**, so the trigger still standing from the
+  NOT OK does not retake the picture without a 2HB press. A 2HB press during the delay is not seen: press again after it.
+- **Abort** (emergency, frontend, "Reset to Step 0") cancels every pending reset and clears the wait.
+- **PLC traffic is unchanged in kind:** only tag reads/writes (PUT/GET) on the existing read and write connections,
+  serialized by their locks.
+- **Tests:** fault scenarios Siemens 80/80, Allen-Bradley 79/79 (section G: knuckle OK reset; hub NOT OK — OK, Done and
+  trigger reset, no picture until the next 2HB, retry OK leaves the trigger alone; top bearing — 2HB during the delay
+  ignored, next press → OK; exactly one scheduler thread); two full cycles and the integrated cycle (DB row unchanged)
+  for both vendors.
