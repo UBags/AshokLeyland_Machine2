@@ -2966,8 +2966,8 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPlcVisionResultResetDelay(cls) -> float:
-        """Seconds after a vision check's OK=True / Done=True were written to the PLC before the IOServer sets both
-        back to False (plc.vision.result.reset.delay.sec). Read at each use, so a change applies while running."""
+        """Seconds after a vision check's result (OK=True/False, Done=True) was written to the PLC before the IOServer
+        sets OK and Done back to False, for OK and NOT OK (plc.vision.result.reset.delay.sec). Read at each use."""
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_VISION_RESULT_RESET_DELAY_KEY,
                                                                 default="2.0")))

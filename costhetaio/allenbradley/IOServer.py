@@ -368,6 +368,8 @@ class IOServer:
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._auditStateChange
+        self._resetTimers: dict = {}           # <Check>OK tag -> pending OK/Done reset (threading.Timer)
+        self._resetTimersLock = threading.Lock()
         self._abortLock = threading.RLock()  # one abort at a time (PLC emergency, heartbeat loss, frontend)
         self.abortCount: int = 0
         self.lastAbortReason: str = ""
@@ -1139,38 +1141,63 @@ class IOServer:
             self.lastAbortReason = reason
             self.abortCount += 1
 
-    def scheduleVisionResultReset(self, tags: list, checkState: MachineState) -> None:
-        """After a vision check answered OK (<Check>OK=True and <Check>Done=True written to the PLC), start a thread
-        that, after plc.vision.result.reset.delay.sec seconds (read now, so a change in the properties applies to the
-        next check), sets BOTH tags of that check back to False: first <Check>OK, then <Check>Done.
-        Each write is retried (VISION_RESULT_RESET_ATTEMPTS) so that a single failed write cannot leave OK or Done
-        True. Not used after a NOT OK, nor for the QR code check.
+    def scheduleVisionResultReset(self, tags: list, checkState: MachineState, result: bool = True) -> None:
+        """After a vision check's result was written to the PLC (<Check>OK = True for OK / False for NOT OK, then
+        <Check>Done = True), start a thread that, after plc.vision.result.reset.delay.sec seconds (read now, so a
+        change in the properties applies to the next check), sets BOTH tags of that check to False: first <Check>OK,
+        then <Check>Done. Done the same way for OK and for NOT OK; not for the QR code check.
+        Each write is retried (VISION_RESULT_RESET_ATTEMPTS) so that a single failed write cannot leave a tag True.
+        If a new result for the same check is written before the delay is over (the retry after a NOT OK), the
+        pending reset is cancelled (cancelVisionResultReset, called by perform_write_state_action), so that it cannot
+        clear the new result; the new result gets its own reset.
         tags = the check's write tags as used by perform_write_state_action: [<Check>OK, <Check>Done]."""
         delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
         okTag = tags[0] if len(tags) > 0 else None
         doneTag = tags[1] if len(tags) > 1 else None
+        if not okTag:
+            return
         objRef = self
+        label = "OK" if result else "NOT OK"
 
         def resetToFalse(tag) -> bool:
             for attempt in range(IOServer.VISION_RESULT_RESET_ATTEMPTS):
                 if objRef.write_bool(tag, False):
                     return True
                 time.sleep(IOServer.WRITE_RETRY_INTERVAL)
-            printBoldRed(f"Could not reset {tag} to False after the OK of {checkState.name} "
+            printBoldRed(f"Could not reset {tag} to False after the {label} of {checkState.name} "
                          f"({IOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
-            objRef.logger.error(f"Could not reset {tag} to False after the OK of {checkState.name}")
+            objRef.logger.error(f"Could not reset {tag} to False after the {label} of {checkState.name}")
             return False
 
         def reset():
-            okReset = resetToFalse(okTag) if okTag else False
+            with objRef._resetTimersLock:
+                if objRef._resetTimers.get(okTag) is not timer:
+                    return                     # cancelled / replaced by a newer result of this check
+                del objRef._resetTimers[okTag]
+            okReset = resetToFalse(okTag)
             doneReset = resetToFalse(doneTag) if doneTag else False
-            printLight(f"{delay} s after the OK of {checkState.name}: {okTag} -> False ({'done' if okReset else 'FAILED'}), "
-                       f"{doneTag} -> False ({'done' if doneReset else 'FAILED'})")
+            printLight(f"{delay} s after the {label} of {checkState.name}: {okTag} -> False "
+                       f"({'done' if okReset else 'FAILED'}), {doneTag} -> False ({'done' if doneReset else 'FAILED'})")
 
         timer = threading.Timer(delay, reset)
         timer.name = f"Reset {checkState.name} OK and Done"
         timer.daemon = True
+        with self._resetTimersLock:
+            previous = self._resetTimers.get(okTag)
+            if previous is not None:
+                previous.cancel()
+            self._resetTimers[okTag] = timer
         timer.start()
+
+    def cancelVisionResultReset(self, tags: list) -> None:
+        """Cancel a pending OK/Done reset of this check (a new result is about to be written for it)."""
+        okTag = tags[0] if tags else None
+        if not okTag:
+            return
+        with self._resetTimersLock:
+            pending = self._resetTimers.pop(okTag, None)
+        if pending is not None:
+            pending.cancel()
 
     def launchFrontendAbortListenerThread(self):
         """Frontend -> IOServer: an abort sent by the frontend (manual abort, sendAbortFromFEServerToIOServer) resets
@@ -1336,8 +1363,8 @@ class IOServer:
                                                                          expectedState=stateBeforeWrite):
                                     time.sleep(objRef.write_loop_interval)
                                     continue        # cycle aborted while writing: do not move on
-                                # OK: set the check's OK and Done back to False after plc.vision.result.reset.delay.sec
-                                objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite)
+                                # set the check's OK and Done back to False after plc.vision.result.reset.delay.sec
+                                objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite, result=True)
                                 # ── Record op-END timestamps for Done-tag-based operations ──
                                 if stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE:
                                     objRef._recordOpEnd(IOServer.OP_KNUCKLE)
@@ -1358,6 +1385,8 @@ class IOServer:
                                 if previousMachineState != MachineState.INVALID_STATE and \
                                         objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
                                                                           expectedState=stateBeforeWrite):
+                                    # NOT OK too: OK (False) and Done back to False after the delay
+                                    objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite, result=False)
                                     printBoldRed(
                                         f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
                                     printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
@@ -1606,6 +1635,7 @@ class IOServer:
         Returns True if both OK and Done were written.
         """
         stateAtStart = self.machineState.getCurrentState() if expectedState is None else expectedState
+        self.cancelVisionResultReset(tags)      # a pending reset of this check must not clear the new result
         if self.machineState.getCurrentState() != stateAtStart:
             # the cycle was aborted after this step's answer was read: nothing is written for the old cycle
             printBoldRed(f"Cycle aborted before {tags[0]} was written; not written")

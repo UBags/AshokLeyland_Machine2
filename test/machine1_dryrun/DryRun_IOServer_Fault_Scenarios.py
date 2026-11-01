@@ -47,8 +47,8 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      back to the QR code at once, stop a QR scan in progress, reset the handshake tags, NOT send an emergency message
      back to the frontend, ignore a late camera answer for the aborted step, and then run a full cycle.
 
-  G. Vision OK -> the IOServer sets the check's OK and Done back to False after plc.vision.result.reset.delay.sec
-     (not before, and not after a NOT OK).
+  G. Vision result, OK or NOT OK -> the IOServer sets the check's OK and Done back to False after
+     plc.vision.result.reset.delay.sec (not before); a retry's result written before that cancels the earlier reset.
 
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
@@ -568,11 +568,11 @@ def run_frontend_abort():
 
 
 def run_vision_result_reset():
-    """G. After a vision check answered OK, the IOServer sets its OK and Done tags back to False after
-    plc.vision.result.reset.delay.sec (default 2 s); not after a NOT OK."""
+    """G. After a vision check's result (OK or NOT OK) was written, the IOServer sets its OK and Done tags back to
+    False after plc.vision.result.reset.delay.sec (default 2 s); a retry's result written before that cancels it."""
     from Configuration import CosThetaConfigurator
     delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
-    print(f"\n=== G. Vision OK -> OK and Done set back to False after {delay} s (not after NOT OK) ===", flush=True)
+    print(f"\n=== G. Vision result (OK or NOT OK) -> OK and Done set back to False after {delay} s ===", flush=True)
     KN_OK, KN_DONE = IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone
     HUB_OK, HUB_DONE = IOServer.PC_PLC_HubCheckOK, IOServer.PC_PLC_HubCheckDone
     assert wait_for(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 10)
@@ -593,22 +593,46 @@ def run_vision_result_reset():
     elapsed = time.time() - tDone
     check(f"G knuckle OK: OK and Done set back to False by the PC about {delay} s after Done ({elapsed:.1f} s)",
           reset and delay - 0.3 <= elapsed <= delay + 1.0, str(writes_of((KN_OK, KN_DONE), mark)))
-    # hub: NOT OK first -> no reset; then the retry OK -> reset
+    # hub: NOT OK -> OK (False) and Done set back to False after the delay as well
     mark = len(WRITES)
     with LOCK: TAGS[IOServer.PLC_PC_CheckHub] = True
     assert wait_for(lambda: TAGS[HUB_DONE] is True), "hub NOT OK Done timeout"
+    tDone = time.time()
     with LOCK: TAGS[IOServer.PLC_PC_CheckHub] = False
-    time.sleep(delay + 1.0)
+    reset = wait_for(lambda: TAGS[HUB_DONE] is False and (HUB_DONE, False) in writes_of((HUB_DONE,), mark), delay + 2.0)
+    elapsed = time.time() - tDone
     w = writes_of((HUB_OK, HUB_DONE), mark)
-    check("G hub NOT OK: OK=False, Done=True written, and Done NOT set back to False by the PC",
-          (HUB_OK, False) in w and (HUB_DONE, True) in w and (HUB_DONE, False) not in w and TAGS[HUB_DONE] is True, str(w))
-    with LOCK: TAGS[HUB_DONE] = False                             # the PLC handles the NOT OK, then re-triggers
+    check(f"G hub NOT OK: OK=False / Done=True written, then OK and Done set to False by the PC after about {delay} s "
+          f"({elapsed:.1f} s)", reset and w[:2] == [(HUB_OK, False), (HUB_DONE, True)] and
+          w[-2:] == [(HUB_OK, False), (HUB_DONE, False)] and delay - 0.3 <= elapsed <= delay + 1.0, str(w))
     mark = len(WRITES)
-    plc_check(IOServer.PLC_PC_CheckHub, HUB_DONE)
+    plc_check(IOServer.PLC_PC_CheckHub, HUB_DONE)                # the retry, answered OK
     check("G hub retry OK: OK and Done set back to False after the delay",
           wait_for(lambda: (HUB_OK, False) in writes_of((HUB_OK,), mark) and (HUB_DONE, False) in writes_of((HUB_DONE,), mark),
                    delay + 2.0), str(writes_of((HUB_OK, HUB_DONE), mark)))
-    run_steps(first="TOP")
+    # top bearing: NOT OK, and the retry's OK written BEFORE the NOT OK's reset is due -> that reset is cancelled
+    TOP_TRIG, TOP_OK, TOP_DONE = (IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckOK,
+                                  IOServer.PC_PLC_HubAndSecondBearingCheckDone)
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING].append(notok)
+    mark = len(WRITES)
+    with LOCK: TAGS[TOP_TRIG] = True
+    assert wait_for(lambda: TAGS[TOP_DONE] is True), "top bearing NOT OK Done timeout"
+    tNotOk = time.time()
+    with LOCK: TAGS[TOP_TRIG] = False; TAGS[TOP_DONE] = False     # the PLC re-triggers at once
+    time.sleep(0.3)
+    with LOCK: TAGS[TOP_TRIG] = True
+    assert wait_for(lambda: TAGS[TOP_OK] is True and TAGS[TOP_DONE] is True), "top bearing retry OK timeout"
+    tOk = time.time()
+    with LOCK: TAGS[TOP_TRIG] = False
+    time.sleep(max(0.0, tNotOk + delay + 0.3 - time.time()))      # the NOT OK's reset would be due now
+    check(f"G quick retry: the NOT OK's reset is cancelled; the retry's OK / Done stay True until its own delay "
+          f"({tOk - tNotOk:.1f} s between NOT OK and OK)",
+          tOk + delay - time.time() > 0.2 and TAGS[TOP_OK] is True and TAGS[TOP_DONE] is True,
+          str(writes_of((TOP_OK, TOP_DONE), mark)))
+    check("G quick retry: then OK and Done set back to False after the retry's delay",
+          wait_for(lambda: TAGS[TOP_OK] is False and TAGS[TOP_DONE] is False, delay + 2.0),
+          str(writes_of((TOP_OK, TOP_DONE), mark)))
+    run_steps(first="NUT")
     check("G cycle completes", wrapped(), f"trace {TRACE}")
 
 

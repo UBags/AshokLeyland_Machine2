@@ -948,3 +948,13 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **DB dry run §9:** the default row is compared with `DEFAULT_MACHINE_SETTINGS`. A database created before today has 19 / 19 Nm and must be recreated for this check to pass.
 - **Also passing:** fault scenarios Allen-Bradley 74/74; DB 49/49 on freshly recreated databases; two full cycles on both vendors (settings 30 / 15 / 19 / 1 / 1); integrated DB row (30, 15, 19, 1, 1) on both; logging 37/37; FE 66/66.
 - **Follow-up (same day):** `scheduleVisionResultReset` names the two tags explicitly. It sets `<Check>OK` to False and then `<Check>Done` to False. Each write is retried up to 5 times (`VISION_RESULT_RESET_ATTEMPTS`, 0.2 s apart), so a single failed write cannot leave OK or Done True. The result of both writes is logged ("PC_PLC_KnuckleCheckOK -> False (done), PC_PLC_KnuckleCheckDone -> False (done)"). Fault scenarios: 75/75.
+
+**Change (same day): reset after NOT OK too.**
+- Done is set back to False whatever the result. After a vision check's result is written (`<Check>OK` = True for OK or False for NOT OK, then `<Check>Done` = True), the IOServer sets OK and then Done to False after `plc.vision.result.reset.delay.sec` (2 s), for OK and for NOT OK alike.
+- The QR code check is still not included.
+- **Retry race handled.** After a NOT OK the PLC re-triggers the check. If the retry's result is written before the NOT OK's reset is due, that pending reset is cancelled (`cancelVisionResultReset`, called at the start of `perform_write_state_action`), so it cannot clear the new result. The new result gets its own 2 s reset.
+- **Fault scenarios G (77/77):**
+  - knuckle OK: still True after 1.4 s, reset at 2.0 s;
+  - hub NOT OK: OK/Done reset at 2.0 s; hub retry OK: reset;
+  - top bearing NOT OK, then retry OK 1.0 s later: the NOT OK's reset is cancelled; the OK stays True until its own delay, then is reset.
+- **Also passing:** Allen-Bradley fault scenarios 76/76; two full cycles; integrated DB row unchanged.
