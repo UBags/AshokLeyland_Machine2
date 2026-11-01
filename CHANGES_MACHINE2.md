@@ -980,3 +980,28 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   trigger reset, no picture until the next 2HB, retry OK leaves the trigger alone; top bearing — 2HB during the delay
   ignored, next press → OK; exactly one scheduler thread); two full cycles and the integrated cycle (DB row unchanged)
   for both vendors.
+
+## 37. Hub and bottom bearing check: Machine 2 (Siemens) positions; DryRun_Hub_Check window (2026-11-01)
+- **How the check works (unchanged code):** (1) "no bearing in centre": mean of a ring round the bore after gamma 3
+  must be below `centre.check.max.mean`; (2) the ring `segment.inner.radius`–`segment.outer.radius` round
+  `segment.center` is cropped and normalised; MobileSAMv2 (YOLO boxes + SAM) finds round shapes; they are grouped by
+  distance from the centre and size; every 4- and 5-combination is tested for equal sides and angles; the most regular
+  wins: 4 = DOST, 5 = DOSTPLUS; the other model's count = mismatch = NOT OK. Two rings qualify: the studs and the
+  through-holes (both 4 on DOST, 5 on DOSTPLUS).
+- **Machine 2 measured on 12 pictures (6 DOST, 6 DOSTPLUS):** bolt-circle centre (613, 341) (Machine 1 settings:
+  635, 345); holes at radius 130–131, studs 156–167. The Machine 1 ring (635, 345, 120–250) cut the hole ring.
+- **`siemens.vision.hub.*` changed** (all three properties files): `segment.center.x/y` 613/341,
+  `segment.outer.radius` 230, `segment.inner.radius` 105 (both rings fully inside on both models);
+  `centre.check.x/y` 613/341, `centre.check.inner/outer.radius` 35/55, `centre.check.max.mean` 127. On the pictures:
+  open bore 110–115, bearing seen in the bore 140–170: the limit sits in the middle of the gap.
+  Pictures DOSTPLUS_05/06 and DOST_01/04/05/06 show a bearing in the bore and are NOT OK at this check.
+- **Check of the positions (proxy):** the real preprocessing and post-processing (filters, grouping, polygon search,
+  model match) run with SAM/YOLO replaced by circle masks: with the new settings the 6 open-bore pictures pass with
+  their own model and give MISMATCH with the other; with the Machine 1 settings 0 of 12 pass. The SAM/YOLO step itself
+  is checked on the GPU machine with the window below.
+- **`test/machine2_dryrun/DryRun_Hub_Check.py`** (and machine1 copy): tkinter; folder chooser, DOST/DOSTPLUS, seconds
+  per picture (3); runs the real `CheckHubAndBottomBearing` on each picture; shows the program's markings plus the
+  search ring (yellow), centre ring with its value (magenta / red), and an OK / NOT OK banner with the reason (bearing
+  in the centre, mismatch, no polygon), the gamma and the time; optional saving to `<folder>/hub_check_results/`.
+  Pictures in `test/machine2_dryrun/hub_images/`.
+- **Verify_Vision_Config_Equivalence:** `plc.vision.*` (IOServer settings) no longer reported as stray vision keys.

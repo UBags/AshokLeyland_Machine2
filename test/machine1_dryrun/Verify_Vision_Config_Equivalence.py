@@ -300,7 +300,9 @@ def main() -> int:
                         problems.append(f"{where}: {pkey}={props[pkey]!r} parses to {parsed!r}, default is {default!r}")
                     else:
                         retuned.add(pkey)
-    stray = sorted(k for k in props if ".vision." in k and not any(k.startswith(p) for p in MACHINE_PREFIXES))
+    # plc.vision.* are IOServer (PLC handshake) settings, not vision-check parameters
+    stray = sorted(k for k in props if ".vision." in k and not k.startswith("plc.")
+                   and not any(k.startswith(p) for p in MACHINE_PREFIXES))
     stray += sorted(k for k in props if k.startswith("vision."))
     if stray:
         problems.append(f"vision keys without a machine prefix (not read by VisionConfig): {stray[:5]}")
