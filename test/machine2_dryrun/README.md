@@ -15,7 +15,8 @@ Run from a scratch directory: image files are written under `C:/AshokLeylandImag
 | `DryRun_FEServer_To_DBServer_Pipeline.py` | Frontend record -> `fe2db.q` -> real `persistence/DBServer.py` -> PostgreSQL (test DB); prints the stored row. |
 | `DryRun_All_Servers_Integrated_Cycle.py` | Everything together: simulated PLC/camera/QR + real IOServer, Frontend (PySide6), DBServer and HeartbeatAndAlarmServer; one cycle, saves `integrated_end_of_cycle.png` and prints the stored DB row. |
 | `DryRun_DBServer_No_Record_Loss.py` | DBServer FIFO/no-loss behaviour: burst of records, repeatedly failing insert (retry then `FailedRecords/` JSON), drain on stop. |
-| `Verify_Vision_Config_Equivalence.py` | Static proof that the configurable vision parameters equal the hard-coded values of the reference commit 5728def (the production vision files, see CHANGES sections 11 and 28). |
+| `DryRun_CheckKnuckle_Images.py` | The real CheckKnuckle on this machine's pictures (`knuckle_images/<MODEL>_<SIDE>_<n>.jpg`) with this machine's `<vendor>.vision.knuckle.*` settings: each picture OK with its own QR code and NOT OK with the other three, a dark object on the other end of the bar rejected, and every region at least 20 grey levels from its threshold (margins printed). Run again after re-tuning. |
+| `Verify_Vision_Config_Equivalence.py` | Static proof that the configurable vision parameters equal the hard-coded values of the reference commit 5728def (the production vision files, see CHANGES sections 11 and 28); CheckKnuckle against its own reference commit (section 33). |
 
 `m1_frontend_sample.png` (a Machine 1 screenshot) supplies the inspection pictures shown in the frontend.
 

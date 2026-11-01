@@ -21,6 +21,7 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
+from camera.VisionConfig import vInt, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -55,71 +56,71 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = 380
-    LHS_CROP_Y: int = 650
-    LHS_CROP_WIDTH: int = 130
-    LHS_CROP_HEIGHT: int = 50
+    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
+    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
+    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
+    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = 765
-    RHS_CROP_Y: int = 650
-    RHS_CROP_WIDTH: int = 100
-    RHS_CROP_HEIGHT: int = 55
+    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
+    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
+    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
+    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = 775
-    COMMON_CHECK_A_Y: int = 300
-    COMMON_CHECK_A_WIDTH: int = 35
-    COMMON_CHECK_A_HEIGHT: int = 25
+    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
+    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
+    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
+    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
 
-    COMMON_CHECK_B_X: int = 440
-    COMMON_CHECK_B_Y: int = 310
-    COMMON_CHECK_B_WIDTH: int = 40
-    COMMON_CHECK_B_HEIGHT: int = 20
+    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
+    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
+    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
+    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = 84
+    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = 390
-    COMMON_CHECK_C_CENTER_Y: int = 465
-    COMMON_CHECK_C_RADIUS: int = 13
+    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
+    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
+    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
 
-    COMMON_CHECK_D_CENTER_X: int = 865
-    COMMON_CHECK_D_CENTER_Y: int = 465
-    COMMON_CHECK_D_RADIUS: int = 13
+    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
+    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
+    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = 600
-    COMMON_CHECK_E_Y: int = 600
-    COMMON_CHECK_E_WIDTH: int = 50
-    COMMON_CHECK_E_HEIGHT: int = 20
+    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
+    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
+    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
+    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array([
+    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ], dtype=np.int32)
+    ]), dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array([
+    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ], dtype=np.int32)
+    ]), dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = 220
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
+    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
 
     # Binarisation threshold: grey levels below this become black, the rest white
-    BINARIZATION_THRESHOLD: int = 48
+    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = (5, 5)
+    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,

@@ -1,5 +1,8 @@
 {
   "_baseline": "5728def",
+  "baseline_per_file": {
+    "camera/CheckKnuckle.py": "637ce4a"
+  },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",

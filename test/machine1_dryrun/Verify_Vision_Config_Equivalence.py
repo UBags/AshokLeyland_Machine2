@@ -4,6 +4,8 @@ Verify_Vision_Config_Equivalence - proves that making the vision checks configur
 Static check (no torch / camera needed). For every vInt/vFloat/vBool/vStr/vTuple/vList/vPoints("key", default)
 call in the live vision modules it verifies:
   1. the default equals the value the same name had in the BASELINE commit (before parameters were made
+     configurable; a file listed under "baseline_per_file" in the manifest is compared with its own reference
+     commit instead, which has the hard-coded values and a deliberate later change to the check logic)
      configurable), with the same Python type; for parameters that were extracted from inline literals, the
      manifest (vision_config_manifest.json) must point at the baseline line, and that line must contain the literal;
   2. ApplicationConfiguration.properties contains the key for each machine (allenbradley.<key> and siemens.<key>):
@@ -41,9 +43,18 @@ for extra in ARGS.manifest:
 BASELINE = ARGS.baseline or manifest.get("_baseline", "5728def")
 
 
+# A file whose check logic was deliberately changed after the baseline is compared with its own reference commit:
+# that file with the hard-coded values and the changed logic ("baseline_per_file" in the manifest).
+BASELINE_PER_FILE = manifest.get("baseline_per_file", {}) if not ARGS.baseline else {}
+
+
+def baseline_for(rel: str) -> str:
+    return BASELINE_PER_FILE.get(str(rel).replace("\\", "/"), BASELINE)
+
+
 def git_show(rel: str) -> str:
     rel = str(rel).replace("\\", "/")          # git wants forward slashes (Windows paths have backslashes)
-    return subprocess.run(["git", "show", f"{BASELINE}:{rel}"], cwd=ROOT, capture_output=True,
+    return subprocess.run(["git", "show", f"{baseline_for(rel)}:{rel}"], cwd=ROOT, capture_output=True,
                           encoding="utf-8", errors="replace").stdout
 
 
@@ -238,7 +249,7 @@ def main() -> int:
         new_src = (ROOT / rel).read_text(encoding="utf-8")
         old_src = git_show(rel)
         if not old_src:
-            problems.append(f"{rel}: not found in baseline {BASELINE}")
+            problems.append(f"{rel}: not found in baseline {baseline_for(rel)}")
             continue
         clash, diff = ast_equivalent(rel, old_src, new_src, extracted)
         for c in clash:
@@ -246,7 +257,8 @@ def main() -> int:
         if diff:
             problems.append(f"{rel}: NOT structurally identical to baseline after substituting defaults - {diff}")
         else:
-            print(f"OK  {rel}: identical to baseline once every configurable value is replaced by its default")
+            ref = f" (reference {baseline_for(rel)})" if baseline_for(rel) != BASELINE else ""
+            print(f"OK  {rel}: identical to baseline{ref} once every configurable value is replaced by its default")
         old_assign = scope_assignments(ast.parse(old_src))
         old_lines = old_src.splitlines()
         for path, tgt, fn, key, default, line in vcalls(ast.parse(new_src)):

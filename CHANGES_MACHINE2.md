@@ -829,3 +829,48 @@ Production's own changes since the common ancestor `6b31dd7` were compared with 
 - Different values:
   - Tag names and state instructions: the new process.
   - Interval values: production's shorter heartbeat intervals were not taken, see section 30.
+
+## 33. CheckKnuckle: both side boxes dark → rejected; comments without numbers; Machine 2 regions calibrated (2026-11-01)
+
+**Logic change.**
+- Before: when both the LHS and the RHS side boxes on the bottom bar were dark, the knuckle was taken as LHS. A glove or rag on the left end of the bar could then let a RHS knuckle pass as LHS.
+- Now such an image is rejected, with "both LHS and RHS side boxes are dark; is something lying on the bar?".
+- Machine 1's results on its four reference pictures are unchanged.
+
+**Comments.** The class description and every check comment now name the configuration key (`<vendor>.vision.knuckle.*`) instead of numbers. The old numbers were partly stale: they said 230 / 96 where the code uses 220 / 84. The Step 2 failure message no longer says ">=" when a DOSTPLUS fails.
+
+**Machine 2 regions (`siemens.vision.knuckle.*`).** Calibrated on 15 Machine 2 pictures.
+- **Pictures:** DOSTPLUS LHS ×3, DOSTPLUS RHS ×4, DOST LHS ×4, DOST RHS ×4.
+- **How DOST and DOSTPLUS were told apart:**
+  - DOSTPLUS kingpin bosses have a flat face with a corner reaching towards the centre, and a pin with a groove ring.
+  - DOST bosses are round, with a stepped bore.
+  - This matches Machine 1's DOST/DOSTPLUS pictures.
+- **Values:**
+
+  | Check | Machine 2 (siemens) | Machine 1 (allenbradley, unchanged) |
+  |---|---|---|
+  | Side boxes (arm across the bottom bar) | LHS 420,624 20×20; RHS 792,612 20×20 | 380,650 130×50; 765,650 100×55 |
+  | Side threshold | 150 | 220 |
+  | A / B (casting next to the right / left boss) | 748,250 28×22 / 455,262 20×14 | 775,300 35×25 / 440,310 40×20 |
+  | C / D (fixture screws, left / right) | 409,434 r9 / 814,437 r9 | 390,465 r13 / 865,465 r13 |
+  | E (dark plate, bottom centre) | 590,535 50×20 | 600,600 50×20 |
+  | Step 2 / Step 3 polygons (next to the bosses) | 6 points each, where the DOSTPLUS boss face reaches and the DOST casting does not | 4 points each |
+  | Model threshold | 160 | 96 |
+  | Common threshold | 84 (both machines) | 84 |
+
+- **Result:** each of the 15 pictures is OK with its own QR code and NOT OK with the other three.
+- **Smallest margin to the threshold:**
+  - A–E: 34
+  - side box with the arm: 132; without it: 105
+  - S2/S3: DOSTPLUS 89, DOST 135
+- **With the regions shifted by ±3 px:** the side boxes keep a gap of more than 200. The model polygons keep DOST ≤ 123 and DOSTPLUS ≥ 193 against the threshold of 160.
+- **Not yet calibrated:** pictures of the empty fixture and of a rag or glove on the bar would confirm that A/B see the knuckle (on Machine 2 they lie on the casting) and test the new rejection with a real object.
+
+**Verifier.**
+- CheckKnuckle is compared with its own reference commit `637ce4a`: production's file with the hard-coded values plus this logic and comment change. The file is listed as `baseline_per_file` in `vision_config_manifest.json`.
+- All 8 files: ALL EQUIVALENT.
+
+**New dry run.**
+- `test/*_dryrun/DryRun_CheckKnuckle_Images.py`, with the pictures in `knuckle_images/`. Machine 2: 32/32. Machine 1: 10/10.
+- It checks every picture against all four QR codes and a simulated object on the bar, and prints the margins.
+- **Also:** logging dry run 37/37.
