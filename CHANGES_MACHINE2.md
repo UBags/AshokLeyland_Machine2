@@ -1020,3 +1020,28 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **DryRun_Hub_Check:** "Enforce bearing absence check" tick box (off by default = production); the centre value is
   shown either way ("not enforced" when off). Controls on two rows. Proxy run on the 12 Machine 2 pictures: off -> 12
   OK; on -> 6 NOT OK "bearing in the centre" except DOSTPLUS_06 (washer, 139.8).
+
+## 39. Top bearing check: Machine 2 (Siemens) search centre; DryRun_TopBearing_Check window (2026-11-01)
+- **How the check works (unchanged code, OpenCV only):** a disc of `annular.outer.radius` round `annular.center` is
+  cropped and normalised; 5 gammas x 2 start centres (`center.offsets`: the centre and 10 px above) are tried in
+  parallel; each inverts the blue channel, binarises, traces rays from the start centre and fits circles (RANSAC) to
+  the inner and outer edge of the bearing's bright inner race (Machine 1: r 32-36 / 46-50); the best valid branch wins;
+  then the ring must be brighter than the same ring in the hub picture of the part (gamma 3, grey mean) by more than
+  `final.gamma.threshold` (30).
+- **Machine 1 (production settings):** 15 bearing pictures OK (5 runs each, always), 11 open-bore hub pictures NOT OK.
+- **Machine 2:** bearing centres measured at (612-615, 337-345). With the Machine 1 centre (632, 360) 3 of 11 bearing
+  pictures were found. With (613, 341) the "10 px above" start centre sometimes won with a smaller wrong ring
+  (r 26-40, brightness difference only 28-30): DOSTPLUS_bearing_03 NOT OK in 3-8 of 20 runs. Like Machine 1, where the
+  set centre is below the bearing centre and the two start centres bracket it, the centre is set to **(613, 345)**:
+  `siemens.vision.topbearing.annular.center.x/y` = 613/345 (all three properties files); nothing else changed.
+  Result: 11 bearing pictures x 20 runs = 220/220 OK; 5 open-bore / washer pictures x 20 = 0/100 OK. Brightness
+  difference on the ring found: DOSTPLUS +42..+56, DOST +78..+83 (limit 30); washers and open bores: no ring found.
+- **Run-to-run variation:** `_fit_circle_ransac` samples with the unseeded global `np.random`, so the same picture can
+  give a slightly different ring (and, near a limit, a different verdict) on each run. Not changed (production code,
+  both machines); noted for a decision.
+- **`test/machine2_dryrun/DryRun_TopBearing_Check.py`** (and machine1 copy): tkinter; folder, hub reference picture
+  (used unless `X_hub.<ext>` sits next to picture X), seconds per picture (3), saving to
+  `<folder>/top_bearing_results/`. Shows the full picture with the search area and start centres (yellow), the ring
+  found (green), the check's own result picture as an inset, and a banner: OK with the ring radii and the brightness
+  difference against the limit, or NOT OK with "no bearing ring found" / "brighter by only ...". Pictures:
+  `test/machine2_dryrun/top_bearing_images/`.
