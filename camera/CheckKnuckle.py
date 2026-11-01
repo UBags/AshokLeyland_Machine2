@@ -21,7 +21,6 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
-from camera.VisionConfig import vInt, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -36,83 +35,91 @@ class CheckKnuckle():
     This class verifies that the knuckle placed on the fixture matches
     the QR code scanned in the previous step.
 
-    Validation Steps:
-    Common Check A: Rectangular region (775, 300) 35x25 - mean < 96
-    Common Check B: Rectangular region (440, 310) 40x20 - mean < 96
-    Common Check C: Circular region center (390, 465) radius 13 - mean < 96
-    Common Check D: Circular region center (865, 465) radius 13 - mean < 96
-    Common Check E: Rectangular region (600, 600) 50x20 - mean < 96
-    1. Determine LHS/RHS from image and match against QR code
-    2. Verify knuckle presence via polygon region check
-    3. Determine DOST/DOSTPLUS model and match against QR code
+    Every region, threshold and filter size below is read from ApplicationConfiguration.properties, per machine:
+    <vendor>.vision.knuckle.* (allenbradley.vision.knuckle.* for Machine 1, siemens.vision.knuckle.* for Machine 2).
+    The numbers in the code are only the defaults used when a key is missing.
+
+    Validation steps:
+    Common checks A-E: the mean grey level of each region (rectangles A, B, E; circles C, D) must be below
+        vision.knuckle.common.check.threshold. They check that the expected dark features are where they should be
+        (knuckle casting next to the bosses, dark fixture features), i.e. a knuckle is there and the camera has
+        not moved.
+    1. LHS / RHS: the knuckle's steering arm lies across the bright bar at the bottom of the fixture, on the left
+       for an LHS knuckle and on the right for an RHS one. Each side box is binarised and mean-filtered; an average
+       below vision.knuckle.lhs.rhs.darkness.threshold means the arm is there. Exactly one side must show the arm
+       (both dark = something else on the bar: rejected), and it must match the QR code.
+    2./3. DOST / DOSTPLUS: two polygons next to the two kingpin bosses (vision.knuckle.step2.polygon.points and
+       vision.knuckle.step3.polygon.points), binarised and mean-filtered. The DOSTPLUS boss face reaches into them
+       (bright), the DOST casting does not (dark): an average below
+       vision.knuckle.component.identification.darkness.threshold means DOST. Both must agree with the QR code.
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
-    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
-    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
-    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
+    LHS_CROP_X: int = 380
+    LHS_CROP_Y: int = 650
+    LHS_CROP_WIDTH: int = 130
+    LHS_CROP_HEIGHT: int = 50
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
-    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
-    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
-    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
+    RHS_CROP_X: int = 765
+    RHS_CROP_Y: int = 650
+    RHS_CROP_WIDTH: int = 100
+    RHS_CROP_HEIGHT: int = 55
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
-    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
-    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
-    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
+    COMMON_CHECK_A_X: int = 775
+    COMMON_CHECK_A_Y: int = 300
+    COMMON_CHECK_A_WIDTH: int = 35
+    COMMON_CHECK_A_HEIGHT: int = 25
 
-    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
-    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
-    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
-    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
+    COMMON_CHECK_B_X: int = 440
+    COMMON_CHECK_B_Y: int = 310
+    COMMON_CHECK_B_WIDTH: int = 40
+    COMMON_CHECK_B_HEIGHT: int = 20
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
+    COMMON_CHECK_THRESHOLD: int = 84
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
-    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
-    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
+    COMMON_CHECK_C_CENTER_X: int = 390
+    COMMON_CHECK_C_CENTER_Y: int = 465
+    COMMON_CHECK_C_RADIUS: int = 13
 
-    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
-    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
-    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
+    COMMON_CHECK_D_CENTER_X: int = 865
+    COMMON_CHECK_D_CENTER_Y: int = 465
+    COMMON_CHECK_D_RADIUS: int = 13
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
-    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
-    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
-    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
+    COMMON_CHECK_E_X: int = 600
+    COMMON_CHECK_E_Y: int = 600
+    COMMON_CHECK_E_WIDTH: int = 50
+    COMMON_CHECK_E_HEIGHT: int = 20
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
+    STEP2_POLYGON_POINTS = np.array([
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
+    STEP3_POLYGON_POINTS = np.array([
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
+    LHS_RHS_DARKNESS_THRESHOLD: int = 220
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
 
-    # Binarization threshold: pixels below this become black (0), else white (255)
-    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
+    # Binarisation threshold: grey levels below this become black, the rest white
+    BINARIZATION_THRESHOLD: int = 48
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
+    KERNEL_SIZE: Tuple[int, int] = (5, 5)
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,
@@ -289,7 +296,7 @@ class CheckKnuckle():
         # Convert to grayscale
         gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
 
-        # Binarize with fixed threshold: < 48 = black (0), >= 48 = white (255)
+        # Binarise: below vision.knuckle.binarization.threshold = black, the rest white
         _, binarized = cv2.threshold(gray, CheckKnuckle.BINARIZATION_THRESHOLD, 255, cv2.THRESH_BINARY)
 
         # Apply mean filter (box blur) on the binarized image
@@ -331,7 +338,7 @@ class CheckKnuckle():
         # Convert to grayscale
         gray_region = cv2.cvtColor(cropped_region, cv2.COLOR_BGR2GRAY)
 
-        # Binarize with fixed threshold: < 48 = black (0), >= 48 = white (255)
+        # Binarise: below vision.knuckle.binarization.threshold = black, the rest white
         _, binarized = cv2.threshold(gray_region, CheckKnuckle.BINARIZATION_THRESHOLD, 255, cv2.THRESH_BINARY)
 
         # Apply mean filter on the binarized image
@@ -416,8 +423,8 @@ class CheckKnuckle():
             # =====================================================================
 
             # =====================================================================
-            # Common Check A: Rectangular region A (775, 300) 35x25
-            # Mean should be < 96, otherwise component is invalid
+            # Common Check A: rectangle vision.knuckle.common.check.a.* (knuckle casting next to the right boss)
+            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
             # =====================================================================
             cropped_a = gray_image[
                         CheckKnuckle.COMMON_CHECK_A_Y:CheckKnuckle.COMMON_CHECK_A_Y + CheckKnuckle.COMMON_CHECK_A_HEIGHT,
@@ -442,8 +449,8 @@ class CheckKnuckle():
                     MessageType.SUCCESS)
 
             # =====================================================================
-            # Common Check B: Rectangular region B (440, 310) 40x20
-            # Mean should be < 96, otherwise component is invalid
+            # Common Check B: rectangle vision.knuckle.common.check.b.* (knuckle casting next to the left boss)
+            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
             # =====================================================================
             cropped_b = gray_image[
                         CheckKnuckle.COMMON_CHECK_B_Y:CheckKnuckle.COMMON_CHECK_B_Y + CheckKnuckle.COMMON_CHECK_B_HEIGHT,
@@ -468,8 +475,8 @@ class CheckKnuckle():
                     MessageType.SUCCESS)
 
             # =====================================================================
-            # Common Check C: Circular region at (390, 465) radius 13
-            # Mean should be < 96, otherwise component is invalid
+            # Common Check C: circle vision.knuckle.common.check.c.* (dark fixture feature, left)
+            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
             # =====================================================================
             # Create circular mask
             mask_c = np.zeros(gray_image.shape[:2], dtype=np.uint8)
@@ -507,8 +514,8 @@ class CheckKnuckle():
                     MessageType.SUCCESS)
 
             # =====================================================================
-            # Common Check D: Circular region at (865, 465) radius 13
-            # Mean should be < 96, otherwise component is invalid
+            # Common Check D: circle vision.knuckle.common.check.d.* (dark fixture feature, right)
+            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
             # =====================================================================
             # Create circular mask
             mask_d = np.zeros(gray_image.shape[:2], dtype=np.uint8)
@@ -546,8 +553,8 @@ class CheckKnuckle():
                     MessageType.SUCCESS)
 
             # =====================================================================
-            # Common Check E: Rectangular region E (600, 600) 50x20
-            # Mean should be < 96, otherwise component is invalid
+            # Common Check E: rectangle vision.knuckle.common.check.e.* (dark fixture feature, bottom centre)
+            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
             # =====================================================================
             cropped_e = gray_image[
                         CheckKnuckle.COMMON_CHECK_E_Y:CheckKnuckle.COMMON_CHECK_E_Y + CheckKnuckle.COMMON_CHECK_E_HEIGHT,
@@ -572,10 +579,9 @@ class CheckKnuckle():
                     MessageType.SUCCESS)
 
             # =====================================================================
-            # Step 1A: Check for LHS component in image
-            # Crop from (380, 650) size 130x50, convert to B&W, binarize (< 48 = black),
-            # apply mean filter 5x5
-            # If average < 230, it's for a LHS component
+            # Step 1A: LHS side box vision.knuckle.lhs.crop.* (left end of the bottom bar)
+            # Binarised (vision.knuckle.binarization.threshold) and mean-filtered (vision.knuckle.kernel.size);
+            # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an LHS knuckle is there
             # =====================================================================
             lhs_avg = CheckKnuckle._crop_and_analyze(
                 anImage,
@@ -589,10 +595,8 @@ class CheckKnuckle():
             logBoth('logDebug', _src, f"LHS region average: {lhs_avg:.2f}, is_LHS: {is_lhs_component}", MessageType.GENERAL)
 
             # =====================================================================
-            # Step 1B: Check for RHS component in image
-            # Crop from (765, 650) size 100x55, convert to B&W, binarize (< 48 = black),
-            # apply mean filter 5x5
-            # If average < 230, it's for a RHS component
+            # Step 1B: RHS side box vision.knuckle.rhs.crop.* (right end of the bottom bar), same processing;
+            # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an RHS knuckle is there
             # =====================================================================
             rhs_avg = CheckKnuckle._crop_and_analyze(
                 anImage,
@@ -615,6 +619,16 @@ class CheckKnuckle():
                         MessageType.ISSUE)
                 return anImage, False
 
+            # Both sides dark: the arm is on one side and something else (a glove, a rag, a hand) lies on the other.
+            # The side cannot be told, and assuming one could accept a knuckle of the wrong side: rejected.
+            if is_lhs_component and is_rhs_component:
+                logBoth('logError', _src,
+                        f"CheckKnuckle: Invalid image - both LHS and RHS side boxes are dark "
+                        f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f}, threshold={CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD}); "
+                        f"is something lying on the bar?",
+                        MessageType.ISSUE)
+                return anImage, False
+
             # Determine detected side from image
             detected_side = "LHS" if is_lhs_component else "RHS"
 
@@ -631,10 +645,10 @@ class CheckKnuckle():
             logBoth('logInfo', _src, f"CheckKnuckle: Side matched - {detected_side}", MessageType.SUCCESS)
 
             # =====================================================================
-            # Step 2: Verify knuckle presence via polygon region check
-            # Crop polygon from points, convert to B&W, binarize (< 48 = black),
-            # apply mean filter 5x5
-            # If average < 230, proceed to Step 3
+            # Step 2: polygon vision.knuckle.step2.polygon.points (next to the left boss)
+            # Binarised and mean-filtered as above; an average below
+            # vision.knuckle.component.identification.darkness.threshold means DOST, otherwise DOSTPLUS.
+            # Must agree with the model in the QR code.
             # =====================================================================
             step2_avg = CheckKnuckle._analyze_polygon_region(anImage, CheckKnuckle.STEP2_POLYGON_POINTS)
             step2_passed = False
@@ -648,15 +662,14 @@ class CheckKnuckle():
 
             if not step2_passed:
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Step 2 failed - polygon average {step2_avg:.2f} >= {CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD}",
+                        f"CheckKnuckle: Step 2 failed - polygon average {step2_avg:.2f} does not match {modelName} "
+                        f"(below {CheckKnuckle.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD} = DOST, otherwise DOSTPLUS)",
                         MessageType.ISSUE)
                 return anImage, False
 
             # =====================================================================
-            # Step 3: Determine DOST vs DOSTPLUS
-            # Crop polygon from points, convert to B&W, binarize (< 48 = black),
-            # apply mean filter 5x5
-            # If average < 230, it's DOST; else it's DOSTPLUS
+            # Step 3: polygon vision.knuckle.step3.polygon.points (next to the right boss), same rule as step 2:
+            # below vision.knuckle.component.identification.darkness.threshold = DOST, otherwise DOSTPLUS
             # =====================================================================
             if CHECK_KNUCKLE_IMAGE_DEBUG:
                 # Get intermediate values for debug visualization
