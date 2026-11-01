@@ -947,3 +947,4 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **D now expects 15 / 19 Nm.**
 - **DB dry run §9:** the default row is compared with `DEFAULT_MACHINE_SETTINGS`. A database created before today has 19 / 19 Nm and must be recreated for this check to pass.
 - **Also passing:** fault scenarios Allen-Bradley 74/74; DB 49/49 on freshly recreated databases; two full cycles on both vendors (settings 30 / 15 / 19 / 1 / 1); integrated DB row (30, 15, 19, 1, 1) on both; logging 37/37; FE 66/66.
+- **Follow-up (same day):** `scheduleVisionResultReset` names the two tags explicitly. It sets `<Check>OK` to False and then `<Check>Done` to False. Each write is retried up to 5 times (`VISION_RESULT_RESET_ATTEMPTS`, 0.2 s apart), so a single failed write cannot leave OK or Done True. The result of both writes is logged ("PC_PLC_KnuckleCheckOK -> False (done), PC_PLC_KnuckleCheckDone -> False (done)"). Fault scenarios: 75/75.

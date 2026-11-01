@@ -354,6 +354,7 @@ class IOServer:
     WATCH_TAG_VALUE: int = 1234
     SETTINGS_WRITE_ATTEMPTS: int = 3        # per cycle-setting tag, in state 2
     WRITE_RETRY_INTERVAL: float = 0.2       # s between write attempts
+    VISION_RESULT_RESET_ATTEMPTS: int = 5          # attempts to set a vision check's OK / Done back to False
     NO_CONNECTION: int = -1986754392
     CONSECUTIVE_CONNECTION_DOWN_COUNT: int = 0
 
@@ -1139,21 +1140,35 @@ class IOServer:
             self.abortCount += 1
 
     def scheduleVisionResultReset(self, tags: list, checkState: MachineState) -> None:
-        """After a vision check answered OK (OK=True, Done=True written to the PLC), start a thread that sets the
-        check's OK and Done tags back to False after plc.vision.result.reset.delay.sec seconds (read now, so a change
-        in the properties applies to the next check). Not used after a NOT OK."""
+        """After a vision check answered OK (<Check>OK=True and <Check>Done=True written to the PLC), start a thread
+        that, after plc.vision.result.reset.delay.sec seconds (read now, so a change in the properties applies to the
+        next check), sets BOTH tags of that check back to False: first <Check>OK, then <Check>Done.
+        Each write is retried (VISION_RESULT_RESET_ATTEMPTS) so that a single failed write cannot leave OK or Done
+        True. Not used after a NOT OK, nor for the QR code check.
+        tags = the check's write tags as used by perform_write_state_action: [<Check>OK, <Check>Done]."""
         delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
-        resetTags = [t for t in tags[:2] if t]
+        okTag = tags[0] if len(tags) > 0 else None
+        doneTag = tags[1] if len(tags) > 1 else None
         objRef = self
 
+        def resetToFalse(tag) -> bool:
+            for attempt in range(IOServer.VISION_RESULT_RESET_ATTEMPTS):
+                if objRef.write_bool(tag, False):
+                    return True
+                time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+            printBoldRed(f"Could not reset {tag} to False after the OK of {checkState.name} "
+                         f"({IOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
+            objRef.logger.error(f"Could not reset {tag} to False after the OK of {checkState.name}")
+            return False
+
         def reset():
-            for tag in resetTags:
-                if not objRef.write_bool(tag, False):
-                    printBoldRed(f"Could not reset {tag} to False after the OK of {checkState.name}")
-            printLight(f"Reset {resetTags} to False {delay} s after the OK of {checkState.name}")
+            okReset = resetToFalse(okTag) if okTag else False
+            doneReset = resetToFalse(doneTag) if doneTag else False
+            printLight(f"{delay} s after the OK of {checkState.name}: {okTag} -> False ({'done' if okReset else 'FAILED'}), "
+                       f"{doneTag} -> False ({'done' if doneReset else 'FAILED'})")
 
         timer = threading.Timer(delay, reset)
-        timer.name = f"Reset {checkState.name} result"
+        timer.name = f"Reset {checkState.name} OK and Done"
         timer.daemon = True
         timer.start()
 
