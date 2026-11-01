@@ -91,7 +91,7 @@ from utils.RedisUtils import (
     readDataInFEServerFromCameraServer,
     readDataInFEServerFromIOServer,
     readEmergencyAbortInFEServerFromIOServer,
-    clearKeyCommunicationQueuesOnAbort,
+    clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer,
     getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage,
     readHeartbeatsInFEServerFromHeartbeatServer,
 )
@@ -1091,6 +1091,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         except:
             noteSuppressed()
         clearKeyCommunicationQueuesOnAbort()
+        # Tell the IOServer: it resets its PLC handshake and goes back to reading the QR code. Without this the
+        # IOServer stayed in the middle of the aborted cycle (waiting for a camera result that never comes).
+        sendAbortFromFEServerToIOServer(AshokLeylandFrontEnd.processUpdationRedisConnection,
+                                        reason="manual abort (Ctrl+Alt+Z) in the frontend")
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         printYellow(f"About to call doFinalProcessing() from manualAbort()")
         self.doFinalProcessing()

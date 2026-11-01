@@ -20,6 +20,8 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
   F1 also: PLC_PC_Station2RotationDuringTighteningDone sent with each tightening torque (True at torque 1, False at
       torque 2) -> each tightening tile shows the torque on the first line and "Rotation Done" / "Rotation Not Done"
       below it in a smaller font; the record carries both values.
+  F8. Manual abort in the frontend (Ctrl+Alt+Z): the abort is sent to the IOServer on fe2io.q (it then goes back to
+      the QR code), the abort screen is shown and the abort record sent.
   F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
       the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
       (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
@@ -348,6 +350,27 @@ def driver():
         take_record(timeout=5)
         check("F7 emergency abort shown within about 1 s", ok_ and time.monotonic() - t0 < 2.0,
               f"{time.monotonic() - t0:.2f} s, {SCREENS}")
+
+        # ---------------- F8 ----------------
+        print("\n=== F8. Manual abort in the frontend (Ctrl+Alt+Z) is sent to the IOServer ===", flush=True)
+        import frontend.AshokLeylandFrontEnd as _feModule
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps(upto=1)
+        r.delete(fe2ioq); SCREENS.clear()
+        _savedConfirm = _feModule.getConfirmation
+        _feModule.getConfirmation = lambda *a, **k: "OK"          # the operator confirms the abort
+        _gui.call.emit(fe.manualAbort)
+        sent = wait_for(lambda: r.xlen(fe2ioq) > 0, 5)
+        msgs = [{k.decode(): v.decode() for k, v in m[1].items()} for m in r.xrange(fe2ioq)]
+        check("F8 manual abort -> ABORT message on the frontend -> IOServer queue (fe2io.q)",
+              sent and any(m.get("action") == ABORT for m in msgs), str(msgs))
+        check("F8 ... which the IOServer reads as an abort (readAbortInIOServerFromFEServer)",
+              readAbortInIOServerFromFEServer(r, block=100)[0])
+        check("F8 the frontend shows the abort screen and sends the abort record", wait_for(lambda: "showEmergencyAbort" in SCREENS, 5)
+              and take_record(timeout=5) is not None, str(SCREENS))
+        check("F8 the frontend is back at READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE, 10), state().name)
+        _feModule.getConfirmation = _savedConfirm
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:
@@ -359,7 +382,10 @@ def driver():
 
 # GUI-thread responsiveness probe (F7): a 20 ms timer in the GUI thread; the largest gap between two ticks is the
 # longest time the GUI thread was busy (a blocking call there freezes the screen).
-from PySide6.QtCore import QTimer as _QTimer
+from PySide6.QtCore import QTimer as _QTimer, QObject as _QObject, Signal as _Signal
+class _GuiCall(_QObject):               # runs a function in the GUI thread (dialogs, widgets) from the driver thread
+    call = _Signal(object)
+_gui = _GuiCall(); _gui.call.connect(lambda f: f())
 GUI_GAPS = {"last": time.monotonic(), "max": 0.0}
 def _guiTick():
     now = time.monotonic()

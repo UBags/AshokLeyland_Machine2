@@ -367,6 +367,9 @@ class IOServer:
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._auditStateChange
+        self._abortLock = threading.RLock()  # one abort at a time (PLC emergency, heartbeat loss, frontend)
+        self.abortCount: int = 0
+        self.lastAbortReason: str = ""
         self.cycleId: int = 0              # incremented at each accepted QR code (log context "[QR=... cycle=N]")
         self._lastAuditedRead = None
         self.shutdown = False
@@ -1048,11 +1051,8 @@ class IOServer:
                         if (IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT == 2):
                             printBoldRed(
                                 f"Combined Heartbeat - connection problem somewhere : sendEmergencyAbortFromIOServerToFEServer")
-                            sendEmergencyAbortFromIOServerToFEServer(objRef.emergencyRedisConnection)
-                            objRef.resetAll()
-                            objRef._resetOpTimestamps()  # Clear cycle timing on abort
-                            objRef.machineState.setCurrentState(MachineState.READ_QR_CODE)
-                            objRef.write_bool(IOServer.PLC_PC_CheckQRCode, True)
+                            objRef.abortCycle("connection to a server lost (combined heartbeat)",
+                                              notifyQRCodeServer=False, notifyFrontend=True, clearQueues=False)
                 except Exception as e:
                     printBoldRed(f"Exception {e} encountered in heartbeat")
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
@@ -1081,16 +1081,8 @@ class IOServer:
                 if emergencyActivated:
                     printBoldRed(
                         f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
-                    sendAbortFromIOServerToQRCodeServer(objRef.emergencyRedisConnection)
-                    time.sleep(0.5)
-                    clearKeyCommunicationQueuesOnAbort()
-                    time.sleep(0.2)
-                    sendEmergencyAbortFromIOServerToFEServer(objRef.emergencyRedisConnection)
-                    objRef.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
-                    objRef.resetAll()
-                    objRef._resetOpTimestamps()  # Clear cycle timing on abort
-                    objRef.machineState.setCurrentState(MachineState.READ_QR_CODE)
-                    objRef.write_bool(IOServer.PLC_PC_CheckQRCode, True)
+                    objRef.abortCycle("emergency button pressed on the machine (PLC)",
+                                      notifyQRCodeServer=True, notifyFrontend=True, clearQueues=True)
                 try:
                     time.sleep(1.0)
                 except:
@@ -1099,6 +1091,74 @@ class IOServer:
         emergencyMonitoringThread = threading.Thread(name=f"Emergency Monitoring Thread", target=monitorEmergency,
                                                      args=(), daemon=True)
         emergencyMonitoringThread.start()
+
+    def abortCycle(self, reason: str, notifyQRCodeServer: bool = True, notifyFrontend: bool = True,
+                   clearQueues: bool = True) -> None:
+        """Abort the current cycle and go back to READ_QR_CODE, whatever state the cycle is in. Used for the emergency
+        button on the machine (PLC), a lost server connection (heartbeat) and an abort sent by the frontend.
+          notifyQRCodeServer: tell the QR code server to stop a scan in progress
+          clearQueues:        drop the camera / QR code messages of the aborted cycle
+          notifyFrontend:     tell the frontend (emergency-abort screen, abort record). False when the abort came
+                              FROM the frontend, which has already done that itself.
+        The read and write loops only move the state on if it is still the state they started from
+        (incrementStateFrom / decrementStateFrom), so a step that finishes after the abort cannot move the reset
+        cycle on."""
+        with self._abortLock:
+            stateBefore = self.machineState.getCurrentState()
+            printBoldRed(f"ABORTING CYCLE in state {stateBefore.name}: {reason}")
+            self._audit(f"CYCLE ABORTED in state {stateBefore.name}: {reason}")
+            try:
+                self.logger.error(f"Cycle aborted in state {stateBefore.name}: {reason}")
+            except Exception:
+                noteSuppressed()
+            redisConnection = self.emergencyRedisConnection
+            if notifyQRCodeServer:
+                try:
+                    sendAbortFromIOServerToQRCodeServer(redisConnection)
+                except Exception:
+                    noteSuppressed()
+                time.sleep(0.5)
+            if clearQueues:
+                try:
+                    clearKeyCommunicationQueuesOnAbort()
+                except Exception:
+                    noteSuppressed()
+                time.sleep(0.2)
+            if notifyFrontend:
+                try:
+                    sendEmergencyAbortFromIOServerToFEServer(redisConnection)
+                except Exception:
+                    noteSuppressed()
+            self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
+            # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
+            self.machineState.setCurrentState(MachineState.READ_QR_CODE)
+            self.resetAll()
+            self._resetOpTimestamps()  # Clear cycle timing on abort
+            self.write_bool(IOServer.PLC_PC_CheckQRCode, True)
+            self.lastAbortReason = reason
+            self.abortCount += 1
+
+    def launchFrontendAbortListenerThread(self):
+        """Frontend -> IOServer: an abort sent by the frontend (manual abort, sendAbortFromFEServerToIOServer) resets
+        the cycle to READ_QR_CODE, exactly like the emergency button on the machine."""
+        objRef = self
+
+        def listen():
+            connection = None
+            while not objRef.shutdown:
+                try:
+                    if connection is None:
+                        connection = Redis(objRef.redisHostname, objRef.redisPort, retry_on_timeout=True)
+                    abort, reason = readAbortInIOServerFromFEServer(connection, block=500)
+                    if abort:
+                        objRef.abortCycle(f"abort from the frontend ({reason or 'no reason given'})",
+                                          notifyQRCodeServer=True, notifyFrontend=False, clearQueues=True)
+                except Exception as e:
+                    printBoldRed(f"Exception {e} in the frontend abort listener")
+                    connection = None
+                    time.sleep(1.0)
+
+        threading.Thread(name="Frontend Abort Listener Thread", target=listen, daemon=True).start()
 
     def launchMonitorStopCommandThread(self):
         objRef = self
@@ -1193,14 +1253,21 @@ class IOServer:
             """Main do loop to take action wherever something required."""
             written_TagsToBeWritten: int = 0
             while not objRef.shutdown:
+                stateOfTags = objRef.machineState.getCurrentState()
                 tagsToBeWritten = objRef.getCurrentTagsToBeWritten()
+                if objRef.machineState.getCurrentState() != stateOfTags:
+                    continue            # state changed (abort) while the tags were looked up: look again
                 if (
                         objRef.clientForWrites is not None) and objRef.clientForWrites.connected and not objRef.connectionInProgress:
                     if tagsToBeWritten is not None and len(tagsToBeWritten) > 0:
                         if written_TagsToBeWritten == 0:
                             written_TagsToBeWritten += 1
-                        if self.machineState.getCurrentState() == MachineState.WRITE_QR_CODE:
+                        stateBeforeWrite = stateOfTags
+                        if stateBeforeWrite == MachineState.WRITE_QR_CODE:
                             success, qrCode = readDataInIOServerFromQRCodeServer(self.redisConnectionForWrites)
+                            if success and objRef.machineState.getCurrentState() != stateBeforeWrite:
+                                printBoldRed("QR code received after the cycle was aborted; ignored")
+                                success = False
                             if success:
                                 objRef.currentQRCode = qrCode  # Store the QR code for this cycle
                                 objRef.cycleId += 1
@@ -1211,21 +1278,28 @@ class IOServer:
                                 settingsWritten = objRef.writeCycleSettingsToPLC(qrCode)
                                 # 2. ... then QRCodeCheckOK, then QRCodeCheckDone. If the settings could not all be
                                 #    written, OK = False (like a NOT OK check): the cycle must not start without them.
-                                if objRef.perform_write_state_action(tags=tagsToBeWritten, result=settingsWritten):
+                                if objRef.perform_write_state_action(tags=tagsToBeWritten, result=settingsWritten,
+                                                                     expectedState=stateBeforeWrite):
                                     printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                     if settingsWritten:
-                                        objRef.machineState.incrementState()
+                                        objRef.machineState.incrementStateFrom(MachineState.WRITE_QR_CODE)
                                     else:
                                         printBoldRed("Cycle settings not written: QR code check reported NOT OK to the PLC")
-                                        objRef.machineState.decrementState()
+                                        objRef.machineState.decrementStateFrom(MachineState.WRITE_QR_CODE)
                                     printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                         else:
-                            # Capture the WRITE state we are about to act on, BEFORE incrementing
-                            stateBeforeWrite = objRef.machineState.getCurrentState()
+                            # stateBeforeWrite: the WRITE state we are about to act on (captured before the read)
                             previousMachineState, evaluation = readDataInIOServerFromCameraServer(
                                 self.redisConnectionForWrites)
+                            if objRef.machineState.getCurrentState() != stateBeforeWrite:
+                                # the cycle was aborted while waiting for the camera: this answer is for the old cycle
+                                printBoldRed(f"Camera answer for {stateBeforeWrite.name} received after the cycle was "
+                                             f"aborted; ignored")
+                                time.sleep(objRef.write_loop_interval)
+                                continue
                             if evaluation:
-                                if not objRef.perform_write_state_action(tags=tagsToBeWritten, result=True):
+                                if not objRef.perform_write_state_action(tags=tagsToBeWritten, result=True,
+                                                                         expectedState=stateBeforeWrite):
                                     time.sleep(objRef.write_loop_interval)
                                     continue        # cycle aborted while writing: do not move on
                                 # ── Record op-END timestamps for Done-tag-based operations ──
@@ -1242,15 +1316,16 @@ class IOServer:
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
                                     objRef._recordOpEnd(IOServer.OP_CAP)
                                 printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
-                                objRef.machineState.incrementState()
+                                objRef.machineState.incrementStateFrom(stateBeforeWrite)
                                 printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                             else:
                                 if previousMachineState != MachineState.INVALID_STATE and \
-                                        objRef.perform_write_state_action(tags=tagsToBeWritten, result=False):
+                                        objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
+                                                                          expectedState=stateBeforeWrite):
                                     printBoldRed(
                                         f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
                                     printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
-                                    objRef.machineState.decrementState()
+                                    objRef.machineState.decrementStateFrom(stateBeforeWrite)
                                     printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                 time.sleep(objRef.write_loop_interval)
 
@@ -1364,7 +1439,7 @@ class IOServer:
 
                     if successfullySent:
                         printBold(f"Transition from state {self.machineState.getCurrentState().name}")
-                        self.machineState.incrementState()
+                        self.machineState.incrementStateFrom(currentState)
                         printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                 except Exception as e:
@@ -1405,7 +1480,7 @@ class IOServer:
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
                             printBold(f"Transition from state {self.machineState.getCurrentState().name}")
-                            self.machineState.incrementState()
+                            self.machineState.incrementStateFrom(currentState)
                             printBold(f"        ...to state {self.machineState.getCurrentState().name}")
                     # Step 10B: Tightening Torque 2 Value
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2:
@@ -1428,7 +1503,7 @@ class IOServer:
                             addTagUpdateRequest(updateRequest)
                             # Transition to next state after successfully reading torque
                             printBold(f"Transition from state {self.machineState.getCurrentState().name}")
-                            self.machineState.incrementState()
+                            self.machineState.incrementStateFrom(currentState)
                             printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                     # Step 15B: Free Rotation Torque 1 Value - FINAL STATE — END of T9
@@ -1449,7 +1524,7 @@ class IOServer:
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
                             printBold(f"Transition from state {self.machineState.getCurrentState().name}")
-                            self.machineState.incrementState()
+                            self.machineState.incrementStateFrom(currentState)
                             printBold(f"        ...to state {self.machineState.getCurrentState().name}")
 
                 except Exception as e:
@@ -1484,7 +1559,8 @@ class IOServer:
             time.sleep(IOServer.WRITE_RETRY_INTERVAL)
         return False
 
-    def perform_write_state_action(self, tags: list[str], result: bool = True) -> bool:
+    def perform_write_state_action(self, tags: list[str], result: bool = True,
+                                   expectedState: Optional[MachineState] = None) -> bool:
         """
         Handshake of a WRITE state: tags = [<Check>OK, <Check>Done, ...].
         The result (OK tag) is written FIRST and must be written before Done is set: the PLC reads OK when it sees
@@ -1493,12 +1569,20 @@ class IOServer:
         written by the caller BEFORE calling this.
         Returns True if both OK and Done were written.
         """
-        stateAtStart = self.machineState.getCurrentState()
+        stateAtStart = self.machineState.getCurrentState() if expectedState is None else expectedState
+        if self.machineState.getCurrentState() != stateAtStart:
+            # the cycle was aborted after this step's answer was read: nothing is written for the old cycle
+            printBoldRed(f"Cycle aborted before {tags[0]} was written; not written")
+            return False
         if not self._writeBoolUntilWritten(tags[0], result, stateAtStart):
             self.logger.info(f"Could not write {tags[0]}; {tags[1]} NOT written")
             return False
         printBoldYellow(f"Wrote {result} to {tags[0]}")
         time.sleep(IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
+        if self.machineState.getCurrentState() != stateAtStart:
+            # aborted between OK and Done: the abort has reset the tags; Done must not be set for the old cycle
+            printBoldRed(f"Cycle aborted before {tags[1]} was written; not written")
+            return False
         if not self._writeBoolUntilWritten(tags[1], True, stateAtStart):
             self.logger.info(f"Could not write {tags[1]}")
             return False
@@ -1526,6 +1610,9 @@ class IOServer:
 
         self.launchEmergencyMonitoringThread()
         printLight("Started emergency monitoring thread in IOServer")
+
+        self.launchFrontendAbortListenerThread()
+        printLight("Started frontend abort listener thread in IOServer")
 
         self.launchMonitorStopCommandThread()
         printLight("Started monitorStop thread in IOServer")

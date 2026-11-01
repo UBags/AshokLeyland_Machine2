@@ -1121,6 +1121,35 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
     # print(f"{data = }")
     return sendData(redisConnection=redisConnection, data=data, queueName=fe2dbq, aProducer=f"{aProducer}")
 
+def sendAbortFromFEServerToIOServer(redisConnection : redis.client.Redis, reason : str = "manual abort in the frontend",
+                                    aProducer : str = "FEServer"):
+    """Frontend -> IOServer: abort the current cycle (the IOServer resets its PLC handshake tags and goes back to
+    READ_QR_CODE). Used by the frontend's manual abort, and by test tools that play the frontend."""
+    return sendData(redisConnection=redisConnection, data={actionKeyString: ABORT, genericdataKeyString: reason},
+                    queueName=fe2ioq, aProducer=f"{aProducer}")
+
+def readAbortInIOServerFromFEServer(redisConnection: redis.client.Redis, block : int = 500):
+    """IOServer: (True, reason) if the frontend has asked for the cycle to be aborted, else (False, "").
+    Reads and removes EVERY message waiting in the frontend -> IOServer queue (an abort must never be lost behind
+    another message); waits up to `block` ms when the queue is empty."""
+    if redisConnection is None:
+        return False, ""
+    try:
+        resp = redisConnection.xread({fe2ioq: 0}, count=100, block=block)
+        if not resp:
+            return False, ""
+        _, messages = resp[0]
+        abort, reason = False, ""
+        for entryId, data in messages:
+            decoded = {k.decode("utf-8"): v.decode("utf-8", "replace") for k, v in data.items()}
+            if decoded.get(actionKeyString) == ABORT:
+                abort, reason = True, decoded.get(genericdataKeyString, "")
+            redisConnection.xdel(fe2ioq, entryId)
+        return abort, reason
+    except Exception as e:
+        printBoldRed(f"readAbortInIOServerFromFEServer(): {e}")
+        return False, ""
+
 def sendDataFromFEServerToIOServer(redisConnection : redis.client.Redis, connectionStatus : ResultType, aProducer : str = "FEServer", handshake : bool = False):
     if not handshake:
         return sendData(redisConnection=redisConnection, data={connectionStatusKeyString : connectionStatus}, queueName=fe2ioq, aProducer=f"{aProducer}")

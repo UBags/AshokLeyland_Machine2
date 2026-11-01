@@ -874,3 +874,51 @@ Production's own changes since the common ancestor `6b31dd7` were compared with 
 - `test/*_dryrun/DryRun_CheckKnuckle_Images.py`, with the pictures in `knuckle_images/`. Machine 2: 32/32. Machine 1: 10/10.
 - It checks every picture against all four QR codes and a simulated object on the bar, and prints the margins.
 - **Also:** logging dry run 37/37.
+
+## 34. Abort part-way through a cycle: from the frontend and from the test window; back to the QR code (2026-11-01)
+
+**Problem.**
+- "Reset to Step 0" in `Test_IOServer_With_Real_PLC_UI.py` only reset the test window. The IOServer stayed in the middle of the cycle, e.g. waiting for a camera result that never came, and did not go back to reading the QR code.
+- The frontend's manual abort (Ctrl+Alt+Z) had the same gap. It stopped the QR scan and cleared the queues, but never told the IOServer.
+- The frontend → IOServer queue (`fe2io.q`) existed but was not used.
+
+**Frontend → IOServer abort.**
+- `RedisUtils.sendAbortFromFEServerToIOServer(conn, reason)` puts `action=Abort` on `fe2io.q`.
+- `readAbortInIOServerFromFEServer` reads and removes every message waiting there, so an abort is never lost behind another message.
+- The IOServer has a new thread, "Frontend Abort Listener", that acts on it.
+- The frontend's `manualAbort()` now sends it.
+- **Test window.** "Reset to Step 0" sends it, as the frontend would, then waits up to 10 s until the IOServer is back at the QR code (state 1, or state 2 once it has re-armed the QR check). It reports either way.
+
+**One abort routine in the IOServer: `abortCycle(reason, ...)`.** It is used for:
+- the emergency button on the machine (`PLC_PC_EmergencyAbort`): QR server told, queues cleared, frontend told;
+- lost server connections (combined heartbeat, still disabled for testing): frontend told;
+- an abort from the frontend: QR server told, queues cleared, frontend NOT told, since the abort came from it.
+
+In order, it:
+1. tells the QR server to stop a scan in progress;
+2. clears the camera / QR queues;
+3. tells the frontend (emergency screen and abort record);
+4. resets `PLC_PC_EmergencyAbort`;
+5. sets READ_QR_CODE;
+6. resets all handshake tags (`resetAll`);
+7. clears the cycle timing;
+8. re-arms `PLC_PC_CheckQRCode`.
+
+It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `abortCount` and `lastAbortReason` are kept.
+
+**Nothing of the aborted cycle moves the reset cycle on.** These race fixes were found by the new dry run:
+- `MachineStateMachine` is now thread-safe (lock). It has `incrementStateFrom(expected)` / `decrementStateFrom(expected)`, which change the state only if it is still the state the step started in. All state changes in the IOServer's read and write loops use them.
+- The write loop notes the state before reading the camera / QR answer. An answer that arrives after an abort is ignored ("received after the cycle was aborted; ignored").
+- Before the fix, a late camera OK wrote `KnuckleCheckOK=True` into the new cycle.
+- `perform_write_state_action(..., expectedState)` writes neither OK nor Done once the cycle has been aborted, including between OK and Done.
+
+**PLC side.** The PC cannot reset the PLC's own sequence. After a PC-side abort (manual abort in the frontend, or Reset in the test window), a PLC that is still part-way through its cycle must be reset on the machine (Emergency). The frontend's abort dialog already says so.
+
+**Dry runs.**
+- **Fault scenarios, new F (Siemens 70/70, Allen-Bradley 69/69):**
+  - F1: abort between steps: back at the QR code within 3 s, ABORT sent to the QR server, no emergency echoed to the frontend, tags reset, message consumed, then a full cycle.
+  - F2: abort while waiting for a camera result, then a late camera OK: nothing written and the state is not moved, then a full cycle.
+  - F3: `incrementStateFrom` refuses after an abort.
+  - C (emergency button) still passes, through `abortCycle`.
+- **FE dry run, new F8 (66/66):** a manual abort puts ABORT on `fe2io.q`, the IOServer reader sees it, the abort screen and record appear, and the frontend is back at READ_QR_CODE.
+- **Also passing:** two full cycles exact on both vendors; integrated DB row unchanged on both; FE dry run 66/66 on both.

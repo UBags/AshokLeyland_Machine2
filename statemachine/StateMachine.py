@@ -1,3 +1,4 @@
+import threading
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from enum import IntEnum
 from typing import *
@@ -93,6 +94,7 @@ MAX_SECONDS_TO_WAIT_FOR_CAMERA_FEEDBACK: float = CosThetaConfigurator.getInstanc
 
 class MachineStateMachine:
     def __init__(self):
+        self._lock = threading.RLock()        # state changes from several IOServer threads (loops, abort)
         self._currentState: MachineState = MachineState.READ_QR_CODE
         self.stateChangeListener = None      # listener(oldState, newState), e.g. the IOServer's audit trail
         # Instruction text comes from properties key state.<N>.instruction, N = the state's integer value
@@ -131,11 +133,12 @@ class MachineStateMachine:
         #     self.currentState = MachineState(self.currentState + 2)
         # else:
         #     self.currentState = MachineState(self.currentState + 1)
-        newState = self.currentState + stateJumps
-        if newState > MachineState.READ_FREE_ROTATION_TORQUE_1:
-            self.currentState = MachineState.READ_QR_CODE
-        else:
-            self.currentState = MachineState(self.currentState + stateJumps)
+        with self._lock:
+            newState = self.currentState + stateJumps
+            if newState > MachineState.READ_FREE_ROTATION_TORQUE_1:
+                self.currentState = MachineState.READ_QR_CODE
+            else:
+                self.currentState = MachineState(self.currentState + stateJumps)
 
     def decrementState(self, stateJumps : int = 1) -> None:
         # """Increment the current state, wrapping around to READ_QR_CODE if at the end."""
@@ -143,11 +146,29 @@ class MachineStateMachine:
         #     self.currentState = MachineState(self.currentState + 2)
         # else:
         #     self.currentState = MachineState(self.currentState + 1)
-        newState = self.currentState - stateJumps
-        if newState < MachineState.READ_QR_CODE:
-            self.currentState = MachineState.READ_QR_CODE
-        else:
-            self.currentState = MachineState(self.currentState - stateJumps)
+        with self._lock:
+            newState = self.currentState - stateJumps
+            if newState < MachineState.READ_QR_CODE:
+                self.currentState = MachineState.READ_QR_CODE
+            else:
+                self.currentState = MachineState(self.currentState - stateJumps)
+
+    def incrementStateFrom(self, expectedState: MachineState, stateJumps: int = 1) -> bool:
+        """Increment only if the state is still expectedState (atomically). False if another thread (an abort) has
+        changed the state meanwhile: a step finishing after an abort must not move the reset cycle on."""
+        with self._lock:
+            if self._currentState != expectedState:
+                return False
+            self.incrementState(stateJumps)
+            return True
+
+    def decrementStateFrom(self, expectedState: MachineState, stateJumps: int = 1) -> bool:
+        """Decrement only if the state is still expectedState (atomically); see incrementStateFrom."""
+        with self._lock:
+            if self._currentState != expectedState:
+                return False
+            self.decrementState(stateJumps)
+            return True
 
     def getCurrentState(self) -> MachineState:
         """Return the current state."""
@@ -155,14 +176,15 @@ class MachineStateMachine:
 
     def setCurrentState(self, newState: Union[int, MachineState]) -> None:
         """Set the current state, ensuring it's valid."""
-        if isinstance(newState, MachineState):
-            if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
-                newState = MachineState.READ_QR_CODE
-            self.currentState = newState
-        else:
-            if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
-                newState = MachineState.READ_QR_CODE
-            self.currentState = MachineState(newState)
+        with self._lock:
+            if isinstance(newState, MachineState):
+                if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
+                    newState = MachineState.READ_QR_CODE
+                self.currentState = newState
+            else:
+                if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
+                    newState = MachineState.READ_QR_CODE
+                self.currentState = MachineState(newState)
 
     def goToFirstState(self) -> None:
         """Set the state to READ_QR_CODE."""

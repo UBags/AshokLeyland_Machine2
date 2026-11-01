@@ -42,6 +42,11 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      and Done=True and goes back to the QR code; after the fault is gone a re-scan writes the settings, OK=True,
      Done, and the cycle runs.
 
+  F. Abort from the frontend (frontend -> IOServer queue; the frontend's manual abort, and 'Reset to Step 0' in the
+     real-PLC test window). Part-way through a cycle, and while the IOServer waits for a camera result: it must go
+     back to the QR code at once, stop a QR scan in progress, reset the handshake tags, NOT send an emergency message
+     back to the frontend, ignore a late camera answer for the aborted step, and then run a full cycle.
+
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -488,8 +493,80 @@ def run_scenarios():
         check("E3 cycle then completes", wrapped())
 
 
+def run_frontend_abort():
+    """F. Abort sent by the frontend (manual abort; also 'Reset to Step 0' in the real-PLC test window)."""
+    print("\n=== F. Abort from the frontend part-way through a cycle -> back to the QR code ===", flush=True)
+    # F1: between steps (waiting for the top-bearing picture trigger)
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="HUB")
+    check("F1 before the abort: waiting for the top-bearing picture",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING),
+          io.machineState.getCurrentState().name)
+    abortLen0, emergLen0, aborts0 = r.xlen(io2qrcodeabortq), r.xlen(emergencyq), io.abortCount
+    with LOCK:
+        TAGS[IOServer.PC_PLC_HubCheckOK] = True; TAGS[IOServer.PC_PLC_HubCheckDone] = True
+    sendAbortFromFEServerToIOServer(r, reason="dry run F1")
+    check("F1 IOServer aborted within 3 s and is back at the QR code (READ_QR_CODE -> WRITE_QR_CODE)",
+          wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 3),
+          io.machineState.getCurrentState().name)
+    time.sleep(0.5)
+    check("F1 the reason is recorded", "dry run F1" in io.lastAbortReason, io.lastAbortReason)
+    check("F1 ABORT sent to the QR server (a scan in progress is stopped)", r.xlen(io2qrcodeabortq) > abortLen0)
+    check("F1 NO emergency message back to the frontend (the abort came from it)", r.xlen(emergencyq) == emergLen0)
+    check("F1 handshake tags of the aborted cycle reset (Hub OK / Done False), CheckQRCode re-armed",
+          TAGS[IOServer.PC_PLC_HubCheckOK] is False and TAGS[IOServer.PC_PLC_HubCheckDone] is False
+          and TAGS[IOServer.PLC_PC_CheckQRCode] is True)
+    check("F1 the abort message was consumed (frontend -> IOServer queue empty)", r.xlen(fe2ioq) == 0)
+    TRACE.clear()
+    plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("F1 a full normal cycle completes after the abort", wrapped(), f"trace {TRACE}")
+
+    # F2: while the IOServer waits for a camera result (WRITE state); the late camera answer must not move it on
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    PAUSE.set(); time.sleep(0.3)                          # the camera does not answer
+    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = True
+    check("F2 waiting for the knuckle camera result (WRITE state)",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_RESULT_OF_CHECKING_KNUCKLE, 5),
+          io.machineState.getCurrentState().name)
+    aborts0 = io.abortCount
+    sendAbortFromFEServerToIOServer(r, reason="dry run F2")
+    check("F2 aborted while waiting for the camera: back to the QR code",
+          wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 3),
+          io.machineState.getCurrentState().name)
+    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = False
+    mark = len(WRITES)
+    sendDataFromCameraServerToIOServer(r, result=ok, currentMachineState=MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
+    time.sleep(1.5)
+    check("F2 a late camera OK for the aborted knuckle check moves nothing (no Knuckle OK/Done written, still at the QR code)",
+          writes_of((IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone), mark) == [] and
+          io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE),
+          f"{writes_of((IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone), mark)} {io.machineState.getCurrentState().name}")
+    r.delete(camera2ioq)
+    PAUSE.clear()
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("F2 a full normal cycle completes after the abort", wrapped(), f"trace {TRACE}")
+
+    # F3: a state change only from the state a step started in (an abort in between wins)
+    from statemachine.StateMachine import MachineStateMachine
+    sm = MachineStateMachine(); sm.setCurrentState(MS.WRITE_RESULT_OF_CHECKING_KNUCKLE)
+    sm.setCurrentState(MS.READ_QR_CODE)                          # abort
+    moved = sm.incrementStateFrom(MS.WRITE_RESULT_OF_CHECKING_KNUCKLE)
+    check("F3 a step that finishes after an abort does not move the reset state on (incrementStateFrom)",
+          moved is False and sm.getCurrentState() == MS.READ_QR_CODE)
+    sm.setCurrentState(MS.WRITE_RESULT_OF_CHECKING_KNUCKLE)
+    check("F3 ... and moves it on normally otherwise",
+          sm.incrementStateFrom(MS.WRITE_RESULT_OF_CHECKING_KNUCKLE) and
+          sm.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
+
+
 try:
     run_scenarios()
+    run_frontend_abort()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

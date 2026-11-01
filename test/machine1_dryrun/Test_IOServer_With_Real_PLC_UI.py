@@ -7,6 +7,9 @@ Run from the project root, alongside the IOServer (which must already be running
     Terminal 2: python test/machine1_dryrun/Test_IOServer_With_Real_PLC_UI.py
                 (or)  python -m test.machine1_dryrun.Test_IOServer_With_Real_PLC_UI
 NOTE: on start-up this script FLUSHES the Redis database (as before), and "Clear Redis" flushes it again.
+"Reset to Step 0" aborts the cycle in the IOServer as well (the abort message the frontend's manual abort sends, on
+fe2io.q): the IOServer resets its handshake tags and goes back to the QR code; this window waits until it is there.
+The PLC's own sequence is not reset by the PC: if the PLC is in the middle of a cycle, reset it on the machine.
 
 This script tests the IOServer with actual PLC hardware by:
 1. Sending QRCode/Camera server responses via Redis (including QR code strings)
@@ -364,7 +367,7 @@ class IOServerTestApp:
         ttk.Button(actions_frame, text="Send Next OK",
                    command=self._send_next_ok).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions_frame, text="Reset to Step 0",
-                   command=self._reset_to_start).pack(side=tk.LEFT, padx=5)
+                   command=self._abort_and_reset).pack(side=tk.LEFT, padx=5)
 
     def _build_tag_display(self, parent):
         """Build the right panel for tag display."""
@@ -824,8 +827,32 @@ step for easy reading.
         self.tag_status_label.config(text="")
         self._update_status("Redis cleared - ready for new cycle")
 
+    def _abort_and_reset(self):
+        """'Reset to Step 0': abort the cycle in the IOServer too (as the frontend's manual abort does), not only in
+        this window. Sends the abort on the frontend -> IOServer queue, then waits for the IOServer to be back at the
+        QR code (READ_QR_CODE, or WRITE_QR_CODE once it has re-armed the QR check)."""
+        self._reset_to_start()
+        sendAbortFromFEServerToIOServer(testRedisConnection, reason="Reset to Step 0 in the test window")
+        self._update_status("Abort sent to the IOServer; waiting for it to go back to the QR code...")
+
+        def confirm():
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                state = self._get_ioserver_current_state()
+                if state in (MS.READ_QR_CODE, MS.WRITE_QR_CODE):
+                    self.root.after(0, lambda s=state: self._update_status(
+                        f"IOServer aborted the cycle and is back at the QR code ({s.name}). If the PLC is still in the "
+                        f"middle of its sequence, reset it on the machine (Emergency) before the next QR code."))
+                    return
+                time.sleep(0.5)
+            self.root.after(0, lambda: self._update_status(
+                "IOServer did NOT go back to the QR code within 10 s: is it running, and is it a version with the "
+                "frontend abort listener (git pull)?"))
+
+        threading.Thread(target=confirm, daemon=True).start()
+
     def _reset_to_start(self):
-        """Reset tracking to Step 0."""
+        """Reset tracking to Step 0 (this window only; see _abort_and_reset for the IOServer)."""
         self.stop_signal_monitor = True  # Stop any active monitoring
         self.stop_full_cycle = True  # Stop a running full cycle
         self.signal_monitor_active = False
