@@ -1,833 +1,359 @@
-import http.server
-import socketserver
+"""
+AshokLeyland_MI_Light - the management-information dashboard of the hub and disc assembly machine (Machine 2 database).
+
+What it is for: supervisors and managers on the plant network see, in a browser, how many components were assembled
+(per day and per week, OK and NOT OK), how the torques are spread (nut tightening torque 1 and 2 against their
+setpoints, free rotation torque), and how many components were re-assembled (a QR code scanned again: the DBServer
+saves such a record with remarks "DUPLICATE"). Model filter (all models or one), period per chart, production or test
+database; the page refreshes itself every minute. Port 8050 (the next free port if 8050 is taken), all interfaces.
+
+GET /                 the page
+GET /data?db=&model=&day_period=&week_period=&torque1_period=&torque2_period=&rotation_period=&reworked_period=
+                      the figures (Plotly JSON), today's / this week's / this month's counts and the database's models
+GET /assets/...       bootstrap (endpoints/assets) and plotly.js (from the installed plotly package): the page needs no
+                      internet access.
+
+Values not measured are stored as negative numbers (-1.0); they are left out of the torque charts. A record counts as
+OK when ok_notok_result is the configured OK value. Days and weeks are by created_on (the end of the cycle); weeks
+start on Monday. Started by OtherServices.py (startMIServer).
+"""
 import json
-import socket as parentclasssocket
-from socket import socket as mainsocket
-from urllib.parse import urlparse, parse_qs
-
-import pandas as pd
-import psycopg2
-from psycopg2 import Error
+import os
+import socket
+import sys
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
-import plotly.graph_objects as go
-import numpy as np
 from html import escape
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
-# Custom JSON encoder to handle NumPy types
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        return super().default(obj)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # project root, when run directly
 
-# Database configuration
-db_params = {
-    "host": "127.0.0.1",
-    "database": "ashok_leyland_production",
-    "user": "postgres",
-    "password": "postgres",
-    "port": "5432"
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.io as pio
+from plotly.offline import get_plotlyjs
+
+from endpoints import EndpointsDB as DB
+
+DEFAULT_PORT = 8050
+ALL_MODELS = "ALL MODELS"
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+GREEN, RED, BLUE, ORANGE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00"
+COLUMNS = ["created_on", "model_name", "ok_notok_result", "nut_tightening_torque_1", "nut_tightening_torque_2",
+           "free_rotation_torque_1", "setting_tightening_torque1_setpoint", "setting_tightening_torque2_setpoint",
+           "remarks"]
+TORQUES = {  # key -> (column, title, setpoint column)
+    "torque1": ("nut_tightening_torque_1", "Nut Tightening Torque 1", "setting_tightening_torque1_setpoint"),
+    "torque2": ("nut_tightening_torque_2", "Nut Tightening Torque 2", "setting_tightening_torque2_setpoint"),
+    "rotation": ("free_rotation_torque_1", "Free Rotation Torque", None),
 }
+DAY_PERIODS = {"7_days": "Last 7 Days", "30_days": "Last 30 Days", "90_days": "Last 90 Days",
+               "365_days": "Last 365 Days", "ytd": "Year-to-Date", "qtd": "Quarter-to-Date", "mtd": "Month-to-Date"}
+WEEK_PERIODS = {"12_weeks": "Last 12 Weeks", "52_weeks": "Last 52 Weeks", "ytd": "Year-to-Date",
+                "qtd": "Quarter-to-Date", "mtd": "Month-to-Date"}
+SHORT_PERIODS = {"30_days": "Last 30 Days", "90_days": "Last 90 Days", "365_days": "Last 365 Days"}
 
-# SQL Queries
-base_query = """
-    SELECT created_on, model_name, nut_tightening_torque_1, free_rotation_torque_1,
-           nut_tightening_torque_2, free_rotation_torque_2,
-           nut_tightening_torque_3, free_rotation_torque_3,
-           remarks
-    FROM hub_and_disc_assembly_schema.hub_and_disc_assembly_data
-    WHERE created_on >= %s AND created_on <= %s
-"""
 
-unique_models_query = """
-    SELECT DISTINCT model_name
-    FROM hub_and_disc_assembly_schema.hub_and_disc_assembly_data
-    ORDER BY model_name
-"""
+# ------------------------------------------------------------------------------------------------ data
+def periodStart(period: str, now: datetime) -> datetime:
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period.endswith("_days"):
+        return today - timedelta(days=int(period.split("_")[0]) - 1)
+    if period.endswith("_weeks"):
+        monday = today - timedelta(days=today.weekday())
+        return monday - timedelta(weeks=int(period.split("_")[0]) - 1)
+    if period == "ytd":
+        return today.replace(month=1, day=1)
+    if period == "qtd":
+        return today.replace(month=3 * ((today.month - 1) // 3) + 1, day=1)
+    if period == "mtd":
+        return today.replace(day=1)
+    raise DB.RequestError(f"Unknown period '{period}'")
 
-# Helper function to fetch unique model names
-def fetch_unique_models():
-    try:
-        with psycopg2.connect(**db_params) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(unique_models_query)
-                models = [row[0] for row in cursor.fetchall() if row[0]]
-                if not models:
-                    print("Warning: No models found in the database. Using 'ALL MODELS' only.")
-                else:
-                    # print(f"Fetched models: {models}")
-                    pass
-                return ['ALL MODELS'] + models
-    except Error as e:
-        print(f"Database error in fetch_unique_models: {e}")
-        return ['ALL MODELS']
 
-# Helper function to fetch data
-def fetch_data(start_date, end_date):
-    try:
-        with psycopg2.connect(**db_params) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(base_query, (start_date, end_date))
-                records = cursor.fetchall()
-                df = pd.DataFrame(records, columns=[
-                    'created_on', 'model_name', 'nut_tightening_torque_1', 'free_rotation_torque_1',
-                    'nut_tightening_torque_2', 'free_rotation_torque_2',
-                    'nut_tightening_torque_3', 'free_rotation_torque_3', 'remarks'
-                ])
-                # print(f"Fetched {len(df)} records from {start_date} to {end_date}")
-                return df
-    except Error as e:
-        print(f"Database error in fetch_data: {e}")
-        return pd.DataFrame()
+def loadFrame(database: str, now: datetime) -> pd.DataFrame:
+    """The last 366 days (enough for every period) of the columns the charts use."""
+    start = min(periodStart("365_days", now), periodStart("ytd", now))
+    rows = DB.fetchColumns(database, COLUMNS, start, now + timedelta(days=1))
+    frame = pd.DataFrame(rows, columns=COLUMNS)
+    frame["created_on"] = pd.to_datetime(frame["created_on"])
+    for column in COLUMNS[3:8]:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame["ok"] = frame["ok_notok_result"].fillna("") == DB.OK_VALUE
+    frame["reworked"] = frame["remarks"].fillna("").str.contains("DUPLICATE", case=False)
+    return frame
 
-# Helper function to calculate date ranges
-def get_date_ranges():
+
+def select(frame: pd.DataFrame, model: str, start: datetime) -> pd.DataFrame:
+    part = frame[frame["created_on"] >= start]
+    return part if model == ALL_MODELS else part[part["model_name"] == model]
+
+
+# ------------------------------------------------------------------------------------------------ figures
+def _layout(fig: go.Figure, title: str, xTitle: str, yTitle: str, empty: bool) -> dict:
+    fig.update_layout(title=title + (" - no data" if empty else ""), template="plotly_white", barmode="stack",
+                      xaxis_title=xTitle, yaxis_title=yTitle, legend=dict(orientation="h", y=1.12),
+                      margin=dict(l=60, r=20, t=80, b=50), font=dict(size=12))
+    return json.loads(pio.to_json(fig))
+
+
+def countsFigure(part: pd.DataFrame, by: str, title: str) -> dict:
+    """Stacked OK / NOT OK counts per day (by="day") or per week starting Monday (by="week")."""
+    fig = go.Figure()
+    if not part.empty:
+        key = part["created_on"].dt.normalize()
+        if by == "week":
+            key = key - pd.to_timedelta(key.dt.weekday, unit="D")
+        counts = part.groupby([key, "ok"]).size().unstack(fill_value=0)
+        labels = [d.strftime("%Y-%m-%d") for d in counts.index]
+        fig.add_bar(x=labels, y=counts.get(True, pd.Series(0, counts.index)).tolist(), name="OK", marker_color=GREEN)
+        fig.add_bar(x=labels, y=counts.get(False, pd.Series(0, counts.index)).tolist(), name="NOT OK",
+                    marker_color=RED)
+        fig.update_xaxes(type="category")
+    return _layout(fig, title, "Week starting" if by == "week" else "Date", "Components", part.empty)
+
+
+def torqueFigure(part: pd.DataFrame, key: str, title: str) -> dict:
+    column, name, setpointColumn = TORQUES[key]
+    values = part[column].dropna()
+    values = values[values >= 0]                     # -1.0 = not measured
+    fig = go.Figure()
+    if not values.empty:
+        span = float(values.max() - values.min())
+        size = 0.05 if span / 0.05 <= 200 else span / 60
+        fig.add_histogram(x=values.tolist(), xbins=dict(start=float(values.min()) - size / 2,
+                                                         end=float(values.max()) + size, size=size),
+                          marker=dict(color="rgba(21, 101, 192, 0.45)", line=dict(color=BLUE, width=1)),
+                          name="components")
+        if setpointColumn:
+            setpoints = part.loc[values.index, setpointColumn].dropna()
+            for setpoint in sorted(setpoints.unique())[-3:]:    # the setpoints in force in this period (at most 3)
+                fig.add_vline(x=float(setpoint), line=dict(color=ORANGE, dash="dash", width=2),
+                              annotation_text=f"setpoint {setpoint:g}", annotation_position="top")
+        title = (f"{title}: n = {len(values)}, mean {values.mean():.2f}, sd {values.std(ddof=0):.2f}, "
+                 f"min {values.min():.2f}, max {values.max():.2f} Nm")
+    return _layout(fig, title, f"{name} (Nm)", "Components", values.empty)
+
+
+def reworkedFigure(part: pd.DataFrame, title: str) -> dict:
+    reworked = part[part["reworked"]]
+    fig = go.Figure()
+    if not reworked.empty:
+        counts = reworked.groupby(reworked["created_on"].dt.normalize()).size()
+        fig.add_bar(x=[d.strftime("%Y-%m-%d") for d in counts.index], y=counts.tolist(), marker_color=ORANGE,
+                    name="re-assembled")
+        fig.update_xaxes(type="category")
+    return _layout(fig, title, "Date", "Re-assembled components", reworked.empty)
+
+
+def summary(frame: pd.DataFrame, model: str, now: datetime) -> dict:
+    out = {}
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    for label, start in (("today", today), ("week", today - timedelta(days=today.weekday())),
+                         ("month", today.replace(day=1))):
+        part = select(frame, model, start)
+        out[label] = {"total": int(len(part)), "ok": int(part["ok"].sum()), "notok": int((~part["ok"]).sum())}
+    return out
+
+
+def dashboardData(query: dict) -> dict:
+    get = lambda name, default: query.get(name, [default])[0] or default
+    database = DB.resolveDatabase(get("db", "production"))
+    model = get("model", ALL_MODELS)
+    periods = {name: get(name, default) for name, default in (
+        ("day_period", "7_days"), ("week_period", "12_weeks"), ("torque1_period", "30_days"),
+        ("torque2_period", "30_days"), ("rotation_period", "30_days"), ("reworked_period", "30_days"))}
     now = datetime.now()
-    return {
-        '7_days': (now - timedelta(days=7), now),
-        '30_days': (now - timedelta(days=30), now),
-        '90_days': (now - timedelta(days=90), now),
-        '365_days': (now - timedelta(days=365), now),
-        'ytd': (datetime(now.year, 1, 1), now),
-        'qtd': (now - relativedelta(months=(now.month - 1) % 3), now),
-        'mtd': (datetime(now.year, now.month, 1), now)
+    frame = loadFrame(database, now)
+    suffix = "All Models" if model == ALL_MODELS else model
+    label = lambda name, table: table.get(periods[name], periods[name])
+    data = {
+        "models": DB.fetchModelNames(database),
+        "summary": summary(frame, model, now),
+        "components_day": countsFigure(select(frame, model, periodStart(periods["day_period"], now)), "day",
+                                       f"Components per Day ({label('day_period', DAY_PERIODS)} - {suffix})"),
+        "components_week": countsFigure(select(frame, model, periodStart(periods["week_period"], now)), "week",
+                                        f"Components per Week ({label('week_period', WEEK_PERIODS)} - {suffix})"),
+        "reworked_components": reworkedFigure(select(frame, model, periodStart(periods["reworked_period"], now)),
+                                              f"Re-assembled Components per Day "
+                                              f"({label('reworked_period', SHORT_PERIODS)} - {suffix})"),
     }
+    for key in TORQUES:
+        name = f"{key}_period"
+        data[key] = torqueFigure(select(frame, model, periodStart(periods[name], now)), key,
+                                 f"{TORQUES[key][1]} ({label(name, SHORT_PERIODS)} - {suffix})")
+    return data
 
-# Helper function to calculate components per day
-def components_per_day(df, model_name, period):
-    # print(f"components_per_day: model={model_name}, period={period}, input df rows={len(df)}")
-    title_suffix = 'All Models' if model_name == 'ALL MODELS' else model_name
-    start, end = get_date_ranges()[period]
-    df_period = df[(df['created_on'] >= start) & (df['created_on'] <= end)]
-    if model_name != 'ALL MODELS':
-        df_period = df_period[df_period['model_name'] == model_name]
-    # print(f"components_per_day: filtered df rows={len(df_period)}")
-    if df_period.empty:
-        fig = go.Figure().update_layout(
-            title=f'Components per Day ({period.replace("_", " ").title()} - {title_suffix}) - No Data',
-            template='plotly_white',
-            xaxis_title="Date",
-            yaxis_title="Component Count",
-            plot_bgcolor='rgba(144, 238, 144, 0.1)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12)
-        )
-        # print("components_per_day: returning empty figure")
-        return fig.to_dict()
-    df_grouped = df_period.groupby(df_period['created_on'].dt.date).size().reset_index(name='count')
-    # print(f"components_per_day: grouped data points={len(df_grouped)}")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_grouped['created_on'].astype(str).tolist(),
-        y=df_grouped['count'].tolist(),
-        mode='lines+markers',
-        line=dict(color='#006400', width=2),
-        marker=dict(size=8, color='#006400')
-    ))
-    fig.update_layout(
-        title=f'Components per Day ({period.replace("_", " ").title()} - {title_suffix})',
-        template='plotly_white',
-        xaxis_title="Date",
-        yaxis_title="Component Count",
-        plot_bgcolor='rgba(144, 238, 144, 0.1)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12)
-    )
-    # print("components_per_day: returning populated figure")
-    return fig.to_dict()
 
-# Helper function to calculate components per week
-def components_per_week(df, model_name, period):
-    # print(f"components_per_week: model={model_name}, period={period}, input df rows={len(df)}")
-    title_suffix = 'All Models' if model_name == 'ALL MODELS' else model_name
-    week_ranges = {
-        '12_weeks': (datetime.now() - timedelta(weeks=12), datetime.now()),
-        '52_weeks': (datetime.now() - timedelta(weeks=52), datetime.now()),
-        'ytd': (datetime(datetime.now().year, 1, 1), datetime.now()),
-        'qtd': (datetime.now() - relativedelta(months=(datetime.now().month - 1) % 3), datetime.now()),
-        'mtd': (datetime(datetime.now().year, datetime.now().month, 1), datetime.now())
-    }
-    start, end = week_ranges[period]
-    df_period = df[(df['created_on'] >= start) & (df['created_on'] <= end)]
-    if model_name != 'ALL MODELS':
-        df_period = df_period[df_period['model_name'] == model_name]
-    # print(f"components_per_week: filtered df rows={len(df_period)}")
-    if df_period.empty:
-        fig = go.Figure().update_layout(
-            title=f'Components per Week ({period.replace("_", " ").title()} - {title_suffix}) - No Data',
-            template='plotly_white',
-            xaxis_title="Week Starting",
-            yaxis_title="Component Count",
-            plot_bgcolor='rgba(144, 238, 144, 0.1)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12)
-        )
-        # print("components_per_week: returning empty figure")
-        return fig.to_dict()
-    df_grouped = df_period.groupby(pd.Grouper(key='created_on', freq='W-MON')).size().reset_index(name='count')
-    # print(f"components_per_week: grouped data points={len(df_grouped)}")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_grouped['created_on'].astype(str).tolist(),
-        y=df_grouped['count'].tolist(),
-        mode='lines+markers',
-        line=dict(color='#006400', width=2),
-        marker=dict(size=8, color='#006400')
-    ))
-    fig.update_layout(
-        title=f'Components per Week ({period.replace("_", " ").title()} - {title_suffix})',
-        template='plotly_white',
-        xaxis_title="Week Starting",
-        yaxis_title="Component Count",
-        plot_bgcolor='rgba(144, 238, 144, 0.1)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12)
-    )
-    # print("components_per_week: returning populated figure")
-    return fig.to_dict()
+# ------------------------------------------------------------------------------------------------ page
+def _options(table: dict) -> str:
+    return "".join(f'<option value="{k}">{v}</option>' for k, v in table.items())
 
-# Helper function for torque distributions
-def torque_distribution(df, column, model_name, period):
-    # print(f"torque_distribution: column={column}, model={model_name}, period={period}, input df rows={len(df)}")
-    title_suffix = 'All Models' if model_name == 'ALL MODELS' else model_name
-    torque_ranges = {
-        '30_days': (datetime.now() - timedelta(days=30), datetime.now()),
-        '90_days': (datetime.now() - timedelta(days=90), datetime.now()),
-        '365_days': (datetime.now() - timedelta(days=365), datetime.now())
-    }
-    start, end = torque_ranges[period]
-    df_period = df[(df['created_on'] >= start) & (df['created_on'] <= end) & (df[column].notnull())]
-    if model_name != 'ALL MODELS':
-        df_period = df_period[df_period['model_name'] == model_name]
-    # print(f"torque_distribution: filtered df rows={len(df_period)}")
-    if df_period.empty or df_period[column].dropna().empty:
-        fig = go.Figure().update_layout(
-            title=f'{column.replace("_", " ").title()} ({period.replace("_", " ").title()} - {title_suffix}) - No Data',
-            template='plotly_white',
-            xaxis_title="Torque Value",
-            yaxis_title="Density",
-            plot_bgcolor='rgba(173, 216, 230, 0.1)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12)
-        )
-        # print("torque_distribution: returning empty figure")
-        return fig.to_dict()
-    data = df_period[column].dropna().tolist()
-    # print(f"torque_distribution: data points={len(data)}")
-    # Calculate histogram bins with 0.05 bucket size
-    min_val = min(data)
-    max_val = max(data)
-    bin_size = 0.05
-    bins = np.arange(np.floor(min_val / bin_size) * bin_size, np.ceil(max_val / bin_size) * bin_size + bin_size, bin_size)
-    hist, bin_edges = np.histogram(data, bins=bins, density=True)
-    # Log histogram for verification
-    # print(f"torque_distribution: {column} histogram bins={bin_edges.tolist()}")
-    # print(f"torque_distribution: {column} histogram counts (normalized)={hist.tolist()}")
-    fig = go.Figure()
-    fig.add_trace(go.Histogram(
-        x=data,
-        xbins=dict(start=min_val, end=max_val + bin_size, size=bin_size),
-        histnorm='probability density',
-        marker=dict(
-            color='rgba(173, 216, 230, 0.5)',
-            line=dict(color='#00008B', width=2)
-        )
-    ))
-    fig.update_layout(
-        title=f'{column.replace("_", " ").title()} ({period.replace("_", " ").title()} - {title_suffix})',
-        template='plotly_white',
-        xaxis_title="Torque Value",
-        yaxis_title="Density",
-        plot_bgcolor='rgba(173, 216, 230, 0.1)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12)
-    )
-    # print("torque_distribution: returning populated figure")
-    return fig.to_dict()
 
-# Helper function for reworked components
-def reworked_components(df, model_name, period):
-    # print(f"reworked_components: model={model_name}, period={period}, input df rows={len(df)}")
-    title_suffix = 'All Models' if model_name == 'ALL MODELS' else model_name
-    period_ranges = {
-        '30_days': (datetime.now() - timedelta(days=30), datetime.now()),
-        '90_days': (datetime.now() - timedelta(days=90), datetime.now()),
-        '365_days': (datetime.now() - timedelta(days=365), datetime.now())
-    }
-    start, end = period_ranges[period]
-    df_period = df[(df['created_on'] >= start) & (df['created_on'] <= end)]
-    if model_name != 'ALL MODELS':
-        df_period = df_period[df_period['model_name'] == model_name]
-    df_reworked = df_period[df_period['remarks'].str.contains('DUPLICATE', case=False, na=False)]
-    # print(f"reworked_components: filtered df rows={len(df_reworked)}")
-    if df_reworked.empty:
-        fig = go.Figure().update_layout(
-            title=f'Reworked Components per Day ({period.replace("_", " ").title()} - {title_suffix}) - No Data',
-            template='plotly_white',
-            xaxis_title="Date",
-            yaxis_title="Reworked Component Count",
-            plot_bgcolor='rgba(144, 238, 144, 0.1)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(size=12)
-        )
-        # print("reworked_components: returning empty figure")
-        return fig.to_dict()
-    df_grouped = df_reworked.groupby(df_reworked['created_on'].dt.date).size().reset_index(name='count')
-    # print(f"reworked_components: grouped data points={len(df_grouped)}")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_grouped['created_on'].astype(str).tolist(),
-        y=df_grouped['count'].tolist(),
-        mode='lines+markers',
-        line=dict(color='#006400', width=2),
-        marker=dict(size=8, color='#006400')
-    ))
-    fig.update_layout(
-        title=f'Reworked Components per Day ({period.replace("_", " ").title()} - {title_suffix})',
-        template='plotly_white',
-        xaxis_title="Date",
-        yaxis_title="Reworked Component Count",
-        plot_bgcolor='rgba(144, 238, 144, 0.1)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12)
-    )
-    # print("reworked_components: returning populated figure")
-    return fig.to_dict()
+def _tab(key: str, title: str, periods: dict, description: str, active: bool = False) -> str:
+    return f"""
+    <div class="tab-pane fade{' show active' if active else ''}" id="{key}" role="tabpanel">
+      <div class="card mt-3"><div class="card-body">
+        <div class="d-flex align-items-center gap-2 mb-2"><label class="fw-semibold" for="{key}-period">Period</label>
+          <select id="{key}-period" class="form-select period" style="max-width: 220px;">{_options(periods)}</select></div>
+        <div id="{key}-chart" class="chart"></div>
+        <p class="description">{description}</p>
+      </div></div>
+    </div>"""
 
-# HTML template with escaped curly braces in CSS
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hub and Disc Assembly Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <style>
-        body {{ background: linear-gradient(to bottom, #f8f9fa, #e9ecef); }}
-        .card {{ border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
-        .nav-tabs .nav-link {{ border-radius: 0.25rem; }}
-        .nav-tabs .nav-link.active {{ background-color: #007bff; color: white; }}
-        .description {{ color: #6c757d; font-size: 0.9rem; margin-top: 1rem; }}
-        .dropdown-container {{ margin-bottom: 1.5rem; }}
-        .chart-container {{ width: 100%; height: 400px; box-sizing: border-box; clear: both; display: block; }}
-        .card-body {{ padding: 1rem; }}
-    </style>
-</head>
-<body>
-    <div class="container-fluid py-4">
-        <div class="row mb-4 align-items-center">
-            <div class="col-auto">
-                <h1 class="text-primary mb-0" style="font-weight: 700; font-size: 2.5rem;">
-                    <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/bar-chart-line.svg" width="32" class="me-2" alt="Chart Icon">
-                    Hub and Disc Assembly Dashboard
-                </h1>
-            </div>
-            <div class="col-auto ms-auto">
-                <div class="bg-primary text-white rounded-pill px-3 py-2 shadow-sm" style="font-size: 0.9rem; font-weight: 500;">
-                    Made by CosTheta Technologies
-                </div>
-            </div>
-        </div>
-        <div class="card mb-4">
-            <div class="card-body">
-                <label class="form-label fw-semibold mb-2">
-                    <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/gear-fill.svg" width="20" class="me-2" alt="Gear Icon">
-                    Select Model Name
-                </label>
-                <select id="model-dropdown" class="form-select mb-3" style="max-width: 400px;">
-                    <!-- MODEL_OPTIONS_PLACEHOLDER -->
-                </select>
-            </div>
-        </div>
-        <ul class="nav nav-tabs" id="tabs" role="tablist">
-            <li class="nav-item">
-                <a class="nav-link active" id="day-tab" data-bs-toggle="tab" href="#day" role="tab">Components per Day</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="week-tab" data-bs-toggle="tab" href="#week" role="tab">Components per Week</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque1-tightening-tab" data-bs-toggle="tab" href="#torque1-tightening" role="tab">Nut Tightening Torque 1</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque1-rotation-tab" data-bs-toggle="tab" href="#torque1-rotation" role="tab">Free Rotation Torque 1</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque2-tightening-tab" data-bs-toggle="tab" href="#torque2-tightening" role="tab">Nut Tightening Torque 2</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque2-rotation-tab" data-bs-toggle="tab" href="#torque2-rotation" role="tab">Free Rotation Torque 2</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque3-tightening-tab" data-bs-toggle="tab" href="#torque3-tightening" role="tab">Nut Tightening Torque 3</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="torque3-rotation-tab" data-bs-toggle="tab" href="#torque3-rotation" role="tab">Free Rotation Torque 3</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" id="reworked-tab" data-bs-toggle="tab" href="#reworked" role="tab">Reworked Components</a>
-            </li>
-        </ul>
-        <div class="tab-content mt-3">
-            <div class="tab-pane fade show active" id="day" role="tabpanel">
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/calendar-day.svg" width="20" class="me-2" alt="Calendar Day">
-                        <span class="fw-semibold">Components per Day</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="day-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="day-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="7_days">Last 7 Days</option>
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                    <option value="ytd">Year-to-Date</option>
-                                    <option value="qtd">Quarter-to-Date</option>
-                                    <option value="mtd">Month-to-Date</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="components-day" class="chart-container"></div>
-                        <p class="description">Components processed per day for the selected model or all models.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="week" role="tabpanel">
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/calendar-week.svg" width="20" class="me-2" alt="Calendar Week">
-                        <span class="fw-semibold">Components per Week</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="week-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="week-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="12_weeks">Last 12 Weeks</option>
-                                    <option value="52_weeks">Last 52 Weeks</option>
-                                    <option value="ytd">Year-to-Date</option>
-                                    <option value="qtd">Quarter-to-Date</option>
-                                    <option value="mtd">Month-to-Date</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="components-week" class="chart-container"></div>
-                        <p class="description">Components processed per week for the selected model or all models.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque1-tightening" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/wrench.svg" width="20" class="me-2" alt="Wrench">
-                        <span class="fw-semibold">Nut Tightening Torque 1</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque1-tightening-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque1-tightening-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque1-tightening-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Nut Tightening Torque 1 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque1-rotation" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/arrow-repeat.svg" width="20" class="me-2" alt="Arrow Repeat">
-                        <span class="fw-semibold">Free Rotation Torque 1</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque1-rotation-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque1-rotation-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque1-rotation-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Free Rotation Torque 1 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque2-tightening" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/wrench.svg" width="20" class="me-2" alt="Wrench">
-                        <span class="fw-semibold">Nut Tightening Torque 2</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque2-tightening-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque2-tightening-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque2-tightening-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Nut Tightening Torque 2 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque2-rotation" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/arrow-repeat.svg" width="20" class="me-2" alt="Arrow Repeat">
-                        <span class="fw-semibold">Free Rotation Torque 2</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque2-rotation-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque2-rotation-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque2-rotation-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Free Rotation Torque 2 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque3-tightening" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/wrench.svg" width="20" class="me-2" alt="Wrench">
-                        <span class="fw-semibold">Nut Tightening Torque 3</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque3-tightening-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque3-tightening-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque3-tightening-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Nut Tightening Torque 3 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="torque3-rotation" role="tabpanel">
-                <div class="card">
-                    <div class="card-header" style="background-color: #ADD8E6;">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/arrow-repeat.svg" width="20" class="me-2" alt="Arrow Repeat">
-                        <span class="fw-semibold">Free Rotation Torque 3</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="torque3-rotation-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="torque3-rotation-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="torque3-rotation-chart" class="chart-container"></div>
-                        <p class="description">Histogram of Free Rotation Torque 3 values with 0.05 bin size.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="tab-pane fade" id="reworked" role="tabpanel">
-                <div class="card">
-                    <div class="card-header bg-light">
-                        <img src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/arrow-counterclockwise.svg" width="20" class="me-2" alt="Arrow Counterclockwise">
-                        <span class="fw-semibold">Reworked Components</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="row dropdown-container">
-                            <div class="col-auto">
-                                <label for="reworked-period-dropdown" class="form-label fw-semibold">Select Period</label>
-                                <select id="reworked-period-dropdown" class="form-select" style="max-width: 300px;">
-                                    <option value="30_days">Last 30 Days</option>
-                                    <option value="90_days">Last 90 Days</option>
-                                    <option value="365_days">Last 365 Days</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div id="reworked-components" class="chart-container"></div>
-                        <p class="description">Reworked components marked as 'DUPLICATE' in remarks, shown per day.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
-        function fetchGraphData() {
-            const model = document.getElementById('model-dropdown').value || 'ALL MODELS';
-            const dayPeriod = document.getElementById('day-period-dropdown').value;
-            const weekPeriod = document.getElementById('week-period-dropdown').value;
-            const torque1TighteningPeriod = document.getElementById('torque1-tightening-period-dropdown').value;
-            const torque1RotationPeriod = document.getElementById('torque1-rotation-period-dropdown').value;
-            const torque2TighteningPeriod = document.getElementById('torque2-tightening-period-dropdown').value;
-            const torque2RotationPeriod = document.getElementById('torque2-rotation-period-dropdown').value;
-            const torque3TighteningPeriod = document.getElementById('torque3-tightening-period-dropdown').value;
-            const torque3RotationPeriod = document.getElementById('torque3-rotation-period-dropdown').value;
-            const reworkedPeriod = document.getElementById('reworked-period-dropdown').value;
 
-            fetch('/data?model=' + encodeURIComponent(model) +
-                '&day_period=' + encodeURIComponent(dayPeriod) +
-                '&week_period=' + encodeURIComponent(weekPeriod) +
-                '&torque1_tightening_period=' + encodeURIComponent(torque1TighteningPeriod) +
-                '&torque1_rotation_period=' + encodeURIComponent(torque1RotationPeriod) +
-                '&torque2_tightening_period=' + encodeURIComponent(torque2TighteningPeriod) +
-                '&torque2_rotation_period=' + encodeURIComponent(torque2RotationPeriod) +
-                '&torque3_tightening_period=' + encodeURIComponent(torque3TighteningPeriod) +
-                '&torque3_rotation_period=' + encodeURIComponent(torque3RotationPeriod) +
-                '&reworked_period=' + encodeURIComponent(reworkedPeriod))
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const config = { responsive: true, displayModeBar: true };
-                    try {
-                        Plotly.newPlot('components-day', data.components_day.data, data.components_day.layout, config);
-                        console.log('Rendered components-day');
-                    } catch (e) {
-                        console.error('Error rendering components-day:', e);
-                    }
-                    try {
-                        Plotly.newPlot('components-week', data.components_week.data, data.components_week.layout, config);
-                        console.log('Rendered components-week');
-                    } catch (e) {
-                        console.error('Error rendering components-week:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque1-tightening-chart', data.torque1_tightening.data, data.torque1_tightening.layout, config);
-                        console.log('Rendered torque1-tightening-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque1-tightening-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque1-rotation-chart', data.torque1_rotation.data, data.torque1_rotation.layout, config);
-                        console.log('Rendered torque1-rotation-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque1-rotation-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque2-tightening-chart', data.torque2_tightening.data, data.torque2_tightening.layout, config);
-                        console.log('Rendered torque2-tightening-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque2-tightening-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque2-rotation-chart', data.torque2_rotation.data, data.torque2_rotation.layout, config);
-                        console.log('Rendered torque2-rotation-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque2-rotation-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque3-tightening-chart', data.torque3_tightening.data, data.torque3_tightening.layout, config);
-                        console.log('Rendered torque3-tightening-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque3-tightening-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('torque3-rotation-chart', data.torque3_rotation.data, data.torque3_rotation.layout, config);
-                        console.log('Rendered torque3-rotation-chart');
-                    } catch (e) {
-                        console.error('Error rendering torque3-rotation-chart:', e);
-                    }
-                    try {
-                        Plotly.newPlot('reworked-components', data.reworked_components.data, data.reworked_components.layout, config);
-                        console.log('Rendered reworked-components');
-                    } catch (e) {
-                        console.error('Error rendering reworked-components:', e);
-                    }
-                })
-                .then(() => console.log('Charts rendered successfully'))
-                .catch(error => console.error('Error fetching data:', error));
-        }
+TABS = [  # (key in /data, tab label, period table, description, query parameter)
+    ("components_day", "Components per Day", DAY_PERIODS,
+     "Components assembled per day, split into OK and NOT OK (final result of the cycle).", "day_period"),
+    ("components_week", "Components per Week", WEEK_PERIODS,
+     "Components assembled per week (weeks start on Monday), OK and NOT OK.", "week_period"),
+    ("torque1", "Nut Tightening Torque 1", SHORT_PERIODS,
+     "Spread of the first nut tightening torque; dashed line: the torque 1 setpoint used.", "torque1_period"),
+    ("torque2", "Nut Tightening Torque 2", SHORT_PERIODS,
+     "Spread of the second nut tightening torque; dashed line: the torque 2 setpoint used.", "torque2_period"),
+    ("rotation", "Free Rotation Torque", SHORT_PERIODS,
+     "Spread of the free rotation torque measured at the end of the cycle.", "rotation_period"),
+    ("reworked_components", "Re-assembled", SHORT_PERIODS,
+     "Components whose QR code was scanned again (saved with remarks DUPLICATE), per day.", "reworked_period"),
+]
 
-        // Add event listeners for dropdown changes
-        document.getElementById('model-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('day-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('week-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque1-tightening-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque1-rotation-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque2-tightening-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque2-rotation-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque3-tightening-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('torque3-rotation-period-dropdown').addEventListener('change', fetchGraphData);
-        document.getElementById('reworked-period-dropdown').addEventListener('change', fetchGraphData);
 
-        // Add event listeners for tab changes to simulate dropdown click
-        document.getElementById('day-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('day-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on day-period-dropdown');
-        });
-        document.getElementById('week-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('week-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on week-period-dropdown');
-        });
-        document.getElementById('torque1-tightening-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque1-tightening-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque1-tightening-period-dropdown');
-        });
-        document.getElementById('torque1-rotation-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque1-rotation-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque1-rotation-period-dropdown');
-        });
-        document.getElementById('torque2-tightening-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque2-tightening-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque2-tightening-period-dropdown');
-        });
-        document.getElementById('torque2-rotation-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque2-rotation-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque2-rotation-period-dropdown');
-        });
-        document.getElementById('torque3-tightening-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque3-tightening-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque3-tightening-period-dropdown');
-        });
-        document.getElementById('torque3-rotation-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('torque3-rotation-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on torque3-rotation-period-dropdown');
-        });
-        document.getElementById('reworked-tab').addEventListener('shown.bs.tab', function () {
-            document.getElementById('reworked-period-dropdown').dispatchEvent(new Event('change'));
-            console.log('Simulated click on reworked-period-dropdown');
-        });
+def page(models) -> str:
+    modelOptions = "".join(f'<option value="{escape(m)}">{escape(m)}</option>' for m in [ALL_MODELS] + list(models))
+    navs = "".join(f'<li class="nav-item"><a class="nav-link{" active" if i == 0 else ""}" data-bs-toggle="tab" '
+                   f'href="#{k}" role="tab">{label}</a></li>' for i, (k, label, *_) in enumerate(TABS))
+    panes = "".join(_tab(k, label, periods, text, i == 0) for i, (k, label, periods, text, _) in enumerate(TABS))
+    params = json.dumps({k: p for k, *_, p in TABS})
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hub and Disc Assembly Dashboard</title>
+<link href="/assets/bootstrap.min.css" rel="stylesheet">
+<script src="/assets/bootstrap.bundle.min.js"></script>
+<script src="/assets/plotly.min.js"></script>
+<style>
+  body {{ background: linear-gradient(to bottom, #f8f9fa, #e9ecef); }}
+  .card {{ border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }}
+  .nav-tabs .nav-link.active {{ background-color: #0d6efd; color: white; }}
+  .chart {{ width: 100%; height: 430px; }}
+  .description {{ color: #6c757d; font-size: 0.9rem; margin: 0.5rem 0 0 0; }}
+  .stat {{ font-size: 1.6rem; font-weight: 700; }}
+</style></head>
+<body><div class="container-fluid p-4">
+  <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
+    <h1 class="text-primary mb-0 me-auto" style="font-weight: 700;">Hub and Disc Assembly Dashboard</h1>
+    <div><label class="form-label fw-semibold mb-0" for="model">Model</label>
+      <select id="model" class="form-select" style="min-width: 220px;">{modelOptions}</select></div>
+    <div><label class="form-label fw-semibold mb-0" for="db">Database</label>
+      <select id="db" class="form-select"><option value="production">Production</option><option value="test">Test</option></select></div>
+  </div>
+  <div class="row g-3 mb-3" id="summary">
+    <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">Today</div><div class="stat" id="s-today">-</div></div></div></div>
+    <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">This week</div><div class="stat" id="s-week">-</div></div></div></div>
+    <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted">This month</div><div class="stat" id="s-month">-</div></div></div></div>
+  </div>
+  <ul class="nav nav-tabs" role="tablist">{navs}</ul>
+  <div class="tab-content">{panes}</div>
+  <p class="text-muted small mt-3" id="status"></p>
+</div>
+<script>
+const PARAMS = {params};
+const shown = new Set();
+function draw(data) {{
+  for (const key of Object.keys(PARAMS)) {{
+    const div = document.getElementById(key + '-chart');
+    if (!data[key]) continue;
+    if (div.offsetParent === null && !shown.has(key)) continue;     // hidden tab: drawn when opened
+    Plotly.react(div, data[key].data, data[key].layout, {{responsive: true, displaylogo: false}});
+    shown.add(key);
+  }}
+  const select = document.getElementById('model'), names = ['{ALL_MODELS}'].concat(data.models || []);
+  if (Array.from(select.options).map(o => o.value).join('|') !== names.join('|')) {{   // the chosen database's models
+    const keep = select.value;
+    select.innerHTML = names.map(n => `<option value="${{n.replace(/"/g, '&quot;')}}">${{n.replace(/</g, '&lt;')}}</option>`).join('');
+    select.value = names.includes(keep) ? keep : '{ALL_MODELS}';
+  }}
+  for (const p of ['today', 'week', 'month']) {{
+    const s = data.summary[p];
+    document.getElementById('s-' + p).innerHTML = `${{s.total}} <span class="fs-6 text-success">OK ${{s.ok}}</span> <span class="fs-6 text-danger">NOT OK ${{s.notok}}</span>`;
+  }}
+}}
+let last = null;
+function refresh() {{
+  const q = new URLSearchParams({{db: document.getElementById('db').value, model: document.getElementById('model').value}});
+  for (const [key, name] of Object.entries(PARAMS)) q.set(name, document.getElementById(key + '-period').value);
+  fetch('/data?' + q.toString())
+    .then(r => r.json().then(j => {{ if (!r.ok) throw new Error(j.error || r.statusText); return j; }}))
+    .then(data => {{ last = data; draw(data); document.getElementById('status').textContent = 'Updated ' + new Date().toLocaleTimeString(); }})
+    .catch(e => {{ document.getElementById('status').textContent = 'Error: ' + e.message; }});
+}}
+document.querySelectorAll('select').forEach(s => s.addEventListener('change', refresh));
+document.querySelectorAll('a[data-bs-toggle="tab"]').forEach(a => a.addEventListener('shown.bs.tab', () => {{ if (last) draw(last); window.dispatchEvent(new Event('resize')); }}));
+refresh();
+setInterval(refresh, 60 * 1000);
+</script>
+</body></html>"""
 
-        // Initial data fetch
-        fetchGraphData();
 
-        // Auto-refresh every minute
-        setInterval(fetchGraphData, 60 * 1000);
-    </script>
-</body>
-</html>
-"""
+# ------------------------------------------------------------------------------------------------ server
+_plotlyJs = None
 
-# HTTP Request Handler
-class DashboardHandler(http.server.SimpleHTTPRequestHandler):
+
+class DashboardHandler(BaseHTTPRequestHandler):
+    def log_message(self, *args):          # quiet: the page polls every minute
+        pass
+
+    def _send(self, status: int, body, contentType: str, cache: bool = False):
+        payload = body.encode("utf-8") if isinstance(body, str) else body
+        self.send_response(status)
+        self.send_header("Content-Type", contentType)
+        self.send_header("Content-Length", str(len(payload)))
+        if cache:
+            self.send_header("Cache-Control", "max-age=86400")
+        self.end_headers()
+        self.wfile.write(payload)
+
     def do_GET(self):
-        parsed_path = urlparse(self.path)
-        path = parsed_path.path
-        query = parse_qs(parsed_path.query)
+        global _plotlyJs
+        parsed = urlparse(self.path)
+        try:
+            if parsed.path == "/":
+                try:
+                    models = DB.fetchModelNames(DB.DEFAULT_DATABASE)
+                except Exception as e:
+                    print(f"MI dashboard: database not reachable: {e}")
+                    models = []
+                self._send(200, page(models), "text/html; charset=utf-8")
+            elif parsed.path == "/data":
+                self._send(200, json.dumps(dashboardData(parse_qs(parsed.query))), "application/json")
+            elif parsed.path == "/assets/plotly.min.js":
+                if _plotlyJs is None:
+                    _plotlyJs = get_plotlyjs().encode("utf-8")
+                self._send(200, _plotlyJs, "application/javascript", cache=True)
+            elif parsed.path in ("/assets/bootstrap.min.css", "/assets/bootstrap.bundle.min.js"):
+                with open(os.path.join(ASSETS, os.path.basename(parsed.path)), "rb") as f:
+                    self._send(200, f.read(), "text/css" if parsed.path.endswith(".css") else "application/javascript",
+                               cache=True)
+            else:
+                self._send(404, "Not Found", "text/plain")
+        except DB.RequestError as e:
+            self._send(400, json.dumps({"error": str(e)}), "application/json")
+        except Exception as e:
+            print(f"MI dashboard error: {e}")
+            self._send(500, json.dumps({"error": str(e)}), "application/json")
 
-        if path == '/':
-            try:
-                models = fetch_unique_models()
-                # Escape model names to prevent HTML injection
-                model_options = ''.join([f'<option value="{escape(model)}">{escape(model)}</option>' for model in models])
-                # print(f"model_options: {model_options}")
-                # Use string concatenation to avoid str.format() issues
-                html_content = HTML_TEMPLATE.replace('<!-- MODEL_OPTIONS_PLACEHOLDER -->', model_options)
-                # print(f"html_content first 100 chars: {html_content[:100]}")
-                self.send_response(200)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                self.wfile.write(html_content.encode('utf-8'))
-            except Exception as e:
-                print(f"Error generating HTML response: {e}")
-                self.send_response(500)
-                self.send_header('Content-type', 'text/plain')
-                self.end_headers()
-                self.wfile.write(f"Internal Server Error: {str(e)}".encode('utf-8'))
-        elif path == '/data':
-            try:
-                model_name = query.get('model', ['ALL MODELS'])[0]
-                day_period = query.get('day_period', ['7_days'])[0]
-                week_period = query.get('week_period', ['12_weeks'])[0]
-                torque1_tightening_period = query.get('torque1_tightening_period', ['30_days'])[0]
-                torque1_rotation_period = query.get('torque1_rotation_period', ['30_days'])[0]
-                torque2_tightening_period = query.get('torque2_tightening_period', ['30_days'])[0]
-                torque2_rotation_period = query.get('torque2_rotation_period', ['30_days'])[0]
-                torque3_tightening_period = query.get('torque3_tightening_period', ['30_days'])[0]
-                torque3_rotation_period = query.get('torque3_rotation_period', ['30_days'])[0]
-                reworked_period = query.get('reworked_period', ['30_days'])[0]
 
-                # print(f"/data: model={model_name}, day_period={day_period}, week_period={week_period}, reworked_period={reworked_period}")
-                earliest_date = datetime.now() - timedelta(days=365)
-                df = fetch_data(earliest_date, datetime.now())
-                # print(f"/data: fetched df rows={len(df)}")
-
-                data = {
-                    'components_day': components_per_day(df, model_name, day_period),
-                    'components_week': components_per_week(df, model_name, week_period),
-                    'torque1_tightening': torque_distribution(df, 'nut_tightening_torque_1', model_name, torque1_tightening_period),
-                    'torque1_rotation': torque_distribution(df, 'free_rotation_torque_1', model_name, torque1_rotation_period),
-                    'torque2_tightening': torque_distribution(df, 'nut_tightening_torque_2', model_name, torque2_tightening_period),
-                    'torque2_rotation': torque_distribution(df, 'free_rotation_torque_2', model_name, torque2_rotation_period),
-                    'torque3_tightening': torque_distribution(df, 'nut_tightening_torque_3', model_name, torque3_tightening_period),
-                    'torque3_rotation': torque_distribution(df, 'free_rotation_torque_3', model_name, torque3_rotation_period),
-                    'reworked_components': reworked_components(df, model_name, reworked_period)
-                }
-
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(data, cls=NumpyEncoder).encode('utf-8'))
-            except Exception as e:
-                print(f"Error generating JSON data: {e}")
-                self.send_response(500)
-                self.send_header('Content-type', 'text/plain')
-                self.end_headers()
-                self.wfile.write(f"Internal Server Error: {str(e)}".encode('utf-8'))
-        else:
-            self.send_response(404)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'Not Found')
-
-# Function to find a free port
-def find_free_port():
-    # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    with mainsocket(parentclasssocket.AF_INET, parentclasssocket.SOCK_STREAM) as s:
-        s.bind(('localhost', 0))
-        s.listen(1)
-        port = s.getsockname()[1]
-        print(f"Found free port: {port}")
-        return port
-
-# Start the server
-def start_server():
-    desired_port = 8050
+def startMIServer(port: int = DEFAULT_PORT):
     try:
-        server = socketserver.TCPServer(('0.0.0.0', desired_port), DashboardHandler)
-        print(f"Started server on http://127.0.0.1:{desired_port}/")
-        server.serve_forever()
-    except OSError as e:
-        print(f"Port {desired_port} is in use: {e}")
-        free_port = find_free_port()
-        server = socketserver.TCPServer(('0.0.0.0', free_port), DashboardHandler)
-        print(f"Started MI server on http://127.0.0.1:{free_port}/")
-        server.serve_forever()
+        server = ThreadingHTTPServer(("0.0.0.0", port), DashboardHandler)
+    except OSError:
+        server = ThreadingHTTPServer(("0.0.0.0", 0), DashboardHandler)
+        print(f"MI dashboard: port {port} is in use", end="; ")
+    server.daemon_threads = True
+    print(f"MI dashboard on http://0.0.0.0:{server.server_address[1]}/ "
+          f"(this PC: http://127.0.0.1:{server.server_address[1]}/)")
+    server.serve_forever()
 
-def startMIServer():
-    start_server()
+
+if __name__ == "__main__":
+    startMIServer()

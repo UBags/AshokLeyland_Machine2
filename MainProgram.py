@@ -142,7 +142,7 @@ def startTheFrontendServer(mode : str, username : str, role : str):
 #     startWebService()
 
 # def startTheMIService():
-#     from endpoints.AshokLeyland_MI_Panel import startMIServer
+#     from endpoints.AshokLeyland_MI_Light import startMIServer
 #     startMIServer()
 
 def checkIPs():

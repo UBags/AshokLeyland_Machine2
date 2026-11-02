@@ -1095,3 +1095,36 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   their limits). Pictures: `test/machine2_dryrun/nut_washer_images/` (use `top_bearing_images/DOST_bearing_01.jpg` as
   the bearing picture).
 - Figure of the washer-comparison fix (Machine 1 pair, 10 px between the centres): `docs/nut_washer_comparison_fix.png`.
+
+## 42. Endpoints: web service and MI dashboard rewritten for the Machine 2 database; MI_Panel and MI removed (2026-11-03)
+- **Removed:** `endpoints/AshokLeyland_MI_Panel.py`, `endpoints/AshokLeyland_MI.py`, and `endpoints/rendered.html`
+  (written by the old web service on every page view). `OtherServices.py` already starts MI_Light, the web service and
+  ShowScreen; nothing else imported the removed files (MainProgram's commented-out lines now name MI_Light).
+- **Why a rewrite:** both read `hub_and_disc_assembly_schema` (now `al_hub_and_disc_assembly_schema`) and Machine 1
+  columns that no longer exist (`knuckle_check_*`, `hub_and_first_bearing_*`, `second_bearing_*`, torque 3, free
+  rotation 2/3, `bung_*`, `component_manufacturing_date`), so every query failed.
+- **`endpoints/EndpointsDB.py`** (new, shared): database "production" (default) or "test" only; the exported columns
+  are `persistence.Persistence.all_columns_record_header` (as in the frontend's CSV export); a record's day is its
+  `created_on`; date limits are whole days with both ends included; model names match whole names ignoring case; one
+  connection per query, closed afterwards.
+- **`endpoints/AshokLeylandWebService.py`** (port 8000): same routes, bodies and answer shapes as before
+  (`/api/get_*` with model_name / start_date / end_date, the page's `/api/by_*` / `today_by_model` / `all_today` with
+  modelName / startDate / endDate, `/csv/` and `/json/`, the no-format routes answering `{"data": "<csv>"}`), now with
+  the Machine 2 columns. Fixed on the way: `db_name` is honoured (was ignored); the end date is included (the old query
+  stopped at its midnight); errors give HTTP 400 (request) / 500 (database) instead of 200 with an error text; the page
+  script calls the service it was loaded from (it called `http://localhost:8000`, which fails from any other PC); the
+  page reloads the model lists when the database is switched; the API examples show the address the page was opened
+  with; no internet resources.
+- **`endpoints/AshokLeyland_MI_Light.py`** (port 8050): components per day and per week split OK / NOT OK, nut
+  tightening torque 1 and 2 (with the setpoints in force as dashed lines) and free rotation torque histograms,
+  re-assembled components (remarks DUPLICATE) per day, today / this week / this month counts; model filter, production
+  / test, period per chart, refresh every minute. Fixed: torques not measured (-1.0) are left out (they were counted);
+  quarter-to-date starts on the quarter's first day; weeks start on Monday (were labelled by their end); plotly.js and
+  bootstrap are served by the dashboard itself (were CDN links: no internet, no charts); several browsers at once
+  (threading server).
+- **ShowScreen** unchanged (no database). It listens on 127.0.0.1 only, so the stream can be watched only on the
+  machine PC itself.
+- **`test/machine2_dryrun/DryRun_Endpoints.py`** (and machine1 copy): adds tagged records (QR `DRYRUN-ENDPOINTS-...`) to
+  the test database, starts both services on free ports, checks every route and the dashboard numbers against SQL,
+  deletes its records: 43/43. Also checked here in headless Chromium: dashboard tabs drawn, no script errors; query page
+  download of CSV / JSON, model lists follow the database.

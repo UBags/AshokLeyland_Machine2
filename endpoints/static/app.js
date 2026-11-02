@@ -1,205 +1,101 @@
-console.log('app.js loaded');
-try {
-    console.log('Script block started');
+// Query page of AshokLeylandWebService: calls the service it was loaded from (relative URLs), so it works from any PC.
+function download(text, filename, type) {
+    const url = window.URL.createObjectURL(new Blob([text], {type: type}));
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    window.URL.revokeObjectURL(url); document.body.removeChild(a);
+}
 
-    function downloadCSV(csv, filename) {
-        console.log('downloadCSV called with filename:', filename);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-    }
-    console.log('downloadCSV defined');
+function localDate() {   // today's date on this PC, YYYY-MM-DD (toISOString would give the UTC date)
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
-    function downloadJSON(json, filename) {
-        console.log('downloadJSON called with filename:', filename);
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-    }
-    console.log('downloadJSON defined');
+function show(text, count) {
+    document.getElementById('result').value = text;
+    document.getElementById('recordCount').textContent = `(${count} records)`;
+}
 
-    function jsonToCsv(jsonData) {
-        if (!jsonData || jsonData.length === 0) return '';
-        const headers = Object.keys(jsonData[0]);
-        const csvRows = [headers.join(',')];
-        jsonData.forEach(row => {
-            const values = headers.map(header => {
-                const value = row[header];
-                return value === null || value === undefined ? '' : `'${value}'`;
-            });
-            csvRows.push(values.join(','));
-        });
-        return csvRows.join('\n');
-    }
-    console.log('jsonToCsv defined');
-
-    function query(method, params) {
-        console.log('query called with method:', method, 'params:', params);
-        const format = method.endsWith('/json/') ? 'json' : 'csv';
-        fetch(`http://localhost:8000/api/${method}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params)
-        })
-        .then(response => {
-            console.log('Fetch response status:', response.status);
-            const contentType = response.headers.get('Content-Type');
-            if (contentType.includes('application/json')) {
-                return response.json().then(data => ({ data, format: 'json' }));
-            } else if (contentType.includes('text/csv')) {
-                return response.text().then(text => ({ data: text, format: 'csv' }));
-            } else {
-                throw new Error('Unsupported response format');
-            }
-        })
-        .then(({ data, format }) => {
-            console.log('Response data:', data, 'format:', format);
-            const resultArea = document.getElementById('result');
-            const recordCountSpan = document.getElementById('recordCount');
-            let displayContent = '';
-            let recordCount = 0;
-            const date = new Date().toISOString().split('T')[0];
-            const methodName = method.split('/')[0];
-
-            if (format === 'json') {
-                if (data.error) {
-                    resultArea.value = `Error: ${data.error}`;
-                    recordCountSpan.textContent = '(0 records)';
-                    return;
-                }
-                if (data.data && data.data.length > 0) {
-                    displayContent = JSON.stringify(data.data, null, 2); // Pretty-print JSON
-                    recordCount = data.data.length;
-                    downloadJSON(displayContent, `${methodName}_${date}.json`);
-                } else {
-                    displayContent = 'No records found for the selected criteria';
-                    recordCount = 0;
-                }
-            } else {
-                displayContent = data;
-                const lines = data.trim().split('\n');
-                recordCount = lines.length > 1 ? lines.length - 1 : 0;
-                if (recordCount > 0) {
-                    downloadCSV(displayContent, `${methodName}_${date}.csv`);
-                } else {
-                    displayContent = 'No records found for the selected criteria';
-                }
-            }
-
-            resultArea.value = displayContent;
-            recordCountSpan.textContent = `(${recordCount} records)`;
-        })
-        .catch(error => {
-            console.error('Fetch error:', error);
-            document.getElementById('result').value = `Error: ${error}`;
-            document.getElementById('recordCount').textContent = '(0 records)';
-        });
-    }
-    console.log('query defined');
-
-    function validateAndQuery(method, format, selectId = null) {
-        console.log('validateAndQuery called with method:', method, 'format:', format, 'selectId:', selectId);
-        const modelSelect = selectId ? document.getElementById(selectId) : null;
-        const modelName = modelSelect ? modelSelect.value : '';
-        const params = {};
-
-        if (['by_model_name', 'by_model_name_and_date', 'today_by_model'].includes(method)) {
-            if (modelSelect && modelSelect.options.length <= 1) {
-                alert('No model names available in the database. Please populate the database.');
-                document.getElementById('result').value = 'Error: No model names available';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-            if (!modelName) {
-                alert('Please select a valid model name.');
-                document.getElementById('result').value = 'Error: Model name not selected';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-        }
-
-        if (method === 'by_model_name') {
-            params.modelName = modelName;
-        } else if (method === 'by_model_name_and_date') {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            if (!startDate || !endDate) {
-                alert('Please select both start and end dates.');
-                document.getElementById('result').value = 'Error: Start or end date not selected';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-                alert('Dates must be in YYYY-MM-DD format.');
-                document.getElementById('result').value = 'Error: Invalid date format';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-            params.modelName = modelName;
-            params.startDate = startDate;
-            params.endDate = endDate;
-        } else if (method === 'today_by_model') {
-            params.model_name = modelName;
-        } else if (method === 'by_date_limits') {
-            const startDate = document.getElementById('startDate2').value;
-            const endDate = document.getElementById('endDate2').value;
-            if (!startDate || !endDate) {
-                alert('Please select both start and end dates.');
-                document.getElementById('result').value = 'Error: Start or end date not selected';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-                alert('Dates must be in YYYY-MM-DD format.');
-                document.getElementById('result').value = 'Error: Invalid date format';
-                document.getElementById('recordCount').textContent = '(0 records)';
-                return;
-            }
-            params.startDate = startDate;
-            params.endDate = endDate;
-        } else if (method === 'all_today') {
-            // No parameters needed
-        } else {
-            document.getElementById('result').value = 'Error: Invalid method';
-            document.getElementById('recordCount').textContent = '(0 records)';
+function query(method, format, params) {
+    params.db_name = document.getElementById('dbName').value;
+    fetch(`api/${method}/${format}/`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(params)
+    })
+    .then(response => response.text().then(text => ({ok: response.ok, text: text})))
+    .then(({ok, text}) => {
+        const stamp = localDate();
+        if (!ok) {
+            let message = text;
+            try { message = JSON.parse(text).error || text; } catch (e) {}
+            show(message.startsWith('Error') ? message : `Error: ${message}`, 0);
             return;
         }
-
-        const fullMethod = `${method}/${format}/`;
-        console.log('Sending params to backend:', params, 'fullMethod:', fullMethod);
-        query(fullMethod, params);
-    }
-    console.log('validateAndQuery defined');
-
-    window.onload = function() {
-        console.log('window.onload executed');
-        const selects = ['modelName1', 'modelName2', 'modelName3'];
-        selects.forEach(id => {
-            const select = document.getElementById(id);
-            if (select && select.options.length <= 1) {
-                const btnPrefix = id === 'modelName1' ? 'by_model_name' :
-                                  id === 'modelName2' ? 'by_model_name_and_date' :
-                                  'today_by_model';
-                document.getElementById(`${btnPrefix}_csv_btn`).disabled = true;
-                document.getElementById(`${btnPrefix}_json_btn`).disabled = true;
-            }
-        });
-    };
-    console.log('Script block completed');
-} catch (e) {
-    console.error('Script error:', e);
+        if (format === 'json') {
+            const rows = JSON.parse(text).data || [];
+            if (rows.length === 0) { show('No records found for the selected criteria', 0); return; }
+            const pretty = JSON.stringify(rows, null, 2);
+            show(pretty, rows.length);
+            download(pretty, `${method}_${stamp}.json`, 'application/json');
+        } else {
+            const count = Math.max(text.trim().split('\n').length - 1, 0);
+            if (count === 0) { show('No records found for the selected criteria', 0); return; }
+            show(text, count);
+            download(text, `${method}_${stamp}.csv`, 'text/csv');
+        }
+    })
+    .catch(error => show(`Error: ${error}`, 0));
 }
+
+function dates(startId, endId) {
+    const start = document.getElementById(startId).value, end = document.getElementById(endId).value;
+    if (!start || !end) { alert('Please select both dates.'); return null; }
+    if (end < start) { alert('The end date is before the start date.'); return null; }
+    return {startDate: start, endDate: end};
+}
+
+function validateAndQuery(method, format, selectId = null) {
+    const params = {};
+    if (selectId) {
+        const model = document.getElementById(selectId).value;
+        if (!model) { alert('Please select a model.'); return; }
+        params.modelName = model;
+    }
+    if (method === 'by_model_name_and_date') {
+        const d = dates('startDate', 'endDate'); if (!d) return; Object.assign(params, d);
+    } else if (method === 'by_date_limits') {
+        const d = dates('startDate2', 'endDate2'); if (!d) return; Object.assign(params, d);
+    }
+    query(method, format, params);
+}
+
+const MODEL_SELECTS = [['modelName1', 'by_model_name'], ['modelName2', 'by_model_name_and_date'],
+                       ['modelName3', 'today_by_model']];
+
+function loadModels() {   // the model lists of the chosen database
+    fetch('api/get_unique_model_names/json/', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({db_name: document.getElementById('dbName').value})
+    })
+    .then(r => r.json())
+    .then(d => {
+        const names = d.model_names || [];
+        MODEL_SELECTS.forEach(([id, prefix]) => {
+            const select = document.getElementById(id), keep = select.value;
+            select.innerHTML = '<option value="">Select model</option>' +
+                names.map(n => `<option value="${n.replace(/"/g, '&quot;')}">${n.replace(/</g, '&lt;')}</option>`).join('');
+            if (names.includes(keep)) select.value = keep;
+            document.getElementById(`${prefix}_csv_btn`).disabled = names.length === 0;
+            document.getElementById(`${prefix}_json_btn`).disabled = names.length === 0;
+        });
+        if (d.error) show(`Error: ${d.error}`, 0);
+    })
+    .catch(error => show(`Error: ${error}`, 0));
+}
+
+window.onload = function () {
+    const today = localDate();
+    ['startDate', 'endDate', 'startDate2', 'endDate2'].forEach(id => { document.getElementById(id).value = today; });
+    document.getElementById('dbName').addEventListener('change', loadModels);
+    loadModels();
+};
