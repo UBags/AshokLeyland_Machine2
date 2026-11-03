@@ -1128,3 +1128,24 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   the test database, starts both services on free ports, checks every route and the dashboard numbers against SQL,
   deletes its records: 43/43. Also checked here in headless Chromium: dashboard tabs drawn, no script errors; query page
   download of CSV / JSON, model lists follow the database.
+
+## 43. Machine 2 camera moved: knuckle check regions re-placed (2026-11-03)
+- **Camera change measured** (image registration of 9 old/new pairs of the same model and side): the new pictures are
+  scaled x1.098 and rotated +0.3 deg against the old ones; old (612, 345) is now (705, 353). Old point (x, y) ->
+  (1.0979 x - 0.006 y + 34.7, 0.006 x + 1.0979 y - 29.8). Spread between pairs <= 5 px (parts sit slightly differently).
+  The fixture plate is now bright (cleaned / replaced): the old grey levels no longer apply.
+- **`siemens.vision.knuckle.*`** (all three properties files; logic, thresholds, binarisation and kernel unchanged):
+  model polygons (step2 / step3) and the sizes of all regions = the old ones through the transform; the side boxes,
+  the common checks A-D and E re-placed on the new pictures (positions only) because the transformed positions had
+  margins of 3-11 grey levels on the brighter scene:
+  side boxes 468,661 / 916,667 (22 x 22); A 785,210; B 534,295; C 547,449 r10; D 879,477 r10; E 692,590 (on the
+  black bracket, as before); step2 557,201;547,231;515,247;534,250;549,241;560,215;
+  step3 857,199;854,213;862,239;882,253;899,247;867,229.
+- **Pictures** (`test/machine2_dryrun/knuckle_images/`, replaced; the old set is in git history): 14 knuckles (DOST LHS 5,
+  DOST RHS 4, DOSTPLUS LHS 2, DOSTPLUS RHS 3; side by the arm, model as the check classifies it: the "RF0142"
+  knuckles are DOST) and 5 of the empty fixture. DryRun_CheckKnuckle_Images now also checks that the empty fixture is
+  NOT OK with every QR code. Result 35/35; smallest margins: A 20.6, B 29.7, C 21.0, D 32.2, E 27.3, side boxes 103,
+  model polygons 52. The empty fixture fails on B, C and D (bright plate there now). Figure:
+  `docs/knuckle_regions_machine2.jpg`.
+- **Other stations** (hub, top bearing, nut): same camera, so their centres move by the same transform (about +93 px in
+  x, +8 px in y, radii x1.10); to be measured on new pictures of those stations.

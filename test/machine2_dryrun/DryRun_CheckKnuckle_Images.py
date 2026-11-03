@@ -1,7 +1,8 @@
 """
 DryRun_CheckKnuckle_Images - the real CheckKnuckle on real pictures of this machine, with this machine's settings.
 
-Pictures: knuckle_images/<MODEL>_<SIDE>_<n>.jpg next to this script (MODEL = DOST or DOSTPLUS, SIDE = LHS or RHS).
+Pictures: knuckle_images/<MODEL>_<SIDE>_<n>.jpg next to this script (MODEL = DOST or DOSTPLUS, SIDE = LHS or RHS),
+and knuckle_images/EMPTY_<n>.jpg (the fixture without a knuckle: must be NOT OK with every QR code).
 For every picture, CheckKnuckle is run with the QR code of each of the four knuckles (DOST/DOSTPLUS x LHS/RHS): it
 must pass with its own QR code and fail with the other three. Also checked:
   - a dark object lying on the other end of the bottom bar (both side boxes dark) is rejected;
@@ -60,7 +61,8 @@ def measure(img):
         S3=K._analyze_polygon_region(img, K.STEP3_POLYGON_POINTS))
 
 
-files = sorted(glob.glob(str(HERE / "knuckle_images" / "*.jpg")))
+files = sorted(f for f in glob.glob(str(HERE / "knuckle_images" / "*.jpg")) if not os.path.basename(f).startswith("EMPTY"))
+empties = sorted(glob.glob(str(HERE / "knuckle_images" / "EMPTY_*.jpg")))
 print(f"{len(files)} pictures, settings {C.getVisionKeyPrefix()}vision.knuckle.*: common < {K.COMMON_CHECK_THRESHOLD}, "
       f"side < {K.LHS_RHS_DARKNESS_THRESHOLD}, model < {K.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD} = DOST\n")
 check("pictures found", len(files) >= 4, str(HERE / "knuckle_images"))
@@ -88,6 +90,11 @@ for f in files:
     cv2.rectangle(rag, (x - 10, y - 10), (x + w + 10, y + h + 10), (30, 30, 30), -1)
     check(f"{os.path.basename(f)}: dark object on the other end of the bar -> NOT OK",
           not K.checkKnuckle(rag, componentQRCode=QR[(model, side)])[1])
+
+for f in empties:
+    img = cv2.imread(f)
+    accepted = [f"{q[0]} {q[1]}" for q, code in QR.items() if K.checkKnuckle(img, componentQRCode=code)[1]]
+    check(f"{os.path.basename(f)}: empty fixture NOT OK with every QR code", not accepted, accepted)
 
 print("\nSmallest margin of each region to its threshold:")
 for k, v in margins.items():
