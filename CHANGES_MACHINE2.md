@@ -1161,3 +1161,31 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Checked here** (the real post-processing - shape filters, grouping, polygon search, model match - with the holes and
   studs found on the picture standing in for MobileSAM): 13/13 OK with their own model and MISMATCH with the other;
   with the previous settings 0/13. Pictures replaced in `test/machine2_dryrun/hub_images/` (old set in git history).
+
+## 45. Machine 2 camera moved: top bearing and nut / plate washer checks re-centred (2026-11-04)
+- **Measured on the new pictures (8 bearing, 5 washer-only, 5 nut + washer):** bearing ring centre about (707, 351),
+  inner / outer race radius 37-43 / 50-55 (previous camera 33-36 / 46-50, x1.10 as on the fixture). Nut centre
+  (707.7, 346.9), outline about 4650 px (previous camera about 4380: only x1.06 in area, x1.03 across).
+- **Top bearing (`siemens.vision.topbearing.*`, all three properties files):** `annular.center` 613,345 -> **707,354**
+  (3 px below the ring centre, as before); `annular.outer.radius` 120 -> 132, `detection.mask.radius` 60 -> 66,
+  `target.ring.thickness` 14 -> 15, `target.ring.thickness.for.area.score` 15 -> 16, `center.offsets` 0,0;0,-10 ->
+  0,0;0,-11 (all x1.10). **Not scaled:** `prompt.radius` stays 40 - at 44 two DOSTPLUS bearing pictures found no ring
+  (the edge windows 0.65-1.2 x 40 and 0.8-1.6 x 40 still contain the new ring, 37-43 / 50-55); the normalisation
+  sigmas (`bg.norm`, `contrast.norm`) stay - they are smoothing scales, and scaling them gave a wider, off ring on one
+  picture. Brightness limit (30) and all other values unchanged.
+- **Top bearing results (real check, OpenCV only):** 8/8 bearing pictures OK, brightness over the open-bore hub picture
+  +39.1..+57.7 (limit 30), ring centres (707-709, 350-357); 13 open-bore hub pictures and 5 washer-only pictures NOT OK
+  (no ring found). Same 26/26 with the search centre moved 2 px either way (705-709 x 352-356). Previous settings: 0/8
+  bearing pictures found. Either open-bore hub picture (DOST or DOSTPLUS) works as the hub reference.
+- **Nut / washer (`siemens.vision.nutwasher.*`, all three properties files):** `nut.detection.center` 612,349 ->
+  **708,358** (11 px below the nut centre, as before). `nut.reference.center` 80/69 unchanged: the nut centre falls at
+  (79, 68) in the search disc again (composite symmetry 81.5-82.6; the Machine 1 point 72/64 gives 68-70). Nut area and
+  shape limits unchanged: the nut measured only 3% larger across, and its outline (about 4650 px) sits inside
+  3000-5500. Washer limits unchanged (0.55 / 5.57, user decision).
+- **Nut / washer results** (nut outline by thresholding standing in for MobileSAM / YOLO, everything after it real):
+  5/5 nut + washer pictures OK, diff_R +32.2..+33.9, diff_RB +7.6..+8.1; 5/5 washer-only pictures NOT OK (no nut).
+  With the previous centre the nut lies outside the search disc (95 px away, radius 80). Note: diff_RB is +7.6..+8.1
+  here against +15..+18 with the previous camera - about 2 above the 5.57 limit.
+- Verifier: ALL EQUIVALENT. Pictures replaced: `test/machine2_dryrun/top_bearing_images/` (DOST / DOSTPLUS bearing),
+  `test/machine2_dryrun/nut_washer_images/` (DOSTPLUS washer / nut; use `top_bearing_images/DOSTPLUS_bearing_01.jpg`
+  as the bearing picture and `hub_images/DOSTPLUS_01.jpg` as the hub reference). Old sets in git history.
