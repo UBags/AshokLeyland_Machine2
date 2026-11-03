@@ -1149,3 +1149,15 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   `docs/knuckle_regions_machine2.jpg`.
 - **Other stations** (hub, top bearing, nut): same camera, so their centres move by the same transform (about +93 px in
   x, +8 px in y, radii x1.10); to be measured on new pictures of those stations.
+
+## 44. Machine 2 camera moved: hub check re-centred (2026-11-03)
+- **Measured on 13 new hub pictures** (8 DOST, 5 DOSTPLUS): hole ring centre (706-709, 351-354), median (707, 352),
+  radius 143.6 (was 130.5); stud ring 172-177 (DOST) / 182-186 (DOSTPLUS) (was 156-161 / 165-167). Ratio 1.10 and the
+  centre agree with the camera change measured on the knuckle pictures (section 43).
+- **`siemens.vision.hub.*`** (all three properties files; logic, tolerances and the centre limit 140 unchanged):
+  `segment.center` 707,352 (was 613,341); `segment.outer/inner.radius` 253/116 (230/105 x1.10); `min/max.mask.area`
+  121/3630 (100/3000 x1.10^2); `centre.check` 707,352, radii 38/60 (35/55 x1.10; the check runs only when
+  enforceBearingAbsenceCheck=True).
+- **Checked here** (the real post-processing - shape filters, grouping, polygon search, model match - with the holes and
+  studs found on the picture standing in for MobileSAM): 13/13 OK with their own model and MISMATCH with the other;
+  with the previous settings 0/13. Pictures replaced in `test/machine2_dryrun/hub_images/` (old set in git history).
