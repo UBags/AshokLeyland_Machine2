@@ -1490,3 +1490,28 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Not yet tested:** the real no-cap state at the cap station is after the split pin and washer; no such Machine 2
   pictures. A bright split pin / washer would raise the r25 brightness.
 - Verifier: reference e9171d2 for CheckCap; ALL EQUIVALENT (both copies).
+
+## 59. Bunk checks (states 13 and 24): Machine 2 centre and DOSTPLUS hole spacing (2026-11-04)
+- **Reference points (unchanged code, `camera/BunkSegmenter.py`):** one centre, `vision.bunk.outer.disc.center`. The r250
+  disc round it is segmented (MobileSAM), holes are kept only inside r110 round the same centre (area 325-1200 px,
+  bounding box 15-45 px), and the same centre is the reference for the DOST square's angular-spacing score. DOST: 4 holes
+  forming a square (sides within 20 % of the median, corners 65-115 deg); DOSTPLUS: exactly 2 holes,
+  `dostplus.hole.pair.distance.min/max` apart. Siemens values were still Machine 1's (630,350; 75-100).
+- **Measured** on 19 Machine 2 pictures of the new bungs (not yet blackened; holes not yet polished), saved in
+  `test/machine2_dryrun/bunk_images/`:
+
+  | bung | pictures | bung face rim centre | hole-pattern centre | holes |
+  |---|---|---|---|---|
+  | DOST (4 holes) | 6 seated | (709.5-716.3, 341.8-348.5), mean (713,345) | mean (715,344) | sides 71.6-77.3 px, 44-63 px from centre |
+  | DOSTPLUS (2 holes) | 7 seated | (713.0-715.4, 336.3-338.2), mean (714,337) | mean (717,337) | pair 108.2-112.0 px apart, 49-62 px from centre |
+
+  6 more DOSTPLUS pictures show the bung not seated (tilted or slid 20-25 px): left out of the centre and saved as
+  `DOSTPLUS_bunk_not_seated_*`.
+- **Change (siemens only, all three properties files):** `vision.bunk.outer.disc.center` 630,350 -> **715,341** (between the
+  two bungs, which are 8 px apart; each within about 5 px of it); `dostplus.hole.pair.distance.min/max` 75/100 -> **95/125**
+  (the Machine 2 DOSTPLUS bung's holes are 108-112 px apart, so the Machine 1 range would reject every one). One centre
+  for both bungs: with it the farthest hole edge is about 85 px from the centre, inside the r110 search disc.
+- **Not tested end-to-end:** MobileSAM is not available in this environment; the blackened / polished bungs will look
+  different (dark holes instead of bright domes). Re-run the bunk dry run on the finished bungs. The check does not test
+  whether the bung is seated: an unseated bung with both holes visible and correctly spaced can pass.
+- Verifier: ALL EQUIVALENT (Machine 1 values unchanged).
