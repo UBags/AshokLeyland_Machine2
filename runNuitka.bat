@@ -57,13 +57,15 @@ if exist MainProgram.dist rmdir /s /q MainProgram.dist
 if exist MainProgram.build rmdir /s /q MainProgram.build
 
 REM ---- compile
+REM torch / torchvision are NOT given as --include-package: that compiles every torch submodule, including torch._dynamo
+REM (torch.compile), which this program never imports and which crashed Nuitka 2.7.10 (torch\_dynamo\pgo.py). The torch
+REM modules the program uses are followed from its imports. The numpy / torch plugins are deprecated (built in now);
+REM --follow-imports is the default in standalone mode.
+python -m nuitka --version
 nuitka --standalone ^
-    --follow-imports ^
     --assume-yes-for-downloads ^
     --remove-output ^
     --force-dll-dependency-cache-update ^
-    --enable-plugin=numpy ^
-    --enable-plugin=torch ^
     --include-module=psycopg2._psycopg ^
     --include-package=psycopg2 ^
     --enable-plugin=tk-inter ^
@@ -77,8 +79,6 @@ nuitka --standalone ^
     --include-package=yaml ^
     --windows-console-mode=attach ^
     --include-package=cv2 ^
-    --include-package=torch ^
-    --include-package=torchvision ^
     --include-package=ultralytics ^
     --include-package=sklearn.externals ^
     MainProgram.py

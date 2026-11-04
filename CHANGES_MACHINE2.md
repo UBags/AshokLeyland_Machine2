@@ -1595,3 +1595,15 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   (Machine 2, `ApplicationConfiguration.Machine2.properties`); case-insensitive. No default and no prompt: with no
   argument, or any other, it prints both commands in full (and the PowerShell form) and exits with code 1 - nothing is
   built or deleted. Replaces the `1` / `2` argument of section 63; everything else unchanged.
+
+## 66. runNuitka.bat: Nuitka crash in torch._dynamo (2026-11-04)
+- **Found (user's build log + nuitka-crash-report.xml):** Nuitka 2.7.10 / Python 3.12 / torch 2.11 crashed optimizing
+  `torch\_dynamo\pgo.py` (NuitkaOptimizationError at an assignment expression inside `with dynamo_timed(...)`). The
+  report lists all 59 `torch._dynamo` modules with reason "Root module": they were compiled only because
+  `--include-package=torch` forces every torch submodule into the build. No project module imports `torch._dynamo`
+  (torch.compile / TorchDynamo is not used).
+- **Change:** removed `--include-package=torch` and `--include-package=torchvision` (the torch modules the program uses
+  are followed from its imports), the deprecated `--enable-plugin=numpy` / `--enable-plugin=torch` (Nuitka warns: built
+  in now) and `--follow-imports` (default in standalone mode). Prints `python -m nuitka --version` before compiling.
+- Not run here (Windows build). If Nuitka still reaches `torch._dynamo` through torch's own imports, upgrade Nuitka
+  (2.7.10 predates torch 2.11).
