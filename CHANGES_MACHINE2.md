@@ -1417,3 +1417,15 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   highest no-washer value.
 - Machine 2 re-run: DOST_nut_01/02/03 OK against all 4 DOST bearing pictures (12/12), DOSTPLUS nuts OK, washer-only
   NOT OK. ALL EQUIVALENT.
+
+## 56. NoBunk check: Machine 2 search centre (2026-11-04)
+- **Checked:** `CheckNoBunk.checkNoBunk` only runs the hexagon nut detector (`HexagonNutDetector`) in a disc of
+  `vision.nobunk.nut.detection.radius` (80) round `vision.nobunk.nut.detection.center` and returns whether a nut was
+  found; no washer comparison. The hexagon tests and the nut reference point (`vision.nut.*`) are shared with the nut /
+  washer check and were already set for Machine 2. Machine 1 uses the same centre for both checks (632,360).
+- **Change:** `siemens.vision.nobunk.nut.detection.center` 632,360 (the Machine 1 value, never re-tuned) -> **708,358**,
+  the Machine 2 nut / washer centre (all three properties files). With the old centre the nut (about 708,347) was 76 px
+  from the centre of an 80 px search disc.
+- **Test** (no NoBunk-stage pictures from Machine 2; the nut pictures stand in; nut outline from thresholding in place
+  of MobileSAM, the detector's real loop and hexagon tests): old centre 0/8 nut pictures OK; new centre 8/8 OK, and 0/9
+  washer-only / bearing pictures OK. Not added to NoBunk: the nut / washer check's ring fallback and size checks.
