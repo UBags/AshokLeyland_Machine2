@@ -12,7 +12,6 @@ REM  The exe reads everything relative to its own folder (MainProgram.dist), so 
 REM    ApplicationConfiguration.properties   <- the chosen machine's properties file (decides IOServer + vision settings)
 REM    models\                               <- MobileSAM / YOLO weights (not in git)
 REM    costhetaio\siemens\IOServerProperties.yaml  (Siemens tag map; included by Nuitka below)
-REM    sklearn data files
 REM ==========================================================================================================
 
 set "VENDOR=%~1"
@@ -65,8 +64,17 @@ REM networkx / pandas / seaborn are left out: no MainProgram code imports them, 
 REM vision checks does not load them (only optional paths of torch.compile / ultralytics training plots would; pandas is
 REM used by the MI dashboard, which is OtherServices.py, not MainProgram). scipy (hub / top bearing / nut checks), sympy
 REM (loaded by torch) and matplotlib (loaded by ultralytics) stay.
+REM Also left out (nothing MainProgram runs imports them; from the 4.3.4 build report):
+REM   sklearn            - only there because of --include-package=sklearn.externals; no code imports sklearn
+REM   torchaudio         - optional import inside torch; never used
+REM   boto3 / botocore / s3transfer - S3 backup only (PostgresBackupUtility imports boto3 in try/except; local backups)
+REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer variant
+REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC
+REM --jobs=4: the C compiler ran out of heap space (C1060 / C1002) on the huge sympy modules with one job per core.
 python -m nuitka --version
 nuitka --standalone ^
+    --jobs=4 ^
+    --module-parameter=torch-disable-jit=yes ^
     --assume-yes-for-downloads ^
     --remove-output ^
     --force-dll-dependency-cache-update ^
@@ -87,7 +95,16 @@ nuitka --standalone ^
     --nofollow-import-to=networkx ^
     --nofollow-import-to=pandas ^
     --nofollow-import-to=seaborn ^
-    --include-package=sklearn.externals ^
+    --nofollow-import-to=sklearn ^
+    --nofollow-import-to=torchaudio ^
+    --nofollow-import-to=boto3 ^
+    --nofollow-import-to=botocore ^
+    --nofollow-import-to=s3transfer ^
+    --nofollow-import-to=pymodbus ^
+    --nofollow-import-to=costhetaio.allenbradley.IOServer_ModbusTCP ^
+    --nofollow-import-to=costhetaio.siemens.s7_read_all_tags ^
+    --nofollow-import-to=costhetaio.siemens.s7_smoke_test ^
+    --nofollow-import-to=costhetaio.siemens.s7_tag_check ^
     MainProgram.py
 
 if errorlevel 1 (
@@ -108,8 +125,6 @@ if exist "models" (
     robocopy "models" "MainProgram.dist\models" /E /NFL /NDL /NJH /NJS /NP >nul
     echo   models\
 )
-robocopy ".venv\lib\site-packages\sklearn" "MainProgram.dist\sklearn" *.css *.json *.txt *.rst /S /NFL /NDL /NJH /NJS /NP >nul
-echo   sklearn data files
 
 echo.
 echo ============================================

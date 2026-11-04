@@ -1617,3 +1617,26 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   and ImageNormalisationWithMask - hub, top bearing, nut checks), sympy (loaded by torch), matplotlib (loaded by ultralytics).
 - Risk: an optional code path of torch (torch.compile) or ultralytics (training plots / `Results.pandas()`) would raise
   ImportError in the exe; MainProgram uses neither.
+
+## 68. runNuitka.bat: C compiler out of heap; more unused packages left out (2026-11-04)
+- **Found (user's build with Nuitka 4.3.4 / Python 3.12.3 / MSVC, crash report):** the Python stage now completes (6305
+  modules); the C stage failed with `fatal error C1060/C1002: compiler is out of heap space` on
+  `sympy.series.formal` and `sympy.polys.polyquinticconst` - very large generated C files compiled with one job per
+  core. sympy is needed (loaded by torch).
+- **Report analysis - in the build but not used by MainProgram:**
+  | package | modules | why it was in |
+  |---|---|---|
+  | sklearn | 278 | `--include-package=sklearn.externals` (no code imports sklearn) |
+  | pandas, networkx, seaborn (+ xlsxwriter) | 626+ | torch / ultralytics optional imports (already excluded in section 67, this build predates it) |
+  | torchaudio | 74 | optional import inside torch |
+  | boto3, botocore, s3transfer | ~115 | `PostgresBackupUtility` S3 backup, imported in try/except; backups are local |
+  | pymodbus + `IOServer_ModbusTCP` | 39 | `--include-package=costhetaio` made the unused Modbus IOServer a root module |
+  | `costhetaio.siemens.s7_*` | 3 | the same; command-line PLC test tools |
+- **Kept** (used): torch (1563), sympy + mpmath (torch), scipy, timm + huggingface_hub (MobileSAM's encoder), torchvision,
+  ultralytics, matplotlib (ultralytics), PIL, cv2, Xlib (imported unconditionally by `frontend/CosThetaMonitorDimensions`),
+  ffmpeg-python + future/past (camera/RTSPCam), FreeSimpleGUI / tkinter (start-up popups).
+- **Change:** `--jobs=4` (fewer parallel compiler processes, each gets more memory); `--nofollow-import-to` sklearn,
+  torchaudio, boto3, botocore, s3transfer, pymodbus, `costhetaio.allenbradley.IOServer_ModbusTCP`, the three
+  `costhetaio.siemens.s7_*`; removed `--include-package=sklearn.externals` and the sklearn data-file copy;
+  `--module-parameter=torch-disable-jit=yes` (Nuitka's default, made explicit to silence its warning).
+- Not run here (Windows build).
