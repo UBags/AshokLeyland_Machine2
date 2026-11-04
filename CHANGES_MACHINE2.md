@@ -1263,3 +1263,35 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Dry-run windows:** DryRun_TopBearing_Check shows the ring's outer diameter / width and the size reason;
   DryRun_NutWasher_Check shows the nut size and the size reason (machine1 copies regenerated).
 - **Verifier:** reference commit 86b4e8f for CheckTopBearing and CheckNutAndPlateWasher; ALL EQUIVALENT.
+
+## 48. Top bearing profile kept in memory (Redis key removed): end-of-cycle message IOServer -> camera server; bearing ranges 86-113 / 9-21 on both machines; mean diameter evaluated (2026-11-04)
+- **Why (user):** Redis is for inter-process communication only; what stays within a process is kept in memory
+  variables. The profile is made and used inside the camera server, so it is kept in `ImageProcessor` again
+  (`bearingCentreAndRadii`, now the full geometry with the edge profile, and `bearingProfileQRCode`, the component it
+  was kept for). The Redis key `TopBearingProfile` and its save / read / clear functions (section 47) are removed.
+- **What the camera server could not know:** the end of a cycle and aborts happen in the IOServer. Now
+  `IOServer._onStateChange` sends `sendEndOfCycleFromIOServerToCameraServer` (action `END_OF_CYCLE`, "completed" /
+  "aborted", on io2camera.q) whenever the machine returns to READ_QR_CODE: cycle completed, PLC emergency button,
+  heartbeat loss, abort from the frontend (in an abort, after the queues are cleared); audited. Own Redis connection
+  with 1 s timeouts. `readDataInCameraServerFromIOServer` returns `(time, READ_QR_CODE, False)` for it (every caller
+  acts only on take-picture, so nothing else changes); `MonitorGetPicQueue.processItem` then calls
+  `ImageProcessor.clearBearingCentreAndRadii()`. If the message is overtaken (the camera queue keeps only the newest
+  message), the next cycle's knuckle request drops the profile as before.
+- **Kept / dropped:** saved after an OK top bearing check; a NOT OK top bearing result drops it (only the top bearing
+  check writes it - nut / washer retakes read the same profile again); `getBearingProfile()` gives it only for the
+  component it was kept for; dropped on the end-of-cycle message and at the knuckle step.
+- **Bearing ranges:** `<vendor>.vision.topbearing.outer.diameter.min/max` = 86 / 113 and `.width.min/max` = 9 / 21 on
+  both machines (code defaults the same).
+- **Mean diameter (user's proposal: the diameter where the mean of the inner and outer profile lands, for bearing and
+  nut) - evaluated, not adopted:** pooled over both machines, bearings 78.5-87.0 px, nuts 64.3-69.7 px (gap 8.8);
+  outer diameter: bearings 92.3-101.7, nuts 73.9-80.9 (gap 11.4). The spread within each group is a little smaller
+  (bearings 8.5 against 9.4, nuts 5.4 against 7.0) but the gap is smaller still, because the mean is the outer
+  diameter minus the width and the bearing ring is 1-3 px wider than the nut's. Per machine: Machine 2 outer gap 17.0
+  / mean gap 15.5; Machine 1 outer gap 11.4 / mean gap 8.8. The outer diameter stays the test.
+- **Results:** top bearing 26/26 both machines, every nut picture (15) NOT OK on size; camera-side profile checks
+  10/10 (kept in memory and not in Redis; another component gets none; picture requests and nut retakes keep it;
+  end-of-cycle message completed / aborted drops it; NOT OK top bearing drops it; knuckle step drops it);
+  DryRun_IOServer_Fault_Scenarios scenario H rewritten (no end-of-cycle message while the cycle runs; exactly one at
+  completion, on a frontend abort, on a PLC emergency abort; a normal cycle afterwards): Machine 2 88/88, Machine 1
+  87/87; DryRun_All_Servers_Integrated_Cycle both vendors as before.
+- **Verifier:** reference commit df144cc for CheckTopBearing; ALL EQUIVALENT.

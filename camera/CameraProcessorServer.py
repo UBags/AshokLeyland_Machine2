@@ -115,6 +115,12 @@ class MonitorGetPicQueue(GenericQueueProcessor):
         except Exception as e:
             logBoth('logWarning', MonitorGetPicQueue.logSource, f"Exception reading camera queue: {e}", Logger.ISSUE)
             self.connectToRedis()
+        if (not takePicture) and currentMachineState == MachineState.READ_QR_CODE:
+            # End-of-cycle message from the IOServer (cycle completed or aborted): drop what was kept for the cycle
+            ImageProcessor.clearBearingCentreAndRadii()
+            logBoth('logInfo', MonitorGetPicQueue.logSource,
+                    "End of cycle from the IOServer: top bearing profile dropped", Logger.SUCCESS)
+            return None
         if takePicture:
             timeOfMessage = float(timeOfMessage)
             logBoth('logInfo', MonitorGetPicQueue.logSource, f"Got takePicture command in MonitorGetPicQueue", Logger.SUCCESS)
@@ -853,7 +859,8 @@ class ImageProcessor():
     currentComponentQRCodeValue: str | None = None
     currentModelName: str | None = None
     currentSide : str | None = None
-    bearingCentreAndRadii: Dict[str, Any] | None = None
+    bearingCentreAndRadii: Dict[str, Any] | None = None      # top bearing ring and edge profile, for the nut / washer check
+    bearingProfileQRCode: str | None = None                  # component it was kept for
 
     # this lock is needed because 3 threads simultaneously call this function, and only 1 message is in the queue
     getQRCodeLock = threading.Lock()
@@ -902,35 +909,30 @@ class ImageProcessor():
     def clearBearingCentreAndRadii(cls):
         try:
             ImageProcessor.bearingCentreAndRadii = None
-            if not clearTopBearingProfile():
-                logBoth('logWarning', ImageProcessor.logSource,
-                        "Could not remove the saved top bearing profile from Redis", Logger.RISK)
+            ImageProcessor.bearingProfileQRCode = None
         except Exception as e:
             logBoth('logWarning', ImageProcessor.logSource,
                     f"Exception in clearBearingCentreAndRadii: {e}", Logger.RISK)
 
     @classmethod
     def saveBearingProfile(cls, geometry: Dict[str, Any] | None):
-        """Keep the top bearing ring (centre, radii, outer diameter, width, edge profile) of the current component in
-        Redis (utils.RedisUtils.saveTopBearingProfile), for the nut / washer check; None removes it. The IOServer
-        removes it when the cycle ends, completed or aborted."""
+        """Keep the top bearing ring (centre, radii, outer diameter, width, edge profile) of the current component for
+        the nut / washer check; None drops it. Dropped also at the end of the cycle (end-of-cycle message from the
+        IOServer: completed or aborted) and when the next cycle's knuckle check starts."""
         ImageProcessor.bearingCentreAndRadii = geometry
-        if geometry is None:
-            saved = clearTopBearingProfile()
-        else:
-            saved = saveTopBearingProfile(geometry, ImageProcessor.currentComponentQRCodeValue)
-        if not saved:
-            logBoth('logWarning', ImageProcessor.logSource,
-                    f"Could not {'remove' if geometry is None else 'save'} the top bearing profile in Redis", Logger.RISK)
+        ImageProcessor.bearingProfileQRCode = None if geometry is None else ImageProcessor.currentComponentQRCodeValue
 
     @classmethod
     def getBearingProfile(cls) -> Dict[str, Any] | None:
-        """The top bearing ring saved in this cycle for the current component, or None (none saved, removed at the end
-        of a cycle or on an abort, or saved for another component)."""
-        profile = readTopBearingProfile(ImageProcessor.currentComponentQRCodeValue)
+        """The top bearing ring kept in this cycle, or None (none kept, dropped at the end of a cycle or on an abort,
+        or kept for another component)."""
+        profile, savedFor = ImageProcessor.bearingCentreAndRadii, ImageProcessor.bearingProfileQRCode
+        current = ImageProcessor.currentComponentQRCodeValue
+        if profile is not None and savedFor is not None and current is not None and savedFor != current:
+            profile = None
         if profile is None:
             logBoth('logWarning', ImageProcessor.logSource,
-                    "No top bearing profile saved for the current component", Logger.RISK)
+                    "No top bearing profile kept for the current component", Logger.RISK)
         return profile
 
     @classmethod
@@ -1274,9 +1276,6 @@ def CameraServer(mode : str = "Test"):
         logBoth('logCritical', logSource, message, MessageType.PROBLEM)
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
-
-    # A top bearing profile left from an earlier run (crash, power cut) is never used in this one
-    clearTopBearingProfile()
 
     # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.

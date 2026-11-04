@@ -43,6 +43,7 @@ HANDSHAKE : str  = "Handshake"
 ALIVE : str  = "Alive"
 DEAD : str = "Dead"
 ABORT : str = "Abort"
+END_OF_CYCLE : str = "End Of Cycle"      # IOServer -> CameraServer: the cycle is over (completed or aborted)
 DOST : str = "DOST"
 DOSTPLUS : str = "DOSTPLUS"
 GARUDA : str = "GARUDA"
@@ -180,7 +181,7 @@ blankWhiteImage = 255 * np.ones(shape=(720, 1280, 3), dtype=np.uint8)
 blankWhiteImage = cv2.putText(blankWhiteImage, f"Picture Not Received", (500, 300), cv2.FONT_HERSHEY_SIMPLEX,
                         1, (255,0,0), 2, cv2.LINE_AA)
 
-ActionType = Literal[updateValueCommand, takePictureCommand, readQRCodeCommand, noActionCommand, moveAheadToNextComponent, ABORT]
+ActionType = Literal[updateValueCommand, takePictureCommand, readQRCodeCommand, noActionCommand, moveAheadToNextComponent, ABORT, END_OF_CYCLE]
 ResultType = Literal[ok,notok]
 ConnectionStatusType = Literal[DEAD, ALIVE]
 ComponentName = Literal[DOST, DOSTPLUS, GARUDA]
@@ -772,6 +773,14 @@ def sendDataFromIOServerToCameraServer(redisConnection : redis.client.Redis, cur
 def sendDataFromIOServerToQRCodeServer(redisConnection : redis.client.Redis, currentMachineState : MachineState = MachineState.READ_QR_CODE, action : ActionType = readQRCodeCommand, aProducer : str = "IOServer", handshake : bool = False):
     data = {currentMachineStateKeyString: currentMachineState, actionKeyString: action}
     return sendData(redisConnection=redisConnection, data=data, queueName=io2qrcodeq, aProducer=f"{aProducer}")
+
+def sendEndOfCycleFromIOServerToCameraServer(redisConnection : redis.client.Redis, aborted : bool = False, aProducer : str = "IOServer"):
+    """The cycle is over (completed, or aborted: emergency button, heartbeat loss, frontend). The camera server then
+    drops what it kept for the cycle (the top bearing profile). Read by readDataInCameraServerFromIOServer(), which
+    returns (time, MachineState.READ_QR_CODE, False) for it."""
+    data = {currentMachineStateKeyString: MachineState.READ_QR_CODE, actionKeyString: END_OF_CYCLE,
+            genericdataKeyString: "aborted" if aborted else "completed"}
+    return sendData(redisConnection=redisConnection, data=data, queueName=io2cameraq, aProducer=f"{aProducer}")
 
 def sendAbortFromIOServerToQRCodeServer(redisConnection : redis.client.Redis, currentMachineState : MachineState = MachineState.READ_QR_CODE, action : ActionType = ABORT, aProducer : str = "IOServer", handshake : bool = False):
     # printBoldBlue(f"Inside sendAbortFromIOServerToQRCodeServer()...")
@@ -1620,6 +1629,12 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, None, False
+    except:
+        noteSuppressed()
+
+    try:
+        if newData.get(actionKeyString) == END_OF_CYCLE:          # the cycle is over: no picture, state READ_QR_CODE
+            return timeOfMessage, MachineState.READ_QR_CODE, False
     except:
         noteSuppressed()
 
@@ -2540,59 +2555,6 @@ def clearKeyCommunicationQueuesOnAbort():
             redisConnection.xtrim(q,0)
         except:
             noteSuppressed()
-
-# ================================================================================
-# Top bearing profile: the ring found by the top bearing check (centre, radii, outer diameter, width and the edge
-# profile of both edges, see CheckTopBearing.checkTopBearing) for the component being assembled. Kept in a Redis key
-# so that the nut / washer check (CameraServer) can use it, and so that the IOServer can remove it when the cycle ends,
-# completed or aborted. One profile at a time: the machine assembles one component at a time.
-
-topBearingProfileKeyString: str = "TopBearingProfile"
-TOP_BEARING_PROFILE_MAX_AGE_SEC: int = 3600     # Redis removes it after this even if nothing else does
-# short timeouts: the IOServer clears it while changing state, which must never hang on Redis
-redisPoolForTopBearingProfile = redis.ConnectionPool(host=redisHostname, port=redisPort, max_connections=4,
-                                                     socket_timeout=1.0, socket_connect_timeout=1.0)
-
-
-def saveTopBearingProfile(profile: dict, componentQRCode: Optional[str]) -> bool:
-    """Save the top bearing profile of the component with this QR code (replaces any saved profile)."""
-    try:
-        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
-        record = {"componentQRCode": componentQRCode, "savedAt": time.time(), "profile": profile}
-        redisConnection.set(topBearingProfileKeyString, json.dumps(record), ex=TOP_BEARING_PROFILE_MAX_AGE_SEC)
-        return True
-    except Exception:
-        noteSuppressed()
-        return False
-
-
-def readTopBearingProfile(componentQRCode: Optional[str] = None) -> Optional[dict]:
-    """The saved top bearing profile, or None if there is none, it cannot be read, or it was saved for another
-    component (both QR codes known and different)."""
-    try:
-        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
-        raw = redisConnection.get(topBearingProfileKeyString)
-        if raw is None:
-            return None
-        record = json.loads(raw)
-        savedFor = record.get("componentQRCode")
-        if componentQRCode is not None and savedFor is not None and savedFor != componentQRCode:
-            return None
-        return record.get("profile")
-    except Exception:
-        noteSuppressed()
-        return None
-
-
-def clearTopBearingProfile() -> bool:
-    """Remove the saved top bearing profile (end of a cycle, abort, start of a new cycle)."""
-    try:
-        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
-        redisConnection.delete(topBearingProfileKeyString)
-        return True
-    except Exception:
-        noteSuppressed()
-        return False
 
 # ================================================================================
 

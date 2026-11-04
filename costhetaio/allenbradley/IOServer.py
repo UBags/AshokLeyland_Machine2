@@ -432,7 +432,7 @@ class IOServer:
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._onStateChange
-        clearTopBearingProfile()             # none from an earlier run (crash, power cut) is used in this one
+        self._cycleEndRedisConnection = None  # end-of-cycle message to the camera server (_onStateChange)
         # Vision result reset: one scheduler thread for all checks; READ states that ignore their trigger until the
         # PC has reset it after a NOT OK (see scheduleVisionResultReset)
         self._resultResetScheduler = DelayedJobScheduler("Vision Result Reset Scheduler")
@@ -1853,16 +1853,24 @@ class IOServer:
     def _onStateChange(self, oldState, newState) -> None:
         """Every state change: audit trail; and when the machine goes back to READ_QR_CODE the cycle is over -
         completed (from the last state) or aborted (emergency button, heartbeat loss, frontend abort, from any other
-        state) - so the top bearing profile kept for the nut / washer check is removed."""
+        state) - so the camera server is told (end-of-cycle message on its queue, sent after an abort has cleared the
+        queues) and drops what it kept for the cycle: the top bearing profile for the nut / washer check."""
         self._auditStateChange(oldState, newState)
         if newState == MachineState.READ_QR_CODE and oldState is not None and oldState != MachineState.READ_QR_CODE:
-            how = "completed" if oldState == MachineState.READ_FREE_ROTATION_TORQUE_1 else f"aborted in {getattr(oldState, 'name', oldState)}"
-            if clearTopBearingProfile():
-                self._audit(f"Top bearing profile removed (cycle {how})")
-            else:
-                self._audit(f"Top bearing profile NOT removed (cycle {how}): Redis not reachable; it expires by itself")
+            completed = oldState == MachineState.READ_FREE_ROTATION_TORQUE_1
+            how = "completed" if completed else f"aborted in {getattr(oldState, 'name', oldState)}"
+            sent = False
+            try:
+                if self._cycleEndRedisConnection is None:      # short timeouts: a state change must never hang on Redis
+                    self._cycleEndRedisConnection = Redis(redisHostname, redisPort, socket_timeout=1.0,
+                                                          socket_connect_timeout=1.0, retry_on_timeout=True)
+                sent = bool(sendEndOfCycleFromIOServerToCameraServer(self._cycleEndRedisConnection, aborted=not completed))
+            except Exception:
+                noteSuppressed()
+            self._audit(f"End of cycle ({how}) {'sent' if sent else 'NOT sent (Redis not reachable)'} to the camera server")
+            if not sent:
                 try:
-                    self.logger.error(f"Could not remove the top bearing profile from Redis (cycle {how})")
+                    self.logger.error(f"Could not send the end of cycle ({how}) to the camera server")
                 except Exception:
                     noteSuppressed()
 

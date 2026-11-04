@@ -3,7 +3,7 @@
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "637ce4a",
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
-    "camera/CheckTopBearing.py": "86b4e8f",
+    "camera/CheckTopBearing.py": "df144cc",
     "camera/CheckNutAndPlateWasher.py": "86b4e8f"
   },
   "extracted": {
