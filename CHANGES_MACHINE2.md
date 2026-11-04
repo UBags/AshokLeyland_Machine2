@@ -1607,3 +1607,13 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   in now) and `--follow-imports` (default in standalone mode). Prints `python -m nuitka --version` before compiling.
 - Not run here (Windows build). If Nuitka still reaches `torch._dynamo` through torch's own imports, upgrade Nuitka
   (2.7.10 predates torch 2.11).
+
+## 67. runNuitka.bat: networkx / pandas / seaborn left out of the build (2026-11-04)
+- **Checked (user, in the venv):** importing torch, ultralytics and the vision checks loads sympy, scipy and matplotlib;
+  networkx, pandas and seaborn are not loaded. In the project, outside test/ and endpoints/, nothing imports networkx,
+  pandas or seaborn; pandas is only in `endpoints/AshokLeyland_MI_Light.py`, started by `OtherServices.py`, not by
+  MainProgram (its web-service / MI processes are commented out).
+- **Change:** `--nofollow-import-to=networkx`, `pandas`, `seaborn`. Kept: scipy (used directly by HubAndBearingSegmenter
+  and ImageNormalisationWithMask - hub, top bearing, nut checks), sympy (loaded by torch), matplotlib (loaded by ultralytics).
+- Risk: an optional code path of torch (torch.compile) or ultralytics (training plots / `Results.pandas()`) would raise
+  ImportError in the exe; MainProgram uses neither.

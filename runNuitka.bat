@@ -61,6 +61,10 @@ REM torch / torchvision are NOT given as --include-package: that compiles every 
 REM (torch.compile), which this program never imports and which crashed Nuitka 2.7.10 (torch\_dynamo\pgo.py). The torch
 REM modules the program uses are followed from its imports. The numpy / torch plugins are deprecated (built in now);
 REM --follow-imports is the default in standalone mode.
+REM networkx / pandas / seaborn are left out: no MainProgram code imports them, and importing torch, ultralytics and the
+REM vision checks does not load them (only optional paths of torch.compile / ultralytics training plots would; pandas is
+REM used by the MI dashboard, which is OtherServices.py, not MainProgram). scipy (hub / top bearing / nut checks), sympy
+REM (loaded by torch) and matplotlib (loaded by ultralytics) stay.
 python -m nuitka --version
 nuitka --standalone ^
     --assume-yes-for-downloads ^
@@ -80,6 +84,9 @@ nuitka --standalone ^
     --windows-console-mode=attach ^
     --include-package=cv2 ^
     --include-package=ultralytics ^
+    --nofollow-import-to=networkx ^
+    --nofollow-import-to=pandas ^
+    --nofollow-import-to=seaborn ^
     --include-package=sklearn.externals ^
     MainProgram.py
 
