@@ -1378,3 +1378,13 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Results:** the six Machine 1 cases accepted; Machine 1 nut pictures 10/10 OK; Machine 2 DOSTPLUS nuts and
   DOST_nut_03 OK, washer-only NOT OK, DOST_nut_01/02 NOT OK on the washer diff_RB (unchanged, user decision).
   Verifier: reference for CheckNutAndPlateWasher in `baseline_per_file` updated; ALL EQUIVALENT.
+
+## 53. Nut / plate washer settings of both machines in sync (2026-11-04)
+- The nut / washer logic changes (sections 47-52: size checks, bore search 0.6-0.9 R, failure reason kept,
+  thickness-symmetry rejection removed, ring fallback, width limit removed) are in the shared code and apply to both
+  machines; removed keys are removed for both. Compared every `<vendor>.vision.nut*` key: the only remaining
+  difference besides the camera positions (`nutwasher.nut.detection.center`, `nut.reference.center.x/y`) was the nut
+  outer diameter range, Machine 1 64-84 / Machine 2 66-87. Machine 2 set to 64-84 (= Machine 1 = code default;
+  Machine 2 nuts measure 74.6-77.0).
+- Machine 2 re-run: DOSTPLUS nuts and DOST_nut_03 OK, washer-only NOT OK, DOST_nut_01/02 NOT OK on the washer diff_RB
+  (unchanged, user decision). Verifier ALL EQUIVALENT.
