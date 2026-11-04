@@ -1531,3 +1531,14 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Found:** on the Machine 2 bungs the DOST holes' diagonals are 98.5-100.0 and 110.8-111.4 px; the DOSTPLUS pair is
   108-112 px. If only two diagonal holes of a DOST bung are found, the check as DOSTPLUS would pass it; distance cannot
   tell them apart. Protection is the hole count (4 holes found when 2 are expected = NOT OK, existing logic).
+
+## 61. Bunk check dry run with a window (both machines) (2026-11-04)
+- `test/machine2_dryrun/DryRun_Bunk_Check_UI.py` (Machine 1 copy generated): tkinter window - model drop-down
+  (DOST / DOSTPLUS, applied to every picture in the folder), Folder button, seconds-between-pictures drop-down
+  (0.5-20), check drop-down (CheckBunk state 24 / CheckNoCapBunk state 13), "Save marked pictures"
+  (`<folder>/bunk_results/`), Start / Stop. Shows each picture with the segmented disc, the hole search disc and centre,
+  the holes found and an OK / NOT OK banner with the hole count, spacing, offset from the set centre, deciding gamma and
+  time; a list of all results below. Models load in the background when the window opens.
+- Tested here without tkinter or MobileSAM (neither installable in this environment): the window's load / run /
+  marking code with stand-ins (pin finder for MobileSAM) - Siemens settings read, both checks run, results and marked
+  pictures produced. The window itself was not opened here.
