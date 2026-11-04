@@ -1515,3 +1515,19 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   different (dark holes instead of bright domes). Re-run the bunk dry run on the finished bungs. The check does not test
   whether the bung is seated: an unseated bung with both holes visible and correctly spaced can pass.
 - Verifier: ALL EQUIVALENT (Machine 1 values unchanged).
+
+## 60. Bunk check dry run (both machines) (2026-11-04)
+- **Machine 1 has one bunk centre for both bungs** (`vision.bunk.outer.disc.center` is the only centre in the code and in
+  its history), so Machine 2 keeps one too (715,341, section 59).
+- **New:** `test/machine2_dryrun/DryRun_Bunk_Check.py` (Machine 1 copy generated). Runs the real `CheckBunk.checkBunk`
+  (state 24) and / or `CheckNoCapBunk.checkNoCapBunk` (state 13) with this machine's settings on `<folder>/DOST_*` and
+  `DOSTPLUS_*` pictures: each as its own model (must be OK) and as the other model (must be NOT OK); `*not_seated*` only
+  reported. Prints the deciding gamma, the holes found (centres in the full picture), the pair distance or the 4 sides,
+  and the distance of the holes' centre from the set centre; `--save` writes marked pictures (search circles, holes) to
+  `<folder>/bunk_results/`. Options `--check bunk|nocap|both`, `--folder`. Needs MobileSAM (as the camera server).
+- Tested here without MobileSAM (not installed): with a simple pin finder in place of the mask generator, everything
+  else real - the script reads the Siemens settings (715,341; 95-125), runs both checks and reports as designed; the
+  verdicts from that stand-in say nothing about MobileSAM's.
+- **Found:** on the Machine 2 bungs the DOST holes' diagonals are 98.5-100.0 and 110.8-111.4 px; the DOSTPLUS pair is
+  108-112 px. If only two diagonal holes of a DOST bung are found, the check as DOSTPLUS would pass it; distance cannot
+  tell them apart. Protection is the hole count (4 holes found when 2 are expected = NOT OK, existing logic).
