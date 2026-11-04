@@ -1408,3 +1408,12 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   part): diff_R -2.5..+2.5, diff_RB -0.82..+0.81 (unchanged). Machine 1 nuts all OK (diff_RB +11.7..+31.0). Limits
   unchanged (0.55 / 5.57): DOST_nut_01 now passes against 3 of the 4 DOST bearing pictures, DOST_nut_02 against 1.
 - Verifier: reference 8ece644 for CheckNutAndPlateWasher; ALL EQUIVALENT.
+
+## 55. Washer R-B limit 5.57 -> 3.5 (both machines) (2026-11-04)
+- `<vendor>.vision.nutwasher.washer.threshold.rb` = 3.5 in all three properties files (user decision; machines in sync,
+  so the code default is 3.5 too - verifier reference 181790d). diff_R limit unchanged (0.55).
+- Measured with the area of section 54: washer present diff_RB +5.36..+8.56 (Machine 2 DOST), +13.8..+14.6 (DOSTPLUS),
+  +11.7..+31.0 (Machine 1); no washer -0.82..+0.81. Margins: 1.86 below the lowest washer value, 2.69 above the
+  highest no-washer value.
+- Machine 2 re-run: DOST_nut_01/02/03 OK against all 4 DOST bearing pictures (12/12), DOSTPLUS nuts OK, washer-only
+  NOT OK. ALL EQUIVALENT.
