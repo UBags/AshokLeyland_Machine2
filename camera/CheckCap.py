@@ -14,14 +14,13 @@ Detection Method:
         - Calculate average (R - B) within the circular mask
         - If R - B average is less than threshold, Step 2 passes
 
-Parameters (from configuration):
-    CENTER_X, CENTER_Y: Center of the cap region (default: 635, 360)
+Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.properties):
+    CENTER: centre of the cap region (Machine 1: 635, 360)
     RADIUS: 100 for DOST, 70 for DOSTPLUS
-    DELTA_THRESHOLD: Minimum average delta required (default: 30)
-    RB_THRESHOLD: Maximum R-B value for cap (default: -1)
+    DELTA_THRESHOLD_HUB/TOP/NUT: Step 1 minimum brightening against each earlier picture, per model
+    RB_THRESHOLD: Step 2 R-B limit (DOST: below -1, DOSTPLUS: above 15)
 """
 
-from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import cv2
 import numpy as np
 from typing import Dict, Tuple
@@ -71,51 +70,26 @@ class CheckCap:
     with previously captured images using a circular mask and color analysis.
     """
 
-    # Default detection parameters (will be overridden by configuration)
-    CENTER_X = 633
-    CENTER_Y = 344
-    RADIUS_DOST = 90
-    RADIUS_DOSTPLUS = 65
-    DELTA_THRESHOLD_DOST = 30.0
-    RB_THRESHOLD_DOST = -1.0
-    DELTA_THRESHOLD_DOSTPLUS = 30.0
-    RB_THRESHOLD_DOSTPLUS = 15.0
+    # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
+    # properties file is used from the next picture on.
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
-    # Component-specific delta thresholds for Step 1
+    # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
     DELTA_THRESHOLD_HUB_DOST = 30.0
     DELTA_THRESHOLD_TOP_DOST = 30.0
     DELTA_THRESHOLD_NUT_DOST = 35.0
 
     DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
-    DELTA_THRESHOLD_TOP_DOSTPLUS = 40.0  # <-- This is the key change!
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
     DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
     # Cached circular mask
     _circular_mask = None
-    _mask_shape = None
-    _mask_radius = None
-
-    @classmethod
-    def _load_parameters_from_config(cls, componentType: str = "DOST"):
-        """Load parameters from configuration file."""
-        try:
-            cls.CENTER_X = CosThetaConfigurator.getInstance().getCapCheckCenterX()
-            cls.CENTER_Y = CosThetaConfigurator.getInstance().getCapCheckCenterY()
-            cls.RADIUS_DOST = CosThetaConfigurator.getInstance().getCapCheckRadius(DOST)
-            cls.RADIUS_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckRadius(DOSTPLUS)
-            cls.DELTA_THRESHOLD_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThreshold(DOST)
-            cls.RB_THRESHOLD_DOST = CosThetaConfigurator.getInstance().getCapCheckRBThreshold(DOST)
-            cls.DELTA_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThreshold(DOSTPLUS)
-            cls.RB_THRESHOLD_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckRBThreshold(DOSTPLUS)
-            # Load component-specific thresholds if available
-            cls.DELTA_THRESHOLD_HUB_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdHub(DOSTPLUS)
-            cls.DELTA_THRESHOLD_TOP_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdTop(DOSTPLUS)
-            cls.DELTA_THRESHOLD_NUT_DOSTPLUS = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdNut(DOSTPLUS)
-            cls.DELTA_THRESHOLD_HUB_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdHub(DOST)
-            cls.DELTA_THRESHOLD_TOP_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdTop(DOST)
-            cls.DELTA_THRESHOLD_NUT_DOST = CosThetaConfigurator.getInstance().getCapCheckDeltaThresholdNut(DOST)
-        except:
-            noteSuppressed()
+    _mask_key = None
 
     @classmethod
     def _get_radius_for_component(cls, componentType: str) -> int:
@@ -130,16 +104,14 @@ class CheckCap:
         Get the circular mask for the given image shape and radius.
         Creates it on first call or if parameters change, then reuses cached version.
         """
-        if (cls._circular_mask is None or
-                cls._mask_shape != image_shape[:2] or
-                cls._mask_radius != radius):
+        key = (tuple(image_shape[:2]), tuple(cls.CENTER), radius)      # the centre can change on a live reload
+        if cls._circular_mask is None or cls._mask_key != key:
             h, w = image_shape[:2]
             mask = np.zeros((h, w), dtype=np.uint8)
-            cv2.circle(mask, (CheckCap.CENTER_X, CheckCap.CENTER_Y), radius, 255, -1)
+            cv2.circle(mask, (int(cls.CENTER[0]), int(cls.CENTER[1])), radius, 255, -1)
 
             cls._circular_mask = mask
-            cls._mask_shape = image_shape[:2]
-            cls._mask_radius = radius
+            cls._mask_key = key
 
         return cls._circular_mask
 
@@ -203,7 +175,7 @@ class CheckCap:
 
         # Draw the circular region
         color = (0, 255, 0) if is_cap_present else (0, 0, 255)
-        cv2.circle(annotated, (CheckCap.CENTER_X, CheckCap.CENTER_Y), radius, color, 2)
+        cv2.circle(annotated, (int(CheckCap.CENTER[0]), int(CheckCap.CENTER[1])), radius, color, 2)
 
         # Add result text
         result_text = "CAP: PRESENT" if is_cap_present else "CAP: NOT DETECTED"
@@ -289,9 +261,6 @@ class CheckCap:
         if modelName == UNKNOWN:
             modelName = "DOST"
 
-        # Load parameters from configuration
-        CheckCap._load_parameters_from_config(modelName)
-
         # Get radius based on component type
         radius = CheckCap._get_radius_for_component(modelName)
 
@@ -316,46 +285,6 @@ class CheckCap:
         try:
             # Get circular mask
             mask = CheckCap._get_circular_mask(anImage.shape, radius)
-
-            # # =====================================================================
-            # # STEP 1: Color Delta Analysis
-            # # =====================================================================
-            # delta_averages = []
-            # step1_all_pass = True
-            #
-            # for name, base_image in base_images:
-            #     _, delta_avg = CheckCap._compute_clamped_delta_grayscale(
-            #         anImage, base_image, mask
-            #     )
-            #     delta_averages.append(delta_avg)
-            #
-            #     if modelName == DOST:
-            #         if delta_avg < CheckCap.DELTA_THRESHOLD_DOST:
-            #             step1_all_pass = step1_all_pass and False
-            #             logBoth('logError', _src,
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOST}",
-            #                 MessageType.ISSUE)
-            #         else:
-            #             logBoth('logInfo', _src,
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOST}",
-            #                 MessageType.SUCCESS)
-            #     elif modelName == DOSTPLUS:
-            #         if delta_avg < CheckCap.DELTA_THRESHOLD_DOSTPLUS:
-            #             step1_all_pass = step1_all_pass and False
-            #             logBoth('logError', _src,
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}",
-            #                 MessageType.ISSUE)
-            #         else:
-            #             logBoth('logInfo', _src,
-            #                 f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={CheckCap.DELTA_THRESHOLD_DOSTPLUS}",
-            #                 MessageType.SUCCESS)
-            #
-            # step1_passed = step1_all_pass
-            #
-            # if step1_passed:
-            #     logBoth('logInfo', _src, "CheckCap: Step 1 PASSED - All delta comparisons above threshold", MessageType.SUCCESS)
-            # else:
-            #     logBoth('logError', _src, "CheckCap: Step 1 FAILED - Not all delta comparisons above threshold", MessageType.ISSUE)
 
             # =====================================================================
             # STEP 1: Color Delta Analysis with Component-Specific Thresholds
@@ -473,16 +402,16 @@ class CheckCap:
         print(f"{CYAN}{'=' * 80}{RESET}")
         print(f"\nDirectory: {directory_path}")
         print(f"Parameters:")
-        print(f"  Center: ({CheckCap.CENTER_X}, {CheckCap.CENTER_Y})")
+        print(f"  Center: {CheckCap.CENTER}")
         if DOSTPLUS in directory_path:
             print("In DOSTPLUS path")
             print(f"  Radius DOSTPLUS: {CheckCap.RADIUS_DOSTPLUS}")
-            print(f"  Delta Threshold: {CheckCap.DELTA_THRESHOLD_DOSTPLUS}")
+            print(f"  Delta Thresholds hub/top/nut: {CheckCap.DELTA_THRESHOLD_HUB_DOSTPLUS}/{CheckCap.DELTA_THRESHOLD_TOP_DOSTPLUS}/{CheckCap.DELTA_THRESHOLD_NUT_DOSTPLUS}")
             print(f"  R-B Threshold: {CheckCap.RB_THRESHOLD_DOSTPLUS}")
         else:
             print("In DOST path")
             print(f"  Radius DOST: {CheckCap.RADIUS_DOST}")
-            print(f"  Delta Threshold: {CheckCap.DELTA_THRESHOLD_DOST}")
+            print(f"  Delta Thresholds hub/top/nut: {CheckCap.DELTA_THRESHOLD_HUB_DOST}/{CheckCap.DELTA_THRESHOLD_TOP_DOST}/{CheckCap.DELTA_THRESHOLD_NUT_DOST}")
             print(f"  R-B Threshold: {CheckCap.RB_THRESHOLD_DOST}")
 
 
