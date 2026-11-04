@@ -1581,3 +1581,11 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   finds nothing - a vision value changed in the properties file takes effect after a restart. Other settings read
   through `getValue` still reload live.
 - Not run here (Windows / Nuitka / CUDA build).
+
+## 64. Default machine is now Machine 2 (2026-11-04)
+- `ApplicationConfiguration.properties` = `ApplicationConfiguration.Machine2.properties` (`plc.vendor=siemens`): running
+  `python MainProgram.py` from the repo starts the Siemens IOServer and uses the `siemens.vision.*` settings (user's
+  decision). Machine 1 from source: `COSTHETA_PLC_VENDOR=allenbradley`, or copy `ApplicationConfiguration.Machine1.properties`
+  over it. The exe build is unaffected (`runNuitka.bat 1|2` copies the machine's own file).
+- `DryRun_Logging_And_Live_Config.py` (both copies), check L9: compares `plc.vendor` with the value in the live file
+  instead of a fixed "allenbradley". L9 passes. Verifier ALL EQUIVALENT.

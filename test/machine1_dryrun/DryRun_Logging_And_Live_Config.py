@@ -33,6 +33,7 @@ LOGDIR_NAME = "logs/dryrun_logging"
 LOGDIR = ROOT / LOGDIR_NAME
 shutil.rmtree(LOGDIR, ignore_errors=True)
 text = (ROOT / "ApplicationConfiguration.properties").read_text(encoding="ascii")
+FILE_VENDOR = re.search(r"^plc\.vendor=(\S+)", text, re.M).group(1)    # whichever machine the live file is for
 
 def set_props(**changes):
     """Rewrite keys in the copy (dots written as __ in the argument names); mtime bumped so the change is seen."""
@@ -210,9 +211,9 @@ full = text
 PROPS.write_text("\n".join(full.splitlines()[:20]), encoding="ascii"); t2 = time.time() + 2; os.utime(PROPS, (t2, t2))
 time.sleep(1.5)
 check("L9 half-written file (20 lines) not applied: values unchanged", str(C.getValue("time.to.display.ok.images")) == "0.75"
-      and C.getValue("plc.vendor") == "allenbradley")
+      and C.getValue("plc.vendor") == FILE_VENDOR)
 set_props()                                                    # complete file again
-check("L9 complete file applied again", wait_for(lambda: C.getValue("plc.vendor") == "allenbradley", 4))
+check("L9 complete file applied again", wait_for(lambda: C.getValue("plc.vendor") == FILE_VENDOR, 4))
 
 # ---------------------------------------------------------------- L10
 print("\n=== L10 vision constants live ===", flush=True)
