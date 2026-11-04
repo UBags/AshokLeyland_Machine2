@@ -33,6 +33,7 @@ except:
 
 from camera.HexagonNutDetector import NutDetector
 from camera.CheckTopBearing import CheckTopBearing
+from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -89,25 +90,25 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = 3.0            # Gamma correction value
+    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = (632, 360)
-    NUT_DETECTION_RADIUS = 80
+    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
+    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
 
     # Accepted nut (the outline found by the nut detector): outer diameter (circle of the outline's area) and width
     # (outer radius minus the radius of the nut's bore, measured on the picture), px. A shape outside these ranges
     # is not a nut (a bearing ring is about 92-102 px across).
-    NUT_OUTER_DIAMETER_MIN = 64.0
-    NUT_OUTER_DIAMETER_MAX = 84.0
-    NUT_WIDTH_MIN = 6.0
-    NUT_WIDTH_MAX = 13.0
+    NUT_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.outer.diameter.min", 64.0)
+    NUT_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.outer.diameter.max", 84.0)
+    NUT_WIDTH_MIN = vFloat("vision.nutwasher.nut.width.min", 6.0)
+    NUT_WIDTH_MAX = vFloat("vision.nutwasher.nut.width.max", 13.0)
     # and its mean diameter (outline and bore averaged round the nut) within this range (nuts 64-70, a whole bearing
     # 78-87, a disc the size of a bearing's bore 54-58)
-    NUT_MEAN_DIAMETER_MIN = 60.0
-    NUT_MEAN_DIAMETER_MAX = 72.0
+    NUT_MEAN_DIAMETER_MIN = vFloat("vision.nutwasher.nut.mean.diameter.min", 60.0)
+    NUT_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.mean.diameter.max", 72.0)
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None

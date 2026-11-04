@@ -1314,3 +1314,31 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Results (all limits):** top bearing 26/26 both machines; nut / washer 5/5 Machine 2 nut + washer OK, 5/5
   washer-only NOT OK, Machine 1 nut sizes all accepted (AB_nut_06/07 fail before the size test with the stand-in
   outline, as before). Dry-run windows show the mean diameter. Verifier: reference 7f62a10; ALL EQUIVALENT.
+
+## 50. Nut / washer check: three Machine 2 DOST pictures failing with nut and washer present - bore search, failure reason, nut mean diameter minimum (2026-11-04)
+- **Pictures** (added as `test/machine2_dryrun/nut_washer_images/DOST_nut_01..03.jpg`; use a DOST bearing picture):
+  DOST_nut_01 = ...4720 (washer NOT OK: diff_RB +5.1 <= 5.57), DOST_nut_02 = ...6408 ("no hexagon"),
+  DOST_nut_03 = ...8287 ("not a nut's size": width 21.5, mean diameter 56.5). On these DOST parts the nut face is a
+  narrow bright hexagon; inside it a dark gap, then the bright collar of the shaft end, then the dark hole.
+- **8287 - bore found on the shaft-end collar (fixed):** width 21.5 = bore radius 17.6 = 0.45 x the outer radius,
+  the lower end of the bore search. Dark-to-bright steps measured round the nut: the nut face's inner edge (the bore)
+  at 0.72-0.77 R (strength 82-117) on all 18 nut pictures; the shaft-end collar at 0.42-0.47 R (39-75, strongest on
+  the DOST pictures). `_measure_nut` now searches 0.6-0.9 R. All nuts that passed: same bore (26.9-31.4) and width
+  (8.4-10.6).
+- **6408 - reason hidden (fixed reporting):** `NutDetector.detect_nut_in_image` kept a failure reason only for
+  area / color / no_nut; every other rejection (hexagon tests, symmetry / thickness, centre overlap, centre disc)
+  was dropped and the dry-run window showed "no hexagon". It now keeps the first rejection of any kind (no change to
+  OK / NOT OK). With the nut outline from thresholding standing in for MobileSAM, 6408 is rejected for
+  "low_thickness (score=44.3 < 45)" (8287: 45.2, just above); the reason with MobileSAM's outline is to be read in the
+  window. Not changed: the thickness limit.
+- **Nut mean diameter minimum `<vendor>.vision.nutwasher.nut.mean.diameter.min` = 60 (both machines):** with the
+  narrower bore search a disc the size of a bearing's bore has width 13.8-14.6 (limit 13; was 15.5-18.6), so the
+  width alone rejected it by 0.8 px; its mean diameter is 54.7-57.4, nuts 65.0-69.9. Range now 60-72.
+- **4720 - washer (not changed, for a decision):** diff_R +45.3..+48.0 (limit 0.55), diff_RB +4.1..+5.4 (limit
+  5.57) against any of the 8 bearing pictures; DOST_nut_03 diff_RB +7.1..+7.6; DOSTPLUS nut pictures +13.6..+14.4.
+  Without a washer (bearing against bearing of the same part): diff_R -2.6..+2.6, diff_RB -0.8..+0.8.
+- **Idea evaluated, not adopted:** a regular hexagon fitted to the nut's outer edge found along every 2 degrees within
+  +/- 15 px of the nut ring: circle-fit / hexagon-fit ratio nuts 0.76-1.60, bearings 0.36-1.03; 6-fold ripple nuts
+  0.5-5.2 %, bearings 0.3-6.3 %; the three failing pictures had the weakest hexagon signal (0.8-1.9 %).
+- Verifier: reference fc95d43 for CheckNutAndPlateWasher and HexagonNutDetector (now in `baseline_per_file`);
+  ALL EQUIVALENT.
