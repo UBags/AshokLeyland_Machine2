@@ -2,23 +2,23 @@
 CheckCap - Detects presence of Cap by comparing with previous assembly stage images.
 
 Detection Method:
-    Two-step verification:
-
-    Step 1: Color Delta Analysis
+    Step 1: Which cap - brass if mean R-B in the DOSTPLUS circle is above the DOSTPLUS R-B limit; else silver if mean
+            R-B in the DOST circle is below the DOST R-B limit AND the mean brightness within the silver brightness
+            radius reaches its minimum; else no cap.
+    Step 2: The cap found must be the model's cap (DOST: silver, DOSTPLUS: brass, from the QR code).
+    Step 3 (limits of the cap found): Color Delta Analysis
         - Compare Cap image against 3 base images (Hub+Bottom Bearing, Top Bearing, Nut+Plate Washer)
         - For each pixel in circular mask, calculate (R_cap - R_base), (G_cap - G_base), (B_cap - B_base)
         - Clamp values to [0, 255] and average to get grayscale delta
-        - If average delta for all 3 comparisons exceeds threshold, Step 1 passes
-
-    Step 2: Cap Color Verification
-        - Calculate average (R - B) within the circular mask
-        - If R - B average is less than threshold, Step 2 passes
+        - All 3 averages must reach the limits of the cap found
+    Result OK = right cap AND all 3 comparisons pass.
 
 Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.properties):
     CENTER: centre of the cap region (Machine 1: 635, 360)
     RADIUS: 100 for DOST, 70 for DOSTPLUS
-    DELTA_THRESHOLD_HUB/TOP/NUT: Step 1 minimum brightening against each earlier picture, per model
-    RB_THRESHOLD: Step 2 R-B limit (DOST: below -1, DOSTPLUS: above 15)
+    DELTA_THRESHOLD_HUB/TOP/NUT: Step 3 minimum brightening against each earlier picture, per cap
+    RB_THRESHOLD: Step 1 R-B limits (silver: below -1, brass: above 15)
+    SILVER_BRIGHTNESS_RADIUS / _MIN: Step 1 silver brightness test (radius 25; minimum 0 = off)
 """
 
 import cv2
@@ -27,7 +27,6 @@ from typing import Dict, Tuple
 import glob
 import os
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -73,24 +72,29 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = 30.0
+    DELTA_THRESHOLD_TOP_DOST = 30.0
+    DELTA_THRESHOLD_NUT_DOST = 35.0
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
+    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
-    # Cached circular mask
-    _circular_mask = None
-    _mask_key = None
+    # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
+    # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
+    # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
+    SILVER_BRIGHTNESS_RADIUS = 25
+    SILVER_BRIGHTNESS_MIN = 0.0
+
+    # Cached circular masks, keyed on (image size, centre, radius)
+    _circular_masks = {}
 
     @classmethod
     def _get_radius_for_component(cls, componentType: str) -> int:
@@ -106,15 +110,16 @@ class CheckCap:
         Creates it on first call or if parameters change, then reuses cached version.
         """
         key = (tuple(image_shape[:2]), tuple(cls.CENTER), radius)      # the centre can change on a live reload
-        if cls._circular_mask is None or cls._mask_key != key:
+        mask = cls._circular_masks.get(key)
+        if mask is None:
             h, w = image_shape[:2]
             mask = np.zeros((h, w), dtype=np.uint8)
             cv2.circle(mask, (int(cls.CENTER[0]), int(cls.CENTER[1])), radius, 255, -1)
+            if len(cls._circular_masks) > 16:
+                cls._circular_masks.clear()
+            cls._circular_masks[key] = mask
 
-            cls._circular_mask = mask
-            cls._mask_key = key
-
-        return cls._circular_mask
+        return mask
 
     @staticmethod
     def _compute_clamped_delta_grayscale(cap_image: np.ndarray,
@@ -166,41 +171,45 @@ class CheckCap:
     @staticmethod
     def _create_annotated_image(image: np.ndarray,
                                 is_cap_present: bool,
+                                cap_found: str | None,
+                                model_name: str,
                                 step1_passed: bool,
-                                step2_passed: bool,
                                 delta_averages: list,
                                 rb_average: float,
+                                brightness: float,
                                 radius: int) -> np.ndarray:
         """Create an annotated version of the input image showing the detection result."""
         annotated = image.copy()
+        centre = (int(CheckCap.CENTER[0]), int(CheckCap.CENTER[1]))
 
-        # Draw the circular region
+        # Draw the circular regions: the comparison circle and the silver brightness circle
         color = (0, 255, 0) if is_cap_present else (0, 0, 255)
-        cv2.circle(annotated, (int(CheckCap.CENTER[0]), int(CheckCap.CENTER[1])), radius, color, 2)
+        cv2.circle(annotated, centre, radius, color, 2)
+        cv2.circle(annotated, centre, int(CheckCap.SILVER_BRIGHTNESS_RADIUS), (255, 255, 0), 1)
 
         # Add result text
         result_text = "CAP: PRESENT" if is_cap_present else "CAP: NOT DETECTED"
         cv2.putText(annotated, result_text, (50, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
 
+        # Cap found against the cap this model needs
+        found = {DOSTPLUS: "brass", DOST: "silver"}.get(cap_found, "none")
+        needed = "brass" if model_name == DOSTPLUS else "silver"
+        cap_color = (0, 255, 0) if cap_found == model_name else (0, 0, 255)
+        cv2.putText(annotated, f"Cap found: {found} (needed: {needed})", (50, 90),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, cap_color, 2)
+        cv2.putText(annotated, f"  R-B={rb_average:.1f}  brightness r{CheckCap.SILVER_BRIGHTNESS_RADIUS}={brightness:.0f}",
+                    (50, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
         # Add Step 1 details
-        step1_color = (0, 255, 0) if step1_passed else (0, 0, 255)
-        step1_text = f"Step1: {'PASS' if step1_passed else 'FAIL'}"
-        cv2.putText(annotated, step1_text, (50, 90),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, step1_color, 2)
-
-        # Add delta values
-        labels = ["Hub+Bot", "TopBrg", "Nut+PW"]
-        for i, (label, avg) in enumerate(zip(labels, delta_averages)):
-            delta_text = f"  {label}: {avg:.1f}"
-            cv2.putText(annotated, delta_text, (50, 120 + i * 25),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-
-        # Add Step 2 details
-        step2_color = (0, 255, 0) if step2_passed else (0, 0, 255)
-        step2_text = f"Step2: {'PASS' if step2_passed else 'FAIL'} (R-B={rb_average:.1f})"
-        cv2.putText(annotated, step2_text, (50, 200),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, step2_color, 2)
+        if delta_averages:
+            step1_color = (0, 255, 0) if step1_passed else (0, 0, 255)
+            cv2.putText(annotated, f"Step1: {'PASS' if step1_passed else 'FAIL'}", (50, 150),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, step1_color, 2)
+            labels = ["Hub+Bot", "TopBrg", "Nut+PW"]
+            for i, (label, avg) in enumerate(zip(labels, delta_averages)):
+                cv2.putText(annotated, f"  {label}: {avg:.1f}", (50, 180 + i * 25),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
         return annotated
 
@@ -262,11 +271,6 @@ class CheckCap:
         if modelName == UNKNOWN:
             modelName = "DOST"
 
-        # Get radius based on component type
-        radius = CheckCap._get_radius_for_component(modelName)
-
-        logBoth('logDebug', _src, f"CheckCap: Using radius={radius} for component type={modelName}", MessageType.GENERAL)
-
         # Get base images
         hub_bottom_bearing_image = currentPictures.get(hubAndBottomBearingPictureKeyString, None)
         top_bearing_image = currentPictures.get(topBearingPictureKeyString, None)
@@ -284,96 +288,97 @@ class CheckCap:
             return anImage, False
 
         try:
-            # Get circular mask
-            mask = CheckCap._get_circular_mask(anImage.shape, radius)
+            # =====================================================================
+            # STEP 1: Which cap is on the part? Brass first, then silver, else none
+            # =====================================================================
+            brass_mask = CheckCap._get_circular_mask(anImage.shape, CheckCap.RADIUS_DOSTPLUS)
+            rb_brass = CheckCap._compute_rb_difference(anImage, brass_mask)
+            silver_mask = CheckCap._get_circular_mask(anImage.shape, CheckCap.RADIUS_DOST)
+            rb_silver = CheckCap._compute_rb_difference(anImage, silver_mask)
+            brightness_mask = CheckCap._get_circular_mask(anImage.shape, CheckCap.SILVER_BRIGHTNESS_RADIUS)
+            brightness = float(np.mean(anImage[brightness_mask > 0]))
+
+            if rb_brass > CheckCap.RB_THRESHOLD_DOSTPLUS:
+                cap_found = DOSTPLUS
+                logBoth('logInfo', _src,
+                        f"CheckCap: brass cap found - R-B={rb_brass:.1f} > {CheckCap.RB_THRESHOLD_DOSTPLUS} (r{CheckCap.RADIUS_DOSTPLUS})",
+                        MessageType.SUCCESS)
+            elif rb_silver < CheckCap.RB_THRESHOLD_DOST and brightness >= CheckCap.SILVER_BRIGHTNESS_MIN:
+                cap_found = DOST
+                logBoth('logInfo', _src,
+                        f"CheckCap: silver cap found - R-B={rb_silver:.1f} < {CheckCap.RB_THRESHOLD_DOST} (r{CheckCap.RADIUS_DOST}), "
+                        f"brightness={brightness:.1f} >= {CheckCap.SILVER_BRIGHTNESS_MIN} (r{CheckCap.SILVER_BRIGHTNESS_RADIUS})",
+                        MessageType.SUCCESS)
+            else:
+                cap_found = None
+                logBoth('logError', _src,
+                        f"CheckCap: no cap found - not brass (R-B={rb_brass:.1f} <= {CheckCap.RB_THRESHOLD_DOSTPLUS}, r{CheckCap.RADIUS_DOSTPLUS}), "
+                        f"not silver (R-B={rb_silver:.1f} vs < {CheckCap.RB_THRESHOLD_DOST}, r{CheckCap.RADIUS_DOST}; "
+                        f"brightness={brightness:.1f} vs >= {CheckCap.SILVER_BRIGHTNESS_MIN}, r{CheckCap.SILVER_BRIGHTNESS_RADIUS})",
+                        MessageType.ISSUE)
 
             # =====================================================================
-            # STEP 1: Color Delta Analysis with Component-Specific Thresholds
+            # STEP 2: Is it the cap this model needs? (DOST: silver, DOSTPLUS: brass)
+            # =====================================================================
+            right_cap = cap_found == modelName
+            if cap_found is not None and not right_cap:
+                logBoth('logError', _src,
+                        f"CheckCap: WRONG CAP - {'brass' if cap_found == DOSTPLUS else 'silver'} cap on a {modelName} part",
+                        MessageType.ISSUE)
+
+            # =====================================================================
+            # STEP 3: The cap must brighten the circle against each earlier picture of the part (limits of the cap found)
             # =====================================================================
             delta_averages = []
-            step1_all_pass = True
-
-            thresholds = []
-            # Define component-specific thresholds based on model
-            if modelName == DOST:
-                thresholds = [
-                    CheckCap.DELTA_THRESHOLD_HUB_DOST,
-                    CheckCap.DELTA_THRESHOLD_TOP_DOST,
-                    CheckCap.DELTA_THRESHOLD_NUT_DOST
-                ]
-            elif modelName == DOSTPLUS:
-                thresholds = [
-                    CheckCap.DELTA_THRESHOLD_HUB_DOSTPLUS,
-                    CheckCap.DELTA_THRESHOLD_TOP_DOSTPLUS,
-                    CheckCap.DELTA_THRESHOLD_NUT_DOSTPLUS
-                ]
-
-            for (name, base_image), threshold in zip(base_images, thresholds):
-                _, delta_avg = CheckCap._compute_clamped_delta_grayscale(
-                    anImage, base_image, mask
-                )
-                delta_averages.append(delta_avg)
-
-                if delta_avg < threshold:
-                    step1_all_pass = False
-                    logBoth('logError', _src,
-                            f"CheckCap Step1: {name} delta={delta_avg:.1f} < threshold={threshold}",
-                            MessageType.ISSUE)
+            step1_passed = False
+            radius = CheckCap._get_radius_for_component(cap_found if cap_found is not None else modelName)
+            if cap_found is not None:
+                mask = CheckCap._get_circular_mask(anImage.shape, radius)
+                if cap_found == DOST:
+                    thresholds = [
+                        CheckCap.DELTA_THRESHOLD_HUB_DOST,
+                        CheckCap.DELTA_THRESHOLD_TOP_DOST,
+                        CheckCap.DELTA_THRESHOLD_NUT_DOST
+                    ]
                 else:
-                    logBoth('logInfo', _src,
-                            f"CheckCap Step1: {name} delta={delta_avg:.1f} >= threshold={threshold}",
-                            MessageType.SUCCESS)
+                    thresholds = [
+                        CheckCap.DELTA_THRESHOLD_HUB_DOSTPLUS,
+                        CheckCap.DELTA_THRESHOLD_TOP_DOSTPLUS,
+                        CheckCap.DELTA_THRESHOLD_NUT_DOSTPLUS
+                    ]
+                step1_passed = True
+                for (name, base_image), threshold in zip(base_images, thresholds):
+                    _, delta_avg = CheckCap._compute_clamped_delta_grayscale(
+                        anImage, base_image, mask
+                    )
+                    delta_averages.append(delta_avg)
 
-            step1_passed = step1_all_pass
-
-            if step1_passed:
-                logBoth('logInfo', _src, "CheckCap: Step 1 PASSED - All delta comparisons above threshold", MessageType.SUCCESS)
-            else:
-                logBoth('logError', _src, "CheckCap: Step 1 FAILED - Not all delta comparisons above threshold", MessageType.ISSUE)
-
-            # =====================================================================
-            # STEP 2: Cap Color Verification (R - B)
-            # =====================================================================
-            rb_average = CheckCap._compute_rb_difference(anImage, mask)
-
-            step2_passed = False
-            # Check if R - B is less than threshold
-            if modelName == DOST:
-                step2_passed = rb_average < CheckCap.RB_THRESHOLD_DOST
-                if step2_passed:
-                    logBoth('logInfo', _src,
-                            f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} < threshold={CheckCap.RB_THRESHOLD_DOST}",
-                            MessageType.SUCCESS)
-                else:
-                    logBoth('logError', _src,
-                            f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} >= threshold={CheckCap.RB_THRESHOLD_DOST}",
-                            MessageType.ISSUE)
-            elif modelName == DOSTPLUS:
-                step2_passed = rb_average > CheckCap.RB_THRESHOLD_DOSTPLUS
-                if step2_passed:
-                    logBoth('logInfo', _src,
-                            f"CheckCap: Step 2 PASSED - R-B={rb_average:.1f} > threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}",
-                            MessageType.SUCCESS)
-                else:
-                    logBoth('logError', _src,
-                            f"CheckCap: Step 2 FAILED - R-B={rb_average:.1f} <= threshold={CheckCap.RB_THRESHOLD_DOSTPLUS}",
-                            MessageType.ISSUE)
-
+                    if delta_avg < threshold:
+                        step1_passed = False
+                        logBoth('logError', _src,
+                                f"CheckCap comparison: {name} delta={delta_avg:.1f} < threshold={threshold}",
+                                MessageType.ISSUE)
+                    else:
+                        logBoth('logInfo', _src,
+                                f"CheckCap comparison: {name} delta={delta_avg:.1f} >= threshold={threshold}",
+                                MessageType.SUCCESS)
 
             # =====================================================================
             # Final Decision
             # =====================================================================
-            is_cap_present = step1_passed and step2_passed
+            is_cap_present = right_cap and step1_passed
 
             if is_cap_present:
-                logBoth('logInfo', _src, "CheckCap: CAP DETECTED - Both steps passed", MessageType.SUCCESS)
+                logBoth('logInfo', _src, "CheckCap: CAP DETECTED - right cap, all comparisons passed", MessageType.SUCCESS)
             else:
-                logBoth('logError', _src, "CheckCap: CAP NOT DETECTED - One or more steps failed", MessageType.ISSUE)
+                logBoth('logError', _src, "CheckCap: CAP NOT DETECTED - " +
+                        ("no cap" if cap_found is None else "wrong cap" if not right_cap else "comparisons failed"),
+                        MessageType.ISSUE)
 
             # Create annotated output image
             annotated_image = CheckCap._create_annotated_image(
-                anImage, is_cap_present, step1_passed, step2_passed,
-                delta_averages, rb_average, radius
+                anImage, is_cap_present, cap_found, modelName, step1_passed,
+                delta_averages, rb_brass if cap_found == DOSTPLUS else rb_silver, brightness, radius
             )
 
             return annotated_image, is_cap_present
