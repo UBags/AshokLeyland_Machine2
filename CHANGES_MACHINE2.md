@@ -1367,3 +1367,14 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   outline never detected). With the ring's disc as the nut mask, diff_RB is 1-2 lower than with the hexagon mask.
 - Top bearing 26/26 both machines (unchanged). DryRun_NutWasher_Check shows the fallback (reason and the ring).
   Verifier: reference 4e04121 for CheckTopBearing, CheckNutAndPlateWasher, HexagonNutDetector; ALL EQUIVALENT.
+
+## 52. Nut width limit removed (both machines) (2026-11-04)
+- **Why (user):** on Machine 1, 6 of 96 pictures with a nut were NOT OK only on the nut width (13.2, 14.5 above 13;
+  5.1 below 6) with outer diameter 75.5-80.0 and mean diameter 66.6-70.6 inside their ranges; the diameter checks are
+  sufficient. `<vendor>.vision.nutwasher.nut.width.min/max` removed (code and all three properties files); the width
+  is still measured and reported ("Nut size: ... width ..."). The top bearing's width range is unchanged.
+- **Still rejected without it:** a whole bearing offered as a nut (outer diameter 99-101, mean 84-88) and a disc the size
+  of a bearing's bore (mean 54.7-57.4 < 60).
+- **Results:** the six Machine 1 cases accepted; Machine 1 nut pictures 10/10 OK; Machine 2 DOSTPLUS nuts and
+  DOST_nut_03 OK, washer-only NOT OK, DOST_nut_01/02 NOT OK on the washer diff_RB (unchanged, user decision).
+  Verifier: reference for CheckNutAndPlateWasher in `baseline_per_file` updated; ALL EQUIVALENT.
