@@ -67,7 +67,6 @@ from utils.ImageNormalisationWithMask import (
     pixBackgroundNorm_masked,
     pixContrastNorm_masked,
     relative_gamma_masked)
-from camera.VisionConfig import vInt, vFloat, vBool, vList, vPoints
 
 
 # =============================================================================
@@ -75,22 +74,8 @@ from camera.VisionConfig import vInt, vFloat, vBool, vList, vPoints
 # =============================================================================
 
 # Detection parameters from TopBearingSegmentation
-MAX_ALLOWED_CENTER_PERCENT_DEVIATION = vFloat("vision.unused.topbearing.max.allowed.center.percent.deviation", 25.0)
-PERCENTILE_CUT_OFF_FOR_BLACK_PIXELS = vInt("vision.topbearing.percentile.cut.off.for.black.pixels", 25)
-
-# Branch acceptance: a branch is valid only if min(score_A, score_B) > LOWER_SCORE_THRESHOLD AND average_G > AVERAGE_G_THRESHOLD
-LOWER_SCORE_THRESHOLD = vFloat("vision.topbearing.lower.score.threshold", 0.65)
-AVERAGE_G_THRESHOLD = vInt("vision.topbearing.average.g.threshold", 77)
-# Radius (px, in the annular crop) of the disc whose pixels set the binarisation percentile threshold
-DETECTION_MASK_RADIUS = vInt("vision.topbearing.detection.mask.radius", 60)
-# Radial tracing: accepted edge distances as multiples of PROMPT_RADIUS (inner edge / outer edge)
-INNER_EDGE_MIN_DIST_FACTOR = vFloat("vision.topbearing.inner.edge.min.dist.factor", 0.65)
-INNER_EDGE_MAX_DIST_FACTOR = vFloat("vision.topbearing.inner.edge.max.dist.factor", 1.20)
-OUTER_EDGE_MIN_DIST_FACTOR = vFloat("vision.topbearing.outer.edge.min.dist.factor", 0.80)
-OUTER_EDGE_MAX_DIST_FACTOR = vFloat("vision.topbearing.outer.edge.max.dist.factor", 1.60)
-# Expected annulus thickness (px): target for percentile selection, and for the ideal area in score_B
-TARGET_RING_THICKNESS = vInt("vision.topbearing.target.ring.thickness", 14)
-TARGET_RING_THICKNESS_FOR_AREA_SCORE = vInt("vision.topbearing.target.ring.thickness.for.area.score", 15)
+MAX_ALLOWED_CENTER_PERCENT_DEVIATION = 25.0
+PERCENTILE_CUT_OFF_FOR_BLACK_PIXELS = 25
 
 # RANSAC circle fitting samples from its own random generator started from this fixed seed (not the global np.random):
 # the same picture always gives the same ring and the same verdict, also when the branches run in parallel threads.
@@ -114,19 +99,19 @@ class CheckTopBearing:
     """
 
     # Annular disc parameters (from TopBearingSegmentation defaults)
-    ANNULAR_CENTER_X = vInt("vision.topbearing.annular.center.x", 632)
-    ANNULAR_CENTER_Y = vInt("vision.topbearing.annular.center.y", 360)
-    ANNULAR_OUTER_RADIUS = vInt("vision.topbearing.annular.outer.radius", 120)
-    ANNULAR_INNER_RADIUS = vInt("vision.topbearing.annular.inner.radius", 0)  # Set to 0 to include full disc
+    ANNULAR_CENTER_X = 632
+    ANNULAR_CENTER_Y = 360
+    ANNULAR_OUTER_RADIUS = 120
+    ANNULAR_INNER_RADIUS = 0  # Set to 0 to include full disc
 
     # Background normalization parameters
-    BG_NORM_SX = vInt("vision.topbearing.bg.norm.sx", 40)
-    BG_NORM_SY = vInt("vision.topbearing.bg.norm.sy", 40)
+    BG_NORM_SX = 40
+    BG_NORM_SY = 40
 
     # Contrast normalization parameters
     APPLY_CONTRAST_NORM = True
-    CONTRAST_NORM_SX = vInt("vision.topbearing.contrast.norm.sx", 10)
-    CONTRAST_NORM_SY = vInt("vision.topbearing.contrast.norm.sy", 10)
+    CONTRAST_NORM_SX = 10
+    CONTRAST_NORM_SY = 10
 
     # Gamma and filtering
     ALTER_GAMMA = True
@@ -141,31 +126,38 @@ class CheckTopBearing:
     REMOVE_INNER_REGION = False
 
     # Point prompt radius for bearing ring detection
-    PROMPT_RADIUS = vInt("vision.topbearing.prompt.radius", 40)
+    PROMPT_RADIUS = 40
 
     # Ring refinement, run once on the winning branch's ring before the brightness comparison (_refine_ring):
     # the outer edge is searched round the branch's outer circle (centre +/- REFINE_CENTRE_SPAN, radius
     # +/- REFINE_OUTER_RADIUS_SPAN), the inner edge concentric with it at a width within the target ring thickness
     # +/- REFINE_THICKNESS_SPAN, each outer circle scored with its best inner edge; step REFINE_STEP after a 1 px
     # pass. False = the branch's ring as is.
-    REFINE_RING = vBool("vision.topbearing.refine.ring", True)
-    REFINE_CENTRE_SPAN = vFloat("vision.topbearing.refine.centre.span", 4.0)
-    REFINE_OUTER_RADIUS_SPAN = vFloat("vision.topbearing.refine.outer.radius.span", 10.0)
-    REFINE_THICKNESS_SPAN = vFloat("vision.topbearing.refine.thickness.span", 2.0)
-    REFINE_STEP = vFloat("vision.topbearing.refine.step", 0.5)
+    REFINE_RING = True
+    REFINE_CENTRE_SPAN = 4.0
+    REFINE_OUTER_RADIUS_SPAN = 10.0
+    REFINE_THICKNESS_SPAN = 2.0
+    REFINE_STEP = 0.5
+
+    # Accepted bearing ring (the ring after refinement): outer diameter and width (outer minus inner radius), px.
+    # A ring outside these ranges is not a top bearing (a nut found as a ring is about 76-80 px across).
+    BEARING_OUTER_DIAMETER_MIN = 86.0
+    BEARING_OUTER_DIAMETER_MAX = 110.0
+    BEARING_WIDTH_MIN = 9.0
+    BEARING_WIDTH_MAX = 20.0
 
     # Scoring mode
     SCORING_MODE = "InlierRatio+ArcCov"  # or "InlierRatio+ArcCov+Area"
 
     # Final gamma check threshold (from original CheckTopBearing)
-    FINAL_GAMMA_THRESHOLD = vFloat("vision.topbearing.final.gamma.threshold", 30.0)
-    FINAL_GAMMA_VALUE = vFloat("vision.topbearing.final.gamma.value", 3.0)
+    FINAL_GAMMA_THRESHOLD = 30.0
+    FINAL_GAMMA_VALUE = 3.0
 
     # Gamma values to test in parallel branches
-    GAMMA_CANDIDATES = vList("vision.topbearing.gamma.candidates", [3.0, 4.0, 5.0, 6.0, 6.5])
+    GAMMA_CANDIDATES = [3.0, 4.0, 5.0, 6.0, 6.5]
 
     # Center offsets to test
-    CENTER_OFFSETS = vPoints("vision.topbearing.center.offsets", [(0, 0), (0, -10)])  # Relative to base center
+    CENTER_OFFSETS = [(0, 0), (0, -10)]  # Relative to base center
 
     # Pre-calculated gamma LUTs
     _gamma_luts = {}
@@ -267,6 +259,40 @@ class CheckTopBearing:
             'outer_edge_score': float(outer[k]),
             'inner_edge_score': float(inner[k]),
         }
+
+    @staticmethod
+    def _ring_profile(gray: np.ndarray, cx: float, cy: float, r_inner: float, r_outer: float):
+        """
+        The ring's two edges along every 2 degrees: on each ray from (cx, cy), the radius within +/- 4 px of the circle
+        where the step across the edge is strongest (outer edge: bright race inside, dark outside; inner edge: dark
+        inside, bright outside), and that step's contrast (mean 1-3 px on one side minus the other).
+        Returns (angles in degrees, inner radii, inner contrasts, outer radii, outer contrasts).
+        """
+        angles = np.arange(0, 360, 2)
+        rad = np.radians(angles).astype(np.float32)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+        offsets = np.arange(-4.0, 4.0 + 1e-6, 0.5, dtype=np.float32)
+        band = np.array([1, 2, 3], np.float32)
+
+        def edge(r0: float, bright_inside: bool):
+            rr = (r0 + offsets).astype(np.float32)
+
+            def side(sign: float) -> np.ndarray:
+                r3 = rr[:, None, None] + sign * band[None, :, None]
+                xs = (cx + r3 * cos_a[None, None, :]).astype(np.float32).reshape(len(rr), -1)
+                ys = (cy + r3 * sin_a[None, None, :]).astype(np.float32).reshape(len(rr), -1)
+                values = cv2.remap(gray, xs, ys, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+                return values.reshape(len(rr), len(band), len(rad)).mean(axis=1)
+
+            contrast = side(-1.0) - side(1.0)
+            if not bright_inside:
+                contrast = -contrast
+            k = np.argmax(contrast, axis=0)
+            return rr[k], contrast[k, np.arange(len(rad))]
+
+        r_out, c_out = edge(r_outer, True)
+        r_in, c_in = edge(r_inner, False)
+        return angles, r_in, c_in, r_out, c_out
 
     @staticmethod
     def _draw_ring_overlay(original_annular: np.ndarray, fcx: int, fcy: int, ri: int, ro: int) -> np.ndarray:
@@ -549,7 +575,7 @@ class CheckTopBearing:
         morph_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         gray_det = cv2.morphologyEx(gray_det, cv2.MORPH_OPEN, morph_kernel)
 
-        detection_radius = DETECTION_MASK_RADIUS
+        detection_radius = 60
         det_mask = np.zeros((h_det, w_det), dtype=np.uint8)
         cv2.circle(det_mask, (cx, cy), detection_radius, 255, -1)
 
@@ -581,10 +607,10 @@ class CheckTopBearing:
         list_b = []
 
         # Separate validation ranges for inner vs outer edge.
-        min_valid_dist_inner = prompt_r * INNER_EDGE_MIN_DIST_FACTOR
-        max_valid_dist_inner = prompt_r * INNER_EDGE_MAX_DIST_FACTOR
-        min_valid_dist_outer = prompt_r * OUTER_EDGE_MIN_DIST_FACTOR
-        max_valid_dist_outer = prompt_r * OUTER_EDGE_MAX_DIST_FACTOR
+        min_valid_dist_inner = prompt_r * 0.65
+        max_valid_dist_inner = prompt_r * 1.20
+        min_valid_dist_outer = prompt_r * 0.80
+        max_valid_dist_outer = prompt_r * 1.60
 
         # Modification 1: Start scanning from prompt_r - 18
         scan_start = max(1, prompt_r - 18)
@@ -777,7 +803,7 @@ class CheckTopBearing:
                     MessageType.GENERAL)
 
         # Determine thickness from percentiles, pick closest to 14
-        TARGET_THICKNESS = TARGET_RING_THICKNESS
+        TARGET_THICKNESS = 14
         if len(list_c) >= 5:
             arr_c = np.array(list_c, dtype=np.float64)
             percentiles = [25, 40, 50, 60, 75, 90]
@@ -841,7 +867,7 @@ class CheckTopBearing:
             area_pixels = 0
 
         # Calculate score_B now that we have area_pixels
-        TARGET_THICK_FOR_SCORE = TARGET_RING_THICKNESS_FOR_AREA_SCORE
+        TARGET_THICK_FOR_SCORE = 15
         ideal_area = math.pi * ((prompt_r + TARGET_THICK_FOR_SCORE) ** 2 - prompt_r ** 2)
         area_score = min(area_pixels / ideal_area, 1.0) if ideal_area > 0 else 0.0
         score_B = 0.3 * avg_inlier_ratio + 0.4 * avg_arc_coverage + 0.3 * area_score
@@ -850,7 +876,7 @@ class CheckTopBearing:
         # NEW VALIDATION RULE: Only valid if min(score_A, score_B) > 0.65 AND average_G > 77
         # =================================================================
         lower_score = min(score_A, score_B)
-        validation_passed = (lower_score > LOWER_SCORE_THRESHOLD) and (average_G > AVERAGE_G_THRESHOLD)
+        validation_passed = (lower_score > 0.65) and (average_G > 77)
 
         # Final validity includes both old checks and new validation rule
         annular_valid = prelim_valid and validation_passed
@@ -859,12 +885,12 @@ class CheckTopBearing:
         if not prelim_valid:
             validation_reason = "Basic geometry check failed"
         elif not validation_passed:
-            if lower_score <= LOWER_SCORE_THRESHOLD and average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD} AND avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
-            elif lower_score <= LOWER_SCORE_THRESHOLD:
-                validation_reason = f"Failed: lower_score={lower_score:.3f}<={LOWER_SCORE_THRESHOLD}"
-            elif average_G <= AVERAGE_G_THRESHOLD:
-                validation_reason = f"Failed: avg_G={average_G:.1f}<={AVERAGE_G_THRESHOLD}"
+            if lower_score <= 0.65 and average_G <= 77:
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65 AND avg_G={average_G:.1f}<=77"
+            elif lower_score <= 0.65:
+                validation_reason = f"Failed: lower_score={lower_score:.3f}<=0.65"
+            elif average_G <= 77:
+                validation_reason = f"Failed: avg_G={average_G:.1f}<=77"
 
         if PRINT_THICKNESS_DETERMINATION_DETAILS:
             logBoth('logDebug', _src,
@@ -1057,7 +1083,7 @@ class CheckTopBearing:
         }
 
         prompt_r = CheckTopBearing.PROMPT_RADIUS
-        detection_radius = DETECTION_MASK_RADIUS
+        detection_radius = 60
         trace_distance = max(detection_radius, outer_radius)
 
         h_det, w_det = annular_image.shape[:2]
@@ -1638,7 +1664,7 @@ class CheckTopBearing:
             }
 
             prompt_r = CheckTopBearing.PROMPT_RADIUS
-            detection_radius = DETECTION_MASK_RADIUS
+            detection_radius = 60
             trace_distance = max(detection_radius, outer_radius)
 
             # Image centre for detection (centre of cropped annular image)
@@ -1725,13 +1751,17 @@ class CheckTopBearing:
                 fcx_f = int(round(fc[0]))
                 fcy_f = int(round(fc[1]))
 
+                # Background-normalised grey picture, for the ring refinement and the ring's edge profile
+                refine_gray = cv2.GaussianBlur(CheckTopBearing._to_gray(bg_normalized).astype(np.float32),
+                                               (3, 3), 0)
+                ring_center = (float(fc[0]), float(fc[1]))
+                ring_r_inner = float(best['r_inner_final'])
+                ring_r_outer = float(best['r_outer_final'])
                 if CheckTopBearing.REFINE_RING:
                     # Refine the winning branch's ring: outer edge searched round its outer circle, inner edge
                     # concentric at a width of the target ring thickness +/- REFINE_THICKNESS_SPAN (_refine_ring)
-                    refine_gray = cv2.GaussianBlur(CheckTopBearing._to_gray(bg_normalized).astype(np.float32),
-                                                   (3, 3), 0)
                     refined = CheckTopBearing._refine_ring(refine_gray, fc[0], fc[1], best['r_outer_final'],
-                                                           float(TARGET_RING_THICKNESS))
+                                                           float(14))
                     if PRINT_THICKNESS_DETERMINATION_DETAILS:
                         logBoth('logDebug', _src,
                                 f"[Refine] branch ring c=({fc[0]:.1f},{fc[1]:.1f}) r={best['r_inner_final']:.1f}-"
@@ -1741,12 +1771,34 @@ class CheckTopBearing:
                                 f"{refined['outer_edge_score']:.1f} inner {refined['inner_edge_score']:.1f})",
                                 MessageType.GENERAL)
                     fc = refined['center']
+                    ring_center = (float(fc[0]), float(fc[1]))
+                    ring_r_inner = float(refined['r_inner'])
+                    ring_r_outer = float(refined['r_outer'])
                     ri_f = int(round(refined['r_inner']))
                     ro_f = int(round(refined['r_outer']))
                     fcx_f = int(round(fc[0]))
                     fcy_f = int(round(fc[1]))
                     result_overlay = CheckTopBearing._draw_ring_overlay(original_annular_copy, fcx_f, fcy_f,
                                                                         ri_f, ro_f)
+
+                # The ring must have a bearing's size: outer diameter and width within the configured ranges
+                ring_outer_diameter = 2.0 * ring_r_outer
+                ring_width = ring_r_outer - ring_r_inner
+                if not (CheckTopBearing.BEARING_OUTER_DIAMETER_MIN <= ring_outer_diameter
+                        <= CheckTopBearing.BEARING_OUTER_DIAMETER_MAX
+                        and CheckTopBearing.BEARING_WIDTH_MIN <= ring_width <= CheckTopBearing.BEARING_WIDTH_MAX):
+                    logBoth('logError', _src,
+                            f"[Final Check] TOP BEARING NOT DETECTED - ring is not a bearing's size: outer diameter "
+                            f"{ring_outer_diameter:.1f} px (accepted {CheckTopBearing.BEARING_OUTER_DIAMETER_MIN:.0f}-"
+                            f"{CheckTopBearing.BEARING_OUTER_DIAMETER_MAX:.0f}), width {ring_width:.1f} px (accepted "
+                            f"{CheckTopBearing.BEARING_WIDTH_MIN:.0f}-{CheckTopBearing.BEARING_WIDTH_MAX:.0f})",
+                            MessageType.ISSUE)
+                    end_time = time.perf_counter()
+                    logBoth('logError', _src,
+                            f"[Pipeline] Processing completed in {end_time - start_time:.2f}s - RING SIZE OUT OF RANGE",
+                            MessageType.ISSUE)
+                    result_bgr_final = cv2.cvtColor(result_overlay, cv2.COLOR_RGB2BGR)
+                    return result_bgr_final, False, None
 
                 # logBoth('logDebug', _src, f"[Final Check] Detected annulus: center=({fcx_f},{fcy_f}), "
                 #              f"r_inner={ri_f}, r_outer={ro_f}", MessageType.GENERAL)
@@ -1816,10 +1868,29 @@ class CheckTopBearing:
                     original_cy = fcy_f + crop_offset_y
 
                     # Prepare geometry dictionary
+                    # The ring's edge profile (every 2 degrees, picture coordinates), for the nut / washer check
+                    p_angles, p_r_in, p_c_in, p_r_out, p_c_out = CheckTopBearing._ring_profile(
+                        refine_gray, ring_center[0], ring_center[1], ring_r_inner, ring_r_outer)
+                    p_cx = ring_center[0] + crop_offset_x
+                    p_cy = ring_center[1] + crop_offset_y
+                    p_rad = np.radians(p_angles)
                     geometry_dict = {
                         "center": [original_cx, original_cy],
                         "inner_radius": ri_f,
-                        "outer_radius": ro_f
+                        "outer_radius": ro_f,
+                        "center_precise": [round(float(p_cx), 2), round(float(p_cy), 2)],
+                        "inner_radius_precise": round(ring_r_inner, 2),
+                        "outer_radius_precise": round(ring_r_outer, 2),
+                        "outer_diameter": round(ring_outer_diameter, 2),
+                        "width": round(ring_width, 2),
+                        "brightness_difference": round(float(brightness_diff), 2),
+                        "profile_angles_deg": [int(a) for a in p_angles],
+                        "inner_profile": [[round(float(p_cx + r * np.cos(t)), 2), round(float(p_cy + r * np.sin(t)), 2)]
+                                          for r, t in zip(p_r_in, p_rad)],
+                        "outer_profile": [[round(float(p_cx + r * np.cos(t)), 2), round(float(p_cy + r * np.sin(t)), 2)]
+                                          for r, t in zip(p_r_out, p_rad)],
+                        "inner_profile_contrast": [round(float(c), 1) for c in p_c_in],
+                        "outer_profile_contrast": [round(float(c), 1) for c in p_c_out],
                     }
 
                     end_time = time.perf_counter()

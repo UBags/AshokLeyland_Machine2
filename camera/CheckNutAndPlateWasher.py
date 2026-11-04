@@ -32,7 +32,7 @@ except:
     pass
 
 from camera.HexagonNutDetector import NutDetector
-from camera.VisionConfig import vInt, vFloat, vTuple
+from camera.CheckTopBearing import CheckTopBearing
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -89,13 +89,21 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
+    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = 3.0            # Gamma correction value
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
+
+    # Accepted nut (the outline found by the nut detector): outer diameter (circle of the outline's area) and width
+    # (outer radius minus the radius of the nut's bore, measured on the picture), px. A shape outside these ranges
+    # is not a nut (a bearing ring is about 92-102 px across).
+    NUT_OUTER_DIAMETER_MIN = 64.0
+    NUT_OUTER_DIAMETER_MAX = 84.0
+    NUT_WIDTH_MIN = 6.0
+    NUT_WIDTH_MAX = 13.0
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -364,6 +372,32 @@ class CheckNutAndPlateWasher:
         return result
 
     @staticmethod
+    def _measure_nut(nut_mask: np.ndarray, annular_rgb: np.ndarray,
+                     hex_center: Tuple[float, float]) -> Optional[Tuple[float, float, float]]:
+        """
+        Size of the nut found (all in the nut search area's coordinates, px):
+          outer diameter = diameter of the circle with the area of the nut's outline (outer contour of nut_mask);
+          bore radius    = the radius, between 0.45 and 0.9 of the outer radius round hex_center, where the step from
+                           the dark bore to the bright nut face is strongest (median over every 2 degrees);
+          width          = outer radius - bore radius.
+        Returns (outer diameter, bore radius, width), or None if the mask has no outline.
+        """
+        contours, _ = cv2.findContours((nut_mask > 0).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return None
+        outline = max(contours, key=cv2.contourArea)
+        outer_radius = float(np.sqrt(cv2.contourArea(outline) / np.pi))
+        gray = cv2.GaussianBlur(cv2.cvtColor(annular_rgb, cv2.COLOR_RGB2GRAY).astype(np.float32), (3, 3), 0)
+        radii = np.arange(0.45 * outer_radius, 0.9 * outer_radius, 0.5, dtype=np.float32)
+        if len(radii) == 0:
+            return None
+        cx, cy = float(hex_center[0]), float(hex_center[1])
+        scores = CheckTopBearing._ring_edge_scores(gray, np.full(len(radii), cx, np.float32),
+                                                   np.full(len(radii), cy, np.float32), radii, False)
+        bore_radius = float(radii[int(np.argmax(scores))])
+        return 2.0 * outer_radius, bore_radius, outer_radius - bore_radius
+
+    @staticmethod
     def checkNutAndPlateWasher(
             anImage: np.ndarray,
             currentPictures: Dict[str, np.ndarray | None] = None,
@@ -467,6 +501,21 @@ class CheckNutAndPlateWasher:
         # =====================================================================
         # CHECK CONFIGURATION: Should we check washer presence?
         # =====================================================================
+        # The nut must have a nut's size: outer diameter and width within the configured ranges
+        nut_size = CheckNutAndPlateWasher._measure_nut(nut_result['mask'], nut_result['annular_rgb'], (_hcx, _hcy))
+        if nut_size is None or not (
+                CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MIN <= nut_size[0] <= CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MAX
+                and CheckNutAndPlateWasher.NUT_WIDTH_MIN <= nut_size[2] <= CheckNutAndPlateWasher.NUT_WIDTH_MAX):
+            size_text = ("no outline" if nut_size is None else
+                         f"outer diameter {nut_size[0]:.1f} px (accepted {CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MIN:.0f}-"
+                         f"{CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MAX:.0f}), width {nut_size[2]:.1f} px (accepted "
+                         f"{CheckNutAndPlateWasher.NUT_WIDTH_MIN:.0f}-{CheckNutAndPlateWasher.NUT_WIDTH_MAX:.0f})")
+            logBoth('logError', _src, f"[Step 1] Shape found is not a nut's size: {size_text}", MessageType.ISSUE)
+            annotated = _crop240(nut_result.get('annotated_original', anImage))
+            return annotated, False
+        logBoth('logInfo', _src, f"[Step 1] Nut size: outer diameter {nut_size[0]:.1f} px, bore radius "
+                                 f"{nut_size[1]:.1f} px, width {nut_size[2]:.1f} px", MessageType.SUCCESS)
+
         check_washer = CosThetaConfigurator.getInstance().getCheckWashersPresenceInNutAndPlateWasher()
 
         if not check_washer:
