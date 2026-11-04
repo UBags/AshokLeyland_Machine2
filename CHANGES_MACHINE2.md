@@ -1461,3 +1461,32 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Test:** `test/machine2_dryrun/DryRun_Cap_Check.py` (Machine 1 copy generated): Machine 2 20/20 caps OK, 8/8 no cap
   NOT OK; Machine 1 13 cap pictures Step 2 OK (no Machine 1 hub / bearing / nut pictures in the repo). Pictures saved in
   `cap_images/`. Verifier: reference 219eeb0 for CheckCap; ALL EQUIVALENT (Machine 1 manifest copy re-synced).
+
+## 58. Cap check: identify the cap first (brass, silver, none), then the model and the comparisons (2026-11-04)
+- **Why:** a missing DOST cap was caught only by the comparisons with the earlier pictures (Step 1): R-B without a cap
+  (-6..-11) passes the DOST colour test (< -1), and R-B / R-G cannot tell silver from bare steel (they overlap at every
+  radius from 30 to 100). Brightness near the centre can: without a cap the bore and shaft end are dark.
+  Mean brightness (B+G+R)/3, Machine 2, silver cap lowest vs no-cap highest (13 nut / washer + 8 bearing pictures):
+  r10 125 vs 61, r20 120 vs 78, **r25 122 vs 76**, r30 124 vs 80, r40 121 vs 112 (nut faces), r50 124 vs 98, r70 125 vs 102,
+  r100 109 vs 108.
+- **New order (user's design, plus the silver test):**
+  1. which cap: **brass** if mean R-B in the DOSTPLUS circle (r70) > `rb.threshold.dostplus` (15); else **silver** if mean
+     R-B in the DOST circle (r100) < `rb.threshold.dost` (-1) AND mean brightness within `cap.silver.brightness.radius`
+     (25) >= `cap.silver.brightness.min`; else **none**;
+  2. the cap must be the model's (QR): DOST silver, DOSTPLUS brass - otherwise "wrong cap";
+  3. comparisons with the hub, top bearing and nut / washer pictures with the limits and circle of the cap found.
+  OK = right cap and all three comparisons pass. Logs and the marked picture say which cap was found and which was needed.
+- **Settings:** `<vendor>.vision.cap.silver.brightness.radius` = 25 (both); `.silver.brightness.min` = **100.0** on Machine 2
+  (user's choice: 22 above the lowest silver cap, 24 below the highest no-cap picture), **0.0 = off** on Machine 1 (no
+  Machine 1 no-cap pictures yet; its silver caps read 175-209). Masks now cached per (size, centre, radius).
+- **Machine 1:** same results as before for any real picture. Brass / not-brass is the old DOSTPLUS colour test; with
+  the silver test off, "silver" is the old DOST colour test. The only case decided differently - brass R-B at r70 but
+  negative R-B at r100 on a DOST part - does not occur (brass caps read +20..+28 at r100).
+- **Test** (`DryRun_Cap_Check.py`, now also wrong-cap and both-model no-cap rows; the check is run with the earlier
+  pictures that make it hardest to give the right answer): Machine 2 - 20/20 caps OK; 20/20 caps as the other model NOT OK
+  (wrong cap); 26/26 nut / washer pictures as DOST or DOSTPLUS NOT OK ("none": brightness 69-75). The cross-model case
+  that the comparisons alone accepted (DOSTPLUS nut checked as DOST, 9/10 accepted before) is now rejected at step 1.
+  Machine 1 - 13/13 caps identified correctly, 13/13 wrong-model NOT OK.
+- **Not yet tested:** the real no-cap state at the cap station is after the split pin and washer; no such Machine 2
+  pictures. A bright split pin / washer would raise the r25 brightness.
+- Verifier: reference e9171d2 for CheckCap; ALL EQUIVALENT (both copies).

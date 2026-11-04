@@ -2,24 +2,26 @@
 DryRun_Cap_Check - the real cap check (CheckCap.checkCap) on this machine's cap pictures, with this machine's settings
 (<vendor>.vision.cap.* in ApplicationConfiguration.properties). Console only.
 
-The check, in a circle of <vendor>.vision.cap.radius.<model> round <vendor>.vision.cap.center:
-  Step 1: the cap picture must be brighter than each earlier picture of the same part (hub + bottom bearing, top
-          bearing, nut + plate washer) by at least <vendor>.vision.cap.delta.threshold.<hub|top|nut>.<model>
-          (brightening = cap minus earlier picture, negative values counted as 0, averaged over the colours and the circle);
-  Step 2: mean R-B in the circle: DOST below <vendor>.vision.cap.rb.threshold.dost (silver cap),
-          DOSTPLUS above <vendor>.vision.cap.rb.threshold.dostplus (brass cap).
+The check:
+  1. which cap: brass if mean R-B in the DOSTPLUS circle (<vendor>.vision.cap.radius.dostplus) is above
+     rb.threshold.dostplus; else silver if mean R-B in the DOST circle is below rb.threshold.dost and the mean brightness
+     within silver.brightness.radius reaches silver.brightness.min; else none;
+  2. it must be the model's cap (DOST silver, DOSTPLUS brass - the model comes from the QR code);
+  3. the cap picture must be brighter than each earlier picture of the same part (hub + bottom bearing, top bearing,
+     nut + plate washer) by at least delta.threshold.<hub|top|nut>.<model of the cap found>.
 
 Pictures (in this folder):
   cap_images/<MODEL>_cap_NN.jpg                       the cap pictures
   hub_images/<MODEL>_NN.jpg                            hub + bottom bearing pictures
   top_bearing_images/<MODEL>_bearing_NN.jpg            top bearing pictures
-  nut_washer_images/<MODEL>_nut_NN.jpg                 nut + plate washer pictures
+  nut_washer_images/<MODEL>_nut_NN.jpg (and _washer_)  nut + plate washer pictures
 The earlier pictures are not of the same part as each cap, so every cap picture is compared with every earlier picture of
-its model: the table shows the lowest and highest brightening, and the check itself is run with the earlier pictures that
-give the lowest brightening (the hardest case). Without earlier pictures only Step 2 is reported.
+its model: the table shows the lowest and highest brightening; the check itself is run with the earlier pictures that
+give the lowest brightening for a cap (hardest case to accept) and the highest for a picture without a cap (hardest case
+to reject). Without earlier pictures only steps 1 and 2 are reported.
 
-"No cap" rows: each nut picture used as the cap picture (the cap left off), against the other earlier pictures - these
-must all be NOT OK.
+Rows: every cap as its own model (must be OK); every cap as the other model (wrong cap, must be NOT OK); every nut /
+washer picture as the cap picture (cap left off), as DOST and as DOSTPLUS (must be NOT OK).
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Cap_Check.py   [--save]   (--save writes the check's
 marked pictures to cap_images/cap_results/)
@@ -54,54 +56,72 @@ def main() -> int:
             module.nutAndPlateWasherPictureKeyString)
     print(f"Machine: {os.environ['COSTHETA_PLC_VENDOR']}   centre {tuple(CheckCap.CENTER)}   "
           f"radius DOST {CheckCap.RADIUS_DOST} / DOSTPLUS {CheckCap.RADIUS_DOSTPLUS}")
+    print(f"Which cap: brass if R-B(r{CheckCap.RADIUS_DOSTPLUS}) > {CheckCap.RB_THRESHOLD_DOSTPLUS}; else silver if "
+          f"R-B(r{CheckCap.RADIUS_DOST}) < {CheckCap.RB_THRESHOLD_DOST} and brightness(r{CheckCap.SILVER_BRIGHTNESS_RADIUS}) "
+          f">= {CheckCap.SILVER_BRIGHTNESS_MIN}; else none")
     failures = 0
     outDir = HERE / "cap_images" / "cap_results"
+
+    def bases(model):
+        return [pictures(f"hub_images/{model}_[0-9]*.*"), pictures(f"top_bearing_images/{model}_bearing_*.*"),
+                pictures(f"nut_washer_images/{model}_nut_*.*")]
+
+    def capFound(image):
+        rbBrass = CheckCap._compute_rb_difference(image, CheckCap._get_circular_mask(image.shape, CheckCap.RADIUS_DOSTPLUS))
+        rbSilver = CheckCap._compute_rb_difference(image, CheckCap._get_circular_mask(image.shape, CheckCap.RADIUS_DOST))
+        bright = float(np.mean(image[CheckCap._get_circular_mask(image.shape, CheckCap.SILVER_BRIGHTNESS_RADIUS) > 0]))
+        if rbBrass > CheckCap.RB_THRESHOLD_DOSTPLUS:
+            found = "brass"
+        elif rbSilver < CheckCap.RB_THRESHOLD_DOST and bright >= CheckCap.SILVER_BRIGHTNESS_MIN:
+            found = "silver"
+        else:
+            found = "none"
+        return found, rbBrass, rbSilver, bright
+
+    def run(name, image, model, expectOK, exclude=None, tag=""):
+        nonlocal failures
+        found, rbBrass, rbSilver, bright = capFound(image)
+        group = bases(model)
+        capModel = {"brass": "DOSTPLUS", "silver": "DOST"}.get(found, model)
+        radius = CheckCap.RADIUS_DOSTPLUS if capModel == "DOSTPLUS" else CheckCap.RADIUS_DOST
+        mask = CheckCap._get_circular_mask(image.shape, radius)
+        cells, chosen = [], []
+        if all(group):
+            for label, g in zip(("hub", "top", "nut"), group):
+                d = [(CheckCap._compute_clamped_delta_grayscale(image, b, mask)[1], b) for n, b in g if n != exclude]
+                pick = min(d, key=lambda x: x[0]) if expectOK else max(d, key=lambda x: x[0])
+                chosen.append(pick[1])
+                cells.append(f"{label} {min(x[0] for x in d):5.1f}-{max(x[0] for x in d):5.1f}")
+            annotated, ok = CheckCap.checkCap(image, dict(zip(keys, chosen)), QR[model])
+            verdict = "OK" if ok else "NOT OK"
+        else:
+            annotated = image
+            ok = {"brass": "DOSTPLUS", "silver": "DOST"}.get(found) == model
+            verdict = ("cap " + ("OK" if ok else "NOT OK")) + " (no earlier pictures)"
+        wrong = ok != expectOK
+        failures += wrong
+        print(f"    {name:24s} as {model:8s} cap={found:6s} R-B {rbBrass:6.1f}/{rbSilver:6.1f} bright {bright:5.0f}  "
+              f"{' | '.join(cells):45s} {verdict}{'   <-- UNEXPECTED' if wrong else ''}")
+        if SAVE and all(group):
+            outDir.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(outDir / f"{pathlib.Path(name).stem}_as_{model}{tag}.png"), annotated)
+
+    other = {"DOST": "DOSTPLUS", "DOSTPLUS": "DOST"}
     for model in ("DOST", "DOSTPLUS"):
         caps = pictures(f"cap_images/{model}_cap_*.*")
-        bases = [pictures(f"hub_images/{model}_[0-9]*.*"), pictures(f"top_bearing_images/{model}_bearing_*.*"),
-                 pictures(f"nut_washer_images/{model}_nut_*.*")]
-        plus = model == "DOSTPLUS"
-        radius = CheckCap.RADIUS_DOSTPLUS if plus else CheckCap.RADIUS_DOST
-        limits = ((CheckCap.DELTA_THRESHOLD_HUB_DOSTPLUS, CheckCap.DELTA_THRESHOLD_TOP_DOSTPLUS,
-                   CheckCap.DELTA_THRESHOLD_NUT_DOSTPLUS) if plus else
-                  (CheckCap.DELTA_THRESHOLD_HUB_DOST, CheckCap.DELTA_THRESHOLD_TOP_DOST, CheckCap.DELTA_THRESHOLD_NUT_DOST))
-        rbLimit = (">", CheckCap.RB_THRESHOLD_DOSTPLUS) if plus else ("<", CheckCap.RB_THRESHOLD_DOST)
-        haveBases = all(bases)
-        print(f"\n=== {model}: {len(caps)} cap pictures; earlier pictures hub {len(bases[0])}, top bearing "
-              f"{len(bases[1])}, nut {len(bases[2])}")
-        print(f"    limits: brightening hub >= {limits[0]}, top >= {limits[1]}, nut >= {limits[2]};  R-B {rbLimit[0]} {rbLimit[1]}")
-
-        def run(name, image, excludeNut=None, expectOK=True):
-            nonlocal failures
-            mask = CheckCap._get_circular_mask(image.shape, radius)
-            rb = CheckCap._compute_rb_difference(image, mask)
-            cells, worst = [], []
-            if haveBases:
-                for label, group in zip(("hub", "top", "nut"), bases):
-                    pool = [(n, b) for n, b in group if not (label == "nut" and n == excludeNut)]
-                    d = [(CheckCap._compute_clamped_delta_grayscale(image, b, mask)[1], b) for n, b in pool]
-                    lo = min(d, key=lambda x: x[0])
-                    worst.append(lo[1])
-                    cells.append(f"{label} {lo[0]:5.1f}-{max(x[0] for x in d):5.1f}")
-                annotated, ok = CheckCap.checkCap(image, dict(zip(keys, worst)), QR[model])
-                verdict = "OK" if ok else "NOT OK"
-                wrong = ok != expectOK
-            else:
-                annotated, ok = image, (rb > rbLimit[1] if plus else rb < rbLimit[1])
-                verdict = "Step 2 " + ("OK" if ok else "NOT OK")
-                wrong = ok != expectOK
-            failures += wrong
-            print(f"    {name:24s} {' | '.join(cells):48s} R-B {rb:6.1f}   {verdict}{'   <-- UNEXPECTED' if wrong else ''}")
-            if SAVE and haveBases:
-                outDir.mkdir(parents=True, exist_ok=True)
-                cv2.imwrite(str(outDir / f"{pathlib.Path(name).stem}.png"), annotated)
-
+        print(f"\n=== {model} caps ({len(caps)}), as {model} - must be OK")
         for name, image in caps:
-            run(name, image)
-        if haveBases:
-            print("    -- no cap (nut picture as the cap picture) --")
-            for name, image in bases[2]:
-                run(name, image, excludeNut=name, expectOK=False)
+            run(name, image, model, True)
+    for model in ("DOST", "DOSTPLUS"):
+        caps = pictures(f"cap_images/{model}_cap_*.*")
+        print(f"\n=== {model} caps as {other[model]} (wrong cap) - must be NOT OK")
+        for name, image in caps:
+            run(name, image, other[model], False)
+    noCap = pictures("nut_washer_images/*.*")
+    for model in ("DOST", "DOSTPLUS"):
+        print(f"\n=== no cap: nut / washer pictures as {model} - must be NOT OK")
+        for name, image in noCap:
+            run(name, image, model, False, exclude=name)
     print(f"\nRESULT: {'all as expected' if failures == 0 else f'{failures} unexpected result(s)'}")
     return 0 if failures == 0 else 1
 
