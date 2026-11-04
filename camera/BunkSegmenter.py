@@ -31,7 +31,6 @@ import os
 
 from BaseUtils import get_project_root, getFullyQualifiedName
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat, vTuple
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 
@@ -53,30 +52,29 @@ PRINT_BATCH_PROCESSING = False
 # =============================================================================
 
 # Two-stage cropping parameters
-OUTER_DISC_CENTER = vTuple("vision.bunk.outer.disc.center", (630, 350))  # Center in full image
-OUTER_DISC_RADIUS = vInt("vision.bunk.outer.disc.radius", 250)
+OUTER_DISC_CENTER = (630, 350)  # Center in full image
+OUTER_DISC_RADIUS = 250
 
-INNER_DISC_RADIUS = vInt("vision.bunk.inner.disc.radius", 110)  # Radius from center of outer disc
+INNER_DISC_RADIUS = 110  # Radius from center of outer disc
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
-MIN_MASK_AREA = vInt("vision.bunk.min.mask.area", 325)
-MAX_MASK_AREA = vInt("vision.bunk.max.mask.area", 1200)
+MIN_MASK_AREA = 325
+MAX_MASK_AREA = 1200
 
 # Geometric validation thresholds (retained from v1)
-EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bunk.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code
-MINIMUM_INTERIOR_ANGLE = vFloat("vision.unused.bunk.minimum.interior.angle", 65.0)  # degrees  # UNUSED by live code
-ALLOWED_STD_DEVIATION_IN_ANGLES = vFloat("vision.unused.bunk.allowed.std.deviation.in.angles", 20.0)  # degrees  # UNUSED by live code
+EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation  # UNUSED by live code
+MINIMUM_INTERIOR_ANGLE = 65.0  # degrees  # UNUSED by live code
+ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees  # UNUSED by live code
 # Expected radius of hole for morphological filtering
-EXPECTED_RADIUS_OF_HOLE = vInt("vision.bunk.expected.radius.of.hole", 30)
-SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bunk.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
-SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bunk.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
-SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bunk.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
-SQUARE_MAX_ANGLE_STD = vFloat("vision.bunk.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
-DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.bunk.dostplus.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
-DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.bunk.dostplus.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
+EXPECTED_RADIUS_OF_HOLE = 30
+# 3 holes found, one in the middle of the other two (e.g. the bung's centre punch mark taken for a hole): the middle one
+# is ignored and the other two are treated as the 2 holes, when the angle at the middle hole is within THREE_HOLE_MAX_BEND
+# of a straight line AND its distances to the other two differ by at most THREE_HOLE_MAX_DISTANCE_DIFFERENCE of their mean
+THREE_HOLE_MAX_BEND = 10.0  # degrees
+THREE_HOLE_MAX_DISTANCE_DIFFERENCE = 0.25  # fraction of the mean distance
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """
@@ -183,6 +181,35 @@ def order_centers_clockwise(centers: List[Tuple[float, float]],
     sorted_indices = sorted(range(len(angles)), key=lambda i: angles[i], reverse=False)
 
     return sorted_indices
+
+
+def drop_middle_of_three_in_line(
+        components: List[Tuple[Tuple[float, float], np.ndarray]]
+) -> Tuple[List[Tuple[Tuple[float, float], np.ndarray]], Optional[str]]:
+    """
+    3 holes, one in the middle of the other two (more or less on the line between them, more or less equally far from
+    both): return the outer two and a description; otherwise return the components unchanged and None.
+
+    The middle hole is the one that is not in the farthest-apart pair. Straightness: 180 deg minus the angle at the
+    middle hole <= THREE_HOLE_MAX_BEND. Equal distances: |d1 - d2| / mean(d1, d2) <= THREE_HOLE_MAX_DISTANCE_DIFFERENCE.
+    """
+    if len(components) != 3:
+        return components, None
+    pts = [np.array(c[0], dtype=float) for c in components]
+    pairs = [(0, 1, 2), (0, 2, 1), (1, 2, 0)]              # (outer, outer, middle)
+    a, b, m = max(pairs, key=lambda t: np.linalg.norm(pts[t[0]] - pts[t[1]]))
+    v1, v2 = pts[a] - pts[m], pts[b] - pts[m]
+    d1, d2 = float(np.linalg.norm(v1)), float(np.linalg.norm(v2))
+    if d1 == 0 or d2 == 0:
+        return components, None
+    angle = float(np.degrees(np.arccos(np.clip(np.dot(v1, v2) / (d1 * d2), -1.0, 1.0))))
+    bend = 180.0 - angle
+    difference = abs(d1 - d2) / ((d1 + d2) / 2.0)
+    text = (f"3 holes: middle one at ({pts[m][0]:.1f}, {pts[m][1]:.1f}), bend {bend:.1f} deg (max {THREE_HOLE_MAX_BEND}), "
+            f"distances {d1:.1f} / {d2:.1f} px, difference {difference:.1%} (max {THREE_HOLE_MAX_DISTANCE_DIFFERENCE:.0%})")
+    if bend <= THREE_HOLE_MAX_BEND and difference <= THREE_HOLE_MAX_DISTANCE_DIFFERENCE:
+        return [components[a], components[b]], text + " - middle one ignored, treated as 2 holes"
+    return components, text + " - kept as 3 holes"
 
 
 def calculate_angle_between_points(p1: Tuple[float, float],
@@ -373,10 +400,10 @@ def find_best_equidistant_subset_euclidean_robust(
         points: List[Tuple[float, float]],
         n: int,
         center: Tuple[float, float],  # Still provided but only for angular spacing check
-        tolerance: float = SQUARE_SIDE_LENGTH_TOLERANCE,
-        min_interior_angle: float = SQUARE_MIN_INTERIOR_ANGLE,
-        max_interior_angle: float = SQUARE_MAX_INTERIOR_ANGLE,
-        allowed_angle_std: float = SQUARE_MAX_ANGLE_STD
+        tolerance: float = 0.2,
+        min_interior_angle: float = 65.0,
+        max_interior_angle: float = 115.0,
+        allowed_angle_std: float = 20.0
 ) -> Tuple[Optional[List[int]], float, dict]:
     """
     ROBUST VERSION: Find best subset forming regular polygon.
@@ -1248,6 +1275,13 @@ class BunkSegmenter:
         if PRINT_GEOMETRIC_VALIDATION:
             logBoth('logDebug', _src, f"\nReference center for geometry: {reference_center}", MessageType.GENERAL)
 
+        # 3 holes with one in the middle of the other two (e.g. the centre punch mark): ignore the middle one
+        if count == 3:
+            valid_components, three_hole_text = drop_middle_of_three_in_line(valid_components)
+            count = len(valid_components)
+            if three_hole_text:
+                logBoth('logInfo', _src, f"[Cascade] {three_hole_text}", MessageType.GENERAL)
+
         # FIRST: Check for 4-hole square pattern if count >= 4
         if count >= 4:
             # SPECIAL CASE: If expecting 2 holes but found 4+, this is immediate fail
@@ -1311,16 +1345,16 @@ class BunkSegmenter:
                     logBoth('logDebug', _src, f"  Center 1: ({c1[0]:.1f}, {c1[1]:.1f})", MessageType.GENERAL)
                     logBoth('logDebug', _src, f"  Center 2: ({c2[0]:.1f}, {c2[1]:.1f})", MessageType.GENERAL)
                     logBoth('logDebug', _src, f"  Distance between centers: {distance:.1f} pixels", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"  Required range: [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}] pixels", MessageType.GENERAL)
+                    logBoth('logDebug', _src, f"  Required range: [75, 100] pixels", MessageType.GENERAL)
 
                 # Check if distance is in range [75, 100]
-                if DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
+                if 75 <= distance <= 100:
                     found_definitive_pattern = True
                     if PRINT_GEOMETRIC_VALIDATION:
                         logBoth('logDebug', _src, f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!", MessageType.GENERAL)
                 else:
                     if PRINT_GEOMETRIC_VALIDATION:
-                        logBoth('logDebug', _src, f"[Cascade] ✗ Distance {distance:.1f} outside range [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}]", MessageType.GENERAL)
+                        logBoth('logDebug', _src, f"[Cascade] ✗ Distance {distance:.1f} outside range [75, 100]", MessageType.GENERAL)
                         logBoth('logDebug', _src, f"[Cascade] Will try next gamma", MessageType.GENERAL)
                     count = 0
                     valid_components = []
