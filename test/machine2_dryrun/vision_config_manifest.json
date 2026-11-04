@@ -5,7 +5,8 @@
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
     "camera/CheckTopBearing.py": "4e04121",
     "camera/CheckNutAndPlateWasher.py": "181790d",
-    "camera/HexagonNutDetector.py": "4e04121"
+    "camera/HexagonNutDetector.py": "4e04121",
+    "camera/CheckCap.py": "219eeb0"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {

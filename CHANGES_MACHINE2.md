@@ -1429,3 +1429,35 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **Test** (no NoBunk-stage pictures from Machine 2; the nut pictures stand in; nut outline from thresholding in place
   of MobileSAM, the detector's real loop and hexagon tests): old centre 0/8 nut pictures OK; new centre 8/8 OK, and 0/9
   washer-only / bearing pictures OK. Not added to NoBunk: the nut / washer check's ring fallback and size checks.
+
+## 57. Cap check: per-machine settings, Machine 2 tuned (2026-11-04)
+- **Found:** the cap check read global `cap.check.*` keys (no machine prefix), so Machine 2 used Machine 1's circle
+  (635,360) - 72 px from the cap on the Siemens camera (caps at about 707,348). `Configuration.py` getters had mixed
+  defaults (radius 70 vs 100, delta 70) and `int()` on float limits; `cap.check.delta.threshold.dost/dostplus` were read
+  but never used; the mask cache was keyed on size and radius only (a new centre after a live reload was ignored).
+- **How Step 1 gets its pictures (unchanged):** the hub, top bearing and nut / washer pictures of the same part are kept
+  in memory by the camera server (`ImageProcessor.currentPictures`, set before each check, cleared at the knuckle step);
+  a missing one makes the cap check NOT OK.
+- **Change:** `CheckCap` reads `<vendor>.vision.cap.*` through VisionConfig (centre, radius per model, R-B limit per
+  model, Step 1 limits hub / top / nut per model); `cap.check.*` keys and the `getCapCheck*` getters removed; the dead
+  Step 1 comment block and the unused single delta limits removed; mask cache keyed on size, centre and radius.
+  Machine 1 values = its former `cap.check.*` values (behaviour unchanged).
+- **Machine 2 values** (20 Siemens cap pictures, 10 silver DOST / 10 brass DOSTPLUS, against the Machine 2 hub, top
+  bearing and nut pictures in the dry-run folders; each limit midway between cap and no cap):
+
+  | key (siemens.vision.cap.) | Machine 1 | Machine 2 | cap present (min) | no cap (max) |
+  |---|---|---|---|---|
+  | center | 635,360 | 707,348 | | |
+  | delta.threshold.hub.dost | 30 | 40 | 52.4 | 28.0 |
+  | delta.threshold.top.dost | 30 | 30 | 42.6 | 18.1 |
+  | delta.threshold.nut.dost | 35 | 28 | 45.2 | 11.8 |
+  | delta.threshold.hub.dostplus | 35 | 43 | 49.9 | 37.4 |
+  | delta.threshold.top.dostplus | 50 | 30 | 37.2 | 22.5 |
+  | delta.threshold.nut.dostplus | 35 | 20 | 36.3 | 6.1 |
+
+  Radii (100 / 70) and R-B limits (-1 / 15) unchanged: R-B DOST -12.5..-17.2, DOSTPLUS +43.1..+44.7. With the Machine 1
+  limits every brass cap would fail (top bearing brightening 37-41 < 50). "No cap" = a nut picture used as the cap
+  picture. DOST R-B without a cap is -6..-8 (passes Step 2), so for DOST a missing cap is caught by Step 1 only.
+- **Test:** `test/machine2_dryrun/DryRun_Cap_Check.py` (Machine 1 copy generated): Machine 2 20/20 caps OK, 8/8 no cap
+  NOT OK; Machine 1 13 cap pictures Step 2 OK (no Machine 1 hub / bearing / nut pictures in the repo). Pictures saved in
+  `cap_images/`. Verifier: reference 219eeb0 for CheckCap; ALL EQUIVALENT (Machine 1 manifest copy re-synced).

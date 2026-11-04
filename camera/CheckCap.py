@@ -27,6 +27,7 @@ from typing import Dict, Tuple
 import glob
 import os
 # from HandDetector import HandDetector
+from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -72,20 +73,20 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = (635, 360)               # centre of the circle the check looks at
-    RADIUS_DOST = 100
-    RADIUS_DOSTPLUS = 70
-    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
+    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
+    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
+    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
+    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = 30.0
-    DELTA_THRESHOLD_TOP_DOST = 30.0
-    DELTA_THRESHOLD_NUT_DOST = 35.0
+    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
+    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
+    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
-    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
-    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
+    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
+    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
 
     # Cached circular mask
     _circular_mask = None

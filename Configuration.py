@@ -3174,80 +3174,8 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(key, default="NO INSTRUCTION AVAILABLE")
 
     # *********************************** CAP CHECK PARAMETERS *********************************
-
-    CAP_CHECK_CENTER_X_KEY: str = "cap.check.center.x"
-    CAP_CHECK_CENTER_Y_KEY: str = "cap.check.center.y"
-    CAP_CHECK_RADIUS_DOST_KEY: str = "cap.check.radius.dost"
-    CAP_CHECK_RADIUS_DOSTPLUS_KEY: str = "cap.check.radius.dostplus"
-    CAP_CHECK_DOST_DELTA_THRESHOLD_KEY: str = "cap.check.delta.threshold.dost"
-    CAP_CHECK_DOST_RB_THRESHOLD_KEY: str = "cap.check.rb.threshold.dost"
-    CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_KEY: str = "cap.check.delta.threshold.dostplus"
-    CAP_CHECK_DOSTPLUS_RB_THRESHOLD_KEY: str = "cap.check.rb.threshold.dostplus"
-
-    # Component-specific delta threshold keys for Step 1
-    CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_HUB_KEY: str = "cap.check.delta.threshold.hub.dostplus"
-    CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_TOP_KEY: str = "cap.check.delta.threshold.top.dostplus"
-    CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_NUT_KEY: str = "cap.check.delta.threshold.nut.dostplus"
-    CAP_CHECK_DOST_DELTA_THRESHOLD_HUB_KEY: str = "cap.check.delta.threshold.hub.dost"
-    CAP_CHECK_DOST_DELTA_THRESHOLD_TOP_KEY: str = "cap.check.delta.threshold.top.dost"
-    CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY: str = "cap.check.delta.threshold.nut.dost"
-
-    @classmethod
-    def getCapCheckCenterX(cls) -> int:
-        return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_CENTER_X_KEY, default="635"))
-
-    @classmethod
-    def getCapCheckCenterY(cls) -> int:
-        return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_CENTER_Y_KEY, default="360"))
-
-    @classmethod
-    def getCapCheckRadius(cls, componentType: str = "DOST") -> int:
-        if componentType.upper() == "DOSTPLUS":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_RADIUS_DOSTPLUS_KEY, default="70"))
-        elif componentType.upper() == "DOST":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_RADIUS_DOST_KEY, default="70"))
-        return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_RADIUS_DOST_KEY, default="100"))
-
-    @classmethod
-    def getCapCheckDeltaThreshold(cls, componentType: str = "DOST") -> float:
-        if componentType.upper() == "DOSTPLUS":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_KEY, default="70"))
-        elif componentType.upper() == "DOST":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_KEY, default="70"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_KEY, default="30"))
-
-    @classmethod
-    def getCapCheckRBThreshold(cls, componentType: str = "DOST") -> float:
-        if componentType.upper() == "DOSTPLUS":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_RB_THRESHOLD_KEY, default="15"))
-        elif componentType.upper() == "DOST":
-            return int(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_RB_THRESHOLD_KEY, default="-1"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_RB_THRESHOLD_KEY, default="-1"))
-
-    @classmethod
-    def getCapCheckDeltaThresholdHub(cls, componentType: str = "DOST") -> float:
-        if componentType.upper() == "DOSTPLUS":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_HUB_KEY, default="35"))
-        elif componentType.upper() == "DOST":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_HUB_KEY, default="30"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_HUB_KEY, default="30"))
-
-    @classmethod
-    def getCapCheckDeltaThresholdTop(cls, componentType: str = "DOST") -> float:
-        if componentType.upper() == "DOSTPLUS":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_TOP_KEY, default="50"))
-        elif componentType.upper() == "DOST":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_TOP_KEY, default="30"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_TOP_KEY, default="30"))
-
-    @classmethod
-    def getCapCheckDeltaThresholdNut(cls, componentType: str = "DOST") -> float:
-        if componentType.upper() == "DOSTPLUS":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOSTPLUS_DELTA_THRESHOLD_NUT_KEY, default="35"))
-        elif componentType.upper() == "DOST":
-            return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="35"))
-        return float(CosThetaConfigurator.getValue(cls.CAP_CHECK_DOST_DELTA_THRESHOLD_NUT_KEY, default="35"))
-
+    # The cap check reads its settings per machine (allenbradley.vision.cap.* / siemens.vision.cap.*) through
+    # camera/VisionConfig.py, like the other vision checks.
     # *********************************** CAP CHECK PARAMETERS DONE *********************************
 
 
