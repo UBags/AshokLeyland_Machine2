@@ -1679,3 +1679,23 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   passed).
 - Rest of that run as expected on the build laptop: QR scanner COM3 absent, Siemens PLC 192.168.1.10 unreachable,
   Redis / DB / frontend / heartbeat up, IOServer (Siemens S7) started.
+
+## 73. runNuitka.bat: exclusions re-checked against library source - pandas and sklearn no longer excluded (2026-11-05)
+- User: keep an exclusion only if it is certainly not needed (a build takes 100 min). Checked every import of an
+  excluded package recorded in the last compilation report (34) against the source of the pinned versions (torch 2.11.0,
+  ultralytics 8.0.200, tqdm 4.67.1, and pandas, scikit-learn, networkx, scipy, matplotlib, sympy, timm, huggingface_hub,
+  mobile_sam and the other ~70 packages in the build, searched for imports or look-ups by name), and Nuitka 4.3.4's loader.
+- **Nuitka detail that matters:** for a module excluded with `--nofollow-import-to`, the exe raises ImportError not only on
+  `import` but also on `importlib.util.find_spec()` (`MetaPathBasedLoader.c`, `_nuitka_loader_find_spec`), where Python
+  returns None. A package that is simply not in the build still returns None.
+- **No longer excluded:**
+  - **pandas** - required: every YOLO `predict` (hub, bunk and nut checks) runs `AutoBackend.__init__` ->
+    `_model_type()` -> `ultralytics.engine.exporter.export_formats()` -> `import pandas` (and uses the DataFrame).
+    The earlier venv check imported the modules but ran no prediction, so it did not show this.
+  - **sklearn** - `torch._dynamo.trace_rules` calls `find_spec("sklearn")` (also "pandas", "networkx") at module level,
+    outside any try; excluded, that raises in the exe. Not excluded and imported by nothing, it is simply absent and
+    find_spec returns None.
+- **Still excluded (certain):** seaborn (only `plot_labels` / `ConfusionMatrix.plot`, training/validation, never called -
+  no `.train/.val/.tune/.export` in MainProgram code), torchaudio (torch datapipes audio decoder, try/except ImportError),
+  boto3 / botocore / s3transfer (PostgresBackupUtility try/except ImportError; pandas only for s3:// URLs, try/except),
+  pymodbus + `IOServer_ModbusTCP` and the `s7_*` tools (nothing imports them). No library looks any of them up by name.

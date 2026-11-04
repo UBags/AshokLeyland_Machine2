@@ -58,18 +58,25 @@ REM torch / torchvision are NOT given as --include-package: that compiles every 
 REM (torch.compile), which this program never imports and which crashed Nuitka 2.7.10 (torch\_dynamo\pgo.py). The torch
 REM modules the program uses are followed from its imports. The numpy / torch plugins are deprecated (built in now);
 REM --follow-imports is the default in standalone mode.
-REM pandas / seaborn are left out: no MainProgram code imports them; torch, tqdm and ultralytics import them only inside
-REM functions or try/except (ultralytics training plots, tqdm.pandas); pandas is used by the MI dashboard, which is
-REM OtherServices.py, not MainProgram. networkx STAYS: in the exe, loading MobileSAM reaches
-REM torch._functorch.partitioners -> torch._functorch._activation_checkpointing.graph_info_provider, which imports networkx
-REM at module level (the first exe failed with "Module 'networkx' was actively excluded"). scipy (hub / top bearing / nut
-REM checks), sympy (loaded by torch) and matplotlib (loaded by ultralytics) stay.
-REM Also left out (nothing MainProgram runs imports them; from the 4.3.4 build report):
-REM   sklearn            - only there because of --include-package=sklearn.externals; no code imports sklearn
-REM   torchaudio         - optional import inside torch; never used
-REM   boto3 / botocore / s3transfer - S3 backup only (PostgresBackupUtility imports boto3 in try/except; local backups)
-REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer variant
-REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC
+REM Exclusions (--nofollow-import-to). Checked against the source of every library in the build at the pinned versions
+REM (torch 2.11.0, ultralytics 8.0.200, tqdm 4.67.1, pandas 2.2.3, scikit-learn 1.7.0, networkx 3.4.2, scipy, matplotlib,
+REM sympy, timm, huggingface_hub, mobile_sam, ... 80 packages) and against Nuitka 4.3.4: in the exe an excluded module
+REM raises ImportError not only on import but also on importlib.util.find_spec() (MetaPathBasedLoader.c), where normal
+REM Python returns None - so a library that only LOOKS FOR a package by name breaks too.
+REM MUST stay IN (do not exclude):
+REM   networkx - torch._functorch...graph_info_provider imports it at module level; reached when MobileSAM loads
+REM   pandas   - every YOLO predict (hub / bunk / nut checks): ultralytics AutoBackend.__init__ -> _model_type() ->
+REM              exporter.export_formats() -> import pandas
+REM   sklearn  - torch._dynamo.trace_rules calls find_spec("sklearn") (and "pandas", "networkx") at module level
+REM   scipy (hub / top bearing / nut checks), sympy (torch), matplotlib (ultralytics) stay as well.
+REM Left OUT - each is only imported inside a function or try/except ImportError on a path MainProgram never takes, and
+REM no library looks it up by name:
+REM   seaborn    - ultralytics plot_labels / ConfusionMatrix.plot (training, validation; never called)
+REM   torchaudio - torch datapipes audio decoder, inside try/except ImportError
+REM   boto3, botocore, s3transfer - PostgresBackupUtility (try/except ImportError, local backups);
+REM              pandas reads s3:// URLs only (try/except ImportError)
+REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer; nothing imports it
+REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC; nothing imports them
 REM --clang: MSVC's cl ran out of heap space (C1060 / C1002) on sympy\polys\polyquinticconst (a huge generated C file;
 REM sympy.polys.polyroots imports it, torch imports sympy) with one job per core and again with 4 jobs. clang-cl from
 REM Visual Studio ("C++ Clang Compiler for Windows" component) is used instead. The objects cached by cl are not reused,
@@ -111,9 +118,7 @@ nuitka --standalone ^
     --windows-console-mode=attach ^
     --include-package=cv2 ^
     --include-package=ultralytics ^
-    --nofollow-import-to=pandas ^
     --nofollow-import-to=seaborn ^
-    --nofollow-import-to=sklearn ^
     --nofollow-import-to=torchaudio ^
     --nofollow-import-to=boto3 ^
     --nofollow-import-to=botocore ^
