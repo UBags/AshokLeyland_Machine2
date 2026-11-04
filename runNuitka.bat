@@ -3,9 +3,9 @@ setlocal EnableExtensions
 REM ==========================================================================================================
 REM  Build MainProgram.exe with Nuitka for Machine 1 (Allen-Bradley) or Machine 2 (Siemens S7-1515).
 REM
-REM    runNuitka.bat 1     Machine 1: ApplicationConfiguration.Machine1.properties (plc.vendor=allenbradley)
-REM    runNuitka.bat 2     Machine 2: ApplicationConfiguration.Machine2.properties (plc.vendor=siemens)
-REM    runNuitka.bat       asks which machine
+REM    runNuitka.bat allenbradley   Machine 1: ApplicationConfiguration.Machine1.properties (plc.vendor=allenbradley)
+REM    runNuitka.bat siemens        Machine 2: ApplicationConfiguration.Machine2.properties (plc.vendor=siemens)
+REM  No default: without (or with any other) argument it shows these two commands and exits.
 REM
 REM  Run from the project root with the project's .venv activated (torch cu128 for the target machine).
 REM  The exe reads everything relative to its own folder (MainProgram.dist), so after compiling this copies in:
@@ -15,17 +15,17 @@ REM    costhetaio\siemens\IOServerProperties.yaml  (Siemens tag map; included by
 REM    sklearn data files
 REM ==========================================================================================================
 
-set "MACHINE=%~1"
-if "%MACHINE%"=="" set /p "MACHINE=Build for which machine (1 = Allen-Bradley, 2 = Siemens)? "
-if "%MACHINE%"=="1" (
-    set "PROPS=ApplicationConfiguration.Machine1.properties"
+set "VENDOR=%~1"
+if /I "%VENDOR%"=="allenbradley" (
     set "VENDOR=allenbradley"
-) else if "%MACHINE%"=="2" (
-    set "PROPS=ApplicationConfiguration.Machine2.properties"
+    set "MACHINE=1"
+    set "PROPS=ApplicationConfiguration.Machine1.properties"
+) else if /I "%VENDOR%"=="siemens" (
     set "VENDOR=siemens"
+    set "MACHINE=2"
+    set "PROPS=ApplicationConfiguration.Machine2.properties"
 ) else (
-    echo ERROR: machine must be 1 or 2, got "%MACHINE%"
-    goto :end
+    goto :usage
 )
 
 echo ============================================
@@ -131,3 +131,19 @@ echo ============================================
 echo Ended: %date% %time%
 endlocal
 pause
+exit /b
+
+:usage
+echo.
+echo runNuitka.bat - builds MainProgram.exe with Nuitka for one machine. Give the PLC vendor:
+echo.
+echo     runNuitka.bat allenbradley
+echo         Machine 1 ^(Allen-Bradley PLC^): uses ApplicationConfiguration.Machine1.properties
+echo.
+echo     runNuitka.bat siemens
+echo         Machine 2 ^(Siemens S7-1515 PLC^): uses ApplicationConfiguration.Machine2.properties
+echo.
+echo From PowerShell:  .\runNuitka.bat allenbradley    or    .\runNuitka.bat siemens
+if not "%~1"=="" echo.& echo Not a valid option: "%~1"
+endlocal
+exit /b 1

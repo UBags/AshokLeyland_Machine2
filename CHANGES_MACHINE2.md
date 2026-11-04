@@ -1589,3 +1589,9 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   over it. The exe build is unaffected (`runNuitka.bat 1|2` copies the machine's own file).
 - `DryRun_Logging_And_Live_Config.py` (both copies), check L9: compares `plc.vendor` with the value in the live file
   instead of a fixed "allenbradley". L9 passes. Verifier ALL EQUIVALENT.
+
+## 65. runNuitka.bat takes the PLC vendor (2026-11-04)
+- `runNuitka.bat allenbradley` (Machine 1, `ApplicationConfiguration.Machine1.properties`) or `runNuitka.bat siemens`
+  (Machine 2, `ApplicationConfiguration.Machine2.properties`); case-insensitive. No default and no prompt: with no
+  argument, or any other, it prints both commands in full (and the PowerShell form) and exits with code 1 - nothing is
+  built or deleted. Replaces the `1` / `2` argument of section 63; everything else unchanged.
