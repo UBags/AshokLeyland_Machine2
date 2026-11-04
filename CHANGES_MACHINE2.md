@@ -1640,3 +1640,9 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   `costhetaio.siemens.s7_*`; removed `--include-package=sklearn.externals` and the sklearn data-file copy;
   `--module-parameter=torch-disable-jit=yes` (Nuitka's default, made explicit to silence its warning).
 - Not run here (Windows build).
+
+## 69. runNuitka.bat: models\ no longer copied into the build (2026-11-05)
+- User: the MobileSAM / YOLO `models\` folder is very large and already on the target machine. Removed its copy into
+  `MainProgram.dist`, the start-up warning and the two weight-file checks. The end of the build now states that the exe
+  needs `models\MobileSAM\weights\mobile_sam.pt` and `models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt` next to
+  MainProgram.exe (`get_project_root()` = the exe's folder; `ModelManager` / `HexagonNutDetector` read `<root>\models\...`).

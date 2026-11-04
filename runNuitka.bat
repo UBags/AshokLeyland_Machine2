@@ -10,8 +10,9 @@ REM
 REM  Run from the project root with the project's .venv activated (torch cu128 for the target machine).
 REM  The exe reads everything relative to its own folder (MainProgram.dist), so after compiling this copies in:
 REM    ApplicationConfiguration.properties   <- the chosen machine's properties file (decides IOServer + vision settings)
-REM    models\                               <- MobileSAM / YOLO weights (not in git)
 REM    costhetaio\siemens\IOServerProperties.yaml  (Siemens tag map; included by Nuitka below)
+REM  NOT copied: models\ (MobileSAM / YOLO weights, very large, already on the target machine). The exe looks for them in
+REM  <folder of MainProgram.exe>\models\ - on the target, MainProgram.exe must sit next to that models folder.
 REM ==========================================================================================================
 
 set "VENDOR=%~1"
@@ -45,9 +46,6 @@ if errorlevel 1 (
 if not exist "costhetaio\siemens\IOServerProperties.yaml" (
     echo ERROR: costhetaio\siemens\IOServerProperties.yaml not found
     goto :end
-)
-if not exist "models" (
-    echo WARNING: models\ not found here - the vision checks need it; copy it into MainProgram.dist\models yourself.
 )
 python -c "import torch; print('torch', torch.__version__, '| CUDA', torch.version.cuda, '| GPU available', torch.cuda.is_available())"
 
@@ -121,10 +119,6 @@ echo Copying run-time files into MainProgram.dist
 echo ============================================
 copy /Y "%PROPS%" "MainProgram.dist\ApplicationConfiguration.properties" >nul
 echo   ApplicationConfiguration.properties  ^<-  %PROPS%
-if exist "models" (
-    robocopy "models" "MainProgram.dist\models" /E /NFL /NDL /NJH /NJS /NP >nul
-    echo   models\
-)
 
 echo.
 echo ============================================
@@ -134,8 +128,6 @@ set "PROBLEMS=0"
 findstr /B /C:"plc.vendor=%VENDOR%" "MainProgram.dist\ApplicationConfiguration.properties"
 if errorlevel 1 (echo   MISSING: plc.vendor=%VENDOR% in MainProgram.dist\ApplicationConfiguration.properties & set "PROBLEMS=1")
 if exist "MainProgram.dist\costhetaio\siemens\IOServerProperties.yaml" (echo   OK: costhetaio\siemens\IOServerProperties.yaml) else (echo   MISSING: costhetaio\siemens\IOServerProperties.yaml & set "PROBLEMS=1")
-if exist "MainProgram.dist\models\MobileSAM\weights\mobile_sam.pt" (echo   OK: models\MobileSAM\weights\mobile_sam.pt) else (echo   MISSING: models\MobileSAM\weights\mobile_sam.pt & set "PROBLEMS=1")
-if exist "MainProgram.dist\models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt" (echo   OK: models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt) else (echo   MISSING: models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt & set "PROBLEMS=1")
 if exist "MainProgram.dist\wavs" (echo   OK: wavs\) else (echo   MISSING: wavs\ & set "PROBLEMS=1")
 if exist "MainProgram.dist\internalimages" (echo   OK: internalimages\) else (echo   MISSING: internalimages\ & set "PROBLEMS=1")
 
@@ -147,6 +139,10 @@ if "%PROBLEMS%"=="0" (
     echo BUILT, BUT SOMETHING ABOVE IS MISSING. Executable:
 )
 echo MainProgram.dist\MainProgram.exe
+echo ============================================
+echo models\ is NOT in MainProgram.dist. On the target machine the exe needs, next to MainProgram.exe:
+echo     models\MobileSAM\weights\mobile_sam.pt
+echo     models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt
 echo ============================================
 
 :end
