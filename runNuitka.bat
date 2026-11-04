@@ -68,13 +68,28 @@ REM   torchaudio         - optional import inside torch; never used
 REM   boto3 / botocore / s3transfer - S3 backup only (PostgresBackupUtility imports boto3 in try/except; local backups)
 REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer variant
 REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC
-REM --low-memory: the C compiler ran out of heap space (C1060 / C1002) on sympy\polys\polyquinticconst (a huge generated
-REM C file; sympy.polys.polyroots imports it, torch imports sympy) with one job per core and again with 4 jobs. Low-memory
-REM mode compiles one file at a time; files compiled in earlier runs come from the compiler cache (clcache).
+REM --clang: MSVC's cl ran out of heap space (C1060 / C1002) on sympy\polys\polyquinticconst (a huge generated C file;
+REM sympy.polys.polyroots imports it, torch imports sympy) with one job per core and again with 4 jobs. clang-cl from
+REM Visual Studio ("C++ Clang Compiler for Windows" component) is used instead. The objects cached by cl are not reused,
+REM so the first clang build compiles everything; --jobs=4 keeps memory in check. If clang also runs out of memory,
+REM replace --jobs=4 with --low-memory (one file at a time).
 REM --report: writes compilation-report.xml (every module, why it is included, DLLs, data files).
 python -m nuitka --version
+if not exist "%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" (
+    echo ERROR: vswhere.exe not found - Visual Studio / Build Tools are needed for clang-cl.
+    goto :end
+)
+set "CLANGCL="
+for /f "usebackq delims=" %%P in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find VC\Tools\Llvm\x64\bin\clang-cl.exe`) do set "CLANGCL=%%P"
+if not defined CLANGCL (
+    echo ERROR: clang-cl.exe not found. In the Visual Studio Installer, Modify the installation and add the individual
+    echo        component "C++ Clang Compiler for Windows" ^(and "MSBuild support for LLVM ^(clang-cl^) toolset"^).
+    goto :end
+)
+echo Using %CLANGCL%
 nuitka --standalone ^
-    --low-memory ^
+    --clang ^
+    --jobs=4 ^
     --report=compilation-report.xml ^
     --module-parameter=torch-disable-jit=yes ^
     --assume-yes-for-downloads ^

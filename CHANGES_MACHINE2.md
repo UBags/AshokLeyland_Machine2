@@ -1656,3 +1656,9 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   clcache, so a re-run mostly compiles what failed); `--report=compilation-report.xml` (user).
 - The `--nofollow-import-to` warnings for `IOServer_ModbusTCP` and the `s7_*` tools are expected: they are the exclusions
   taking effect over `--include-package=costhetaio`.
+
+## 71. runNuitka.bat: build with clang-cl (2026-11-05)
+- User's choice after `C1002 out of heap` on `sympy.polys.polyquinticconst` with MSVC cl: `--clang` (clang-cl from the
+  Visual Studio installation, component "C++ Clang Compiler for Windows"), `--jobs=4` (replaces `--low-memory`; cl's
+  cached objects are not reused by clang, so the first clang build compiles all ~4400 files). Before compiling, the
+  script finds clang-cl with vswhere and stops with the component to install if it is missing. `--report` kept.
