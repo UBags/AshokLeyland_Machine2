@@ -27,6 +27,7 @@ Run from the project root:   python test/machine2_dryrun/DryRun_NutWasher_Check.
 import os
 import pathlib
 import queue
+import re
 import sys
 import threading
 import time
@@ -238,11 +239,15 @@ class NutWasherCheckWindow:
     def reason(self, ok, washer, geometry, bearingName):
         C = self.module.CheckNutAndPlateWasher
         found, result = self.lastNut if self.lastNut else (False, {})
+        fallback = next((m for m in self.messages if "ring fallback" in m), None)    # no hexagon: ring of a nut's size?
         if not found:
             failure = (result or {}).get("failure_metrics") or {}
             why = failure.get("detail") or failure.get("reason") or "no hexagon"
-            return f"nut not found: {str(why)[:90]}"
-        nutText = f"nut found (symmetry {result.get('composite_score', 0):.0f})"
+            if not (fallback and "nut accepted by the ring fallback" in fallback):
+                return f"nut not found: {str(why)[:90]}" + (f"; {fallback.split('ring fallback: ', 1)[1][:140]}" if fallback else "")
+            nutText = f"no hexagon ({str(why)[:60]}); nut accepted by the ring fallback: " + fallback.split("ring fallback: ", 1)[1][:110]
+        else:
+            nutText = f"nut found (symmetry {result.get('composite_score', 0):.0f})"
         for message in self.messages:
             if "not a nut's size" in message:                  # outline found, but outside the nut size ranges
                 return "shape found is " + message.split("is ", 1)[1][:240]
@@ -275,6 +280,11 @@ class NutWasherCheckWindow:
             cv2.circle(out, c, int(geometry["outer_radius"]), (255, 120, 0), 1)
             cv2.circle(out, c, int(geometry["inner_radius"]), (255, 120, 0), 1)
         found, result = self.lastNut if self.lastNut else (False, {})
+        for message in self.messages:                     # nut accepted by the ring fallback: draw its ring
+            m = re.search(r"ring fallback: ring outer diameter ([0-9.]+) px.*centre \(([0-9.]+), ([0-9.]+)\)", message)
+            if m:
+                cv2.circle(out, (int(round(float(m.group(2)))), int(round(float(m.group(3))))),
+                           int(round(float(m.group(1)) / 2)), (0, 220, 0), 2)
         if found and result.get("mask") is not None:
             full = np.zeros(out.shape[:2], np.uint8)
             mask = result["mask"]

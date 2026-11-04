@@ -3,9 +3,9 @@
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "637ce4a",
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
-    "camera/CheckTopBearing.py": "7f62a10",
-    "camera/CheckNutAndPlateWasher.py": "fc95d43",
-    "camera/HexagonNutDetector.py": "fc95d43"
+    "camera/CheckTopBearing.py": "4e04121",
+    "camera/CheckNutAndPlateWasher.py": "4e04121",
+    "camera/HexagonNutDetector.py": "4e04121"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
@@ -188,7 +188,7 @@
       "const": "NUT_MAX_MASK_AREA",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2690,
+      "old_line": 2688,
       "old_literal": "5500",
       "old_snippet": "max_mask_region_area=5500"
     },
@@ -220,7 +220,7 @@
       "const": "NUT_MIN_MASK_AREA",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2689,
+      "old_line": 2687,
       "old_literal": "3000",
       "old_snippet": "min_mask_region_area=3000"
     },
@@ -239,14 +239,6 @@
       "old_line": 2490,
       "old_literal": "55",
       "old_snippet": "composite_score < 55"
-    },
-    "vision.nut.min.thickness.score": {
-      "const": "NUT_MIN_THICKNESS_SCORE",
-      "file": "camera/HexagonNutDetector.py",
-      "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2492,
-      "old_literal": "45",
-      "old_snippet": "thickness_symmetry_score < 45"
     },
     "vision.nut.min.vertices": {
       "const": "NUT_MIN_VERTICES",
@@ -284,7 +276,7 @@
       "const": "NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2496,
+      "old_line": 2494,
       "old_literal": "35",
       "old_snippet": "total_deviated_pixels >= 35"
     },
@@ -292,7 +284,7 @@
       "const": "NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2494,
+      "old_line": 2492,
       "old_literal": "28",
       "old_snippet": "total_deviated_pixels >= 28"
     },
@@ -300,7 +292,7 @@
       "const": "NUT_SYMMETRY_REJECT_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2539,
+      "old_line": 2537,
       "old_literal": "1.1",
       "old_snippet": "SYMMETRY_REJECT_THRESHOLD = 1.10"
     },
@@ -308,7 +300,7 @@
       "const": "NUT_SYMMETRY_WARNING_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2540,
+      "old_line": 2538,
       "old_literal": "1.4",
       "old_snippet": "SYMMETRY_WARNING_THRESHOLD = 1.40"
     },
@@ -316,7 +308,7 @@
       "const": "NUT_YOLO_CONF_THRESHOLD",
       "file": "camera/HexagonNutDetector.py",
       "old_file": "camera/HexagonNutDetector.py",
-      "old_line": 2687,
+      "old_line": 2685,
       "old_literal": "0.3",
       "old_snippet": "conf_threshold=0.3"
     },

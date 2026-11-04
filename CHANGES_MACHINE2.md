@@ -1342,3 +1342,28 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   0.5-5.2 %, bearings 0.3-6.3 %; the three failing pictures had the weakest hexagon signal (0.8-1.9 %).
 - Verifier: reference fc95d43 for CheckNutAndPlateWasher and HexagonNutDetector (now in `baseline_per_file`);
   ALL EQUIVALENT.
+
+## 51. Nut check: thickness-symmetry rejection removed; ring fallback when no hexagon is accepted (both machines) (2026-11-04)
+- **Thickness symmetry (removed, user decision):** `calculate_perpendicular_thickness_score` x
+  `calculate_radial_thickness_score` x 100 = how evenly thick the nut face is in all directions (outer hexagon edge to
+  a fixed 25 px disc round the centre of mass, along the 6 perpendiculars and the 6 radials). The rejection
+  "low_thickness (score < `vision.nut.min.thickness.score` 45)" is removed from `HexagonNutDetector.process_masks_cpu`
+  (the score is still computed and reported); key removed from all three properties files and the manifest. Bearings
+  it was meant to catch are now rejected by the size limits (sections 47-50). DOST_nut_02 (6408) now passes the nut
+  step with the stand-in outline (it failed on 44.3 < 45).
+- **`CheckTopBearing.findRing(anImage)`:** the top bearing ring finder (same branches, refinement, edge profile)
+  without the bearing size limits and the hub brightness comparison; returns centre, radii, outer diameter, width,
+  mean diameter (picture coordinates) or None. On the 23 bearing pictures it gives exactly the check's ring (0.000 px).
+- **Ring fallback (`CheckNutAndPlateWasher._nut_from_ring`):** when the nut detector accepts no hexagon, `findRing` on
+  the nut picture; a ring with outer diameter `<vendor>.vision.nutwasher.nut.ring.outer.diameter.min/max` (70 / 86)
+  and mean diameter <= `.nut.ring.mean.diameter.max` (74) is accepted as the nut (`.nut.ring.fallback` True). The
+  nut mask for the washer comparison is the ring's disc, 2 px wider; the nut size check of section 47 is not applied
+  (the ring ranges size it). Logged as "nut accepted by the ring fallback" or why not.
+- **Measured on every picture:** nuts 18/18 accepted (ring outer diameter 75.4-81.8, mean 64.3-68.0); washer only 0/5
+  (no ring); bearings 0/23 (92.3-101.7, mean 78.5-87.0); open bores 0/24 (no ring, or 117-122).
+- **End to end, nut detector forced to fail:** Machine 2 DOST_nut_03, DOSTPLUS nuts OK through the fallback,
+  DOST_nut_01/02 nut accepted then NOT OK on the washer diff_RB (+3.8 / +4.2; washer limits unchanged, user
+  decision), washer-only and bearing pictures NOT OK; Machine 1 nuts OK (AB_nut_06/07 included, which the stand-in
+  outline never detected). With the ring's disc as the nut mask, diff_RB is 1-2 lower than with the hexagon mask.
+- Top bearing 26/26 both machines (unchanged). DryRun_NutWasher_Check shows the fallback (reason and the ring).
+  Verifier: reference 4e04121 for CheckTopBearing, CheckNutAndPlateWasher, HexagonNutDetector; ALL EQUIVALENT.
