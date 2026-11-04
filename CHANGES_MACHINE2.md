@@ -1561,3 +1561,23 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   after dropping the middle (outside 95-125), DOSTPLUS holes + punch checked as DOST. Unchanged: DOST square, 2 holes.
 - Verifier: reference f399967 for BunkSegmenter (its six settings first taken from inline numbers written inline there,
   manifest lines remapped); ALL EQUIVALENT (both copies).
+
+## 63. runNuitka.bat: build for Machine 1 or Machine 2 (2026-11-04)
+- **Found:** the exe reads everything relative to its own folder (`get_project_root()` = folder of the compiled
+  `BaseUtils`, i.e. `MainProgram.dist`), but the build put in only `wavs` and `internalimages`:
+  - `ApplicationConfiguration.properties` was not copied - and it is what selects the machine (`plc.vendor`: IOServer,
+    `<vendor>.vision.*`, camera keys);
+  - `costhetaio/siemens/IOServerProperties.yaml` (Siemens tag -> DB address map, read next to `plc_backend.py`) was not
+    included: the Siemens IOServer could not have started from the exe;
+  - `models/` (MobileSAM / YOLO weights, not in git) was not copied.
+- **Change:** `runNuitka.bat 1|2` (asks when no argument). Before compiling: the machine's properties file must exist and
+  contain `plc.vendor=allenbradley` / `siemens`; the yaml must exist; prints torch / CUDA version. Nuitka: adds the yaml
+  as a data file and `--include-package` for `costhetaio`, `pyS7`, `pycomm3`, `yaml` (both IOServers are imported inside
+  a function). After compiling: copies `ApplicationConfiguration.Machine<N>.properties` to
+  `MainProgram.dist\ApplicationConfiguration.properties`, `models\`, the sklearn data files; then checks the vendor line,
+  the yaml, both MobileSAM weight files, `wavs`, `internalimages` and reports anything missing. CRLF line endings.
+- **Known limit of the exe (unchanged):** live reload of `<vendor>.vision.*` re-reads the constants by parsing each
+  vision module's source (`VisionConfig._declarations`, `inspect.getsource`); the exe has no .py sources, so there it
+  finds nothing - a vision value changed in the properties file takes effect after a restart. Other settings read
+  through `getValue` still reload live.
+- Not run here (Windows / Nuitka / CUDA build).
