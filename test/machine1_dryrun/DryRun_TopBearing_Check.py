@@ -200,7 +200,8 @@ class TopBearingCheckWindow:
             cv2.circle(mask, centre, int(geometry["inner_radius"]), 0, -1)
             grey = lambda picture: cv2.cvtColor(lut[picture], cv2.COLOR_BGR2GRAY)[mask > 0].mean()
             return (f"bearing ring r {geometry['inner_radius']}-{geometry['outer_radius']} (outer diameter "
-                    f"{geometry.get('outer_diameter', 0):.1f}, width {geometry.get('width', 0):.1f}), brighter than the hub "
+                    f"{geometry.get('outer_diameter', 0):.1f}, width {geometry.get('width', 0):.1f}, mean diameter "
+                    f"{geometry.get('mean_diameter', 0):.1f}), brighter than the hub "
                     f"picture by {grey(image) - grey(hub):+.1f} (> {T.FINAL_GAMMA_THRESHOLD})")
         for message in self.messages:
             if "Failed brightness check" in message:
@@ -208,7 +209,7 @@ class TopBearingCheckWindow:
                 return f"ring found, but brighter than the hub picture by only {diff} (limit {T.FINAL_GAMMA_THRESHOLD})"
         for message in self.messages:
             if "not a bearing's size" in message:              # ring found, but outside the bearing size ranges
-                return "ring found, but " + message.split("ring is ", 1)[1][:150]
+                return "ring found, but " + message.split("ring is ", 1)[1][:240]
         for message in self.messages:
             if "NO VALID ANNULUS DETECTED" in message:
                 return "no bearing ring found"

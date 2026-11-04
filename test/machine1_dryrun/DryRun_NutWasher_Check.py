@@ -245,7 +245,7 @@ class NutWasherCheckWindow:
         nutText = f"nut found (symmetry {result.get('composite_score', 0):.0f})"
         for message in self.messages:
             if "not a nut's size" in message:                  # outline found, but outside the nut size ranges
-                return "shape found is " + message.split("is ", 1)[1][:150]
+                return "shape found is " + message.split("is ", 1)[1][:240]
             if "Nut size:" in message:
                 nutText = f"nut found (symmetry {result.get('composite_score', 0):.0f}; {message.split('Nut size: ')[1]})"
         if not washer:

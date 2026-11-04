@@ -1295,3 +1295,22 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   completion, on a frontend abort, on a PLC emergency abort; a normal cycle afterwards): Machine 2 88/88, Machine 1
   87/87; DryRun_All_Servers_Integrated_Cycle both vendors as before.
 - **Verifier:** reference commit df144cc for CheckTopBearing; ALL EQUIVALENT.
+
+## 49. Mean diameter conditions: bearing >= 75 px, nut <= 72 px (both machines) (2026-11-04)
+- **Definition:** mean diameter = along every 2 degrees, the inner edge's radius plus the outer edge's radius (from the
+  ring / nut centre), averaged round the ring. Bearing (CheckTopBearing): the two edges of the ring's profile
+  (`_ring_profile`, now computed before the size check). Nut (`CheckNutAndPlateWasher._measure_nut`, now returns a 4th
+  value): the nut outline's radius and the bore edge (found within +/- 4 px of the bore circle).
+- **Keys (both machines, all three properties files):** `<vendor>.vision.topbearing.mean.diameter.min` = 75 (ring NOT OK
+  below: "ring is not a bearing's size ... mean diameter"), `<vendor>.vision.nutwasher.nut.mean.diameter.max` = 72
+  (NOT OK above: "shape found is not a nut's size ... mean diameter"). In addition to the outer diameter and width
+  ranges. Returned geometry gains `mean_diameter`.
+- **Measured (px):** bearings Machine 2 83.5-87.0, Machine 1 78.5-83.3 (closest: 3.5 above 75); nuts in the nut check
+  Machine 2 67.8-67.9, Machine 1 65.1-69.8 (closest: AB_nut_09 69.8, whose stand-in outline merged with grease; clean
+  nuts <= 68.7); nut pictures in the top bearing check 64.3-68.0.
+- **Each condition alone (other size limits off):** top bearing 23/23 bearings OK, 15/15 nut pictures NOT OK, 11/11
+  open bores NOT OK; nut check: a whole bearing offered as a nut 84.4 / 87.5 -> rejected. A disc the size of the
+  bearing's bore has mean 53.7-54.3 and passes "<= 72"; the nut width limit (6-13) rejects it.
+- **Results (all limits):** top bearing 26/26 both machines; nut / washer 5/5 Machine 2 nut + washer OK, 5/5
+  washer-only NOT OK, Machine 1 nut sizes all accepted (AB_nut_06/07 fail before the size test with the stand-in
+  outline, as before). Dry-run windows show the mean diameter. Verifier: reference 7f62a10; ALL EQUIVALENT.
