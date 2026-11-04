@@ -1189,3 +1189,36 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - Verifier: ALL EQUIVALENT. Pictures replaced: `test/machine2_dryrun/top_bearing_images/` (DOST / DOSTPLUS bearing),
   `test/machine2_dryrun/nut_washer_images/` (DOSTPLUS washer / nut; use `top_bearing_images/DOSTPLUS_bearing_01.jpg`
   as the bearing picture and `hub_images/DOSTPLUS_01.jpg` as the hub reference). Old sets in git history.
+
+## 46. Top bearing check: ring refined after the winning branch (both machines) (2026-11-04)
+- **Found (Machine 2 pictures, measured against the brightness profile across the race and an independent per-angle
+  edge fit):** the branch's outer-edge points are pulled off-centre by the roller cage and grease (outer circle fits up
+  to 14 px off-centre). The second edge is not fitted but taken as anchor +/- a width, the percentile of measured
+  widths nearest `target.ring.thickness`; the chosen widths were 10-14.4 against a true 14 (DOST) / 15 (DOSTPLUS).
+  Result: inner edge 6 px too large on 5 of 8 pictures (ring on the outer part of the race only), outer edge up to
+  5.4 px off, centre up to 2.4 px off (when the outer edge was the anchor, the inner circle cut into the bore).
+- **Change (`camera/CheckTopBearing.py`, both machines):** after the winning branch is chosen (branch selection and
+  validation unchanged), `_refine_ring` searches on the background-normalised grey picture:
+  outer edge = circles round the branch's outer circle (centre +/- `refine.centre.span` 4 px, radius
+  +/- `refine.outer.radius.span` 10 px); inner edge = concentric, at a width of `target.ring.thickness`
+  +/- `refine.thickness.span` 2 px. Edge contrast = mean 1-3 px on the bright side minus the dark side, median over
+  angles (every 2 degrees), so sectors with little grease or bright rollers do not decide it. Each outer circle is
+  scored with its best inner edge: the roller cage edge at r 62.5 has the same outer contrast as the race edge
+  (92.9 against 93.5) but no race inner edge inside it (15 against 129). 1 px pass, then +/- 1 px at `refine.step` 0.5.
+  The refined ring is used for the brightness comparison, the returned geometry (also used by the nut / washer
+  check) and the result picture. `refine.ring=False` gives the previous behaviour. About 0.1 s per check.
+- **New keys (both machines, all three properties files):** `<vendor>.vision.topbearing.refine.ring` True,
+  `.refine.centre.span` 4.0, `.refine.outer.radius.span` 10.0, `.refine.thickness.span` 2.0, `.refine.step` 0.5.
+  Why +/-2 round the configured width and not round the width found per picture: with the found width (10) the true
+  14-15 was out of reach. Why radius +/-10: the branch's outer circle was up to 6 px too large; with +/-6, starts
+  10 px off missed the race edge.
+- **Results:** Machine 2: refined ring within 0.8 px of the reference edges on all 8 bearing pictures (whole-pixel
+  result); brightness margin +51.7..+60.9 (was +39.1..+57.7, limit 30); 13 open-bore and 5 washer-only pictures
+  NOT OK (no ring, refinement not run). Machine 1: 15 bearing OK (+101.9..+148.2), 11 open-bore NOT OK; rings
+  equal or better centred (figure). Start circle moved +/-3 px (centre) and +/-4 px (radius), 27 starts per picture:
+  the same ring from every start on all 23 pictures with a ring (spread 0.0 px).
+- **Nut / washer check (uses the top bearing ring):** the ring now covers the full race: Machine 2 nut + washer pairs
+  (5 nut x 4 bearing pictures) diff_R +57.1..+60.7 (was +32..+34), diff_RB +13.3..+14.5 (was +7.6..+8.1, limit 5.57);
+  bearing against bearing of the same part (no washer) diff_RB -0.8..+0.8; washer-only pictures NOT OK (no nut).
+- **Verifier:** reference commit 010969a (the previous reference with this logic, values hard-coded) in
+  `baseline_per_file`; manifest lines moved. ALL EQUIVALENT. Figure: `docs/top_bearing_ring_refinement.png`.
