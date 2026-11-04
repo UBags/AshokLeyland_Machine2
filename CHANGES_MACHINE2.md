@@ -1646,3 +1646,13 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   `MainProgram.dist`, the start-up warning and the two weight-file checks. The end of the build now states that the exe
   needs `models\MobileSAM\weights\mobile_sam.pt` and `models\MobileSAM\MobileSAMv2\weight\ObjectAwareModel.pt` next to
   MainProgram.exe (`get_project_root()` = the exe's folder; `ModelManager` / `HexagonNutDetector` read `<root>\models\...`).
+
+## 70. runNuitka.bat: low-memory mode and a compilation report (2026-11-05)
+- **Found (user's build, crash report):** with `--jobs=4` the build is 5031 modules / 4374 compiled (was 6305 / 5252);
+  `sympy.series.formal` now compiles, but `sympy.polys.polyquinticconst` still fails with `C1002: compiler is out of heap
+  space in pass 2`. It cannot be left out: `sympy.polys.polyroots` imports it at load time (line 25), and torch imports
+  sympy (torch itself and torch._dynamo / _export / _functorch / _inductor, all followed from torch's own imports).
+- **Change:** `--jobs=4` -> `--low-memory` (one C compiler process at a time; objects compiled in earlier runs come from
+  clcache, so a re-run mostly compiles what failed); `--report=compilation-report.xml` (user).
+- The `--nofollow-import-to` warnings for `IOServer_ModbusTCP` and the `s7_*` tools are expected: they are the exclusions
+  taking effect over `--include-package=costhetaio`.

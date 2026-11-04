@@ -68,10 +68,14 @@ REM   torchaudio         - optional import inside torch; never used
 REM   boto3 / botocore / s3transfer - S3 backup only (PostgresBackupUtility imports boto3 in try/except; local backups)
 REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer variant
 REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC
-REM --jobs=4: the C compiler ran out of heap space (C1060 / C1002) on the huge sympy modules with one job per core.
+REM --low-memory: the C compiler ran out of heap space (C1060 / C1002) on sympy\polys\polyquinticconst (a huge generated
+REM C file; sympy.polys.polyroots imports it, torch imports sympy) with one job per core and again with 4 jobs. Low-memory
+REM mode compiles one file at a time; files compiled in earlier runs come from the compiler cache (clcache).
+REM --report: writes compilation-report.xml (every module, why it is included, DLLs, data files).
 python -m nuitka --version
 nuitka --standalone ^
-    --jobs=4 ^
+    --low-memory ^
+    --report=compilation-report.xml ^
     --module-parameter=torch-disable-jit=yes ^
     --assume-yes-for-downloads ^
     --remove-output ^
