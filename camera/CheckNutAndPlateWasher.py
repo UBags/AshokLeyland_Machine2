@@ -33,7 +33,6 @@ except:
 
 from camera.HexagonNutDetector import NutDetector
 from camera.CheckTopBearing import CheckTopBearing
-from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -90,25 +89,33 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
+    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = 3.0            # Gamma correction value
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
 
     # Accepted nut (the outline found by the nut detector): outer diameter (circle of the outline's area) and width
     # (outer radius minus the radius of the nut's bore, measured on the picture), px. A shape outside these ranges
     # is not a nut (a bearing ring is about 92-102 px across).
-    NUT_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.outer.diameter.min", 64.0)
-    NUT_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.outer.diameter.max", 84.0)
-    NUT_WIDTH_MIN = vFloat("vision.nutwasher.nut.width.min", 6.0)
-    NUT_WIDTH_MAX = vFloat("vision.nutwasher.nut.width.max", 13.0)
+    NUT_OUTER_DIAMETER_MIN = 64.0
+    NUT_OUTER_DIAMETER_MAX = 84.0
+    NUT_WIDTH_MIN = 6.0
+    NUT_WIDTH_MAX = 13.0
     # and its mean diameter (outline and bore averaged round the nut) within this range (nuts 64-70, a whole bearing
     # 78-87, a disc the size of a bearing's bore 54-58)
-    NUT_MEAN_DIAMETER_MIN = vFloat("vision.nutwasher.nut.mean.diameter.min", 60.0)
-    NUT_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.mean.diameter.max", 72.0)
+    NUT_MEAN_DIAMETER_MIN = 60.0
+    NUT_MEAN_DIAMETER_MAX = 72.0
+
+    # Fallback when the nut detector accepts no hexagon: the top bearing ring finder (CheckTopBearing.findRing) on
+    # the nut picture; a ring of a nut's size is accepted as the nut. Nuts: outer diameter 75-82 px, mean diameter
+    # 64-68; bearings 92-102 / 78-87; washer only: no ring.
+    NUT_RING_FALLBACK = True
+    NUT_RING_OUTER_DIAMETER_MIN = 70.0
+    NUT_RING_OUTER_DIAMETER_MAX = 86.0
+    NUT_RING_MEAN_DIAMETER_MAX = 74.0
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -377,6 +384,48 @@ class CheckNutAndPlateWasher:
         return result
 
     @staticmethod
+    def _nut_from_ring(anImage: np.ndarray, detector_result: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Fallback when the nut detector accepts no hexagon: find a ring on the nut picture with the top bearing ring
+        finder (CheckTopBearing.findRing) and accept it as the nut if it has a nut's size (outer diameter within
+        NUT_RING_OUTER_DIAMETER_MIN-MAX, mean diameter at most NUT_RING_MEAN_DIAMETER_MAX). Returns a result like the
+        nut detector's (mask = the ring's disc, 2 px wider, in the nut search area; annular_rgb; hex_center = the ring
+        centre in the search area; annotated_original), or None.
+        """
+        _src = getFullyQualifiedName(__file__, CheckNutAndPlateWasher)
+        failure = (detector_result or {}).get('failure_metrics') or {}
+        why = failure.get('detail') or failure.get('reason') or 'no hexagon'
+        ring = CheckTopBearing.findRing(anImage)
+        if ring is None:
+            logBoth('logError', _src, f"[Step 1] Nut detector: {why}; ring fallback: no ring found", MessageType.ISSUE)
+            return None
+        outer_d, mean_d = ring['outer_diameter'], ring['mean_diameter']
+        if not (CheckNutAndPlateWasher.NUT_RING_OUTER_DIAMETER_MIN <= outer_d <= CheckNutAndPlateWasher.NUT_RING_OUTER_DIAMETER_MAX
+                and mean_d <= CheckNutAndPlateWasher.NUT_RING_MEAN_DIAMETER_MAX):
+            logBoth('logError', _src,
+                    f"[Step 1] Nut detector: {why}; ring fallback: ring is not a nut's size: outer diameter {outer_d:.1f} px "
+                    f"(accepted {CheckNutAndPlateWasher.NUT_RING_OUTER_DIAMETER_MIN:.0f}-"
+                    f"{CheckNutAndPlateWasher.NUT_RING_OUTER_DIAMETER_MAX:.0f}), mean diameter {mean_d:.1f} px (accepted <= "
+                    f"{CheckNutAndPlateWasher.NUT_RING_MEAN_DIAMETER_MAX:.0f})", MessageType.ISSUE)
+            return None
+        radius = CheckNutAndPlateWasher.NUT_DETECTION_RADIUS
+        ncx, ncy = CheckNutAndPlateWasher.NUT_DETECTION_CENTER
+        annular_bgr, _ = CheckNutAndPlateWasher._extract_annular_region(anImage, (ncx, ncy), radius)
+        cx = int(round(ring['center_precise'][0] - (ncx - radius)))
+        cy = int(round(ring['center_precise'][1] - (ncy - radius)))
+        mask = np.zeros((2 * radius, 2 * radius), dtype=np.uint8)
+        cv2.circle(mask, (cx, cy), int(round(ring['outer_radius_precise'])) + 2, 255, -1)
+        annotated = anImage.copy()
+        cv2.circle(annotated, (int(round(ring['center_precise'][0])), int(round(ring['center_precise'][1]))),
+                   int(round(ring['outer_radius_precise'])), (0, 255, 0), 2)
+        logBoth('logInfo', _src,
+                f"[Step 1] Nut detector: {why}; nut accepted by the ring fallback: ring outer diameter {outer_d:.1f} px, "
+                f"mean diameter {mean_d:.1f} px, centre ({ring['center_precise'][0]:.1f}, {ring['center_precise'][1]:.1f})",
+                MessageType.SUCCESS)
+        return {'mask': mask, 'annular_rgb': cv2.cvtColor(annular_bgr, cv2.COLOR_BGR2RGB), 'hex_center': (cx, cy),
+                'annotated_original': annotated, 'composite_score': 0.0, 'from_ring': True, 'ring': ring}
+
+    @staticmethod
     def _measure_nut(nut_mask: np.ndarray, annular_rgb: np.ndarray,
                      hex_center: Tuple[float, float]) -> Optional[Tuple[float, float, float]]:
         """
@@ -486,6 +535,13 @@ class CheckNutAndPlateWasher:
             image_id="nut_check"
         )
 
+        nut_from_ring = False
+        if not nut_found and CheckNutAndPlateWasher.NUT_RING_FALLBACK:
+            # no hexagon accepted: a ring of a nut's size found by the top bearing ring finder is accepted as the nut
+            from_ring = CheckNutAndPlateWasher._nut_from_ring(anImage, nut_result)
+            if from_ring is not None:
+                nut_found, nut_result, nut_from_ring = True, from_ring, True
+
         if not nut_found:
             logBoth('logError', _src, "[Step 1] Nut NOT detected", MessageType.ISSUE)
             # Return annotated image from detector (or original)
@@ -522,12 +578,14 @@ class CheckNutAndPlateWasher:
         # =====================================================================
         # CHECK CONFIGURATION: Should we check washer presence?
         # =====================================================================
-        # The nut must have a nut's size: outer diameter and width within the configured ranges
-        nut_size = CheckNutAndPlateWasher._measure_nut(nut_result['mask'], nut_result['annular_rgb'], (_hcx, _hcy))
-        if nut_size is None or not (
+        # The nut must have a nut's size: outer diameter and width within the configured ranges (a nut accepted by
+        # the ring fallback was sized by the ring ranges)
+        nut_size = None if nut_from_ring else CheckNutAndPlateWasher._measure_nut(nut_result['mask'],
+                                                                                 nut_result['annular_rgb'], (_hcx, _hcy))
+        if (not nut_from_ring) and (nut_size is None or not (
                 CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MIN <= nut_size[0] <= CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MAX
                 and CheckNutAndPlateWasher.NUT_WIDTH_MIN <= nut_size[2] <= CheckNutAndPlateWasher.NUT_WIDTH_MAX
-                and CheckNutAndPlateWasher.NUT_MEAN_DIAMETER_MIN <= nut_size[3] <= CheckNutAndPlateWasher.NUT_MEAN_DIAMETER_MAX):
+                and CheckNutAndPlateWasher.NUT_MEAN_DIAMETER_MIN <= nut_size[3] <= CheckNutAndPlateWasher.NUT_MEAN_DIAMETER_MAX)):
             size_text = ("no outline" if nut_size is None else
                          f"outer diameter {nut_size[0]:.1f} px (accepted {CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MIN:.0f}-"
                          f"{CheckNutAndPlateWasher.NUT_OUTER_DIAMETER_MAX:.0f}), width {nut_size[2]:.1f} px (accepted "
@@ -537,9 +595,10 @@ class CheckNutAndPlateWasher:
             logBoth('logError', _src, f"[Step 1] Shape found is not a nut's size: {size_text}", MessageType.ISSUE)
             annotated = _crop240(nut_result.get('annotated_original', anImage))
             return annotated, False
-        logBoth('logInfo', _src, f"[Step 1] Nut size: outer diameter {nut_size[0]:.1f} px, bore radius "
-                                 f"{nut_size[1]:.1f} px, width {nut_size[2]:.1f} px, mean diameter {nut_size[3]:.1f} px",
-                MessageType.SUCCESS)
+        if not nut_from_ring:
+            logBoth('logInfo', _src, f"[Step 1] Nut size: outer diameter {nut_size[0]:.1f} px, bore radius "
+                                     f"{nut_size[1]:.1f} px, width {nut_size[2]:.1f} px, mean diameter {nut_size[3]:.1f} px",
+                    MessageType.SUCCESS)
 
         check_washer = CosThetaConfigurator.getInstance().getCheckWashersPresenceInNutAndPlateWasher()
 

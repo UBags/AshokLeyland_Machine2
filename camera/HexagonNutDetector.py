@@ -53,7 +53,6 @@ from BaseUtils import get_project_root, getFullyQualifiedName
 
 # Import ModelManager for shared model access
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat
 
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
@@ -81,27 +80,6 @@ if PRINT_DETAIL:
     DEBUG_SAVE_IMAGES = True
 
 ENABLE_VRAM_MONITORING: bool = True
-
-NUT_YOLO_CONF_THRESHOLD = vFloat("vision.nut.yolo.conf.threshold", 0.3)    # YOLO box confidence for nut candidates (NutDetector)
-NUT_MIN_MASK_AREA = vInt("vision.nut.min.mask.area", 3000)                 # SAM mask area window, min (px, NutDetector)
-NUT_MAX_MASK_AREA = vInt("vision.nut.max.mask.area", 5500)                 # SAM mask area window, max (px, NutDetector)
-NUT_MIN_VERTICES = vInt("vision.nut.min.vertices", 5)                      # cleaned polygon must have MIN..MAX vertices
-NUT_MAX_VERTICES = vInt("vision.nut.max.vertices", 8)
-NUT_MIN_ASPECT_RATIO = vFloat("vision.nut.min.aspect.ratio", 0.7)          # bounding-box w/h, exclusive range
-NUT_MAX_ASPECT_RATIO = vFloat("vision.nut.max.aspect.ratio", 1.3)
-NUT_CENTER_DISC_RADIUS = vInt("vision.nut.center.disc.radius", 25)         # disc removed around centre of mass (px)
-NUT_MIN_REMAINING_AREA_FRACTION = vFloat("vision.nut.min.remaining.area.fraction", 0.3)  # area after disc >= fraction of original
-NUT_MIN_VERTICES_AFTER_DISC = vInt("vision.nut.min.vertices.after.disc", 4)  # reject if fewer vertices remain after disc
-NUT_MIN_ACTUAL_AREA = vInt("vision.nut.min.actual.area", 2000)             # area after disc must be > this (px)
-NUT_EDGE_MIN_LENGTH_FACTOR = vFloat("vision.nut.edge.min.length.factor", 0.8)  # original straight edge >= factor x fitted edge
-NUT_REFERENCE_CENTER_X = vInt("vision.nut.reference.center.x", 72)         # fixed reference centre in annular-crop coordinates
-NUT_REFERENCE_CENTER_Y = vInt("vision.nut.reference.center.y", 64)
-NUT_MIN_SYMMETRY_SCORE = vInt("vision.nut.min.symmetry.score", 55)         # reject if composite symmetry score (0-100) < this
-NUT_MIN_THICKNESS_SCORE = vInt("vision.nut.min.thickness.score", 45)       # reject if thickness symmetry score (0-100) < this
-NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES = vInt("vision.nut.reject.deviated.pixels.zero.edges", 28)  # 0 straight edges and deviated px >= this -> reject
-NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE = vInt("vision.nut.reject.deviated.pixels.one.edge", 35)      # 1 straight edge and deviated px >= this -> reject
-NUT_SYMMETRY_REJECT_THRESHOLD = vFloat("vision.nut.symmetry.reject.threshold", 1.10)    # debug message only (rejection disabled)
-NUT_SYMMETRY_WARNING_THRESHOLD = vFloat("vision.nut.symmetry.warning.threshold", 1.40)  # debug message only
 
 # --- Add MobileSAM to path ---
 _PROJECT_ROOT = get_project_root()
@@ -2281,20 +2259,20 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
             logBoth('logDebug', _src, f"    Final vertex count after Hough cleaning: {num_vertices}", MessageType.GENERAL)
 
         # Step 4: Check if hexagonal (5-8 vertices, or exactly 6 from Hough)
-        if NUT_MIN_VERTICES <= num_vertices <= NUT_MAX_VERTICES:
+        if 5 <= num_vertices <= 8:
             # Additional check: compute aspect ratio
             x, y, w, h = cv2.boundingRect(contour)
             mask_dims = (h, w)
             aspect_ratio = float(w) / h if h > 0 else 0
 
             if DEBUG_HEXAGON_DETECTION:
-                logBoth('logDebug', _src, f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need {NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO})", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"    [CPU] Aspect ratio: {aspect_ratio:.2f} (need 0.7-1.3)", MessageType.GENERAL)
 
             if PRINT_DETAIL:
                 logBoth('logDebug', _src, f"    Aspect ratio: {aspect_ratio:.2f}", MessageType.GENERAL)
 
             # Hexagons should have aspect ratio close to 1
-            if NUT_MIN_ASPECT_RATIO < aspect_ratio < NUT_MAX_ASPECT_RATIO:
+            if 0.7 < aspect_ratio < 1.3:
                 if DEBUG_HEXAGON_DETECTION:
                     logBoth('logDebug', _src, f"    [CPU] ✓ Passed aspect ratio check, processing actual_nut_mask...", MessageType.GENERAL)
                 # === NEW: Process actual_nut_mask ===
@@ -2313,7 +2291,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     logBoth('logDebug', _src, f"    Center of mass: ({com_x}, {com_y})", MessageType.GENERAL)
 
                 # b) Create disc of radius 25 and exclude from mask
-                disc_radius = NUT_CENTER_DISC_RADIUS
+                disc_radius = 25
                 disc_mask = np.zeros_like(mask_uint8)
                 cv2.circle(disc_mask, (com_x, com_y), disc_radius, 255, -1)
 
@@ -2348,25 +2326,25 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'disc_intersection',
-                        'detail': f'Center disc (r={NUT_CENTER_DISC_RADIUS}) intersects hexagon boundary or covers entire nut',
+                        'detail': 'Center disc (r=25) intersects hexagon boundary or covers entire nut',
                         'original_area': original_mask_area,
                         'disc_area': disc_area,
                         'com': (com_x, com_y)
                     })
                     continue
 
-                if actual_mask_area < original_mask_area * NUT_MIN_REMAINING_AREA_FRACTION:
+                if actual_mask_area < original_mask_area * 0.3:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
                         logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask too small "
                               f"({actual_mask_area} pixels, {actual_mask_area / original_mask_area * 100:.1f}% of original)", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'mask_too_small',
-                        'detail': f'After disc exclusion, mask <{NUT_MIN_REMAINING_AREA_FRACTION:.0%} of original',
+                        'detail': 'After disc exclusion, mask <30% of original',
                         'actual_area': actual_mask_area,
                         'original_area': original_mask_area,
                         'percentage': actual_mask_area / original_mask_area * 100,
-                        'required': f'≥{NUT_MIN_REMAINING_AREA_FRACTION:.0%}'
+                        'required': '≥30%'
                     })
                     continue
 
@@ -2390,38 +2368,38 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 epsilon_check = 0.02 * cv2.arcLength(largest_contour, True)
                 approx_check = cv2.approxPolyDP(largest_contour, epsilon_check, True)
 
-                if len(approx_check) < NUT_MIN_VERTICES_AFTER_DISC:
+                if len(approx_check) < 4:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= {NUT_MIN_VERTICES_AFTER_DISC})", MessageType.ISSUE)
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask has only {len(approx_check)} vertices (need >= 4)", MessageType.ISSUE)
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'insufficient_vertices_after_disc',
                         'detail': 'Hexagon boundary destroyed by disc exclusion',
                         'vertices_remaining': len(approx_check),
-                        'required': f'≥{NUT_MIN_VERTICES_AFTER_DISC}',
+                        'required': '≥4',
                         'actual_area': actual_mask_area
                     })
                     continue
 
                 # === ADDITIONAL VALIDATION: Area ===
                 # a) Check if actual_nut_mask area > 2000
-                if actual_mask_area <= NUT_MIN_ACTUAL_AREA:
+                if actual_mask_area <= 2000:
                     if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
-                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= {NUT_MIN_ACTUAL_AREA}", MessageType.ISSUE)
+                        logBoth('logError', _src, f"  ✗ INVALID: actual_nut_mask area {actual_mask_area} <= 2000", MessageType.ISSUE)
                     # Track this failure
                     failed_attempts.append({
                         'mask_idx': idx,
                         'reason': 'area_threshold',
                         'detail': 'actual_nut_mask area too small',
                         'actual_area': actual_mask_area,
-                        'required': f'>{NUT_MIN_ACTUAL_AREA}',
+                        'required': '>2000',
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio
                     })
                     # Return with specific failure metrics (best attempt so far)
                     failure_metrics = {
                         'reason': 'area_threshold',
-                        'detail': f'Hexagon found but actual_nut_mask area ≤ {NUT_MIN_ACTUAL_AREA} pixels',
+                        'detail': 'Hexagon found but actual_nut_mask area ≤ 2000 pixels',
                         'area': actual_mask_area,
                         'vertices': num_vertices,
                         'aspect_ratio': aspect_ratio,
@@ -2435,7 +2413,7 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 original_edges_count, reference_edge_length, total_deviated_pixels = count_original_edges_above_reference(
                     contour,  # Original contour before Hough cleaning
                     cleaned_vertices,  # Fitted hexagon vertices
-                    min_length_factor=NUT_EDGE_MIN_LENGTH_FACTOR  # Accept edges >= 80% of fitted edge length
+                    min_length_factor=0.8  # Accept edges >= 80% of fitted edge length
                 )
 
                 if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
@@ -2445,13 +2423,13 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                 # Calculate perpendicular distance consistency using FIXED center (72, 64)
                 perp_distance_score = calculate_perpendicular_distance_score(
                     cleaned_vertices,
-                    center=(NUT_REFERENCE_CENTER_X, NUT_REFERENCE_CENTER_Y)  # FIXED CENTER instead of dynamic com_x, com_y
+                    center=(72, 64)  # FIXED CENTER instead of dynamic com_x, com_y
                 )
 
                 # Calculate angles between perpendiculars consistency using FIXED center (72, 64)
                 perp_angles_score = calculate_angles_between_perpendiculars_score(
                     cleaned_vertices,
-                    center=(NUT_REFERENCE_CENTER_X, NUT_REFERENCE_CENTER_Y)  # FIXED CENTER instead of dynamic com_x, com_y
+                    center=(72, 64)  # FIXED CENTER instead of dynamic com_x, com_y
                 )
 
                 # NEW COMPOSITE SCORE: Product of the two perpendicular-based scores × 100
@@ -2509,14 +2487,12 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 reject_reason = None
 
-                if composite_score < NUT_MIN_SYMMETRY_SCORE:
-                    reject_reason = f"low_symmetry (score={composite_score:.1f} < {NUT_MIN_SYMMETRY_SCORE})"
-                elif thickness_symmetry_score < NUT_MIN_THICKNESS_SCORE:
-                    reject_reason = f"low_thickness (score={thickness_symmetry_score:.1f} < {NUT_MIN_THICKNESS_SCORE})"
-                elif original_edges_count == 0 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ZERO_EDGES})"
-                elif original_edges_count == 1 and total_deviated_pixels >= NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE:
-                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>={NUT_REJECT_DEVIATED_PIXELS_ONE_EDGE})"
+                if composite_score < 55:
+                    reject_reason = f"low_symmetry (score={composite_score:.1f} < 55)"
+                elif original_edges_count == 0 and total_deviated_pixels >= 28:
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=0, deviated_px={total_deviated_pixels}>=28)"
+                elif original_edges_count == 1 and total_deviated_pixels >= 35:
+                    reject_reason = f"no_straight_edges_with_high_deviation (edges=1, deviated_px={total_deviated_pixels}>=35)"
 
                 if reject_reason:
                     if DEBUG_HEXAGON_DETECTION or PRINT_DETAIL:
@@ -2558,8 +2534,8 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 # DECISION LOGIC: Reject poor quality hexagons
                 # NEW THRESHOLDS for 0-2 scale (sum of two 0-1 scores)
-                SYMMETRY_REJECT_THRESHOLD = NUT_SYMMETRY_REJECT_THRESHOLD   # Was 0.55 on 0-1 scale
-                SYMMETRY_WARNING_THRESHOLD = NUT_SYMMETRY_WARNING_THRESHOLD  # Was 0.70 on 0-1 scale
+                SYMMETRY_REJECT_THRESHOLD = 1.10   # Was 0.55 on 0-1 scale
+                SYMMETRY_WARNING_THRESHOLD = 1.40  # Was 0.70 on 0-1 scale
 
                 # REJECTION DISABLED - Comment out to re-enable
                 # if composite_score < SYMMETRY_REJECT_THRESHOLD:
@@ -2599,8 +2575,8 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
 
                 # Calculate distance from hexagon center to image center
                 h_img, w_img = mask_uint8.shape
-                img_center_x = NUT_REFERENCE_CENTER_X
-                img_center_y = NUT_REFERENCE_CENTER_Y
+                img_center_x = 72
+                img_center_y = 64
                 center_distance = np.sqrt((com_x - img_center_x)**2 + (com_y - img_center_y)**2)
 
                 if DEBUG_CENTER_OF_MASS or PRINT_DETAIL:
@@ -2623,13 +2599,13 @@ def process_masks_cpu(masks, center_x, center_y, annular_rgb=None):
                     'aspect_ratio': aspect_ratio,
                     'vertices': num_vertices,
                     'area': mask_area,
-                    'required_range': f'{NUT_MIN_ASPECT_RATIO}-{NUT_MAX_ASPECT_RATIO}'
+                    'required_range': '0.7-1.3'
                 })
         else:
             if DEBUG_HEXAGON_DETECTION:
-                logBoth('logDebug', _src, f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"    [CPU] ✗ Wrong vertex count ({num_vertices}, need 5-8)", MessageType.GENERAL)
             if PRINT_DETAIL:
-                logBoth('logDebug', _src, f"  ✗ Mask {idx} has {num_vertices} vertices (need {NUT_MIN_VERTICES}-{NUT_MAX_VERTICES})", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"  ✗ Mask {idx} has {num_vertices} vertices (need 5-8)", MessageType.GENERAL)
             failed_attempts.append({
                 'mask_idx': idx,
                 'reason': 'wrong_vertex_count',
@@ -2706,10 +2682,10 @@ class NutDetector:
         self.mask_generator = MobileSAMv2AutomaticMaskGenerator(
             sam_predictor=self.sam_predictor,
             yolo_model=self.yolo_model,
-            conf_threshold=NUT_YOLO_CONF_THRESHOLD,
+            conf_threshold=0.3,
             iou_threshold=0.7,
-            min_mask_region_area=NUT_MIN_MASK_AREA,
-            max_mask_region_area=NUT_MAX_MASK_AREA,
+            min_mask_region_area=3000,
+            max_mask_region_area=5500,
             use_grid_points=True,
             points_per_side=32
         )
