@@ -1662,3 +1662,20 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   Visual Studio installation, component "C++ Clang Compiler for Windows"), `--jobs=4` (replaces `--low-memory`; cl's
   cached objects are not reused by clang, so the first clang build compiles all ~4400 files). Before compiling, the
   script finds clang-cl with vswhere and stops with the component to install if it is missing. `--report` kept.
+
+## 72. runNuitka.bat: networkx back in the build (2026-11-05)
+- **First exe built** (Nuitka 4.3.4, clang-cl, 5031 modules, `completion="yes"`). On start the camera server failed:
+  `Failed to load MobileSAM: Module 'networkx' was actively excluded from Nuitka compilation`, then
+  `NameError: name 'SamPredictor' is not defined` in `HexagonNutDetector` (class body uses the failed import) and
+  `HubAndBearingSegmenter not available` for the same reason.
+- **Cause (compilation report):** networkx is imported at module level by
+  `torch._functorch._activation_checkpointing.graph_info_provider`, reached through `torch._functorch.partitioners`
+  (imported by `torch._functorch.aot_autograd`, `torch._inductor.pattern_matcher`, `functorch.compile`, ...). In the exe
+  this chain is reached while loading MobileSAM; the earlier check in the venv (`networkx` not in `sys.modules`) did not
+  show it.
+- **Change:** `--nofollow-import-to=networkx` removed (networkx included again, ~280 modules). pandas / seaborn / sklearn /
+  torchaudio / boto3 / pymodbus stay excluded: the report shows their remaining imports are inside functions or
+  try/except (Nuitka's "excluded" error is an ImportError, e.g. the boto3 try/except at import of PostgresBackupUtility
+  passed).
+- Rest of that run as expected on the build laptop: QR scanner COM3 absent, Siemens PLC 192.168.1.10 unreachable,
+  Redis / DB / frontend / heartbeat up, IOServer (Siemens S7) started.

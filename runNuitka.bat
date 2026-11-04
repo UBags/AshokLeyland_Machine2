@@ -58,10 +58,12 @@ REM torch / torchvision are NOT given as --include-package: that compiles every 
 REM (torch.compile), which this program never imports and which crashed Nuitka 2.7.10 (torch\_dynamo\pgo.py). The torch
 REM modules the program uses are followed from its imports. The numpy / torch plugins are deprecated (built in now);
 REM --follow-imports is the default in standalone mode.
-REM networkx / pandas / seaborn are left out: no MainProgram code imports them, and importing torch, ultralytics and the
-REM vision checks does not load them (only optional paths of torch.compile / ultralytics training plots would; pandas is
-REM used by the MI dashboard, which is OtherServices.py, not MainProgram). scipy (hub / top bearing / nut checks), sympy
-REM (loaded by torch) and matplotlib (loaded by ultralytics) stay.
+REM pandas / seaborn are left out: no MainProgram code imports them; torch, tqdm and ultralytics import them only inside
+REM functions or try/except (ultralytics training plots, tqdm.pandas); pandas is used by the MI dashboard, which is
+REM OtherServices.py, not MainProgram. networkx STAYS: in the exe, loading MobileSAM reaches
+REM torch._functorch.partitioners -> torch._functorch._activation_checkpointing.graph_info_provider, which imports networkx
+REM at module level (the first exe failed with "Module 'networkx' was actively excluded"). scipy (hub / top bearing / nut
+REM checks), sympy (loaded by torch) and matplotlib (loaded by ultralytics) stay.
 REM Also left out (nothing MainProgram runs imports them; from the 4.3.4 build report):
 REM   sklearn            - only there because of --include-package=sklearn.externals; no code imports sklearn
 REM   torchaudio         - optional import inside torch; never used
@@ -109,7 +111,6 @@ nuitka --standalone ^
     --windows-console-mode=attach ^
     --include-package=cv2 ^
     --include-package=ultralytics ^
-    --nofollow-import-to=networkx ^
     --nofollow-import-to=pandas ^
     --nofollow-import-to=seaborn ^
     --nofollow-import-to=sklearn ^
