@@ -1222,3 +1222,44 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   bearing against bearing of the same part (no washer) diff_RB -0.8..+0.8; washer-only pictures NOT OK (no nut).
 - **Verifier:** reference commit 010969a (the previous reference with this logic, values hard-coded) in
   `baseline_per_file`; manifest lines moved. ALL EQUIVALENT. Figure: `docs/top_bearing_ring_refinement.png`.
+
+## 47. Top bearing profile kept for the nut / washer check (cleared at cycle end and on aborts); bearing and nut size ranges (both machines) (2026-11-04)
+- **Before:** the camera server kept only `{center, inner_radius, outer_radius}` (whole pixels) in its own memory
+  (`ImageProcessor.bearingCentreAndRadii`), set only when the top bearing check passed (a failed retake left the
+  earlier ring), cleared only when the next cycle's knuckle check started - not at the end of a cycle, not on an abort
+  (the camera server is not told about either; the IOServer is).
+- **Profile (`CheckTopBearing.checkTopBearing`, returned geometry):** besides `center` / `inner_radius` /
+  `outer_radius` (unchanged, whole pixels): `center_precise`, `inner_radius_precise`, `outer_radius_precise`,
+  `outer_diameter`, `width`, `brightness_difference`, `profile_angles_deg` (0, 2 ... 358), `inner_profile` and
+  `outer_profile` (180 [x, y] picture points each: on every ray the edge position within +/- 4 px of the circle,
+  `_ring_profile`) and their edge contrasts. About 10 KB as JSON; edges within 0.5 px of the circle (median) on the
+  Machine 2 bearing pictures.
+- **Storage (`utils/RedisUtils.py`):** Redis key `TopBearingProfile` = {componentQRCode, savedAt, profile}, 1 h expiry
+  as a safety net; `saveTopBearingProfile`, `readTopBearingProfile(componentQRCode)` (None if none, unreadable, or
+  saved for another component), `clearTopBearingProfile`; own connection pool with 1 s timeouts.
+- **Camera server:** after every top bearing check `ImageProcessor.saveBearingProfile(geometry if OK else None)`
+  (a NOT OK result or an exception removes a ring kept earlier); the nut / washer check and the two bunk checks get
+  `ImageProcessor.getBearingProfile()` (Redis, current component only); removed at camera-server start and at the
+  start of a cycle (knuckle step, as before).
+- **IOServer (both PLC vendors):** the state machine listener (`_onStateChange`, also the audit trail) removes the
+  profile whenever the machine returns to READ_QR_CODE from another state: cycle completed (from the last state) or
+  aborted (PLC emergency button, heartbeat loss, abort from the frontend - all through `abortCycle`); audited
+  ("Top bearing profile removed (cycle completed / aborted in <state>)"). Also removed at IOServer start.
+- **Bearing size (`<vendor>.vision.topbearing.outer.diameter.min/max`, `.width.min/max`, px):** the ring after
+  refinement must be within them, otherwise NOT OK ("ring is not a bearing's size"). Machine 1 86-110 / 9-20,
+  Machine 2 89-113 / 10-21. Measured: bearings Machine 1 92-98 / 13-15, Machine 2 98-102 / 14-15; the nut found as a
+  ring by this check (nut pictures) 75-81 / 12-13 - every nut picture (10 Machine 1, 5 Machine 2) is now NOT OK, was OK.
+- **Nut size (`<vendor>.vision.nutwasher.nut.outer.diameter.min/max`, `.nut.width.min/max`, px; `_measure_nut`):**
+  outer diameter = circle of the nut outline's area; bore radius = strongest dark-to-bright step between 0.45 and 0.9
+  of the outer radius (median over angles); width = outer radius - bore radius. Outside the ranges: NOT OK ("shape
+  found is not a nut's size"). Machine 1 64-84 / 6-13, Machine 2 66-87 / 6-13. Measured (nut outline from
+  thresholding standing in for MobileSAM): Machine 2 76.8-77.0 / 10.1-10.2, Machine 1 74.6-80.7 / 8.9-10.7. A whole
+  bearing offered as a nut: 99-101 px, rejected; a disc the size of the bearing's bore: 69-73 px (nut-like) but width
+  15.5-18.6, rejected by the width (why the width is 6-13 and not wider).
+- **Results:** top bearing 26/26 both machines (as before); nut / washer 20 nut + washer pairs OK (Machine 2), 5
+  washer-only NOT OK, Machine 1 nut sizes all accepted; camera-side profile checks 5/5; DryRun_IOServer_Fault_Scenarios
+  new scenario H (saved, kept through the cycle, not given to another component, expiry set, removed at cycle end,
+  on a frontend abort and on a PLC emergency abort, next cycle normal): Machine 2 91/91, Machine 1 90/90.
+- **Dry-run windows:** DryRun_TopBearing_Check shows the ring's outer diameter / width and the size reason;
+  DryRun_NutWasher_Check shows the nut size and the size reason (machine1 copies regenerated).
+- **Verifier:** reference commit 86b4e8f for CheckTopBearing and CheckNutAndPlateWasher; ALL EQUIVALENT.

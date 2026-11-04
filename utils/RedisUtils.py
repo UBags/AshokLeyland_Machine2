@@ -2542,6 +2542,59 @@ def clearKeyCommunicationQueuesOnAbort():
             noteSuppressed()
 
 # ================================================================================
+# Top bearing profile: the ring found by the top bearing check (centre, radii, outer diameter, width and the edge
+# profile of both edges, see CheckTopBearing.checkTopBearing) for the component being assembled. Kept in a Redis key
+# so that the nut / washer check (CameraServer) can use it, and so that the IOServer can remove it when the cycle ends,
+# completed or aborted. One profile at a time: the machine assembles one component at a time.
+
+topBearingProfileKeyString: str = "TopBearingProfile"
+TOP_BEARING_PROFILE_MAX_AGE_SEC: int = 3600     # Redis removes it after this even if nothing else does
+# short timeouts: the IOServer clears it while changing state, which must never hang on Redis
+redisPoolForTopBearingProfile = redis.ConnectionPool(host=redisHostname, port=redisPort, max_connections=4,
+                                                     socket_timeout=1.0, socket_connect_timeout=1.0)
+
+
+def saveTopBearingProfile(profile: dict, componentQRCode: Optional[str]) -> bool:
+    """Save the top bearing profile of the component with this QR code (replaces any saved profile)."""
+    try:
+        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
+        record = {"componentQRCode": componentQRCode, "savedAt": time.time(), "profile": profile}
+        redisConnection.set(topBearingProfileKeyString, json.dumps(record), ex=TOP_BEARING_PROFILE_MAX_AGE_SEC)
+        return True
+    except Exception:
+        noteSuppressed()
+        return False
+
+
+def readTopBearingProfile(componentQRCode: Optional[str] = None) -> Optional[dict]:
+    """The saved top bearing profile, or None if there is none, it cannot be read, or it was saved for another
+    component (both QR codes known and different)."""
+    try:
+        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
+        raw = redisConnection.get(topBearingProfileKeyString)
+        if raw is None:
+            return None
+        record = json.loads(raw)
+        savedFor = record.get("componentQRCode")
+        if componentQRCode is not None and savedFor is not None and savedFor != componentQRCode:
+            return None
+        return record.get("profile")
+    except Exception:
+        noteSuppressed()
+        return None
+
+
+def clearTopBearingProfile() -> bool:
+    """Remove the saved top bearing profile (end of a cycle, abort, start of a new cycle)."""
+    try:
+        redisConnection = redis.Redis(connection_pool=redisPoolForTopBearingProfile)
+        redisConnection.delete(topBearingProfileKeyString)
+        return True
+    except Exception:
+        noteSuppressed()
+        return False
+
+# ================================================================================
 
 # TESTING CAMERASERVER
 

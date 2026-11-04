@@ -3,8 +3,8 @@
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "637ce4a",
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
-    "camera/CheckTopBearing.py": "010969a",
-    "camera/CheckNutAndPlateWasher.py": "04d147d"
+    "camera/CheckTopBearing.py": "86b4e8f",
+    "camera/CheckNutAndPlateWasher.py": "86b4e8f"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
@@ -323,7 +323,7 @@
       "const": "AVERAGE_G_THRESHOLD",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 838,
+      "old_line": 879,
       "old_literal": "77",
       "old_snippet": "average_G > 77"
     },
@@ -331,7 +331,7 @@
       "const": "DETECTION_MASK_RADIUS",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 537,
+      "old_line": 578,
       "old_literal": "60",
       "old_snippet": "detection_radius = 60"
     },
@@ -339,7 +339,7 @@
       "const": "INNER_EDGE_MAX_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 570,
+      "old_line": 611,
       "old_literal": "1.2",
       "old_snippet": "prompt_r * 1.20"
     },
@@ -347,7 +347,7 @@
       "const": "INNER_EDGE_MIN_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 569,
+      "old_line": 610,
       "old_literal": "0.65",
       "old_snippet": "prompt_r * 0.65"
     },
@@ -355,7 +355,7 @@
       "const": "LOWER_SCORE_THRESHOLD",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 838,
+      "old_line": 879,
       "old_literal": "0.65",
       "old_snippet": "lower_score > 0.65"
     },
@@ -363,7 +363,7 @@
       "const": "OUTER_EDGE_MAX_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 572,
+      "old_line": 613,
       "old_literal": "1.6",
       "old_snippet": "prompt_r * 1.60"
     },
@@ -371,7 +371,7 @@
       "const": "OUTER_EDGE_MIN_DIST_FACTOR",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 571,
+      "old_line": 612,
       "old_literal": "0.8",
       "old_snippet": "prompt_r * 0.80"
     },
@@ -379,7 +379,7 @@
       "const": "TARGET_RING_THICKNESS",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 765,
+      "old_line": 806,
       "old_literal": "14",
       "old_snippet": "TARGET_THICKNESS = 14"
     },
@@ -387,7 +387,7 @@
       "const": "TARGET_RING_THICKNESS_FOR_AREA_SCORE",
       "file": "camera/CheckTopBearing.py",
       "old_file": "camera/CheckTopBearing.py",
-      "old_line": 829,
+      "old_line": 870,
       "old_literal": "15",
       "old_snippet": "TARGET_THICK_FOR_SCORE = 15"
     }

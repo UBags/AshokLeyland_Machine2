@@ -50,6 +50,10 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
   G. Vision result, OK or NOT OK -> the IOServer sets the check's OK and Done back to False after
      plc.vision.result.reset.delay.sec (not before); a retry's result written before that cancels the earlier reset.
 
+  H. Top bearing profile (the ring the camera server keeps in Redis for the nut / washer check, key
+     TopBearingProfile): kept while the cycle runs and read only for the same component; removed by the IOServer
+     when the cycle completes, on an abort from the frontend and on an emergency abort from the PLC.
+
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -652,10 +656,56 @@ def run_vision_result_reset():
     check("G cycle completes", wrapped(), f"trace {TRACE}")
 
 
+def run_top_bearing_profile():
+    """H. Top bearing profile removed at the end of a cycle and on aborts."""
+    print("\n=== H. Top bearing profile (kept for the nut / washer check): removed at cycle end and on aborts ===", flush=True)
+    profile = {"center": [707, 351], "inner_radius": 35, "outer_radius": 49, "outer_diameter": 98.1, "width": 14.5,
+               "outer_profile": [[756.0, 351.0], [755.9, 352.7]], "inner_profile": [[742.0, 351.0], [741.9, 352.2]]}
+    clearTopBearingProfile()
+    # H1: a normal cycle
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="TOP")
+    check("H1 saved after the top bearing check (as the camera server does)", saveTopBearingProfile(profile, QR_DOST_LHS))
+    run_steps(first="NUT", last="CAP")
+    check("H1 kept while the cycle runs (read after the nut ... cap steps, same component)",
+          readTopBearingProfile(QR_DOST_LHS) == profile)
+    check("H1 not given for another component", readTopBearingProfile(QR_DOSTPLUS_RHS) is None)
+    check("H1 has an expiry (Redis TTL) as a safety net", 0 < r.ttl(topBearingProfileKeyString) <= TOP_BEARING_PROFILE_MAX_AGE_SEC,
+          str(r.ttl(topBearingProfileKeyString)))
+    run_steps(first="BUNK_CAPP")
+    check("H1 cycle completes", wrapped(), f"trace {TRACE}")
+    check("H1 removed when the cycle completed", wait_for(lambda: r.exists(topBearingProfileKeyString) == 0, 3))
+    # H2: abort from the frontend after the top bearing check
+    TRACE.clear()
+    plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="TOP")
+    saveTopBearingProfile(profile, QR_DOSTPLUS_RHS)
+    aborts0 = io.abortCount
+    sendAbortFromFEServerToIOServer(r, reason="dry run H2")
+    check("H2 abort from the frontend handled", wait_for(lambda: io.abortCount > aborts0, 3))
+    check("H2 removed on the abort from the frontend", wait_for(lambda: r.exists(topBearingProfileKeyString) == 0, 3))
+    # H3: emergency abort from the PLC after the nut / washer check
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="NUT")
+    saveTopBearingProfile(profile, QR_DOST_LHS)
+    aborts0 = io.abortCount
+    with LOCK: TAGS[IOServer.PLC_PC_EmergencyAbort] = True
+    check("H3 emergency abort handled", wait_for(lambda: io.abortCount > aborts0 and TAGS[IOServer.PLC_PC_EmergencyAbort] is False, 5))
+    check("H3 removed on the emergency abort", wait_for(lambda: r.exists(topBearingProfileKeyString) == 0, 3))
+    time.sleep(0.6)
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("H a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+
+
 try:
     run_scenarios()
     run_frontend_abort()
     run_vision_result_reset()
+    run_top_bearing_profile()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

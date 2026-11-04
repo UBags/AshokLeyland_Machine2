@@ -589,7 +589,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                                 test_image,
                                 ImageProcessor.currentPictures,
                                 ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.bearingCentreAndRadii
+                                bearing_geometry=ImageProcessor.getBearingProfile()
                             ) # Note: gamma not passed, relies on default
 
                             chosenOriginalImage = test_image
@@ -623,7 +623,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenProcessedImage, allok, winning_gamma = CheckNoCapBunk.checkNoCapBunk(
                                 test_image,
                                 ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.bearingCentreAndRadii
+                                bearing_geometry=ImageProcessor.getBearingProfile()
                             )
 
                             chosenOriginalImage = test_image
@@ -657,7 +657,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenProcessedImage, allok, winning_gamma = CheckBunk.checkBunk(
                                 test_image,
                                 ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.bearingCentreAndRadii
+                                bearing_geometry=ImageProcessor.getBearingProfile()
                             )
 
                             chosenOriginalImage = test_image
@@ -727,10 +727,14 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                             chosenProcessedImage = annotated_img if annotated_img is not None else test_image
                             chosenOriginalImage = test_image
 
+                            # The ring found (with its edge profile) is kept for the nut / washer check; a NOT OK
+                            # result (also a retake) removes any ring kept earlier in the cycle
+                            ImageProcessor.saveBearingProfile(geometry if allok else None)
                             if allok:
-                                ImageProcessor.bearingCentreAndRadii = geometry
                                 logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        f"CheckTopBearing PASSED, geometry={geometry}", Logger.SUCCESS)
+                                        f"CheckTopBearing PASSED, ring centre {geometry['center']}, radii "
+                                        f"{geometry['inner_radius']}-{geometry['outer_radius']}, outer diameter "
+                                        f"{geometry.get('outer_diameter')}, width {geometry.get('width')}", Logger.SUCCESS)
                             else:
                                 logBoth('logInfo', ConverterScalerAndProcessor.logSource,
                                         "CheckTopBearing FAILED", Logger.ISSUE)
@@ -738,6 +742,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                         except Exception as e:
                             logBoth('logWarning', ConverterScalerAndProcessor.logSource,
                                     f"CheckTopBearing exception: {e}", Logger.ISSUE)
+                            ImageProcessor.saveBearingProfile(None)
                             import traceback
                             traceback.print_exc()
                             allok = False
@@ -897,9 +902,36 @@ class ImageProcessor():
     def clearBearingCentreAndRadii(cls):
         try:
             ImageProcessor.bearingCentreAndRadii = None
+            if not clearTopBearingProfile():
+                logBoth('logWarning', ImageProcessor.logSource,
+                        "Could not remove the saved top bearing profile from Redis", Logger.RISK)
         except Exception as e:
             logBoth('logWarning', ImageProcessor.logSource,
                     f"Exception in clearBearingCentreAndRadii: {e}", Logger.RISK)
+
+    @classmethod
+    def saveBearingProfile(cls, geometry: Dict[str, Any] | None):
+        """Keep the top bearing ring (centre, radii, outer diameter, width, edge profile) of the current component in
+        Redis (utils.RedisUtils.saveTopBearingProfile), for the nut / washer check; None removes it. The IOServer
+        removes it when the cycle ends, completed or aborted."""
+        ImageProcessor.bearingCentreAndRadii = geometry
+        if geometry is None:
+            saved = clearTopBearingProfile()
+        else:
+            saved = saveTopBearingProfile(geometry, ImageProcessor.currentComponentQRCodeValue)
+        if not saved:
+            logBoth('logWarning', ImageProcessor.logSource,
+                    f"Could not {'remove' if geometry is None else 'save'} the top bearing profile in Redis", Logger.RISK)
+
+    @classmethod
+    def getBearingProfile(cls) -> Dict[str, Any] | None:
+        """The top bearing ring saved in this cycle for the current component, or None (none saved, removed at the end
+        of a cycle or on an abort, or saved for another component)."""
+        profile = readTopBearingProfile(ImageProcessor.currentComponentQRCodeValue)
+        if profile is None:
+            logBoth('logWarning', ImageProcessor.logSource,
+                    "No top bearing profile saved for the current component", Logger.RISK)
+        return profile
 
     @classmethod
     def setCurrentComponentName(cls, qrCodeValue : str | None = None):
@@ -990,8 +1022,8 @@ class ImageProcessor():
                 gamma=gamma
             )
 
-            # Store the geometry dictionary in bearingCentreAndRadii
-            ImageProcessor.bearingCentreAndRadii = geometry
+            # Keep the ring (with its edge profile) for the nut / washer check; NOT OK removes any ring kept earlier
+            ImageProcessor.saveBearingProfile(geometry if is_present else None)
 
             return annotated_img, is_present
 
@@ -1242,6 +1274,9 @@ def CameraServer(mode : str = "Test"):
         logBoth('logCritical', logSource, message, MessageType.PROBLEM)
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
+
+    # A top bearing profile left from an earlier run (crash, power cut) is never used in this one
+    clearTopBearingProfile()
 
     # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.

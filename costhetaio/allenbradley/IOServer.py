@@ -431,7 +431,8 @@ class IOServer:
         IOServer.logSource = getFullyQualifiedName(__file__, __class__)
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
-        self.machineState.stateChangeListener = self._auditStateChange
+        self.machineState.stateChangeListener = self._onStateChange
+        clearTopBearingProfile()             # none from an earlier run (crash, power cut) is used in this one
         # Vision result reset: one scheduler thread for all checks; READ states that ignore their trigger until the
         # PC has reset it after a NOT OK (see scheduleVisionResultReset)
         self._resultResetScheduler = DelayedJobScheduler("Vision Result Reset Scheduler")
@@ -1848,6 +1849,22 @@ class IOServer:
 
     def _auditStateChange(self, oldState, newState) -> None:
         self._audit(f"STATE {getattr(oldState, 'name', oldState)} -> {getattr(newState, 'name', newState)}")
+
+    def _onStateChange(self, oldState, newState) -> None:
+        """Every state change: audit trail; and when the machine goes back to READ_QR_CODE the cycle is over -
+        completed (from the last state) or aborted (emergency button, heartbeat loss, frontend abort, from any other
+        state) - so the top bearing profile kept for the nut / washer check is removed."""
+        self._auditStateChange(oldState, newState)
+        if newState == MachineState.READ_QR_CODE and oldState is not None and oldState != MachineState.READ_QR_CODE:
+            how = "completed" if oldState == MachineState.READ_FREE_ROTATION_TORQUE_1 else f"aborted in {getattr(oldState, 'name', oldState)}"
+            if clearTopBearingProfile():
+                self._audit(f"Top bearing profile removed (cycle {how})")
+            else:
+                self._audit(f"Top bearing profile NOT removed (cycle {how}): Redis not reachable; it expires by itself")
+                try:
+                    self.logger.error(f"Could not remove the top bearing profile from Redis (cycle {how})")
+                except Exception:
+                    noteSuppressed()
 
     def _applyLiveConfiguration(self, changedKeys) -> None:
         """Properties that the IOServer caches, re-applied when ApplicationConfiguration.properties changes."""
