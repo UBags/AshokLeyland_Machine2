@@ -1388,3 +1388,23 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   Machine 2 nuts measure 74.6-77.0).
 - Machine 2 re-run: DOSTPLUS nuts and DOST_nut_03 OK, washer-only NOT OK, DOST_nut_01/02 NOT OK on the washer diff_RB
   (unchanged, user decision). Verifier ALL EQUIVALENT.
+
+## 54. Washer comparison area strictly on the bearing race (both machines) (2026-11-04)
+- **Found:** the area compared for the washer (diff_R, diff_RB) was the top bearing ring drawn as two circles with
+  whole-pixel centre and radii. Measured against the race edges found along every 2 degrees: 92.1-98.4 % of it was on
+  the race; the rest lay up to 3.4 px over the dark gap inside or the grease outside.
+- **Change (user's construction, `_create_bearing_mask_in_annular_space`):** start from the bearing ring's measured
+  edges (`inner_profile` / `outer_profile` of the top bearing geometry); a pixel is in the area when its distance from
+  the ring centre is at least the inner edge + `<vendor>.vision.nutwasher.washer.mask.edge.margin` (1 px) and at most
+  the outer edge - 1 px, both edges taken at the pixel's angle (interpolated between the rays): an annulus 2 px
+  narrower than the race. The nut's mask is then removed from it (unchanged). Without an edge profile: the precise
+  circles with the same margin. (A first version drawing the moved edges as polygons left 0.1-0.3 % of the pixels up
+  to 1.5 px off where the edge steps between rays; replaced by the per-pixel test.)
+- **Result:** every pixel of the area on the race, at least 1.0 px inside both edges, on all 23 bearing pictures (both
+  machines); 68-89 % of the former area (about 2250-3300 px).
+- **Washer differences:** Machine 2 DOST nut + washer pictures against 4 DOST bearing pictures: diff_RB DOST_nut_01
+  +5.53..+6.38 (was +4.8..+5.4), DOST_nut_02 +5.36..+6.18 (was about +5.0), DOST_nut_03 +7.75..+8.56 (was +7.1..+7.6);
+  DOSTPLUS nuts +13.8..+14.6 (was +13.6..+14.4); diff_R +44.7..+58.2. No washer (bearing against bearing of the same
+  part): diff_R -2.5..+2.5, diff_RB -0.82..+0.81 (unchanged). Machine 1 nuts all OK (diff_RB +11.7..+31.0). Limits
+  unchanged (0.55 / 5.57): DOST_nut_01 now passes against 3 of the 4 DOST bearing pictures, DOST_nut_02 against 1.
+- Verifier: reference 8ece644 for CheckNutAndPlateWasher; ALL EQUIVALENT.
