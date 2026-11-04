@@ -33,7 +33,6 @@ except:
 
 from camera.HexagonNutDetector import NutDetector
 from camera.CheckTopBearing import CheckTopBearing
-from camera.VisionConfig import vInt, vFloat, vBool, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -90,31 +89,34 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 5.57)   # 1% FPR - R-B difference threshold
-    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
+    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
+    WASHER_THRESHOLD_RB = 5.57    # 1% FPR - R-B difference threshold
+    WASHER_GAMMA = 3.0            # Gamma correction value
+    # Washer comparison area: the bearing ring's measured edges moved this many px into the race (outer edge inward,
+    # inner edge outward), so that every pixel compared is on the race; then the nut's mask is removed from it
+    WASHER_MASK_EDGE_MARGIN = 1.0
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
 
     # Accepted nut (the outline found by the nut detector): outer diameter (circle of the outline's area), px; the
     # width (outer radius minus the bore radius) is only reported, not limited. A shape outside these ranges
     # is not a nut (a bearing ring is about 92-102 px across).
-    NUT_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.outer.diameter.min", 64.0)
-    NUT_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.outer.diameter.max", 84.0)
+    NUT_OUTER_DIAMETER_MIN = 64.0
+    NUT_OUTER_DIAMETER_MAX = 84.0
     # and its mean diameter (outline and bore averaged round the nut) within this range (nuts 64-70, a whole bearing
     # 78-87, a disc the size of a bearing's bore 54-58)
-    NUT_MEAN_DIAMETER_MIN = vFloat("vision.nutwasher.nut.mean.diameter.min", 60.0)
-    NUT_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.mean.diameter.max", 72.0)
+    NUT_MEAN_DIAMETER_MIN = 60.0
+    NUT_MEAN_DIAMETER_MAX = 72.0
 
     # Fallback when the nut detector accepts no hexagon: the top bearing ring finder (CheckTopBearing.findRing) on
     # the nut picture; a ring of a nut's size is accepted as the nut. Nuts: outer diameter 75-82 px, mean diameter
     # 64-68; bearings 92-102 / 78-87; washer only: no ring.
-    NUT_RING_FALLBACK = vBool("vision.nutwasher.nut.ring.fallback", True)
-    NUT_RING_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.ring.outer.diameter.min", 70.0)
-    NUT_RING_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.ring.outer.diameter.max", 86.0)
-    NUT_RING_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.ring.mean.diameter.max", 74.0)
+    NUT_RING_FALLBACK = True
+    NUT_RING_OUTER_DIAMETER_MIN = 70.0
+    NUT_RING_OUTER_DIAMETER_MAX = 86.0
+    NUT_RING_MEAN_DIAMETER_MAX = 74.0
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -181,51 +183,68 @@ class CheckNutAndPlateWasher:
                                               nut_annular_radius: int,
                                               annular_image_shape: Tuple[int, int]) -> np.ndarray:
         """
-        Create bearing annular mask in the nut's annular coordinate space.
+        The area compared for the washer (before the nut is removed), in the nut search area's coordinates: the bearing
+        ring found by the top bearing check, narrowed so that every pixel is on the bearing race - its outer edge moved
+        WASHER_MASK_EDGE_MARGIN px inward and its inner edge the same outward (2 px narrower than the race for a margin
+        of 1). Built from the ring's measured edges (inner_profile / outer_profile, every 2 degrees round
+        center_precise) when the geometry has them, otherwise from its circles (precise radii when known).
 
         Args:
-            bearing_geometry: Dict with 'center', 'inner_radius', 'outer_radius'
-            nut_annular_center: Center used for nut extraction (e.g., (632, 360))
-            nut_annular_radius: Radius used for nut extraction (e.g., 80)
-            annular_image_shape: Shape of annular image (h, w)
+            bearing_geometry: the top bearing check's geometry ('center', 'inner_radius', 'outer_radius'; and
+                              'center_precise', 'inner_profile', 'outer_profile', '*_radius_precise' when present)
+            nut_annular_center: centre of the nut search area (picture coordinates)
+            nut_annular_radius: radius of the nut search area
+            annular_image_shape: (h, w) of the nut search area
 
         Returns:
-            Binary mask of bearing annulus in nut's annular space
+            Mask (0 / 255) of the narrowed bearing ring in the nut search area
         """
         _src = getFullyQualifiedName(__file__, cls)
-
-        bearing_cx_orig, bearing_cy_orig = bearing_geometry["center"]
-        bearing_inner_r = bearing_geometry["inner_radius"]
-        bearing_outer_r = bearing_geometry["outer_radius"]
-
-        # Calculate crop offset (how nut annular image relates to original)
-        crop_offset_x = nut_annular_center[0] - nut_annular_radius
-        crop_offset_y = nut_annular_center[1] - nut_annular_radius
-
-        # Translate bearing center to nut's annular space
-        bearing_cx_annular = bearing_cx_orig - crop_offset_x
-        bearing_cy_annular = bearing_cy_orig - crop_offset_y
-
-        logBoth('logDebug', _src, f"[Bearing Mask] Original center: ({bearing_cx_orig}, {bearing_cy_orig})", MessageType.GENERAL)
-        logBoth('logDebug', _src, f"[Bearing Mask] Annular center: ({bearing_cx_annular}, {bearing_cy_annular})", MessageType.GENERAL)
-        logBoth('logDebug', _src, f"[Bearing Mask] Radii: inner={bearing_inner_r}, outer={bearing_outer_r}", MessageType.GENERAL)
-
-        # Create bearing annular mask
+        crop_offset = np.array([nut_annular_center[0] - nut_annular_radius,
+                                nut_annular_center[1] - nut_annular_radius], dtype=np.float64)
+        margin = float(CheckNutAndPlateWasher.WASHER_MASK_EDGE_MARGIN)
+        shift = 4                                   # sub-pixel drawing: coordinates in 1/16 px
+        scale = float(1 << shift)
         h, w = annular_image_shape
         bearing_mask = np.zeros((h, w), dtype=np.uint8)
+        centre = bearing_geometry.get("center_precise") or bearing_geometry["center"]
+        c = np.asarray(centre, dtype=np.float64)
+        outer_profile = bearing_geometry.get("outer_profile")
+        inner_profile = bearing_geometry.get("inner_profile")
 
-        # Draw outer circle
-        cv2.circle(bearing_mask,
-                  (int(bearing_cx_annular), int(bearing_cy_annular)),
-                  int(bearing_outer_r),
-                  255, -1)
+        if outer_profile and inner_profile:
+            # Each pixel decides for itself: its distance from the ring centre must be at least the inner edge + margin
+            # and at most the outer edge - margin, both edges taken at the pixel's angle (interpolated between the
+            # measured rays, every 2 degrees)
+            inner = np.asarray(inner_profile, dtype=np.float64) - c
+            outer = np.asarray(outer_profile, dtype=np.float64) - c
+            angles = np.mod(np.arctan2(inner[:, 1], inner[:, 0]), 2 * np.pi)
+            order = np.argsort(angles)
+            angles = angles[order]
+            r_inner = np.hypot(inner[:, 0], inner[:, 1])[order]
+            r_outer = np.hypot(outer[:, 0], outer[:, 1])[order]
+            ring_angles = np.r_[angles[-1] - 2 * np.pi, angles, angles[0] + 2 * np.pi]
+            ring_inner = np.r_[r_inner[-1], r_inner, r_inner[0]]
+            ring_outer = np.r_[r_outer[-1], r_outer, r_outer[0]]
+            ys, xs = np.mgrid[0:h, 0:w]
+            dx = xs + crop_offset[0] - c[0]
+            dy = ys + crop_offset[1] - c[1]
+            r = np.hypot(dx, dy)
+            a = np.mod(np.arctan2(dy, dx), 2 * np.pi)
+            inside = (r >= np.interp(a, ring_angles, ring_inner) + margin) & (r <= np.interp(a, ring_angles, ring_outer) - margin)
+            bearing_mask[inside] = 255
+            source = "edge profile"
+        else:
+            r_out = float(bearing_geometry.get("outer_radius_precise", bearing_geometry["outer_radius"])) - margin
+            r_in = float(bearing_geometry.get("inner_radius_precise", bearing_geometry["inner_radius"])) + margin
+            q = np.round((c - crop_offset) * scale).astype(int)
+            cv2.circle(bearing_mask, (int(q[0]), int(q[1])), int(round(r_out * scale)), 255, -1, cv2.LINE_8, shift)
+            cv2.circle(bearing_mask, (int(q[0]), int(q[1])), int(round(r_in * scale)), 0, -1, cv2.LINE_8, shift)
+            source = "circles"
 
-        # Remove inner circle
-        cv2.circle(bearing_mask,
-                  (int(bearing_cx_annular), int(bearing_cy_annular)),
-                  int(bearing_inner_r),
-                  0, -1)
-
+        logBoth('logDebug', _src,
+                f"[Bearing Mask] from the ring's {source}, edges moved {margin:.1f} px into the race: "
+                f"{int(np.sum(bearing_mask == 255))} px", MessageType.GENERAL)
         return bearing_mask
 
     @classmethod
