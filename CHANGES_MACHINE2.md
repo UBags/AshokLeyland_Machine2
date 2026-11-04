@@ -1542,3 +1542,22 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - Tested here without tkinter or MobileSAM (neither installable in this environment): the window's load / run /
   marking code with stand-ins (pin finder for MobileSAM) - Siemens settings read, both checks run, results and marked
   pictures produced. The window itself was not opened here.
+
+## 62. Bunk check: 3 holes in a line - middle one ignored (both machines) (2026-11-04)
+- **Case (user):** the hole detection sometimes finds 3 holes - on the DOSTPLUS bung the centre punch mark, which lies
+  between the two holes, is taken for a third hole - and the check then failed (2 expected).
+- **Change (`BunkSegmenter`, `drop_middle_of_three_in_line`, applied first in `_apply_cascade_geometric_validation`):**
+  when exactly 3 holes are found, the middle one (the one not in the farthest-apart pair) is ignored and the other two are
+  treated as the 2 holes if (1) they are more or less in a straight line - 180 deg minus the angle at the middle hole
+  <= `vision.bunk.three.hole.max.bend` (10.0 deg) - and (2) the middle hole is more or less equally far from both -
+  |d1 - d2| / mean <= `vision.bunk.three.hole.max.distance.difference` (0.25). The usual 2-hole test (pair distance)
+  then decides. Otherwise the 3 holes are kept (as before: NOT OK for DOSTPLUS, next gamma for DOST). Logged either way.
+  Same values on both machines (all three properties files).
+- **Measured** on the 7 seated Machine 2 DOSTPLUS bung pictures (pins + punch mark): bend 0.6-7.7 deg, distance
+  difference 9-20 % (the punch is not exactly central; the bright pins and the punch measured here, not MobileSAM's
+  masks).
+- **Test** (the real cascade on those positions): 7/7 holes + punch -> 2 holes, OK as DOSTPLUS. Still NOT OK: 3 holes in an
+  L (3 of a DOST square), middle hole 40 % off-centre, middle hole 20 px off the line (bend 40 deg), a pair 80 px apart
+  after dropping the middle (outside 95-125), DOSTPLUS holes + punch checked as DOST. Unchanged: DOST square, 2 holes.
+- Verifier: reference f399967 for BunkSegmenter (its six settings first taken from inline numbers written inline there,
+  manifest lines remapped); ALL EQUIVALENT (both copies).

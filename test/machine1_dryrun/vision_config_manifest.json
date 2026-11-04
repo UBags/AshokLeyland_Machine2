@@ -6,14 +6,15 @@
     "camera/CheckTopBearing.py": "4e04121",
     "camera/CheckNutAndPlateWasher.py": "181790d",
     "camera/HexagonNutDetector.py": "4e04121",
-    "camera/CheckCap.py": "e9171d2"
+    "camera/CheckCap.py": "e9171d2",
+    "camera/BunkSegmenter.py": "f399967"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1310,
+      "old_line": 1351,
       "old_literal": "100",
       "old_snippet": "distance <= 100:"
     },
@@ -21,7 +22,7 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MIN",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1310,
+      "old_line": 1351,
       "old_literal": "75",
       "old_snippet": "if 75 <= distance"
     },
@@ -29,7 +30,7 @@
       "const": "SQUARE_MAX_ANGLE_STD",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 372,
+      "old_line": 406,
       "old_literal": "20.0",
       "old_snippet": "allowed_angle_std: float = 20.0"
     },
@@ -37,7 +38,7 @@
       "const": "SQUARE_MAX_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 371,
+      "old_line": 405,
       "old_literal": "115.0",
       "old_snippet": "max_interior_angle: float = 115.0"
     },
@@ -45,7 +46,7 @@
       "const": "SQUARE_MIN_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 370,
+      "old_line": 404,
       "old_literal": "65.0",
       "old_snippet": "min_interior_angle: float = 65.0"
     },
@@ -53,7 +54,7 @@
       "const": "SQUARE_SIDE_LENGTH_TOLERANCE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 369,
+      "old_line": 403,
       "old_literal": "0.2",
       "old_snippet": "tolerance: float = 0.2"
     },
