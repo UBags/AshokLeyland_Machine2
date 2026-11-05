@@ -225,6 +225,10 @@ class TakePictures(GenericQueueProcessor):
         self.cameraPwd = CosThetaConfigurator.getInstance().getCameraPwd()
         self.gapBetweenPictures = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
         self.camera = RTSPCam(IP=self.cameraIP, port=self.cameraPort, uid=self.cameraUID, password=self.cameraPwd, name=self.cameraID)
+        self.redisConnectionForHeartbeat = None
+        self.clientRedisConnectedForHeartbeat = False
+        self.connectToRedisForHeartbeat()
+        self.launchThreadForHeartbeat()
         CosThetaConfigurator.addReloadListener(self._applyLiveConfiguration)
 
     def _applyLiveConfiguration(self, changedKeys) -> None:
@@ -246,10 +250,6 @@ class TakePictures(GenericQueueProcessor):
         if connection:
             logBoth('logError', logSource, f"Camera connection settings changed ({', '.join(connection)}): restart the "
                     f"camera server for them to take effect", MessageType.ISSUE)
-        self.redisConnectionForHeartbeat = None
-        self.clientRedisConnectedForHeartbeat = False
-        self.connectToRedisForHeartbeat()
-        self.launchThreadForHeartbeat()
 
     def connectToRedisForHeartbeat(self, forceRenew=False):
         if forceRenew:

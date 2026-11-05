@@ -692,7 +692,8 @@ class RTSPCam():
 
         if (self.connectionAttempts == 1) or (
                 (self.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0):
-            if (objRef.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0:
+            # only when it really is not connected (connectionAttempts is 0 right after a successful connect)
+            if (not objRef.connected) and (objRef.connectionAttempts % RTSPCam.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) == 0:
                 logBoth('logTakeAction', RTSPCam.logSource,
                         f"RTSPCam {self.name} is NOT CONNECTED! Attempting reconnection...",
                         Logger.PROBLEM)
