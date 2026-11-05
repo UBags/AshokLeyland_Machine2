@@ -28,7 +28,8 @@ param(
     [switch]$Uninstall,
     [switch]$Force,
     [int]$MaxAgeHours    = 72,
-    [int]$StoragePercent = 10      # disk space System Protection may use (set by -Install)
+    [int]$StoragePercent = 10,     # disk space System Protection may use (set by -Install)
+    [int]$ListWaitSeconds = 180    # how long to wait for a new restore point to be listed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +43,7 @@ $SRKey     = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
 $SRPolicy  = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore'
 
 function Write-Log([string]$Message, [string]$Level = 'INFO') {
-    $line = '{0:yyyy-MM-dd HH:mm:ss}  {1,-7}  {2}' -f (Get-Date), $Level, $Message
+    $line = '{0}  {1,-7}  {2}' -f (Get-Date).ToString('yyyy-MM-dd HH\:mm\:ss'), $Level, $Message
     Write-Host $line
     try {
         Add-Content -Path $LogFile -Value $line -Encoding UTF8
@@ -51,12 +52,21 @@ function Write-Log([string]$Message, [string]$Level = 'INFO') {
     } catch { }
 }
 
+function Get-RestorePoints {
+    # Restore points as objects with a local DateTime, newest first
+    @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue | ForEach-Object {
+        [pscustomobject]@{
+            Sequence    = $_.SequenceNumber
+            Description = $_.Description
+            Created     = [Management.ManagementDateTimeConverter]::ToDateTime($_.CreationTime)
+        }
+    } | Sort-Object -Property Created -Descending)
+}
+
 function Get-NewestRestorePointTime {
-    $times = @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue | ForEach-Object {
-        [Management.ManagementDateTimeConverter]::ToDateTime($_.CreationTime)
-    })
-    if ($times.Count -eq 0) { return $null }
-    return ($times | Sort-Object -Descending | Select-Object -First 1)
+    $points = @(Get-RestorePoints)
+    if ($points.Count -eq 0) { return $null }
+    return $points[0].Created
 }
 
 function Assert-Prerequisites {
@@ -84,7 +94,7 @@ function Enable-Protection {
 
 function New-RestorePoint {
     $before = Get-Date
-    $desc   = 'Automatic {0:yyyy-MM-dd HH:mm}' -f $before
+    $desc   = 'Automatic ' + $before.ToString('yyyy-MM-dd HH\:mm\:ss')
     Write-Log "Creating restore point '$desc' on $Drive ..."
     # RestorePointType 12 = MODIFY_SETTINGS, EventType 100 = BEGIN_SYSTEM_CHANGE
     $result = Invoke-CimMethod -Namespace 'root/default' -ClassName 'SystemRestore' -MethodName 'CreateRestorePoint' `
@@ -92,11 +102,23 @@ function New-RestorePoint {
     if ($result.ReturnValue -ne 0) {
         throw ('CreateRestorePoint returned {0} (0x{0:X8})' -f $result.ReturnValue)
     }
-    $newest = Get-NewestRestorePointTime
-    if ($newest -and $newest -ge $before.AddMinutes(-1)) {
-        Write-Log ('Restore point created ({0:yyyy-MM-dd HH:mm:ss}).' -f $newest) 'OK'
+    # The new point can take a while to be listed after the call returns (seen 2026-11-05):
+    # wait for it, up to $ListWaitSeconds, and match it by its description.
+    $deadline = $before.AddSeconds($ListWaitSeconds)
+    do {
+        $point = Get-RestorePoints | Where-Object { $_.Description -eq $desc } | Select-Object -First 1
+        if ($point) { break }
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
+    $waited = ((Get-Date) - $before).TotalSeconds
+    if ($point) {
+        Write-Log ('Restore point #{0} created {1}; listed after {2:N0} s.' -f `
+                   $point.Sequence, $point.Created.ToString('yyyy-MM-dd HH\:mm\:ss'), $waited) 'OK'
     } else {
-        throw 'CreateRestorePoint returned 0 but no new restore point is listed (is System Protection on, with disk space allotted?).'
+        $newest = Get-RestorePoints | Select-Object -First 1
+        $seen   = if ($newest) { "#$($newest.Sequence) '$($newest.Description)' " + $newest.Created.ToString('yyyy-MM-dd HH\:mm\:ss') } else { 'none' }
+        $secs   = '{0:N0}' -f $waited
+        throw "CreateRestorePoint returned 0 but '$desc' is not listed after $secs s (newest listed: $seen)."
     }
 }
 
@@ -116,10 +138,10 @@ function Invoke-Check {
     }
     $age = (Get-Date) - $newest
     if ($age.TotalHours -ge $MaxAgeHours) {
-        Write-Log ('Newest restore point {0:yyyy-MM-dd HH:mm} is {1:N1} h old (limit {2} h).' -f $newest, $age.TotalHours, $MaxAgeHours)
+        Write-Log ('Newest restore point {0:yyyy-MM-dd HH\:mm} is {1:N1} h old (limit {2} h).' -f $newest, $age.TotalHours, $MaxAgeHours)
         New-RestorePoint
     } else {
-        Write-Log ('Newest restore point {0:yyyy-MM-dd HH:mm} is {1:N1} h old; next one after {2:yyyy-MM-dd HH:mm}.' -f `
+        Write-Log ('Newest restore point {0:yyyy-MM-dd HH\:mm} is {1:N1} h old; next one after {2:yyyy-MM-dd HH\:mm}.' -f `
                    $newest, $age.TotalHours, $newest.AddHours($MaxAgeHours)) 'SKIP'
     }
 }
