@@ -6,7 +6,10 @@ and knuckle_images/EMPTY_<n>.jpg (the fixture without a knuckle: must be NOT OK 
 For every picture, CheckKnuckle is run with the QR code of each of the four knuckles (DOST/DOSTPLUS x LHS/RHS): it
 must pass with its own QR code and fail with the other three. Also checked:
   - a dark object lying on the other end of the bottom bar (both side boxes dark) is rejected;
-  - the margin of every measured region to its threshold (printed; a margin below MIN_MARGIN fails).
+  - the margin of every measured region to its threshold (printed; a margin below MIN_MARGIN fails);
+  - yellow paint marks (operators mark knuckles at random spots): for every picture and every common check A-E, a
+    yellow mark over the region -> still OK when the region has an alternate area (vision.knuckle.common.check.
+    <a..e>.alt.*), NOT OK when it has none; a mark over the alternate only -> OK; marks over both -> NOT OK.
 Settings: <vendor>.vision.knuckle.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). No Redis, PLC or camera needed.
 
@@ -27,6 +30,9 @@ from Configuration import CosThetaConfigurator as C
 from camera.CheckKnuckle import CheckKnuckle as K
 
 MIN_MARGIN = 20          # grey levels between a measured value and its threshold
+MIN_ALT_MARGIN = 15      # the same for the alternate areas (Machine 2: the casting near A offers no area
+                         # with 20; the A alternate has 15.1 as photographed, 11.2 with the part 3 px off,
+                         # where A itself has 8.1)
 QR = {("DOST", "LHS"): "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
       ("DOST", "RHS"): "7204838$400102VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$",
       ("DOSTPLUS", "LHS"): "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
@@ -45,6 +51,45 @@ def rect_mean(g, x, y, w, h):
 
 def circ_mean(g, cx, cy, r):
     m = np.zeros(g.shape, np.uint8); cv2.circle(m, (cx, cy), r, 255, -1); return float(g[m == 255].mean())
+
+
+YELLOW = (0, 225, 255)          # BGR: paint as seen on the knuckles (grey level about 210)
+PAD = 3                         # the mark covers the region plus 3 px all round
+
+
+def regions():
+    """{letter: (primary, alternate or None)}; a region is ("r", x, y, w, h) or ("c", cx, cy, r)."""
+    r = lambda x, y, w, h: ("r", x, y, w, h) if w > 0 and h > 0 else None
+    c = lambda x, y, rad: ("c", x, y, rad) if rad > 0 else None
+    return {
+        "A": (r(K.COMMON_CHECK_A_X, K.COMMON_CHECK_A_Y, K.COMMON_CHECK_A_WIDTH, K.COMMON_CHECK_A_HEIGHT),
+              r(K.COMMON_CHECK_A_ALT_X, K.COMMON_CHECK_A_ALT_Y, K.COMMON_CHECK_A_ALT_WIDTH, K.COMMON_CHECK_A_ALT_HEIGHT)),
+        "B": (r(K.COMMON_CHECK_B_X, K.COMMON_CHECK_B_Y, K.COMMON_CHECK_B_WIDTH, K.COMMON_CHECK_B_HEIGHT),
+              r(K.COMMON_CHECK_B_ALT_X, K.COMMON_CHECK_B_ALT_Y, K.COMMON_CHECK_B_ALT_WIDTH, K.COMMON_CHECK_B_ALT_HEIGHT)),
+        "C": (c(K.COMMON_CHECK_C_CENTER_X, K.COMMON_CHECK_C_CENTER_Y, K.COMMON_CHECK_C_RADIUS),
+              c(K.COMMON_CHECK_C_ALT_CENTER_X, K.COMMON_CHECK_C_ALT_CENTER_Y, K.COMMON_CHECK_C_ALT_RADIUS)),
+        "D": (c(K.COMMON_CHECK_D_CENTER_X, K.COMMON_CHECK_D_CENTER_Y, K.COMMON_CHECK_D_RADIUS),
+              c(K.COMMON_CHECK_D_ALT_CENTER_X, K.COMMON_CHECK_D_ALT_CENTER_Y, K.COMMON_CHECK_D_ALT_RADIUS)),
+        "E": (r(K.COMMON_CHECK_E_X, K.COMMON_CHECK_E_Y, K.COMMON_CHECK_E_WIDTH, K.COMMON_CHECK_E_HEIGHT),
+              r(K.COMMON_CHECK_E_ALT_X, K.COMMON_CHECK_E_ALT_Y, K.COMMON_CHECK_E_ALT_WIDTH, K.COMMON_CHECK_E_ALT_HEIGHT)),
+    }
+
+
+def paint(img, region):
+    out = img.copy()
+    if region[0] == "r":
+        _, x, y, w, h = region
+        cv2.rectangle(out, (x - PAD, y - PAD), (x + w + PAD, y + h + PAD), YELLOW, -1)
+    else:
+        _, cx, cy, rad = region
+        cv2.circle(out, (cx, cy), rad + PAD, YELLOW, -1)
+    return out
+
+
+def region_mean(g, region):
+    if region[0] == "r":
+        return rect_mean(g, *region[1:])
+    return circ_mean(g, *region[1:])
 
 
 def measure(img):
@@ -90,6 +135,20 @@ for f in files:
     cv2.rectangle(rag, (x - 10, y - 10), (x + w + 10, y + h + 10), (30, 30, 30), -1)
     check(f"{os.path.basename(f)}: dark object on the other end of the bar -> NOT OK",
           not K.checkKnuckle(rag, componentQRCode=QR[(model, side)])[1])
+    # yellow paint marks
+    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    own = QR[(model, side)]
+    for letter, (prim, alt) in regions().items():
+        if alt is not None:
+            margins.setdefault(f"{letter} alternate", []).append(K.COMMON_CHECK_THRESHOLD - region_mean(g, alt))
+        okPrim = K.checkKnuckle(paint(img, prim), componentQRCode=own)[1]
+        if alt is None:
+            check(f"{os.path.basename(f)}: paint over {letter} (no alternate set) -> NOT OK", not okPrim)
+            continue
+        okAlt = K.checkKnuckle(paint(img, alt), componentQRCode=own)[1]
+        okBoth = K.checkKnuckle(paint(paint(img, prim), alt), componentQRCode=own)[1]
+        check(f"{os.path.basename(f)}: paint over {letter} -> OK (alternate dark); over its alternate -> OK; over both -> NOT OK",
+              okPrim and okAlt and not okBoth, f"over {letter}: {okPrim}, over alternate: {okAlt}, over both: {okBoth}")
 
 for f in empties:
     img = cv2.imread(f)
@@ -99,7 +158,9 @@ for f in empties:
 print("\nSmallest margin of each region to its threshold:")
 for k, v in margins.items():
     print(f"  {k:26} {min(v):6.1f}")
-check(f"every region at least {MIN_MARGIN} grey levels from its threshold", all(min(v) >= MIN_MARGIN for v in margins.values()),
-      {k: round(min(v), 1) for k, v in margins.items() if min(v) < MIN_MARGIN})
+need = lambda k: MIN_ALT_MARGIN if k.endswith("alternate") else MIN_MARGIN
+check(f"every region at least {MIN_MARGIN} grey levels from its threshold (alternate areas {MIN_ALT_MARGIN})",
+      all(min(v) >= need(k) for k, v in margins.items()),
+      {k: round(min(v), 1) for k, v in margins.items() if min(v) < need(k)})
 print(f"\nRESULT {sum(results)}/{len(results)} checks passed", flush=True)
 os._exit(0 if all(results) else 1)
