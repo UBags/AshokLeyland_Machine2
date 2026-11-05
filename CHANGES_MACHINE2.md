@@ -1802,3 +1802,26 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   read and write fails then); S4 / S7 also require the connection. 38 checks. Verified: with no variable (siemens from
   the file), with allenbradley, and with the old default put back (S0 fails, S skipped); two full cycles with no
   variable on the simulated Siemens PLC.
+
+## 77. IOServer test windows after the commonplc change; two window dry runs (2026-11-06)
+- **Which windows depend on the IOServer code:** only `Test_IOServer_With_Mock_PLC_UI.py` imports it (it starts
+  `PLCIOServer(mockInstance=True)` in its own process). `Test_IOServer_With_Real_PLC_UI.py`,
+  `Test_IOServer_With_Simulated_QR_And_Camera_UI.py` and `Test_Integrated_All_Servers_Running_UI.py` talk to a running
+  IOServer over Redis only (QR / camera / fe2io queues, publishTags / receiveTags); those messages did not change.
+- **Fixed in the Mock-PLC window (both folders):**
+  - **Would not start (since section 74):** three uses of the old class name `IOServer` (`getattr(IOServer, ...)` at
+    module level and in `_tag()`, a type hint) were missed by the rename, which caught only `IOServer.<attribute>`:
+    NameError at import. Now `PLCIOServer`; checked with an AST scan of every test window and dry run for unbound names.
+  - **Auto Cycle could report a good cycle as FAILED (older):** the state tracer kept its "last state seen" outside the
+    lock; when Auto Cycle restarted the trace before the tracer had seen the current state, the tracer recorded it a
+    second time ([2, 2, 3, ...]). The tracer and the restart now share it under the lock.
+  - **Rejected QR:** after sending the rejection the window waits until the IOServer has taken it off qrcode2io.q, as a
+    real second scan would.
+- **Found, not changed (production):** `readDataInIOServerFromQRCodeServer` reads one message, then `xtrim(qrcode2io.q, 0)`:
+  a second QR message already queued behind it can be deleted with it. In production the QR server sends nothing for a
+  bad scan (section 9), so this needs two messages within one read interval; same xtrim pattern as section 29.
+- **New dry runs (both folders):** `DryRun_IOServer_Mock_PLC_Window.py` (14 checks) and `DryRun_IOServer_Real_PLC_Window.py`
+  (7 checks; the window against `PLCIOServer` on the simulated PLC) - see the README. They need a display (Linux:
+  `xvfb-run`).
+- **Verified (Python 3.12 + Tk under Xvfb here):** Mock window 14/14 in 12 of 12 runs (3 x both folders x both vendors;
+  before the tracer / QR fixes 3 of 4 runs failed one way or another); Real-PLC window 7/7 on both folders and vendors.

@@ -124,7 +124,7 @@ CYCLE_SETTING_ATTRS = tuple(a for a in ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelS
                                          "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                                          "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
                                          "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW")
-                            if getattr(IOServer, a, ""))          # empty tag name = not on this PLC
+                            if getattr(PLCIOServer, a, ""))       # empty tag name = not on this PLC
 SYSTEM_ATTRS = ("PLC_PC_EmergencyAbort", "PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag")
 
 # QR codes per model/side (part numbers from qrcode.partmapping.* in ApplicationConfiguration.properties)
@@ -139,7 +139,7 @@ WAIT_FOR_STATE_TIMEOUT = 5.0    # s, for the IOServer read loop (plc.read.interv
 
 
 def _tag(attr: str) -> str:
-    return getattr(IOServer, attr)
+    return getattr(PLCIOServer, attr)
 
 
 def _decode_setting(attr: str, value) -> str:
@@ -153,7 +153,7 @@ def _decode_setting(attr: str, value) -> str:
 class TestIOServerGUI:
     """GUI for testing the real IOServer with MockPLC."""
 
-    def __init__(self, root, io_server: IOServer):
+    def __init__(self, root, io_server: PLCIOServer):
         self.root = root
         self.io = io_server
         self.plc = get_mock_plc()  # Same MockPLC singleton instance used by IOServer (mockInstance=True)
@@ -182,6 +182,7 @@ class TestIOServerGUI:
 
         # State trace of the real IOServer (sampled every 10 ms) - used by the auto cycle report
         self.state_trace = []
+        self._trace_last = None          # last state the tracer recorded; shared with the reset in _run_auto_cycle
         self._trace_lock = threading.Lock()
         self.auto_running = False
         self.last_auto_result = None   # dict filled in at the end of an auto cycle
@@ -520,7 +521,12 @@ class TestIOServerGUI:
         sendDataFromQRCodeServerToIOServer(self.redis, qrCodeStatus=(ok if accept else notok), qrCode=qr_code)
 
         if not accept:
-            # IOServer consumes the rejection and stays in WRITE_QR_CODE waiting for a good QR code
+            # IOServer consumes the rejection and stays in WRITE_QR_CODE waiting for a good QR code. Wait until it has
+            # taken the message off qrcode2io.q, as a real second scan would: the IOServer's reader trims the queue
+            # after each read, so a QR code sent before then could be dropped with it.
+            t0 = time.time()
+            while self.redis.xlen(qrcode2ioq) and time.time() - t0 < WAIT_FOR_STATE_TIMEOUT:
+                time.sleep(0.02)
             self._set_step_status(0, "QR rejected → IOServer waits for another QR code", "red")
             self._set_status("Step 0: QR code rejected")
             return True
@@ -583,8 +589,10 @@ class TestIOServerGUI:
 
     def _run_auto_cycle(self, side: str = "LHS"):
         self.auto_running = True
-        with self._trace_lock:
-            self.state_trace = [self._state().value]
+        with self._trace_lock:                  # restart the trace and the tracer's "last seen" together, so the
+            current = self._state().value       # tracer cannot record the starting state a second time
+            self.state_trace = [current]
+            self._trace_last = current
         settings = {}
         error = None
         try:
@@ -647,14 +655,13 @@ class TestIOServerGUI:
 
     def _start_state_tracer(self):
         def trace():
-            last = None
             while True:
-                s = self._state()
-                if s != last:
-                    with self._trace_lock:
-                        self.state_trace.append(s.value)
+                value = self._state().value
+                with self._trace_lock:
+                    if value != self._trace_last:
+                        self.state_trace.append(value)
                         del self.state_trace[:-500]
-                    last = s
+                        self._trace_last = value
                 time.sleep(0.01)
 
         threading.Thread(target=trace, daemon=True).start()
