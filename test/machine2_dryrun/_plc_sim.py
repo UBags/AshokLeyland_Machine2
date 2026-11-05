@@ -3,9 +3,10 @@
     from _plc_sim import setup
     IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 
-The IOServer is costhetaio.commonplc.PLCIOServer; the PLC make is chosen by the environment variable
-COSTHETA_PLC_VENDOR (as in Configuration.getPlcVendor()), and only the driver under the vendor's PLCDataIO is simulated:
-  * allenbradley (default): AllenBradleyPLCDataIO with pycomm3's LogixDriver replaced by an in-memory table of tag
+The IOServer is costhetaio.commonplc.PLCIOServer; the PLC make is Configuration.getPlcVendor(): the environment
+variable COSTHETA_PLC_VENDOR if set, else plc.vendor in the properties file (siemens in the repo's file). Only the
+driver under that vendor's PLCDataIO is simulated:
+  * allenbradley: AllenBradleyPLCDataIO with pycomm3's LogixDriver replaced by an in-memory table of tag
     values;
   * siemens: SiemensPLCDataIO with pyS7's S7Client replaced by an in-memory S7 data block. Every read and
     write goes through the real SiemensPLCDataIO and PyS7PLCBackend: tag name -> DB500 address (IOServerProperties.yaml) -> bytes encoded
@@ -76,10 +77,12 @@ def use_machine_settings(mode="Test", **values):
 
 
 def setup(mode="Test"):
-    vendor = (os.environ.get("COSTHETA_PLC_VENDOR") or "allenbradley").strip().lower()
-    if vendor == "siemens":
-        os.environ["COSTHETA_PLC_VENDOR"] = "siemens"
+    # The PLC make the IOServer will use: COSTHETA_PLC_VENDOR if set, else plc.vendor in the properties file - exactly as
+    # PLCIOServer / PLCDataIOFactory decide. It is then pinned in the environment, so the driver simulated here and the
+    # PLCDataIO the server creates are always the same make (otherwise the server would reach for the real PLC).
     from Configuration import CosThetaConfigurator
+    vendor = CosThetaConfigurator.getPlcVendor()
+    os.environ["COSTHETA_PLC_VENDOR"] = vendor
     if CosThetaConfigurator.getInstance().getCycleSettingsSource() == "database":
         use_machine_settings(mode)
     if vendor == "siemens":

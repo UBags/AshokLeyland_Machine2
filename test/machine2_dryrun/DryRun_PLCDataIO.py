@@ -10,15 +10,16 @@ PLCIOServer's use of them. Automatic PASS/FAIL checks, exit code 1 on failure.
        IOServer's tags.
        Mock (MockPLCDataIO): unknown tag -> PLCIOError; reads and writes share the one MockPLC.
        Factory: plc.vendor -> class; mock; unknown vendor -> ValueError.
-  S  PLCIOServer on the simulated PLC of _plc_sim.py (vendor from COSTHETA_PLC_VENDOR, as in the other dry runs;
-     needs Redis and PostgreSQL): the vendor's PLCDataIO in use; a tag the driver refuses -> write_bool False (and the
+  S  PLCIOServer on the simulated PLC of _plc_sim.py (vendor: COSTHETA_PLC_VENDOR, else plc.vendor - as the server
+     decides; needs Redis and PostgreSQL): connected to the simulated PLC (S0; the rest is skipped otherwise); the
+     vendor's PLCDataIO in use; a tag the driver refuses -> write_bool False (and the
      audit records the error), verified write gives up, read_bool -> not expected, _readBoolOrNone -> None,
      read_float -> FALSE_FLOAT_VALUE; the same tag writes and reads again once accepted; tagNamesUsed;
      get_tag_address; link down -> not connected.
   M  PLCIOServer(mockInstance=True) in a separate process (python DryRun_PLCDataIO.py --mock): MockPLCDataIO in use,
      CheckQRCode armed at start, QR handshake with the cycle settings written to the MockPLC, state moves on.
 
-Run from anywhere:  python test/machine2_dryrun/DryRun_PLCDataIO.py   (COSTHETA_PLC_VENDOR=siemens for Siemens)
+Run from anywhere (no PLC needed):  python test/machine2_dryrun/DryRun_PLCDataIO.py   (COSTHETA_PLC_VENDOR=siemens for Siemens)
 """
 import os, pathlib, subprocess, sys, threading, time
 
@@ -225,6 +226,13 @@ IOServer, TAGS, _W, LOCK, VENDOR = setup()
 TAGS[IOServer.PLC_PC_WatchTag] = 1234
 io = IOServer(mode="Test")
 expected = {"allenbradley": "AllenBradleyPLCDataIO", "siemens": "SiemensPLCDataIO"}[VENDOR]
+# Every check below is only meaningful against the SIMULATED PLC, connected: when nothing is connected every read and
+# write fails anyway, so a "refused" check would pass for the wrong reason.
+check(f"S0 connected to the simulated {VENDOR} PLC (not the real one)", io._plcConnected()
+      and io.read_int(IOServer.PLC_PC_WatchTag) == 1234, f"connected={io._plcConnected()}")
+if not results[-1][1]:
+    print("      S checks skipped: the server is not on the simulated PLC", flush=True)
+    finish()
 check(f"S1 {VENDOR}: the server uses {expected} for reads and writes",
       type(io.dataIOForReads).__name__ == type(io.dataIOForWrites).__name__ == expected)
 names = IOServer.tagNamesUsed()
@@ -241,11 +249,12 @@ TAGS[probe] = True
 ERRORS.update({tag, probe, probeFloat})
 time.sleep(0.3)
 mark = len(WRITES)
-check("S4 driver refuses the write -> write_bool returns False", io.write_bool(tag, True, debug=False) is False)
+check("S4 driver refuses the write -> write_bool returns False (still connected)",
+      io._plcConnected() and io.write_bool(tag, True, debug=False) is False)
 check("S5 refused write not applied in the PLC", all(t != tag for t, _ in WRITES[mark:]))
 check("S6 verified write gives up on a refused tag (returns False)", io._writeVerified(tag, True, attempts=2) is False)
-check("S7 driver refuses the read -> read_bool gives not expected_value (False)",
-      io.read_bool(probe, expected_value=True) is False)
+check("S7 driver refuses the read -> read_bool gives not expected_value (False) (still connected)",
+      io._plcConnected() and io.read_bool(probe, expected_value=True) is False)
 check("S8 ... and _readBoolOrNone gives None (a failure is not a value)", io._readBoolOrNone(probe) is None)
 check("S9 ... and read_float gives FALSE_FLOAT_VALUE", io.read_float(probeFloat) == IOServer.FALSE_FLOAT_VALUE)
 ERRORS.clear()

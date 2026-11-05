@@ -1791,3 +1791,14 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
     settings written, state moves on.
 - **Mutation-tested:** pycomm3 write error ignored again (the behaviour before section 74) -> P4 and S4 fail; the
   PLCDataIO lock removed -> P9 fails.
+- **Fixed the same day (found on the laptop, no PLC connected, `COSTHETA_PLC_VENDOR` not set):** `_plc_sim.setup()`
+  defaulted to allenbradley and simulated only pycomm3, while `PLCIOServer` takes the vendor from `plc.vendor`
+  (siemens in the repo's file) - so the server used the real `SiemensPLCDataIO` and tried the real PLC
+  (192.168.1.10). Hidden before section 74 because the simulator returned the Allen-Bradley IOServer class itself.
+  `setup()` now takes the vendor from `Configuration.getPlcVendor()` (variable, else `plc.vendor`) and pins it in the
+  environment, so the simulated driver and the server's PLCDataIO are always the same make; affects every IOServer dry
+  run started without the variable. `DryRun_PLCDataIO`: new S0 - the server must be connected to the simulated PLC
+  (watch tag 1234), else the S checks are skipped and S0 fails (before, S4-S9 passed with nothing connected, since every
+  read and write fails then); S4 / S7 also require the connection. 38 checks. Verified: with no variable (siemens from
+  the file), with allenbradley, and with the old default put back (S0 fails, S skipped); two full cycles with no
+  variable on the simulated Siemens PLC.

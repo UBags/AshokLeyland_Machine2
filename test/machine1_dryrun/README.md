@@ -40,8 +40,8 @@ from the project root, e.g. `python test/machine1_dryrun/Test_IOServer_With_Mock
 ## Allen-Bradley or Siemens
 
 `DryRun_IOServer_Two_Full_Cycles.py`, `DryRun_IOServer_Fault_Scenarios.py` and `DryRun_All_Servers_Integrated_Cycle.py`
-run the IOServer (`costhetaio/commonplc/PLCIOServer.py`) with `AllenBradleyPLCDataIO` by default. With the
-environment variable `COSTHETA_PLC_VENDOR=siemens` it uses `SiemensPLCDataIO` instead, on a simulated S7 data block
+run the IOServer (`costhetaio/commonplc/PLCIOServer.py`) with the PLC make of `plc.vendor` (siemens in the repo's
+properties file), or of `COSTHETA_PLC_VENDOR` when set. With siemens it uses `SiemensPLCDataIO` on a simulated S7 data block
 (`_plc_sim.py`): every tag goes through the real `SiemensPLCDataIO` and pyS7 backend, its DB500 address and the S7 byte
 encoding. Only the driver below the `PLCDataIO` (pycomm3's LogixDriver, pyS7's S7Client) is simulated.
 `COSTHETA_WRITE_TRACE=<file>` also appends every PC write to that file, in order (to compare two versions of the
