@@ -1699,3 +1699,66 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   no `.train/.val/.tune/.export` in MainProgram code), torchaudio (torch datapipes audio decoder, try/except ImportError),
   boto3 / botocore / s3transfer (PostgresBackupUtility try/except ImportError; pandas only for s3:// URLs, try/except),
   pymodbus + `IOServer_ModbusTCP` and the `s7_*` tools (nothing imports them). No library looks any of them up by name.
+
+## 74. One IOServer for both PLCs: costhetaio.commonplc (PLCIOServer, PLCDataIO) (2026-11-05)
+- **Why (user):** `costhetaio/siemens/IOServer.py` subclassed and imported `costhetaio/allenbradley/IOServer.py`: the
+  machine logic lived in one vendor's package and the other vendor depended on it. Branch `machine2-io-fe-db-cam`
+  (from `machine2-frontend-db`).
+- **Design (agreed):** the machine is vendor-neutral; only reading and writing tags depends on the PLC make. One server
+  class holds two connections (reads, writes) behind an abstract interface, chosen by a factory from `plc.vendor`. No
+  vendor subclasses of the server: nothing vendor-specific is left in it (tag names and settings already come from the
+  vendor's configuration keys).
+
+  | Module | What |
+  |---|---|
+  | `costhetaio/commonplc/PLCIOServer.py` | `PLCIOServer` (was `allenbradley/IOServer.py`, `git mv`, 80 % similar): state machine, handshakes, threads (read, write, heartbeat, connection monitor, emergency, ...), resets with verified writes, restart detection, Redis messages, audit; `startIOServer()`; `UpdateTagsToDefaultProcessor`, `DelayedJobScheduler` |
+  | `costhetaio/commonplc/PLCDataIO.py` | abstract `PLCDataIO` + `PLCIOError` |
+  | `costhetaio/commonplc/PLCDataIOFactory.py` | `createPLCDataIO()` / `plcDataIOClass()` from `plc.vendor` (or `COSTHETA_PLC_VENDOR`); vendor modules imported only when chosen |
+  | `costhetaio/allenbradley/AllenBradleyPLCDataIO.py` | pycomm3 `LogixDriver` |
+  | `costhetaio/siemens/SiemensPLCDataIO.py` | pyS7 through `PyS7PLCBackend` (`plc_backend.py`, unchanged in function; the s7 tools still use it) |
+  | `costhetaio/commonplc/MockPLCDataIO.py`, `MockPLC.py` | in-memory PLC for `mockInstance=True` (MockPLC moved from `allenbradley/`, `git mv`) |
+  | removed | `costhetaio/siemens/IOServer.py` (the subclass); its methods moved: tag-map check -> `SiemensPLCDataIO.checkTagConfiguration`, `get_tag_address` -> `addressFor`, `find_attributes` -> `printTagMap`, `tagNamesUsedByIOServer` -> `PLCIOServer.tagNamesUsed()` |
+
+- **PLCDataIO contract:** `open()` (raises on failure), `close()` (never raises), `.connected`, `read(tag)` -> value,
+  `write(tag, value)`, `readMany(tags)`. A read or write that fails raises `PLCIOError` - also when the driver puts the
+  error in its result instead of raising (pycomm3 does) - so a failure is never taken for a value. Each object has its
+  own lock round the driver call (pycomm3 and pyS7 are not thread-safe). `checkTagConfiguration(tagNames)` before
+  connecting (Siemens: every tag has an address in `IOServerProperties.yaml`, no clashes - start-up refuses otherwise,
+  as before); `missingTags(names)` after connecting (Allen-Bradley: names not in the controller's tag list - logged once
+  as an error, start-up continues; program-scoped `Program:` names not checked).
+- **Behaviour changes (deliberate):**
+  - Allen-Bradley: a write that pycomm3 reports as failed (`Tag.error`) now counts as failed (retried, audited as an
+    error). Before, it was taken as written.
+  - Allen-Bradley: reads and writes are serialised per connection by the PLCDataIO's lock. Before, only the server's
+    `readingLock` / `writingLock` round some calls (removed: the lock is now in the connection).
+  - Connection messages name the PLC: "Connected to Siemens PLC at 192.168.1.10 for Reads", "... Allen-Bradley PLC at
+    ...", "MockPLC".
+  - `read_multiple` returns `{tag: value}` (was pycomm3's list of Tags); not used by the IOServer.
+- **Kept (user: well-defined methods stay even if unused):** `read_single`, `read_multiple`, `read_array`,
+  `read_array_slice`, `find_pids`, `find_attributes`, `get_tag_address` on `PLCIOServer` (they delegate to the
+  PLCDataIO where the PLC supports it); Allen-Bradley `readRaw`, `readArray`, `readArraySlice`, `findPIDs`,
+  `printDataTypeAttributes`; Siemens `findPIDs` (empty), `printTagMap`, `addressFor`. `IOServer_ModbusTCP.py` stays in
+  `allenbradley/` (standalone, unused, still left out of the build).
+- **Callers:** MainProgram starts `costhetaio.commonplc.PLCIOServer.startIOServer` for both PLCs; `s7_tag_check.py` uses
+  `PLCIOServer.tagNamesUsed()`; the IOServer test windows import `PLCIOServer` and `costhetaio.commonplc.MockPLC`.
+  `runNuitka.bat` unchanged (`--include-package=costhetaio` includes the new modules).
+- **Dry runs (both folders):** `_plc_sim.py` replaces only the driver under the vendor's PLCDataIO (pycomm3's
+  `LogixDriver` in `AllenBradleyPLCDataIO`, pyS7's `S7Client` in `plc_backend`), so the real PLCDataIO code runs.
+  New `COSTHETA_WRITE_TRACE=<file>`: every PC write appended to the file in order.
+- **Verified - same PLC writes before and after:** fault scenarios and two full cycles run on the code before the change
+  and after it, on both vendors, with the write trace; the traces compared write by write (the connection-status
+  toggle left out: it is written on a timer).
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Fault scenarios | 113/113 (before and after) | 114/114 (before and after) |
+  | Two full cycles: PC writes | identical (221 writes) | identical (221 writes) |
+  | Fault scenarios: PC writes | each tag's writes identical, in order; the order between tags differs only where a delayed reset (its own 2 s timer) lands among the next cycle's writes, and one delayed reset at the very end lands before or after the run stops | same |
+  | Logging and live configuration | 37/37 | 37/37 |
+  | Mock PLC (`mockInstance=True`) start, QR handshake, settings | 7/7 | 7/7 |
+  | `s7_tag_check.py` (simulated S7) | | PASS (46 tags, watch tag) |
+
+  PLCDataIO contract checked on its own: not connected, a pycomm3 error in the result (read and write), unknown tag on
+  MockPLC -> PLCIOError; `missingTags`. Not run here: the integrated all-servers run (the frontend needs tkinter, not
+  available in this container; the frontend is not touched by this change).
+- **Before production:** `s7_tag_check.py` on the plant PC and one real cycle with an exe built from this branch.
