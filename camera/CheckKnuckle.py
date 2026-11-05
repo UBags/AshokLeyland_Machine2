@@ -21,7 +21,6 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
-from camera.VisionConfig import vInt, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -44,7 +43,9 @@ class CheckKnuckle():
     Common checks A-E: the mean grey level of each region (rectangles A, B, E; circles C, D) must be below
         vision.knuckle.common.check.threshold. They check that the expected dark features are where they should be
         (knuckle casting next to the bosses, dark fixture features), i.e. a knuckle is there and the camera has
-        not moved.
+        not moved. Each region can have an alternate area (vision.knuckle.common.check.<a..e>.alt.*; width / height
+        / radius 0 = none): operators mark knuckles with yellow paint at random spots, and a mark makes a region
+        bright; the region passes if it OR its alternate is dark.
     1. LHS / RHS: the knuckle's steering arm lies across the bright bar at the bottom of the fixture, on the left
        for an LHS knuckle and on the right for an RHS one. Each side box is binarised and mean-filtered; an average
        below vision.knuckle.lhs.rhs.darkness.threshold means the arm is there. Exactly one side must show the arm
@@ -56,71 +57,92 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
-    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
-    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
-    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
+    LHS_CROP_X: int = 380
+    LHS_CROP_Y: int = 650
+    LHS_CROP_WIDTH: int = 130
+    LHS_CROP_HEIGHT: int = 50
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
-    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
-    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
-    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
+    RHS_CROP_X: int = 765
+    RHS_CROP_Y: int = 650
+    RHS_CROP_WIDTH: int = 100
+    RHS_CROP_HEIGHT: int = 55
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
-    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
-    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
-    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
+    COMMON_CHECK_A_X: int = 775
+    COMMON_CHECK_A_Y: int = 300
+    COMMON_CHECK_A_WIDTH: int = 35
+    COMMON_CHECK_A_HEIGHT: int = 25
 
-    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
-    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
-    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
-    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
+    COMMON_CHECK_B_X: int = 440
+    COMMON_CHECK_B_Y: int = 310
+    COMMON_CHECK_B_WIDTH: int = 40
+    COMMON_CHECK_B_HEIGHT: int = 20
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
+    COMMON_CHECK_THRESHOLD: int = 84
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
-    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
-    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
+    COMMON_CHECK_C_CENTER_X: int = 390
+    COMMON_CHECK_C_CENTER_Y: int = 465
+    COMMON_CHECK_C_RADIUS: int = 13
 
-    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
-    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
-    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
+    COMMON_CHECK_D_CENTER_X: int = 865
+    COMMON_CHECK_D_CENTER_Y: int = 465
+    COMMON_CHECK_D_RADIUS: int = 13
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
-    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
-    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
-    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
+    COMMON_CHECK_E_X: int = 600
+    COMMON_CHECK_E_Y: int = 600
+    COMMON_CHECK_E_WIDTH: int = 50
+    COMMON_CHECK_E_HEIGHT: int = 20
+
+    # Alternate area of each common check (same rule; the check passes if the region OR its alternate is dark).
+    # A width, height or radius of 0 means no alternate (the default).
+    COMMON_CHECK_A_ALT_X: int = 0
+    COMMON_CHECK_A_ALT_Y: int = 0
+    COMMON_CHECK_A_ALT_WIDTH: int = 0
+    COMMON_CHECK_A_ALT_HEIGHT: int = 0
+    COMMON_CHECK_B_ALT_X: int = 0
+    COMMON_CHECK_B_ALT_Y: int = 0
+    COMMON_CHECK_B_ALT_WIDTH: int = 0
+    COMMON_CHECK_B_ALT_HEIGHT: int = 0
+    COMMON_CHECK_C_ALT_CENTER_X: int = 0
+    COMMON_CHECK_C_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_C_ALT_RADIUS: int = 0
+    COMMON_CHECK_D_ALT_CENTER_X: int = 0
+    COMMON_CHECK_D_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_D_ALT_RADIUS: int = 0
+    COMMON_CHECK_E_ALT_X: int = 0
+    COMMON_CHECK_E_ALT_Y: int = 0
+    COMMON_CHECK_E_ALT_WIDTH: int = 0
+    COMMON_CHECK_E_ALT_HEIGHT: int = 0
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
+    STEP2_POLYGON_POINTS = np.array([
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
+    STEP3_POLYGON_POINTS = np.array([
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
+    LHS_RHS_DARKNESS_THRESHOLD: int = 220
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
 
     # Binarisation threshold: grey levels below this become black, the rest white
-    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
+    BINARIZATION_THRESHOLD: int = 48
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
+    KERNEL_SIZE: Tuple[int, int] = (5, 5)
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,
@@ -274,6 +296,26 @@ class CheckKnuckle():
         except cv2.error:
             pass
         cv2.waitKey(1)  # Process any pending GUI events
+
+    @staticmethod
+    def _alt_rect_mean(gray: np.ndarray, x: int, y: int, width: int, height: int) -> Optional[float]:
+        """Mean grey level of an alternate rectangle; None if it is not set (width or height 0) or outside the image."""
+        if width <= 0 or height <= 0 or x < 0 or y < 0 or x + width > gray.shape[1] or y + height > gray.shape[0]:
+            return None
+        return float(np.mean(gray[y:y + height, x:x + width]))
+
+    @staticmethod
+    def _alt_circle_mean(gray: np.ndarray, cx: int, cy: int, radius: int) -> Optional[float]:
+        """Mean grey level of an alternate circle; None if it is not set (radius 0) or outside the image."""
+        if radius <= 0 or cx - radius < 0 or cy - radius < 0 or cx + radius >= gray.shape[1] or cy + radius >= gray.shape[0]:
+            return None
+        mask = np.zeros(gray.shape[:2], dtype=np.uint8)
+        cv2.circle(mask, (cx, cy), radius, 255, -1)
+        return float(np.mean(gray[mask == 255]))
+
+    @staticmethod
+    def _alt_text(alt_mean: Optional[float]) -> str:
+        return "" if alt_mean is None else f"; alternate mean {alt_mean:.2f}"
 
     @staticmethod
     def _crop_and_analyze(image: np.ndarray, x: int, y: int, width: int, height: int) -> float:
@@ -439,14 +481,20 @@ class CheckKnuckle():
                     f"mean = {mean_a:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
                     MessageType.GENERAL)
 
-            if mean_a >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
+            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+            mean_a_alt = CheckKnuckle._alt_rect_mean(gray_image, CheckKnuckle.COMMON_CHECK_A_ALT_X, CheckKnuckle.COMMON_CHECK_A_ALT_Y,
+                                                      CheckKnuckle.COMMON_CHECK_A_ALT_WIDTH, CheckKnuckle.COMMON_CHECK_A_ALT_HEIGHT)
+            if mean_a >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                    mean_a_alt is None or mean_a_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_a_alt)}",
                         MessageType.ISSUE)
                 return anImage, False
 
             logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_a_alt)}",
                     MessageType.SUCCESS)
 
             # =====================================================================
@@ -465,14 +513,20 @@ class CheckKnuckle():
                     f"mean = {mean_b:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
                     MessageType.GENERAL)
 
-            if mean_b >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
+            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+            mean_b_alt = CheckKnuckle._alt_rect_mean(gray_image, CheckKnuckle.COMMON_CHECK_B_ALT_X, CheckKnuckle.COMMON_CHECK_B_ALT_Y,
+                                                      CheckKnuckle.COMMON_CHECK_B_ALT_WIDTH, CheckKnuckle.COMMON_CHECK_B_ALT_HEIGHT)
+            if mean_b >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                    mean_b_alt is None or mean_b_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check B failed - Region B mean {mean_b:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        f"CheckKnuckle: Common Check B failed - Region B mean {mean_b:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_b_alt)}",
                         MessageType.ISSUE)
                 return anImage, False
 
             logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check B passed - Region B mean {mean_b:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    f"CheckKnuckle: Common Check B passed - Region B mean {mean_b:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_b_alt)}",
                     MessageType.SUCCESS)
 
             # =====================================================================
@@ -504,14 +558,20 @@ class CheckKnuckle():
                     f"mean = {mean_c:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
                     MessageType.GENERAL)
 
-            if mean_c >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
+            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+            mean_c_alt = CheckKnuckle._alt_circle_mean(gray_image, CheckKnuckle.COMMON_CHECK_C_ALT_CENTER_X,
+                                                        CheckKnuckle.COMMON_CHECK_C_ALT_CENTER_Y, CheckKnuckle.COMMON_CHECK_C_ALT_RADIUS)
+            if mean_c >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                    mean_c_alt is None or mean_c_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check C failed - Circle C mean {mean_c:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        f"CheckKnuckle: Common Check C failed - Circle C mean {mean_c:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_c_alt)}",
                         MessageType.ISSUE)
                 return anImage, False
 
             logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check C passed - Circle C mean {mean_c:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    f"CheckKnuckle: Common Check C passed - Circle C mean {mean_c:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_c_alt)}",
                     MessageType.SUCCESS)
 
             # =====================================================================
@@ -543,14 +603,20 @@ class CheckKnuckle():
                     f"mean = {mean_d:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
                     MessageType.GENERAL)
 
-            if mean_d >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
+            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+            mean_d_alt = CheckKnuckle._alt_circle_mean(gray_image, CheckKnuckle.COMMON_CHECK_D_ALT_CENTER_X,
+                                                        CheckKnuckle.COMMON_CHECK_D_ALT_CENTER_Y, CheckKnuckle.COMMON_CHECK_D_ALT_RADIUS)
+            if mean_d >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                    mean_d_alt is None or mean_d_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check D failed - Circle D mean {mean_d:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        f"CheckKnuckle: Common Check D failed - Circle D mean {mean_d:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_d_alt)}",
                         MessageType.ISSUE)
                 return anImage, False
 
             logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check D passed - Circle D mean {mean_d:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    f"CheckKnuckle: Common Check D passed - Circle D mean {mean_d:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_d_alt)}",
                     MessageType.SUCCESS)
 
             # =====================================================================
@@ -569,14 +635,20 @@ class CheckKnuckle():
                     f"mean = {mean_e:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
                     MessageType.GENERAL)
 
-            if mean_e >= CheckKnuckle.COMMON_CHECK_THRESHOLD:
+            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+            mean_e_alt = CheckKnuckle._alt_rect_mean(gray_image, CheckKnuckle.COMMON_CHECK_E_ALT_X, CheckKnuckle.COMMON_CHECK_E_ALT_Y,
+                                                      CheckKnuckle.COMMON_CHECK_E_ALT_WIDTH, CheckKnuckle.COMMON_CHECK_E_ALT_HEIGHT)
+            if mean_e >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                    mean_e_alt is None or mean_e_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
                 logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check E failed - Region E mean {mean_e:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        f"CheckKnuckle: Common Check E failed - Region E mean {mean_e:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_e_alt)}",
                         MessageType.ISSUE)
                 return anImage, False
 
             logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check E passed - Region E mean {mean_e:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                    f"CheckKnuckle: Common Check E passed - Region E mean {mean_e:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                        f"{CheckKnuckle._alt_text(mean_e_alt)}",
                     MessageType.SUCCESS)
 
             # =====================================================================
