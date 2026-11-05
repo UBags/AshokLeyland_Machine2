@@ -1,4 +1,4 @@
-"""Synthetic dry-run of costhetaio/allenbradley/IOServer.py (Allen-Bradley path) through full Machine-2 cycles.
+"""Synthetic dry-run of costhetaio/commonplc/PLCIOServer.py (Allen-Bradley PLCDataIO by default) through full Machine-2 cycles.
 
 Real Redis; pycomm3.LogixDriver replaced by an in-memory tag table driven by a PLC simulator thread.
 QR server and camera server are simulated on their Redis queues. Records:

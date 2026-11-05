@@ -6,8 +6,10 @@ The MockPLC stores all tag values in memory and provides the same
 read/write interface as LogixDriver.
 
 Usage:
-    from costhetaio.allenbradley.IOServer import IOServer
-    io = IOServer(mockInstance=True)  # Uses MockPLC instead of real PLC
+    from costhetaio.commonplc.PLCIOServer import PLCIOServer
+    io = PLCIOServer(mockInstance=True)  # MockPLCDataIO on this MockPLC instead of a real PLC
+
+Vendor-neutral: keyed by tag name, it starts with the tag names of the configured vendor (plc.vendor).
 """
 
 import threading

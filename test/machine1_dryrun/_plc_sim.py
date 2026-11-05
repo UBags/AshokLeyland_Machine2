@@ -3,11 +3,12 @@
     from _plc_sim import setup
     IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 
-The IOServer is chosen by the environment variable COSTHETA_PLC_VENDOR (as in Configuration.getPlcVendor()):
-  * allenbradley (default): costhetaio.allenbradley.IOServer with pycomm3's LogixDriver replaced by an in-memory
-    table of tag values;
-  * siemens: costhetaio.siemens.IOServer with pyS7's S7Client replaced by an in-memory S7 data block. Every read and
-    write goes through the real PyS7PLCBackend: tag name -> DB500 address (IOServerProperties.yaml) -> bytes encoded
+The IOServer is costhetaio.commonplc.PLCIOServer; the PLC make is chosen by the environment variable
+COSTHETA_PLC_VENDOR (as in Configuration.getPlcVendor()), and only the driver under the vendor's PLCDataIO is simulated:
+  * allenbradley (default): AllenBradleyPLCDataIO with pycomm3's LogixDriver replaced by an in-memory table of tag
+    values;
+  * siemens: SiemensPLCDataIO with pyS7's S7Client replaced by an in-memory S7 data block. Every read and
+    write goes through the real SiemensPLCDataIO and PyS7PLCBackend: tag name -> DB500 address (IOServerProperties.yaml) -> bytes encoded
     as the S7 CPU stores them (bits in bytes, INT big-endian 16-bit, REAL / LREAL big-endian IEEE 754 32 / 64-bit). Two tags sharing an
     address would therefore disturb each other here exactly as on the real PLC. Bit reads fail the first time with
     INVALID_DATA_SIZE, so the byte-read fall-back taken from s7_smoke_test.py is exercised too.
@@ -38,6 +39,17 @@ _RESTART = []           # set by the vendor setup: the function that clears the 
 
 def plc_restart(watch_tag=None, watch_value=1234):
     _RESTART[0](watch_tag, watch_value)
+
+
+# COSTHETA_WRITE_TRACE=<file>: every write the PC makes is also appended to that file as "tag<TAB>value", in order
+# (to compare two versions of the IOServer: the same scenarios must make the same writes).
+_TRACE_FILE = os.environ.get("COSTHETA_WRITE_TRACE")
+
+
+def _trace(tag, value):
+    if _TRACE_FILE:
+        with open(_TRACE_FILE, "a", encoding="utf-8") as fh:
+            fh.write(f"{tag}\t{value!r}\n")
 
 
 SETTING_ATTRS = ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
@@ -98,6 +110,7 @@ def _setup_allenbradley():
                 if tag not in STUCK:
                     TAGS[tag] = value
                 WRITES.append((tag, value))
+                _trace(tag, value)
 
     def restart(watch_tag, watch_value):
         with LOCK:
@@ -105,9 +118,10 @@ def _setup_allenbradley():
             if watch_tag: TAGS[watch_tag] = watch_value
     _RESTART[:] = [restart]
 
-    import costhetaio.allenbradley.IOServer as IOS
-    IOS.LogixDriver = FakeLogix
-    return IOS.IOServer, TAGS, WRITES, LOCK, "allenbradley"
+    import costhetaio.allenbradley.AllenBradleyPLCDataIO as ABD
+    ABD.LogixDriver = FakeLogix
+    from costhetaio.commonplc.PLCIOServer import PLCIOServer
+    return PLCIOServer, TAGS, WRITES, LOCK, "allenbradley"
 
 
 # ----------------------------------------------------------------------------------------------- Siemens
@@ -177,6 +191,7 @@ def _setup_siemens():
                 if by_address.get(a, a) not in STUCK:
                     MEM.set(a, v)
                 WRITES.append((by_address.get(a, a), v if by_address.get(a, a) in STUCK else MEM.get(a)))
+                _trace(*WRITES[-1])
 
     def restart(watch_tag, watch_value):
         with MEM.lock:
@@ -195,5 +210,5 @@ def _setup_siemens():
             db, letter, byte, bit = PB.parse_address(tagmap[tag][0])
             with MEM.lock: return bytes(MEM.dbs[db][byte:byte + max(1, PB._SIZES[letter])])
 
-    import costhetaio.siemens.IOServer as S
-    return S.IOServer, TagView(), WRITES, LOCK, "siemens"
+    from costhetaio.commonplc.PLCIOServer import PLCIOServer
+    return PLCIOServer, TagView(), WRITES, LOCK, "siemens"

@@ -1,5 +1,5 @@
 """
-Test_IOServer_With_Mock_PLC_UI - tests the REAL costhetaio/allenbradley/IOServer.py (Machine 2, 28 states) against the in-memory
+Test_IOServer_With_Mock_PLC_UI - tests the REAL costhetaio/commonplc/PLCIOServer.py (Machine 2, 28 states) against the in-memory
 MockPLC, with a Tk window to raise PLC signals and send QR-code / camera responses.
 
 Run from the project root (Redis must be running; PostgreSQL is optional):
@@ -7,7 +7,7 @@ Run from the project root (Redis must be running; PostgreSQL is optional):
     (or)  python -m test.machine1_dryrun.Test_IOServer_With_Mock_PLC_UI
 
 What it does:
-1. Starts the REAL IOServer with mockInstance=True (it uses the costhetaio.allenbradley.MockPLC singleton instead of a PLC).
+1. Starts the REAL IOServer with mockInstance=True (MockPLCDataIO on the costhetaio.commonplc.MockPLC singleton instead of a PLC).
 2. The GUI plays the PLC (sets trigger / torque / press-done tags in MockPLC), the QR-code server and the camera
    server (sends results on the Redis queues IOServer reads), so IOServer's own code walks the cycle.
 3. The "PLC Tag Monitor" tab shows every MockPLC tag, including the cycle settings IOServer writes in state 2
@@ -47,9 +47,9 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-# Import the REAL IOServer and the same MockPLC module it uses (costhetaio.allenbradley.MockPLC -> same singleton)
-from costhetaio.allenbradley.IOServer import IOServer
-from costhetaio.allenbradley.MockPLC import get_mock_plc
+# Import the REAL IOServer and the same MockPLC module it uses (costhetaio.commonplc.MockPLC -> same singleton)
+from costhetaio.commonplc.PLCIOServer import PLCIOServer
+from costhetaio.commonplc.MockPLC import get_mock_plc
 from redis import Redis
 from utils.RedisUtils import *
 from Configuration import CosThetaConfigurator
@@ -144,9 +144,9 @@ def _tag(attr: str) -> str:
 
 def _decode_setting(attr: str, value) -> str:
     if attr == "PC_PLC_LH_RH_Selection":
-        return {IOServer.LHS_CODE: "LHS", IOServer.RHS_CODE: "RHS"}.get(value, "not set")
+        return {PLCIOServer.LHS_CODE: "LHS", PLCIOServer.RHS_CODE: "RHS"}.get(value, "not set")
     if attr == "PC_PLC_ModelSelection":
-        return {v: k for k, v in IOServer.MODEL_CODES.items()}.get(value, "not set")
+        return {v: k for k, v in PLCIOServer.MODEL_CODES.items()}.get(value, "not set")
     return ""
 
 
@@ -392,7 +392,7 @@ class TestIOServerGUI:
         config = CosThetaConfigurator.getInstance()
         info = "IOServer Configuration (Machine 2)\n"
         info += "=" * 78 + "\n\n"
-        info += f"PLC IP: {IOServer.PLC_IP}\n"
+        info += f"PLC IP: {PLCIOServer.PLC_IP}\n"
         info += f"Using MockPLC: True\n\n"
 
         info += "Cycle settings written by IOServer in state 2 (WRITE_QR_CODE)\n"
@@ -510,12 +510,12 @@ class TestIOServerGUI:
         qr_code = QR_CODES[(model, qr_type)] if accept else ""
 
         # PLC asks for a QR check (IOServer also arms this tag itself at the end of every cycle)
-        self.plc.set_tag(IOServer.PLC_PC_CheckQRCode, True)
+        self.plc.set_tag(PLCIOServer.PLC_PC_CheckQRCode, True)
         if not self._wait_for_state([MS.WRITE_QR_CODE]):
             self._set_step_status(0, "IOServer did not reach WRITE_QR_CODE", "red")
             self._set_status(f"Step 0: IOServer is in {self._state().name}")
             return False
-        self.plc.set_tag(IOServer.PLC_PC_CheckQRCode, False)
+        self.plc.set_tag(PLCIOServer.PLC_PC_CheckQRCode, False)
 
         sendDataFromQRCodeServerToIOServer(self.redis, qrCodeStatus=(ok if accept else notok), qrCode=qr_code)
 
@@ -742,7 +742,7 @@ if __name__ == "__main__":
 
     try:
         # Start the REAL IOServer with MockPLC
-        io = IOServer(mockInstance=True)
+        io = PLCIOServer(mockInstance=True)
 
         print()
         print("IOServer started successfully with MockPLC!")

@@ -26,8 +26,8 @@ from costhetaio.siemens.plc_backend import PyS7PLCBackend, load_tag_map, DEFAULT
 def main() -> int:
     ok = True
     _, tags = load_tag_map(DEFAULT_PROPERTIES_PATH)          # raises on bad / clashing addresses
-    import costhetaio.siemens.IOServer as S                  # tag names the IOServer uses
-    used = S.tagNamesUsedByIOServer()
+    from costhetaio.commonplc.PLCIOServer import PLCIOServer  # tag names the IOServer uses
+    used = PLCIOServer.tagNamesUsed()
     missing = sorted(n for n in used.values() if n not in tags)
     if missing:
         print("FAIL  no address for:", ", ".join(missing))

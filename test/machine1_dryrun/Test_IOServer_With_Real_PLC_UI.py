@@ -1,9 +1,9 @@
 """
-Test_IOServer_With_Real_PLC_UI - drives a REAL IOServer (costhetaio/allenbradley/IOServer.py, Machine 2, 28 states) that is connected
+Test_IOServer_With_Real_PLC_UI - drives a REAL IOServer (costhetaio/commonplc/PLCIOServer.py, Machine 2, 28 states) that is connected
 to the REAL PLC: this Tk window plays the QR-code server and the camera server, and shows PLC tag values.
 
 Run from the project root, alongside the IOServer (which must already be running and connected to the PLC):
-    Terminal 1: start the IOServer as usual (e.g. via MainProgram.py, or costhetaio.allenbradley.IOServer.startIOServer())
+    Terminal 1: start the IOServer as usual (e.g. via MainProgram.py, or costhetaio.commonplc.PLCIOServer.startIOServer())
     Terminal 2: python test/machine1_dryrun/Test_IOServer_With_Real_PLC_UI.py
                 (or)  python -m test.machine1_dryrun.Test_IOServer_With_Real_PLC_UI
 NOTE: on start-up this script FLUSHES the Redis database (as before), and "Clear Redis" flushes it again.

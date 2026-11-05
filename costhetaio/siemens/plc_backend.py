@@ -2,13 +2,12 @@
 # See LICENSE in the project root for license information.
 
 """
-pyS7 PLC backend for the Siemens S7-1515 IOServer.
+pyS7 layer for the Siemens S7-1515: the tag map and one S7 connection.
 
-PyS7PLCBackend gives the IOServer the same client interface it uses with Allen-Bradley's pycomm3 LogixDriver:
+SiemensPLCDataIO (SiemensPLCDataIO.py), the IOServer's PLCDataIO for Siemens, is built on PyS7PLCBackend; the
+command-line tools (s7_tag_check.py, s7_read_all_tags.py) use it directly. PyS7PLCBackend offers
     open(), close(), .connected, read(tag) -> object with .value, read(tag1, tag2, ...) -> list, write(tag, value)
-with SYMBOLIC tag names. Each name is resolved to its absolute DB address through IOServerProperties.yaml, so the
-IOServer's state machine, handshakes and loops are exactly the Allen-Bradley code (costhetaio/siemens/IOServer.py only
-swaps the client).
+with SYMBOLIC tag names. Each name is resolved to its absolute DB address through IOServerProperties.yaml.
 
 The pyS7 calls are the ones proven in s7_smoke_test.py:
   * S7Client constructed with keyword arguments, falling back to the minimal constructor on a TypeError (pyS7
@@ -140,8 +139,8 @@ def safe_read_one(client: Any, addr: str) -> Any:
 
 
 class PyS7PLCBackend:
-    """One pyS7 connection, presented with the LogixDriver interface the IOServer uses. The IOServer creates two
-    (reads / writes) and guards each with its own lock, exactly as with pycomm3."""
+    """One pyS7 connection with symbolic tag names (read results carry .value, as pycomm3's do). Thread-safe: each
+    read and write holds the connection's lock."""
 
     def __init__(self, ip: Optional[str] = None, properties_path: str = DEFAULT_PROPERTIES_PATH, logger=None):
         plc, self._tagmap = load_tag_map(properties_path)

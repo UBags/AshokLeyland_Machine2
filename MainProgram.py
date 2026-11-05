@@ -117,12 +117,9 @@ def startTheQRCodeServer(mode : str):
 def startTheIOServer(mode : str):
     from logutils.LogSettings import setLogProcess
     setLogProcess("ioserver")      # per-server logging settings, crash capture, live configuration
-    # plc.vendor in ApplicationConfiguration.properties: allenbradley (pycomm3) or siemens (pyS7, S7-1515)
-    from Configuration import CosThetaConfigurator
-    if CosThetaConfigurator.getPlcVendor() == "siemens":
-        from costhetaio.siemens.IOServer import startIOServer
-    else:
-        from costhetaio.allenbradley.IOServer import startIOServer
+    # One IOServer for both PLCs; plc.vendor in ApplicationConfiguration.properties chooses its PLCDataIO:
+    # allenbradley (pycomm3) or siemens (pyS7, S7-1515)
+    from costhetaio.commonplc.PLCIOServer import startIOServer
     startIOServer(mode = mode)
 
 def startTheCameraServer(mode : str):

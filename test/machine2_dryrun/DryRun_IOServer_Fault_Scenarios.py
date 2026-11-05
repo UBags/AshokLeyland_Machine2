@@ -1,4 +1,4 @@
-"""Synthetic dry-run of costhetaio/allenbradley/IOServer.py (Allen-Bradley path): the three non-happy paths.
+"""Synthetic dry-run of costhetaio/commonplc/PLCIOServer.py (Allen-Bradley PLCDataIO by default): the three non-happy paths.
 
 Same harness as DryRun_IOServer_Two_Full_Cycles.py: the REAL IOServer, real Redis, pycomm3.LogixDriver replaced by an
 in-memory tag table, and the PLC, QR server and camera server simulated. Every scenario ends with automatic checks;
@@ -502,9 +502,9 @@ def run_scenarios():
 
     if fromDatabase:
         # E3: machine settings not available from the database -> NOTHING written, QR OK=False, Done=True
-        import costhetaio.allenbradley.IOServer as ABIO
-        origGet = ABIO.getMachineSettings
-        ABIO.getMachineSettings = lambda db: {}
+        import costhetaio.commonplc.PLCIOServer as PIO
+        origGet = PIO.getMachineSettings
+        PIO.getMachineSettings = lambda db: {}
         TRACE.clear(); mark = len(WRITES)
         r.delete("cycleSettings:" + QR_DOST_LHS)
         plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
@@ -514,7 +514,7 @@ def run_scenarios():
         check("E3 -> QRCodeCheckOK=False then QRCodeCheckDone=True", (QR_OK, False) in qrw and (QR_OK, True) not in qrw
               and (QR_DONE, True) in qrw and qrw.index((QR_OK, False)) < qrw.index((QR_DONE, True)), str(qrw))
         check("E3 nothing published for the DB record", readCycleSettingsForQRCode(r, QR_DOST_LHS) == {})
-        ABIO.getMachineSettings = origGet
+        PIO.getMachineSettings = origGet
         mark = len(WRITES)
         QR_PLAN.append((ok, QR_DOST_LHS))
         wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE)

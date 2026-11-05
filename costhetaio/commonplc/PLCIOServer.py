@@ -1,3 +1,18 @@
+# Copyright (c) 2025 Uddipan Bagchi. All rights reserved.
+# See LICENSE in the project root for license information.
+
+"""
+PLCIOServer: the IOServer for every PLC make - the 28-state machine, the PLC handshakes (OK, pause, Done), torque
+reads and delayed tag resets, cycle settings written in state 2, the end-of-cycle / abort / start-up reset with
+verified writes, PLC restart detection, emergency abort, heartbeats, Redis messages, tag publishing and the audit
+trail.
+
+It talks to the PLC only through two PLCDataIO objects (costhetaio/commonplc/PLCDataIO.py), one for reads and one for
+writes, made by createPLCDataIO() for plc.vendor: AllenBradleyPLCDataIO (pycomm3, Machine 1), SiemensPLCDataIO (pyS7,
+Machine 2) or MockPLCDataIO (mockInstance=True). Nothing here depends on the PLC make; the tag names and settings
+come from the vendor's keys of ApplicationConfiguration.properties (Configuration picks them by plc.vendor).
+"""
+
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import random
 import sys
@@ -6,9 +21,6 @@ import threading
 import time
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
-from pycomm3 import LogixDriver
-from pycomm3 import DINT, SHORT_STRING, Struct, STRING, REAL
-from pycomm3.logger import configure_default_logger, LOG_VERBOSE
 from psycopg2.pool import ThreadedConnectionPool
 
 from logutils import Logger
@@ -22,6 +34,8 @@ from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from persistence.Persistence import getDatabaseName, setDatabaseName, getMachineSettings
+from costhetaio.commonplc.PLCDataIO import PLCDataIO, PLCIOError
+from costhetaio.commonplc.PLCDataIOFactory import createPLCDataIO, plcDataIOClass, plcVendor
 
 TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM: float = 1.5
 TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM: float = 2.0
@@ -141,8 +155,8 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
         }
 
     Supported Types:
-        - "bool": Writes boolean value using IOServer.write_bool()
-        - "float": Writes float value using IOServer.write_float()
+        - "bool": Writes boolean value using PLCIOServer.write_bool()
+        - "float": Writes float value using PLCIOServer.write_float()
 
     Usage Examples:
         # Get the processor instance
@@ -157,7 +171,7 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
 
     logSource = getFullyQualifiedName(__file__)
 
-    def __init__(self, ioServerInstance: "IOServer", name: str = "UpdateTagsToDefaultProcessor"):
+    def __init__(self, ioServerInstance: "PLCIOServer", name: str = "UpdateTagsToDefaultProcessor"):
         """
         Initialize the UpdateTagsToDefaultProcessor.
 
@@ -320,7 +334,7 @@ class DelayedJobScheduler:
                 printBoldRed(f"Delayed job {key} failed: {e}")
 
 
-class IOServer:
+class PLCIOServer:
     # ==================== QR Code Tags (Step 0) ====================
     PLC_PC_CheckQRCode: str = CosThetaConfigurator.getInstance().getPlcPcCheckQRCodeTagName()
     PC_PLC_QRCodeCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcQRCodeOKTagName()
@@ -432,7 +446,7 @@ class IOServer:
 
     def __init__(self, plc_ip: Union[str, None] = None, mode : str = "TEST", mockInstance: bool = False):
         # Class variables
-        IOServer.logSource = getFullyQualifiedName(__file__, __class__)
+        PLCIOServer.logSource = getFullyQualifiedName(__file__, __class__)
         setLogProcess("ioserver")          # per-server log level, crash capture, live configuration
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._onStateChange
@@ -474,14 +488,15 @@ class IOServer:
         self.connectToRedis(True)
         self.connectToRedisForHeartbeatAndEmergencyMonitoring(True)
 
-        self.plc_ip = plc_ip if plc_ip is not None else IOServer.PLC_IP
+        self.plc_ip = plc_ip if plc_ip is not None else PLCIOServer.PLC_IP
         self.mockInstance = mockInstance
 
-        self.clientForReads: Union[LogixDriver, None] = None
-        self.clientForWrites: Union[LogixDriver, None] = None
-
-        self.readingLock = threading.Lock()
-        self.writingLock = threading.Lock()
+        # The PLC: one PLCDataIO for reads, one for writes (None while not connected). Each has its own lock.
+        self.vendor: str = plcVendor()
+        plcDataIOClass(self.vendor).checkTagConfiguration(PLCIOServer.tagNamesUsed())   # e.g. Siemens addresses
+        self.dataIOForReads: Optional[PLCDataIO] = None
+        self.dataIOForWrites: Optional[PLCDataIO] = None
+        self._tagsCheckedOnPlc: bool = False
 
         # PLC restart detection (see _verifyPlcAfterReconnect):
         #   _plcTrueTags   PLC_PC tags known to be True right now, in the order they became True (the last one is
@@ -514,9 +529,8 @@ class IOServer:
         self.currentQRCode: str = ""
         self.lastStation2RotationDuringTighteningDone: Optional[bool] = None
 
-        # Initialize logging: pycomm3's own logger stays silent; the IOServer's messages go to the log file
-        logging.getLogger("pycomm3").setLevel(logging.CRITICAL)
-        self.logger = _FileLogAdapter(IOServer.logSource)
+        # The IOServer's messages go to the log file
+        self.logger = _FileLogAdapter(PLCIOServer.logSource)
 
         # Start PLC connection and threads
         self.connectionInProgress: bool = False
@@ -524,7 +538,7 @@ class IOServer:
         self.connectPLC()
 
         time.sleep(2)
-        if not (self.clientForReads and self.clientForReads.connected):
+        if not self._readsReady():
             self._plcCheckPending = True          # checked (and reset) as soon as the PLC is connected
         self.resetForNextCycle("IOServer start")  # every per-cycle tag to its default, then CheckQRCode = True
 
@@ -550,10 +564,10 @@ class IOServer:
                 self.clientRedisConnectedForReads = True
             except:
                 self.clientRedisConnectedForReads = False
-                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Redis Connection for Reads',
                                                                Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                             f'Could not get Redis Connection for Reads', Logger.PROBLEM)
 
         if not self.clientRedisConnectedForWrites:
@@ -563,10 +577,10 @@ class IOServer:
                 self.clientRedisConnectedForWrites = True
             except:
                 self.clientRedisConnectedForWrites = False
-                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Redis Connection for Writes',
                                                                Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                             f'Could not get Redis Connection for Writes',
                                                             Logger.PROBLEM)
 
@@ -583,54 +597,54 @@ class IOServer:
             try:
                 self.heartbeatRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.heartbeatRedisConnected = True
-                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                           f'Heartbeat Redis Connection is {self.heartbeatRedisConnection}',
                                                           Logger.SUCCESS)
-                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Heartbeat Redis Connection is {self.heartbeatRedisConnection}',
                                                        Logger.SUCCESS)
             except:
                 self.heartbeatRedisConnected = False
-                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Heartbeat Redis Connection',
                                                                Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                             f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.combinedHeartbeatRedisConnected:
             try:
                 self.combinedHeartbeatRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.combinedHeartbeatRedisConnected = True
-                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                           f'Combined Heartbeat Redis Connection is {self.combinedHeartbeatRedisConnection}',
                                                           Logger.SUCCESS)
-                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Combined Heartbeat Redis Connection is {self.combinedHeartbeatRedisConnection}',
                                                        Logger.SUCCESS)
             except:
                 self.combinedHeartbeatRedisConnected = False
-                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Heartbeat Redis Connection',
                                                                Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                             f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.emergencyRedisConnected:
             try:
                 self.emergencyRedisConnection = Redis(self.redisHostname, self.redisPort, retry_on_timeout=True)
                 self.emergencyRedisConnected = True
-                SlaveConsoleLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                           f'Emergency Redis Connection is {self.emergencyRedisConnection}',
                                                           Logger.SUCCESS)
-                SlaveFileLogger.getInstance().logDebug(IOServer.logSource,
+                SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Emergency Redis Connection is {self.emergencyRedisConnection}',
                                                        Logger.SUCCESS)
             except:
                 self.emergencyRedisConnected = False
-                SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Emergency Redis Connection',
                                                                Logger.PROBLEM)
-                SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource,
+                SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                             f'Could not get Emergency Redis Connection', Logger.PROBLEM)
 
     def _initDatabaseConnectionPool(self):
@@ -676,19 +690,19 @@ class IOServer:
             side = (lhs_rhs or "").strip().upper()
             model = (modelName or "").strip().upper()
             if side == "LHS":
-                sideCode = IOServer.LHS_CODE
+                sideCode = PLCIOServer.LHS_CODE
             elif side == "RHS":
-                sideCode = IOServer.RHS_CODE
+                sideCode = PLCIOServer.RHS_CODE
             else:
                 printBoldRed(f"Cannot determine LHS/RHS from QR code: {qrCode}")
                 return False
-            writes = [(IOServer.PC_PLC_LH_RH_Selection, sideCode, int)]
-            if IOServer.PC_PLC_ModelSelection:
-                modelCode = IOServer.MODEL_CODES.get(model)
+            writes = [(PLCIOServer.PC_PLC_LH_RH_Selection, sideCode, int)]
+            if PLCIOServer.PC_PLC_ModelSelection:
+                modelCode = PLCIOServer.MODEL_CODES.get(model)
                 if modelCode is None:
                     printBoldRed(f"Unknown model '{modelName}' from QR code: {qrCode}")
                     return False
-                writes.append((IOServer.PC_PLC_ModelSelection, modelCode, int))
+                writes.append((PLCIOServer.PC_PLC_ModelSelection, modelCode, int))
 
             config = CosThetaConfigurator.getInstance()
             used = {"rotation_rpm": None, "tightening_torque1_setpoint": None, "tightening_torque2_setpoint": None,
@@ -700,23 +714,23 @@ class IOServer:
                     printBoldRed(f"Cannot write cycle settings: machine settings not available from the database "
                                  f"({', '.join(missing)}); nothing written")
                     return False
-                for tag, key in ((IOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
-                                 (IOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
-                                 (IOServer.PC_PLC_RotationRPM, "rotation_rpm"),
-                                 (IOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
-                                 (IOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
+                for tag, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
+                                 (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
+                                 (PLCIOServer.PC_PLC_RotationRPM, "rotation_rpm"),
+                                 (PLCIOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
+                                 (PLCIOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
                     if tag:
                         writes.append((tag, float(settings[key]), float))
                         used[key] = float(settings[key])
             else:
                 skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
-                for tag, value, key in ((IOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint(), "tightening_torque1_setpoint"),
-                                        (IOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint(), "tightening_torque2_setpoint")):
+                for tag, value, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint(), "tightening_torque1_setpoint"),
+                                        (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint(), "tightening_torque2_setpoint")):
                     if tag and value != skip:
                         writes.append((tag, float(value), float))
                         used[key] = float(value)
-                for tag, value in ((IOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
-                                   (IOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
+                for tag, value in ((PLCIOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
+                                   (PLCIOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
                     if tag and value != skip:
                         writes.append((tag, int(value), int))
 
@@ -725,14 +739,14 @@ class IOServer:
                 writer = (lambda t, v: self.write_int(t, int(v))) if kind is int else \
                          (lambda t, v: self.write_float(t, float(v), debug=False))
                 ok_ = False
-                for attempt in range(IOServer.SETTINGS_WRITE_ATTEMPTS):
+                for attempt in range(PLCIOServer.SETTINGS_WRITE_ATTEMPTS):
                     if writer(tag, value):
                         ok_ = True
                         break
-                    time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+                    time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
                 if not ok_:
                     printBoldRed(f"Could not write cycle setting {tag}={value} after "
-                                 f"{IOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
+                                 f"{PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
                 success = success and ok_
             written = ", ".join(f"{tag}={value}" for tag, value, kind in writes)
             if success:
@@ -778,7 +792,7 @@ class IOServer:
 
     def _resetOpTimestamps(self) -> None:
         """Initialise / clear all operation timestamps to [None, None]."""
-        self._opTimestamps = {key: [None, None] for key in IOServer.ALL_OP_KEYS}
+        self._opTimestamps = {key: [None, None] for key in PLCIOServer.ALL_OP_KEYS}
         self._cycleInProgress = False
 
     def _recordOpStart(self, key: str) -> None:
@@ -812,15 +826,15 @@ class IOServer:
                 return max(delta, 0.0)   # guard against clock skew
             return 0.0
 
-        T1 = getDelta(IOServer.OP_KNUCKLE)
-        T2 = getDelta(IOServer.OP_HUB_BEARING)
-        T3 = getDelta(IOServer.OP_TOP_BEARING)
-        T4 = getDelta(IOServer.OP_NUT_WASHER)
-        T5 = getDelta(IOServer.OP_NOCAP_BUNK)
-        T6 = getDelta(IOServer.OP_TORQUE2)
-        T7 = getDelta(IOServer.OP_SPLITPIN)
-        T8 = getDelta(IOServer.OP_CAP)
-        T9 = getDelta(IOServer.OP_BUNK_CAP_PRESS)
+        T1 = getDelta(PLCIOServer.OP_KNUCKLE)
+        T2 = getDelta(PLCIOServer.OP_HUB_BEARING)
+        T3 = getDelta(PLCIOServer.OP_TOP_BEARING)
+        T4 = getDelta(PLCIOServer.OP_NUT_WASHER)
+        T5 = getDelta(PLCIOServer.OP_NOCAP_BUNK)
+        T6 = getDelta(PLCIOServer.OP_TORQUE2)
+        T7 = getDelta(PLCIOServer.OP_SPLITPIN)
+        T8 = getDelta(PLCIOServer.OP_CAP)
+        T9 = getDelta(PLCIOServer.OP_BUNK_CAP_PRESS)
 
         sumOfDeltas   = T1 + T2 + T3 + T4 + T5 + T6 + T7 + T8 + T9
         fixedOverhead = 8   # seconds — fixed machine overhead per cycle
@@ -851,8 +865,8 @@ class IOServer:
         printBoldYellow(cycleTimeMsg)
 
         # Log at PROBLEM level → guaranteed to appear in both console and file logs
-        SlaveConsoleLogger.getInstance().logTakeAction(IOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
-        SlaveFileLogger.getInstance().logTakeAction(IOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
+        SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
+        SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource, cycleTimeMsg, Logger.PROBLEM)
 
     def getCurrentTagsToBeRead(self) -> Tuple[list[str] | None, list[Type[bool | float] | None] | None]:
         """
@@ -879,69 +893,69 @@ class IOServer:
 
         # Step 0: QR Code
         if currentState == MachineState.READ_QR_CODE:
-            return [IOServer.PLC_PC_CheckQRCode], [bool]
+            return [PLCIOServer.PLC_PC_CheckQRCode], [bool]
 
         # Step 1: Knuckle
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE:
-            return [IOServer.PLC_PC_CheckKnuckle], [bool]
+            return [PLCIOServer.PLC_PC_CheckKnuckle], [bool]
 
         # Step 2: Hub (maps to HUB_AND_BOTTOM_BEARING state)
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING:
-            return [IOServer.PLC_PC_CheckHub], [bool]
+            return [PLCIOServer.PLC_PC_CheckHub], [bool]
 
         # Step 3: Hub and Second Bearing (maps to TOP_BEARING state)
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING:
-            return [IOServer.PLC_PC_CheckHubAndSecondBearing], [bool]
+            return [PLCIOServer.PLC_PC_CheckHubAndSecondBearing], [bool]
 
         # Step 4: Nut and Plate Washer
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER:
-            return [IOServer.PLC_PC_CheckNutAndPlateWasher], [bool]
+            return [PLCIOServer.PLC_PC_CheckNutAndPlateWasher], [bool]
 
         # Step 5: Tightening Torque 1 (Station 2)
         if currentState == MachineState.READ_TIGHTENING_TORQUE_1_DONE:
-            return [IOServer.PLC_PC_Station2TorqueValueSet], [bool]
+            return [PLCIOServer.PLC_PC_Station2TorqueValueSet], [bool]
         if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
-            return [IOServer.PLC_PC_Station2TorqueValue], [float]
+            return [PLCIOServer.PLC_PC_Station2TorqueValue], [float]
 
         # Step 7: No Cap Bunk for Component Press
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-            return [IOServer.PLC_PC_CheckNoCapBunk], [bool]
+            return [PLCIOServer.PLC_PC_CheckNoCapBunk], [bool]
 
         # Step 8: Component Press Done
         if currentState == MachineState.READ_COMPONENT_PRESS_DONE:
-            return [IOServer.PLC_PC_ComponentPressDone], [bool]
+            return [PLCIOServer.PLC_PC_ComponentPressDone], [bool]
 
         # Step 9: No Bunk
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
-            return [IOServer.PLC_PC_CheckNoBunk], [bool]
+            return [PLCIOServer.PLC_PC_CheckNoBunk], [bool]
 
         # Step 10: Tightening Torque 2 (Station 2 - second round, reuses same tags)
         if currentState == MachineState.READ_TIGHTENING_TORQUE_2_DONE:
-            return [IOServer.PLC_PC_Station2TorqueValueSet], [bool]
+            return [PLCIOServer.PLC_PC_Station2TorqueValueSet], [bool]
         if currentState == MachineState.READ_TIGHTENING_TORQUE_2:
-            return [IOServer.PLC_PC_Station2TorqueValue], [float]
+            return [PLCIOServer.PLC_PC_Station2TorqueValue], [float]
 
         # Step 11: Split Pin and Washer
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER:
-            return [IOServer.PLC_PC_CheckSplitPinAndWasher], [bool]
+            return [PLCIOServer.PLC_PC_CheckSplitPinAndWasher], [bool]
 
         # Step 12: Cap
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP:
-            return [IOServer.PLC_PC_CheckCap], [bool]
+            return [PLCIOServer.PLC_PC_CheckCap], [bool]
 
         # Step 13: Bunk for Cap Press - reuses CheckBunk
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
-            return [IOServer.PLC_PC_CheckBunk], [bool]
+            return [PLCIOServer.PLC_PC_CheckBunk], [bool]
 
         # Step 14: Cap Press Done
         if currentState == MachineState.READ_CAP_PRESS_DONE:
-            return [IOServer.PLC_PC_CapPressDone], [bool]
+            return [PLCIOServer.PLC_PC_CapPressDone], [bool]
 
         # Step 15: Free Rotation Torque (Station 3 - final reading)
         if currentState == MachineState.READ_FREE_ROTATION_TORQUE_1_DONE:
-            return [IOServer.PLC_PC_Station3TorqueValueSet], [bool]
+            return [PLCIOServer.PLC_PC_Station3TorqueValueSet], [bool]
         if currentState == MachineState.READ_FREE_ROTATION_TORQUE_1:
-            return [IOServer.PLC_PC_Station3TorqueValue], [float]
+            return [PLCIOServer.PLC_PC_Station3TorqueValue], [float]
 
         return None, None
 
@@ -957,52 +971,54 @@ class IOServer:
 
         # Step 0: QR Code
         if currentState == MachineState.WRITE_QR_CODE:
-            return [IOServer.PC_PLC_QRCodeCheckOK, IOServer.PC_PLC_QRCodeCheckDone, IOServer.PLC_PC_CheckQRCode]
+            return [PLCIOServer.PC_PLC_QRCodeCheckOK, PLCIOServer.PC_PLC_QRCodeCheckDone, PLCIOServer.PLC_PC_CheckQRCode]
 
         # Step 1: Knuckle
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE:
-            return [IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone, IOServer.PLC_PC_CheckKnuckle]
+            return [PLCIOServer.PC_PLC_KnuckleCheckOK, PLCIOServer.PC_PLC_KnuckleCheckDone, PLCIOServer.PLC_PC_CheckKnuckle]
 
         # Step 2: Hub (maps to HUB_AND_BOTTOM_BEARING state)
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING:
-            return [IOServer.PC_PLC_HubCheckOK, IOServer.PC_PLC_HubCheckDone, IOServer.PLC_PC_CheckHub]
+            return [PLCIOServer.PC_PLC_HubCheckOK, PLCIOServer.PC_PLC_HubCheckDone, PLCIOServer.PLC_PC_CheckHub]
 
         # Step 3: Hub and Second Bearing (maps to TOP_BEARING state)
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_TOP_BEARING:
-            return [IOServer.PC_PLC_HubAndSecondBearingCheckOK, IOServer.PC_PLC_HubAndSecondBearingCheckDone,
-                    IOServer.PLC_PC_CheckHubAndSecondBearing]
+            return [PLCIOServer.PC_PLC_HubAndSecondBearingCheckOK, PLCIOServer.PC_PLC_HubAndSecondBearingCheckDone,
+                    PLCIOServer.PLC_PC_CheckHubAndSecondBearing]
 
         # Step 4: Nut and Plate Washer
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER:
-            return [IOServer.PC_PLC_NutAndPlateWasherCheckOK, IOServer.PC_PLC_NutAndPlateWasherCheckDone,
-                    IOServer.PLC_PC_CheckNutAndPlateWasher]
+            return [PLCIOServer.PC_PLC_NutAndPlateWasherCheckOK, PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone,
+                    PLCIOServer.PLC_PC_CheckNutAndPlateWasher]
 
         # Step 7: No Cap Bunk for Component Press
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-            return [IOServer.PC_PLC_NoCapBunkCheckOK, IOServer.PC_PLC_NoCapBunkCheckDone,
-                    IOServer.PLC_PC_CheckNoCapBunk]
+            return [PLCIOServer.PC_PLC_NoCapBunkCheckOK, PLCIOServer.PC_PLC_NoCapBunkCheckDone,
+                    PLCIOServer.PLC_PC_CheckNoCapBunk]
 
         # Step 9: No Bunk
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_NO_BUNK:
-            return [IOServer.PC_PLC_NoBunkCheckOK, IOServer.PC_PLC_NoBunkCheckDone, IOServer.PLC_PC_CheckNoBunk]
+            return [PLCIOServer.PC_PLC_NoBunkCheckOK, PLCIOServer.PC_PLC_NoBunkCheckDone, PLCIOServer.PLC_PC_CheckNoBunk]
 
         # Step 11: Split Pin and Washer
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER:
-            return [IOServer.PC_PLC_SplitPinAndWasherCheckOK, IOServer.PC_PLC_SplitPinAndWasherCheckDone,
-                    IOServer.PLC_PC_CheckSplitPinAndWasher]
+            return [PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK, PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone,
+                    PLCIOServer.PLC_PC_CheckSplitPinAndWasher]
 
         # Step 12: Cap
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
-            return [IOServer.PC_PLP_CapCheckOK, IOServer.PC_PLC_CapCheckDone, IOServer.PLC_PC_CheckCap]
+            return [PLCIOServer.PC_PLP_CapCheckOK, PLCIOServer.PC_PLC_CapCheckDone, PLCIOServer.PLC_PC_CheckCap]
 
         # Step 13: Bunk for Cap Press - reuses CheckBunk
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS:
-            return [IOServer.PC_PLC_BunkCheckOK, IOServer.PC_PLC_BunkCheckDone, IOServer.PLC_PC_CheckBunk]
+            return [PLCIOServer.PC_PLC_BunkCheckOK, PLCIOServer.PC_PLC_BunkCheckDone, PLCIOServer.PLC_PC_CheckBunk]
 
         return None
 
     def connectPLC(self, forceRenew=False) -> bool | None:
-        """Connect to the PLC using pycomm3 or MockPLC."""
+        """Connect to the PLC: two PLCDataIO objects, one for reads and one for writes (createPLCDataIO: the configured
+        vendor, or MockPLC when mockInstance). True if connected, False if not, None if a connection is already
+        being made."""
         if self.connectionInProgress:
             return None
         self.connectionInProgress = True
@@ -1010,54 +1026,63 @@ class IOServer:
 
         try:
             if forceRenew:
-                if self.clientForReads is not None:
-                    try:
-                        self.clientForReads.close()
-                    except:
-                        noteSuppressed()
-                if self.clientForWrites is not None:
-                    try:
-                        self.clientForWrites.close()
-                    except:
-                        noteSuppressed()
-                self.clientForReads = None
-                self.clientForWrites = None
+                self._closePLC()
 
-            # Use MockPLC if mockInstance is True
-            if self.mockInstance:
-                from costhetaio.allenbradley.MockPLC import MockPLC
-                self.clientForReads = MockPLC()
-                self.clientForReads.open()
-                printBoldGreen(f"Connected to MockPLC for Reads")
-                self.clientForWrites = self.clientForReads  # Share same instance
-                printBoldGreen(f"Connected to MockPLC for Writes (shared instance)")
-            else:
-                self.clientForReads = LogixDriver(f"{self.plc_ip}")
-                self.clientForReads.open()
-                printBoldGreen(f"Connected to PLC for Reads at {self.plc_ip}")
-                self.clientForWrites = LogixDriver(f"{self.plc_ip}")
-                self.clientForWrites.open()
-                printBoldGreen(f"Connected to PLC for Writes at {self.plc_ip}")
+            self.dataIOForReads = createPLCDataIO(self.plc_ip, "reads", self.vendor, mock=self.mockInstance)
+            self.dataIOForReads.open()
+            printBoldGreen(f"Connected to {self.dataIOForReads.describe()} for Reads")
+            self.dataIOForWrites = createPLCDataIO(self.plc_ip, "writes", self.vendor, mock=self.mockInstance)
+            self.dataIOForWrites.open()
+            printBoldGreen(f"Connected to {self.dataIOForWrites.describe()} for Writes")
 
             self.connectionInProgress = False
             self.connectionAttempts = 0
+            self._checkTagsOnPlc()
             return True
         except Exception as e:
             if (self.connectionAttempts == 1) or (
-                    (self.connectionAttempts % IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
+                    (self.connectionAttempts % PLCIOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
                 printBoldRed(f"PLC connection error: {e}")
-            try:
-                self.clientForReads.close()
-            except:
-                noteSuppressed()
-            try:
-                self.clientForWrites.close()
-            except:
-                noteSuppressed()
-            self.clientForReads = None
-            self.clientForWrites = None
+            self._closePLC()
             self.connectionInProgress = False
             return False
+
+    def _closePLC(self) -> None:
+        """Close both PLC connections (errors ignored) and forget them."""
+        for dataIO in (self.dataIOForReads, self.dataIOForWrites):
+            if dataIO is not None:
+                dataIO.close()
+        self.dataIOForReads = None
+        self.dataIOForWrites = None
+
+    def _readsReady(self) -> bool:
+        return self.dataIOForReads is not None and self.dataIOForReads.connected
+
+    def _writesReady(self) -> bool:
+        return self.dataIOForWrites is not None and self.dataIOForWrites.connected
+
+    def _checkTagsOnPlc(self) -> None:
+        """Once, after the first connection: warn about tags the PLC does not know (where the PLC can list its tags,
+        i.e. Allen-Bradley; Siemens tags are checked against IOServerProperties.yaml before start)."""
+        if self._tagsCheckedOnPlc or self.mockInstance:
+            return
+        self._tagsCheckedOnPlc = True
+        try:
+            missing = self.dataIOForReads.missingTags(PLCIOServer.tagNamesUsed().values())
+        except Exception:
+            noteSuppressed()
+            return
+        if missing:
+            message = f"Tags not found on the PLC ({self.dataIOForReads.describe()}): {', '.join(missing)}"
+            printBoldRed(message)
+            self.logger.error(message)
+
+    @classmethod
+    def tagNamesUsed(cls) -> Dict[str, str]:
+        """{attribute: tag name} for every PLC tag the IOServer reads or writes (empty names = not on this PLC, left
+        out)."""
+        return {a: getattr(cls, a) for a in vars(cls)
+                if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP") and isinstance(getattr(cls, a), str) and getattr(cls, a)}
 
     def launchConnectionMonitoringThread(self):
         objRef = self
@@ -1068,18 +1093,17 @@ class IOServer:
                 time.sleep(objRef.CONNECTION_CHECK_INTERVAL)
 
                 tryToConnect: bool = False
-                if ((not objRef.clientForReads) or (not objRef.clientForReads.connected) or
-                        (not objRef.clientForWrites) or (not objRef.clientForWrites.connected)):
+                if not objRef._plcConnected():
                     tryToConnect = True
                 else:
                     try:
                         readValue: int = 0
-                        readValue = self.read_int(IOServer.PLC_PC_WatchTag)
-                        if readValue != IOServer.WATCH_TAG_VALUE:
-                            raise Exception(f"Could not read tag {IOServer.PLC_PC_WatchTag} from PLC")
+                        readValue = self.read_int(PLCIOServer.PLC_PC_WatchTag)
+                        if readValue != PLCIOServer.WATCH_TAG_VALUE:
+                            raise Exception(f"Could not read tag {PLCIOServer.PLC_PC_WatchTag} from PLC")
                     except Exception:
                         if (objRef.connectionAttempts == 1) or (
-                                (objRef.connectionAttempts % IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
+                                (objRef.connectionAttempts % PLCIOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
                             objRef.logger.fatal(f"PLC connection test failed")
                             printBoldRed(f"PLC connection test failed. Reconnecting...")
                         tryToConnect = True
@@ -1112,10 +1136,7 @@ class IOServer:
             ioHeartbeatGap = CosThetaConfigurator.getInstance().getIOConnectionStatusSleepInterval()
             while not objRef.shutdown:
                 try:
-                    if objRef.clientForReads is None or objRef.clientForWrites is None:
-                        sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
-                                                                   status=DEAD)
-                    elif not objRef.clientForReads.connected or not objRef.clientForWrites.connected:
+                    if not objRef._plcConnected():
                         sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
                                                                    status=DEAD)
                     else:
@@ -1148,13 +1169,13 @@ class IOServer:
                     #     objRef.combinedHeartbeatRedisConnection)
                     currentStatus = True
                     if currentStatus:
-                        IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT = 0
-                        statusToBeSent = not IOServer.LAST_CONNECTION_STATUS_UPDATED
-                        objRef.write_bool(IOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
-                        IOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
+                        PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT = 0
+                        statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
+                        objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
+                        PLCIOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
                     else:
-                        IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT += 1
-                        if (IOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT == 2):
+                        PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT += 1
+                        if (PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT == 2):
                             printBoldRed(
                                 f"Combined Heartbeat - connection problem somewhere : sendEmergencyAbortFromIOServerToFEServer")
                             objRef.abortCycle("connection to a server lost (combined heartbeat)",
@@ -1177,13 +1198,12 @@ class IOServer:
         def monitorEmergency():
             while not objRef.shutdown:
                 emergencyActivated: bool = False
-                if (objRef.clientForReads is not None):
-                    if objRef.clientForReads.connected:
-                        try:
-                            emergencyActivated = objRef.read_bool(IOServer.PLC_PC_EmergencyAbort)
-                        except Exception as e:
-                            printBoldRed(f"Exception {e} encountered in emergency monitoring")
-                            objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
+                if objRef._readsReady():
+                    try:
+                        emergencyActivated = objRef.read_bool(PLCIOServer.PLC_PC_EmergencyAbort)
+                    except Exception as e:
+                        printBoldRed(f"Exception {e} encountered in emergency monitoring")
+                        objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 if emergencyActivated:
                     printBoldRed(
                         f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
@@ -1235,7 +1255,7 @@ class IOServer:
                     sendEmergencyAbortFromIOServerToFEServer(redisConnection)
                 except Exception:
                     noteSuppressed()
-            self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
+            self.resetTagToFalse(PLCIOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
             self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
@@ -1246,35 +1266,33 @@ class IOServer:
     def _visionTriggerTag(self, readState: MachineState) -> Optional[str]:
         """The PLC's Check (trigger) tag of a vision check, by its READ (take picture) state."""
         return {
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: IOServer.PLC_PC_CheckKnuckle,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: IOServer.PLC_PC_CheckHub,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: IOServer.PLC_PC_CheckHubAndSecondBearing,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: IOServer.PLC_PC_CheckNutAndPlateWasher,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: IOServer.PLC_PC_CheckNoCapBunk,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: IOServer.PLC_PC_CheckNoBunk,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: IOServer.PLC_PC_CheckSplitPinAndWasher,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: IOServer.PLC_PC_CheckCap,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: IOServer.PLC_PC_CheckBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: PLCIOServer.PLC_PC_CheckKnuckle,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: PLCIOServer.PLC_PC_CheckHub,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: PLCIOServer.PLC_PC_CheckHubAndSecondBearing,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: PLCIOServer.PLC_PC_CheckNutAndPlateWasher,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: PLCIOServer.PLC_PC_CheckNoCapBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: PLCIOServer.PLC_PC_CheckNoBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: PLCIOServer.PLC_PC_CheckSplitPinAndWasher,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: PLCIOServer.PLC_PC_CheckCap,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: PLCIOServer.PLC_PC_CheckBunk,
         }.get(readState)
 
     def _readBoolOrNone(self, tag: str) -> Optional[bool]:
         """Read a bool from the PLC; None if it could not be read (read_bool cannot tell a failure from a value)."""
-        if not tag or self.clientForReads is None or not self.clientForReads.connected:
+        if not tag or not self._readsReady():
             return None
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(tag).value
-            return None if value is None else bool(value)
+            return bool(self.dataIOForReads.read(tag))
         except Exception as e:
             printBoldRed(f"Could not read {tag}: {e}")
             return None
 
     def _writeFalseWithRetries(self, tag: str, why: str) -> bool:
-        for attempt in range(IOServer.VISION_RESULT_RESET_ATTEMPTS):
+        for attempt in range(PLCIOServer.VISION_RESULT_RESET_ATTEMPTS):
             if self.write_bool(tag, False):
                 return True
-            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
-        printBoldRed(f"Could not reset {tag} to False {why} ({IOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
+            time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
+        printBoldRed(f"Could not reset {tag} to False {why} ({PLCIOServer.VISION_RESULT_RESET_ATTEMPTS} attempts)")
         self.logger.error(f"Could not reset {tag} to False {why}")
         return False
 
@@ -1378,7 +1396,7 @@ class IOServer:
                         _, stopNow = getStopCommandFromQueue(objRef.heartbeatRedisConnection)
                         if stopNow:
                             objRef.shutdown = True
-                            sendStoppedResponse(objRef.heartbeatRedisConnection, aProducer=IOServer.logSource)
+                            sendStoppedResponse(objRef.heartbeatRedisConnection, aProducer=PLCIOServer.logSource)
                     else:
                         objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(False)
                 except:
@@ -1405,9 +1423,9 @@ class IOServer:
                     goAheadToProcessing: bool = False
                     allok: bool = True
                     typeOfValues: str = "nothing"
-                    finalValue: float = IOServer.FALSE_FLOAT_VALUE
+                    finalValue: float = PLCIOServer.FALSE_FLOAT_VALUE
 
-                    if ((objRef.clientForReads is not None) and objRef.clientForReads.connected
+                    if (objRef._readsReady()
                             and not objRef.connectionInProgress and not objRef._plcCheckPending):
                         tagsToBeRead, valueTypes = objRef.getCurrentTagsToBeRead()
                         if tagsToBeRead is not None:
@@ -1467,8 +1485,7 @@ class IOServer:
                 tagsToBeWritten = objRef.getCurrentTagsToBeWritten()
                 if objRef.machineState.getCurrentState() != stateOfTags:
                     continue            # state changed (abort) while the tags were looked up: look again
-                if (
-                        objRef.clientForWrites is not None) and objRef.clientForWrites.connected and not objRef.connectionInProgress:
+                if objRef._writesReady() and not objRef.connectionInProgress:
                     if tagsToBeWritten is not None and len(tagsToBeWritten) > 0:
                         if written_TagsToBeWritten == 0:
                             written_TagsToBeWritten += 1
@@ -1516,17 +1533,17 @@ class IOServer:
                                 objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite, result=True)
                                 # ── Record op-END timestamps for Done-tag-based operations ──
                                 if stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_KNUCKLE:
-                                    objRef._recordOpEnd(IOServer.OP_KNUCKLE)
+                                    objRef._recordOpEnd(PLCIOServer.OP_KNUCKLE)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING:
-                                    objRef._recordOpEnd(IOServer.OP_HUB_BEARING)
+                                    objRef._recordOpEnd(PLCIOServer.OP_HUB_BEARING)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_TOP_BEARING:
-                                    objRef._recordOpEnd(IOServer.OP_TOP_BEARING)
+                                    objRef._recordOpEnd(PLCIOServer.OP_TOP_BEARING)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-                                    objRef._recordOpEnd(IOServer.OP_NOCAP_BUNK)
+                                    objRef._recordOpEnd(PLCIOServer.OP_NOCAP_BUNK)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER:
-                                    objRef._recordOpEnd(IOServer.OP_SPLITPIN)
+                                    objRef._recordOpEnd(PLCIOServer.OP_SPLITPIN)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
-                                    objRef._recordOpEnd(IOServer.OP_CAP)
+                                    objRef._recordOpEnd(PLCIOServer.OP_CAP)
                                 printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                 objRef.machineState.incrementStateFrom(stateBeforeWrite)
                                 printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
@@ -1574,28 +1591,28 @@ class IOServer:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_KNUCKLE)
+                            self._recordOpStart(PLCIOServer.OP_KNUCKLE)
 
                     # Step 2: Hub (HUB_AND_BOTTOM_BEARING state) — START of T2
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_HUB_BEARING)
+                            self._recordOpStart(PLCIOServer.OP_HUB_BEARING)
 
                     # Step 3: Hub and Second Bearing (TOP_BEARING state) — START of T3
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_TOP_BEARING)
+                            self._recordOpStart(PLCIOServer.OP_TOP_BEARING)
 
                     # Step 4: Nut and Plate Washer — START of T4
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_NUT_WASHER)
+                            self._recordOpStart(PLCIOServer.OP_NUT_WASHER)
 
                     # Step 5: Tightening Torque 1 Done
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_1_DONE:
@@ -1606,8 +1623,8 @@ class IOServer:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_NOCAP_BUNK)
-                            self._recordOpStart(IOServer.OP_TORQUE2)
+                            self._recordOpStart(PLCIOServer.OP_NOCAP_BUNK)
+                            self._recordOpStart(PLCIOServer.OP_TORQUE2)
 
                     # Step 8: Component Press Done
                     elif currentState == MachineState.READ_COMPONENT_PRESS_DONE:
@@ -1622,28 +1639,28 @@ class IOServer:
                     # Step 10: Tightening Torque 2 Done — END of T6
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2_DONE:
                         successfullySent = True
-                        self._recordOpEnd(IOServer.OP_TORQUE2)
+                        self._recordOpEnd(PLCIOServer.OP_TORQUE2)
 
                     # Step 11: Split Pin and Washer — START of T7
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_SPLITPIN)
+                            self._recordOpStart(PLCIOServer.OP_SPLITPIN)
 
                     # Step 12: Cap — START of T8
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_CAP)
+                            self._recordOpStart(PLCIOServer.OP_CAP)
 
                     # Step 13: Bunk for Cap Press — START of T9
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
                         successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
                                                                               currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
                         if successfullySent:
-                            self._recordOpStart(IOServer.OP_BUNK_CAP_PRESS)
+                            self._recordOpStart(PLCIOServer.OP_BUNK_CAP_PRESS)
 
                     # Step 14: Cap Press Done
                     elif currentState == MachineState.READ_CAP_PRESS_DONE:
@@ -1653,7 +1670,7 @@ class IOServer:
                     # Step 15: Free Rotation Torque 1 Done — END of T9
                     elif currentState == MachineState.READ_FREE_ROTATION_TORQUE_1_DONE:
                         successfullySent = True
-                        self._recordOpEnd(IOServer.OP_BUNK_CAP_PRESS)
+                        self._recordOpEnd(PLCIOServer.OP_BUNK_CAP_PRESS)
 
                     if successfullySent:
                         printBold(f"Transition from state {self.machineState.getCurrentState().name}")
@@ -1668,7 +1685,7 @@ class IOServer:
                 returnValue = valueRead
 
         elif type(valueRead) == float:
-            if valueRead == IOServer.FALSE_FLOAT_VALUE:
+            if valueRead == PLCIOServer.FALSE_FLOAT_VALUE:
                 printBold(f"Failed to read proper value of float in state {self.machineState.getCurrentState().name}")
                 returnValue = False
             else:
@@ -1683,16 +1700,16 @@ class IOServer:
                                                                           value=valueRead,
                                                                           rotationDone=rotationDone)
                         if successfullySent:
-                            self._recordOpEnd(IOServer.OP_NUT_WASHER)   # END of T4 (M2: no separate free-rotation step)
+                            self._recordOpEnd(PLCIOServer.OP_NUT_WASHER)   # END of T4 (M2: no separate free-rotation step)
                         # Reset Station 2 torque tags after reading (so Step 10 doesn't auto-trigger)
                         if successfullySent:
                             updateRequest : dict = {
                                 "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM,  # Seconds to wait before writing tags
-                                "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
-                                "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
+                                "tag1": {"tag": PLCIOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
+                                "tag2": {"tag": PLCIOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
-                            if IOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
-                                updateRequest["tag3"] = {"tag": IOServer.PLC_PC_Station2RotationDuringTighteningDone,
+                            if PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
+                                updateRequest["tag3"] = {"tag": PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone,
                                                          "type": "bool", "value": False}
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
@@ -1711,11 +1728,11 @@ class IOServer:
                         if successfullySent:
                             updateRequest : dict = {
                                 "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE2_VALUES_AFTER_READING_THEM,  # Seconds to wait before writing tags
-                                "tag1": {"tag": IOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
-                                "tag2": {"tag": IOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
+                                "tag1": {"tag": PLCIOServer.PLC_PC_Station2TorqueValueSet, "type": "bool", "value": False},
+                                "tag2": {"tag": PLCIOServer.PLC_PC_Station2TorqueValue, "type": "float", "value": 0.0},
                             }
-                            if IOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
-                                updateRequest["tag3"] = {"tag": IOServer.PLC_PC_Station2RotationDuringTighteningDone,
+                            if PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone:     # reset with the torque tags
+                                updateRequest["tag3"] = {"tag": PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone,
                                                          "type": "bool", "value": False}
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
@@ -1736,8 +1753,8 @@ class IOServer:
                             updateRequest: dict = {
                                 "sleepTimeForDelay": TIME_WAIT_BEFORE_RESETTING_TORQUE3_VALUES_AFTER_READING_THEM,
                                 # Seconds to wait before writing tags
-                                "tag1": {"tag": IOServer.PLC_PC_Station3TorqueValueSet, "type": "bool", "value": False},
-                                "tag2": {"tag": IOServer.PLC_PC_Station3TorqueValue, "type": "float", "value": 0.0},
+                                "tag1": {"tag": PLCIOServer.PLC_PC_Station3TorqueValueSet, "type": "bool", "value": False},
+                                "tag2": {"tag": PLCIOServer.PLC_PC_Station3TorqueValue, "type": "float", "value": 0.0},
                             }
                             print(f"Sending request {updateRequest} to UpdateTagsProcessor")
                             addTagUpdateRequest(updateRequest)
@@ -1774,7 +1791,7 @@ class IOServer:
             if attempts == 1 or attempts % 25 == 0:
                 self.logger.error(f"Could not write {tag}={value} (attempt {attempts}); retrying")
                 printBoldRed(f"Could not write {tag}={value} (attempt {attempts}); retrying")
-            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+            time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
         return False
 
     def perform_write_state_action(self, tags: list[str], result: bool = True,
@@ -1797,7 +1814,7 @@ class IOServer:
             self.logger.info(f"Could not write {tags[0]}; {tags[1]} NOT written")
             return False
         printBoldYellow(f"Wrote {result} to {tags[0]}")
-        time.sleep(IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
+        time.sleep(PLCIOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
         if self.machineState.getCurrentState() != stateAtStart:
             # aborted between OK and Done: the abort has reset the tags; Done must not be set for the old cycle
             printBoldRed(f"Cycle aborted before {tags[1]} was written; not written")
@@ -1857,12 +1874,12 @@ class IOServer:
     def _audit(self, text: str) -> None:
         try:
             if auditPLC():
-                SlaveFileLogger.getInstance().logAudit(IOServer.logSource, text)
+                SlaveFileLogger.getInstance().logAudit(PLCIOServer.logSource, text)
         except Exception:
             noteSuppressed()
 
     def _auditWrite(self, tag: str, value, error: Optional[Exception] = None) -> None:
-        if tag == IOServer.PC_PLC_ConnectionStatusTag and error is None and not auditConnectionToggle():
+        if tag == PLCIOServer.PC_PLC_ConnectionStatusTag and error is None and not auditConnectionToggle():
             return
         if error is None:
             self._audit(f"PC->PLC {tag} = {value!r}  (state {self.machineState.getCurrentState().name})")
@@ -1871,7 +1888,7 @@ class IOServer:
 
     def _auditRead(self, tags, value) -> None:
         """PLC->PC: logged when a trigger is seen raised or a value is read (once per state, not every 0.2 s)."""
-        if value is None or value is False or (isinstance(value, float) and value == IOServer.FALSE_FLOAT_VALUE):
+        if value is None or value is False or (isinstance(value, float) and value == PLCIOServer.FALSE_FLOAT_VALUE):
             self._lastAuditedRead = None
             return
         key = (self.machineState.getCurrentState(), tuple(tags or ()), value)
@@ -1919,11 +1936,11 @@ class IOServer:
                 if value != getattr(self, attr):
                     setattr(self, attr, value); applied.append(f"{attr}={value}")
             value = config.getPlcSleepTimeBetweenOKAndDone()
-            if value != IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE:
-                IOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE = value; applied.append(f"PLC_SLEEPTIME_BETWEEN_OK_AND_DONE={value}")
+            if value != PLCIOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE:
+                PLCIOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE = value; applied.append(f"PLC_SLEEPTIME_BETWEEN_OK_AND_DONE={value}")
             value = config.getLogDisconnectionsAfterNSecs()
-            if value != IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS:
-                IOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS = value; applied.append(f"LOG_CONNECTION_PROBLEM_EVERY_N_SECS={value}")
+            if value != PLCIOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS:
+                PLCIOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS = value; applied.append(f"LOG_CONNECTION_PROBLEM_EVERY_N_SECS={value}")
         except Exception as e:
             self.logger.error(f"Could not apply the changed configuration: {e}")
         tagKeys = [k for k in changedKeys if k.endswith(".tagname") or k in ("plc.ip", "siemens.plc.ip", "plc.vendor")]
@@ -1936,19 +1953,14 @@ class IOServer:
     # ==================== Read functions ====================
 
     def read_bool(self, tag: str, expected_value: bool = True, debug: bool = False) -> Optional[bool]:
-        """Read a boolean tag from the PLC."""
+        """Read a boolean tag from the PLC. Not connected: False; read failed: not expected_value (use
+        _readBoolOrNone to tell a failure from a value)."""
         if tag is None or tag == "":
             return False
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
+        if not self._readsReady():
             return False
         try:
-            value: bool = False
-            with self.readingLock:
-                value = self.clientForReads.read(tag).value
-            if value is None:
-                self.logger.error("Error reading bool tag %s", tag)
-                printBoldRed(f"Error reading bool tag {tag}")
-                return not expected_value
+            value = self.dataIOForReads.read(tag)
             if debug and value == expected_value:
                 self.logger.info("Read bool tag %s: %s", tag, value)
             return value
@@ -1958,37 +1970,25 @@ class IOServer:
             return not expected_value
 
     def read_float(self, tag: str, debug: bool = False) -> Optional[float]:
-        """Read a float tag from the PLC."""
+        """Read a float tag from the PLC (FALSE_FLOAT_VALUE if it cannot be read)."""
         if tag is None or tag == "":
-            return IOServer.FALSE_FLOAT_VALUE
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
-            return IOServer.FALSE_FLOAT_VALUE
+            return PLCIOServer.FALSE_FLOAT_VALUE
+        if not self._readsReady():
+            return PLCIOServer.FALSE_FLOAT_VALUE
         try:
-            value: float = IOServer.FALSE_FLOAT_VALUE
-            with self.readingLock:
-                value = self.clientForReads.read(tag).value
-            if value is None:
-                printBoldRed(f"Error reading float tag {tag}")
-                return IOServer.FALSE_FLOAT_VALUE
-            return value
+            return self.dataIOForReads.read(tag)
         except Exception as e:
             printBoldRed(f"Error reading float tag {tag}: {e}")
-            return IOServer.FALSE_FLOAT_VALUE
+            return PLCIOServer.FALSE_FLOAT_VALUE
 
     def read_int(self, tag: str, debug: bool = False) -> Optional[int]:
-        """Read an integer tag from the PLC."""
+        """Read an integer tag from the PLC (FALSE_INT_VALUE if it cannot be read)."""
         if tag is None or tag == "":
-            return IOServer.FALSE_INT_VALUE
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
-            return IOServer.FALSE_INT_VALUE
+            return PLCIOServer.FALSE_INT_VALUE
+        if not self._readsReady():
+            return PLCIOServer.FALSE_INT_VALUE
         try:
-            value: int = IOServer.FALSE_INT_VALUE
-            with self.readingLock:
-                value = self.clientForReads.read(tag).value
-            if value is None:
-                self.logger.error("Error reading integer tag %s: value is None", tag)
-                printBoldRed(f"Error reading integer tag {tag}: value is None")
-                return IOServer.FALSE_INT_VALUE
+            value = self.dataIOForReads.read(tag)
             if debug:
                 self.logger.info("Read integer tag %s: %d", tag, value)
                 printBoldGreen(f"Read integer tag {tag}: {value}")
@@ -1996,52 +1996,57 @@ class IOServer:
         except Exception as e:
             self.logger.error("Error reading integer tag %s: %s", tag, e)
             printBoldRed(f"Error reading integer tag {tag}: {e}")
-            return IOServer.FALSE_INT_VALUE
+            return PLCIOServer.FALSE_INT_VALUE
 
     def read_single(self, aTag: str) -> Any:
+        """Read one tag of any type ("" if it cannot be read)."""
         if aTag is None or aTag == "":
-            return IOServer.FALSE_FLOAT_VALUE
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
-            return IOServer.FALSE_FLOAT_VALUE
+            return PLCIOServer.FALSE_FLOAT_VALUE
+        if not self._readsReady():
+            return PLCIOServer.FALSE_FLOAT_VALUE
         value = ""
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(aTag).value
+            value = self.dataIOForReads.read(aTag)
         except:
             noteSuppressed()
         return value
 
     def read_multiple(self, listOfTags: list) -> Any:
+        """Read several tags: {tag: value} ({} if any cannot be read)."""
         if listOfTags is None or len(listOfTags) == 0:
             return None
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
+        if not self._readsReady():
             return None
-        value = []
+        value = {}
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(*listOfTags)
+            value = self.dataIOForReads.readMany(listOfTags)
         except:
             noteSuppressed()
         return value
 
     def read_array(self, arrayName: str, numberOfElements: int) -> Any:
+        """The first numberOfElements elements of an array tag (PLCs whose PLCDataIO has readArray: Allen-Bradley)."""
         if numberOfElements == 0:
             return None
-        if (self.clientForReads is None) or (not self.clientForReads.connected):
+        if not self._readsReady():
+            return None
+        if not hasattr(self.dataIOForReads, "readArray"):
+            printBoldRed(f"read_array: not available on {self.dataIOForReads.describe()}")
             return None
         value = []
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(f"{arrayName}" + "{" + f"{numberOfElements}" + "}")
+            value = self.dataIOForReads.readArray(arrayName, numberOfElements)
         except:
             noteSuppressed()
         return value
 
     def read_array_slice(self, arrayName: str, index: int, numberOfElements: int) -> Any:
+        """numberOfElements elements of an array tag from index (Allen-Bradley)."""
         value = []
+        if not self._readsReady() or not hasattr(self.dataIOForReads, "readArraySlice"):
+            return value
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(f"{arrayName}[{index}]" + "{" + f"{numberOfElements}" + "}")
+            value = self.dataIOForReads.readArraySlice(arrayName, index, numberOfElements)
         except:
             noteSuppressed()
         return value
@@ -2054,11 +2059,10 @@ class IOServer:
             return False
         if self._writesBlocked():
             return False
-        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+        if not self._writesReady():
             return False
         try:
-            with self.writingLock:
-                self.clientForWrites.write(tag, value)
+            self.dataIOForWrites.write(tag, value)
             self._auditWrite(tag, value)
             self._notePcWrite(tag, bool(value))
             if debug:
@@ -2075,11 +2079,10 @@ class IOServer:
             return False
         if self._writesBlocked():
             return False
-        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+        if not self._writesReady():
             return False
         try:
-            with self.writingLock:
-                self.clientForWrites.write(tag, value)
+            self.dataIOForWrites.write(tag, value)
             self._auditWrite(tag, value)
             if debug:
                 self.logger.info(f"Wrote float tag {tag}: {value}")
@@ -2100,11 +2103,10 @@ class IOServer:
             return False
         if self._writesBlocked():
             return False
-        if (self.clientForWrites is None) or (not self.clientForWrites.connected):
+        if not self._writesReady():
             return False
         try:
-            with self.writingLock:
-                self.clientForWrites.write(tag, value)
+            self.dataIOForWrites.write(tag, value)
             self._auditWrite(tag, value)
             if debug:
                 self.logger.info(f"Wrote integer tag {tag}: {value}")
@@ -2129,25 +2131,25 @@ class IOServer:
         the state-2 cycle settings (written fresh in every cycle), the PLC's watch tag and the PC's connection-status
         toggle. PLC_PC_CheckQRCode is included (set False here; resetForNextCycle() then arms it)."""
         tags = [
-            (IOServer.PLC_PC_CheckQRCode, bool), (IOServer.PC_PLC_QRCodeCheckOK, bool), (IOServer.PC_PLC_QRCodeCheckDone, bool),
-            (IOServer.PLC_PC_CheckKnuckle, bool), (IOServer.PC_PLC_KnuckleCheckOK, bool), (IOServer.PC_PLC_KnuckleCheckDone, bool),
-            (IOServer.PLC_PC_CheckHub, bool), (IOServer.PC_PLC_HubCheckOK, bool), (IOServer.PC_PLC_HubCheckDone, bool),
-            (IOServer.PLC_PC_CheckHubAndSecondBearing, bool), (IOServer.PC_PLC_HubAndSecondBearingCheckOK, bool),
-            (IOServer.PC_PLC_HubAndSecondBearingCheckDone, bool),
-            (IOServer.PLC_PC_CheckNutAndPlateWasher, bool), (IOServer.PC_PLC_NutAndPlateWasherCheckOK, bool),
-            (IOServer.PC_PLC_NutAndPlateWasherCheckDone, bool),
-            (IOServer.PLC_PC_Station2TorqueValueSet, bool), (IOServer.PLC_PC_Station2TorqueValue, float),
-            (IOServer.PLC_PC_Station2RotationDuringTighteningDone, bool),
-            (IOServer.PLC_PC_CheckNoCapBunk, bool), (IOServer.PC_PLC_NoCapBunkCheckOK, bool), (IOServer.PC_PLC_NoCapBunkCheckDone, bool),
-            (IOServer.PLC_PC_ComponentPressDone, bool),
-            (IOServer.PLC_PC_CheckNoBunk, bool), (IOServer.PC_PLC_NoBunkCheckOK, bool), (IOServer.PC_PLC_NoBunkCheckDone, bool),
-            (IOServer.PLC_PC_CheckSplitPinAndWasher, bool), (IOServer.PC_PLC_SplitPinAndWasherCheckOK, bool),
-            (IOServer.PC_PLC_SplitPinAndWasherCheckDone, bool),
-            (IOServer.PLC_PC_CheckCap, bool), (IOServer.PC_PLP_CapCheckOK, bool), (IOServer.PC_PLC_CapCheckDone, bool),
-            (IOServer.PLC_PC_CheckBunk, bool), (IOServer.PC_PLC_BunkCheckOK, bool), (IOServer.PC_PLC_BunkCheckDone, bool),
-            (IOServer.PLC_PC_CapPressDone, bool),
-            (IOServer.PLC_PC_Station3TorqueValueSet, bool), (IOServer.PLC_PC_Station3TorqueValue, float),
-            (IOServer.PLC_PC_EmergencyAbort, bool),
+            (PLCIOServer.PLC_PC_CheckQRCode, bool), (PLCIOServer.PC_PLC_QRCodeCheckOK, bool), (PLCIOServer.PC_PLC_QRCodeCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckKnuckle, bool), (PLCIOServer.PC_PLC_KnuckleCheckOK, bool), (PLCIOServer.PC_PLC_KnuckleCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckHub, bool), (PLCIOServer.PC_PLC_HubCheckOK, bool), (PLCIOServer.PC_PLC_HubCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckHubAndSecondBearing, bool), (PLCIOServer.PC_PLC_HubAndSecondBearingCheckOK, bool),
+            (PLCIOServer.PC_PLC_HubAndSecondBearingCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckNutAndPlateWasher, bool), (PLCIOServer.PC_PLC_NutAndPlateWasherCheckOK, bool),
+            (PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone, bool),
+            (PLCIOServer.PLC_PC_Station2TorqueValueSet, bool), (PLCIOServer.PLC_PC_Station2TorqueValue, float),
+            (PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, bool),
+            (PLCIOServer.PLC_PC_CheckNoCapBunk, bool), (PLCIOServer.PC_PLC_NoCapBunkCheckOK, bool), (PLCIOServer.PC_PLC_NoCapBunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_ComponentPressDone, bool),
+            (PLCIOServer.PLC_PC_CheckNoBunk, bool), (PLCIOServer.PC_PLC_NoBunkCheckOK, bool), (PLCIOServer.PC_PLC_NoBunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckSplitPinAndWasher, bool), (PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK, bool),
+            (PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckCap, bool), (PLCIOServer.PC_PLP_CapCheckOK, bool), (PLCIOServer.PC_PLC_CapCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckBunk, bool), (PLCIOServer.PC_PLC_BunkCheckOK, bool), (PLCIOServer.PC_PLC_BunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_CapPressDone, bool),
+            (PLCIOServer.PLC_PC_Station3TorqueValueSet, bool), (PLCIOServer.PLC_PC_Station3TorqueValue, float),
+            (PLCIOServer.PLC_PC_EmergencyAbort, bool),
         ]
         return [(t, k) for t, k in tags if t]          # an empty name = not on this PLC
 
@@ -2181,9 +2183,9 @@ class IOServer:
             with self._awaitingTriggerResetLock:
                 self._awaitingTriggerReset.clear()
             allReset = self.resetAll()
-            qrArmed = self._plcConnected() and self._writeVerified(IOServer.PLC_PC_CheckQRCode, True)
+            qrArmed = self._plcConnected() and self._writeVerified(PLCIOServer.PLC_PC_CheckQRCode, True)
             with self._plcTrueLock:
-                self._plcTrueTags = [IOServer.PLC_PC_CheckQRCode] if qrArmed else []
+                self._plcTrueTags = [PLCIOServer.PLC_PC_CheckQRCode] if qrArmed else []
             self._resetIncomplete = not (allReset and qrArmed)
         if self._resetIncomplete:
             message = (f"Reset for the next cycle ({reason}) INCOMPLETE: tags reset {'yes' if allReset else 'NO'}, "
@@ -2199,8 +2201,7 @@ class IOServer:
 
     # ---------------------------------------------------------------- verified writes, PLC restart detection
     def _plcConnected(self) -> bool:
-        return bool(self.clientForReads and self.clientForReads.connected and
-                    self.clientForWrites and self.clientForWrites.connected)
+        return self._readsReady() and self._writesReady()
 
     @contextlib.contextmanager
     def _asPrivileged(self):
@@ -2218,12 +2219,10 @@ class IOServer:
 
     def _readFloatOrNone(self, tag: str) -> Optional[float]:
         """Read a float from the PLC; None if it could not be read."""
-        if not tag or self.clientForReads is None or not self.clientForReads.connected:
+        if not tag or not self._readsReady():
             return None
         try:
-            with self.readingLock:
-                value = self.clientForReads.read(tag).value
-            return None if value is None else float(value)
+            return float(self.dataIOForReads.read(tag))
         except Exception as e:
             printBoldRed(f"Could not read {tag}: {e}")
             return None
@@ -2231,7 +2230,7 @@ class IOServer:
     def _writeVerified(self, tag: str, value, attempts: int = None) -> bool:
         """Write a bool or float and read it back, until the PLC holds the value (up to RESET_WRITE_ATTEMPTS).
         Gives up at once if the PLC is not connected (the caller marks the work as incomplete)."""
-        attempts = IOServer.RESET_WRITE_ATTEMPTS if attempts is None else attempts
+        attempts = PLCIOServer.RESET_WRITE_ATTEMPTS if attempts is None else attempts
         isBool = isinstance(value, bool)
         lastSeen = None
         for attempt in range(attempts):
@@ -2241,9 +2240,9 @@ class IOServer:
             if written:
                 lastSeen = self._readBoolOrNone(tag) if isBool else self._readFloatOrNone(tag)
                 if lastSeen is not None and (lastSeen == value if isBool
-                                             else abs(lastSeen - float(value)) <= IOServer.RESET_FLOAT_TOLERANCE):
+                                             else abs(lastSeen - float(value)) <= PLCIOServer.RESET_FLOAT_TOLERANCE):
                     return True
-            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+            time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
         printBoldRed(f"{tag}: wrote {value} {attempts} times, PLC holds {lastSeen}")
         return False
 
@@ -2270,9 +2269,9 @@ class IOServer:
     def _plcPcTagNames(self) -> set:
         names = getattr(self, "_plcPcNamesCache", None)
         if names is None:
-            names = {getattr(IOServer, a) for a in dir(IOServer)
-                     if a.startswith("PLC_PC_") and isinstance(getattr(IOServer, a), str) and getattr(IOServer, a)}
-            names.discard(IOServer.PLC_PC_WatchTag)
+            names = {getattr(PLCIOServer, a) for a in dir(PLCIOServer)
+                     if a.startswith("PLC_PC_") and isinstance(getattr(PLCIOServer, a), str) and getattr(PLCIOServer, a)}
+            names.discard(PLCIOServer.PLC_PC_WatchTag)
             self._plcPcNamesCache = names
         return names
 
@@ -2315,11 +2314,11 @@ class IOServer:
                 return
             value = None
             if reference is not None:
-                for _ in range(IOServer.REFERENCE_READ_ATTEMPTS):
+                for _ in range(PLCIOServer.REFERENCE_READ_ATTEMPTS):
                     value = self._readBoolOrNone(reference)
                     if value is not None:
                         break
-                    time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+                    time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
                 if value is None:
                     printBoldRed(f"PLC connection back, but {reference} cannot be read yet; checking again")
                     return                           # still pending; the connection check calls this again
@@ -2347,9 +2346,9 @@ class IOServer:
         """Read PLC_PC_Station2RotationDuringTighteningDone, which the PLC provides with the Station 2 torque value.
         Sent to the frontend with each torque value (shown as Rotation Done / Not Done, stored with the record).
         Returns None if this PLC does not provide it (empty tag name, Allen-Bradley)."""
-        if not IOServer.PLC_PC_Station2RotationDuringTighteningDone:
+        if not PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone:
             return None
-        value = self.read_bool(IOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
+        value = self.read_bool(PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
         self.lastStation2RotationDuringTighteningDone = value
         printBoldGreen(f"Read Station 2 rotation-during-tightening done: {value}")
         return value
@@ -2358,127 +2357,126 @@ class IOServer:
         """Get the current QR code for this cycle."""
         return self.currentQRCode
 
-    def get_tag_address(self, tag: str) -> int:
-        """Placeholder for mapping tags to addresses (not needed for pycomm3)."""
-        return 0
+    def get_tag_address(self, tag: str) -> Optional[str]:
+        """The tag's address on the PLC where it has one apart from its name (Siemens DB address); else None."""
+        return self.dataIOForReads.addressFor(tag) if self.dataIOForReads is not None else None
 
-    def find_pids(self):
-        pid_tags = [
-            tag
-            for tag, _def in self.clientForReads.tags.items()
-            if _def['data_type_name'] == 'PID'
-        ]
-        return pid_tags
+    def find_pids(self) -> list:
+        """The PLC's PID tags (Allen-Bradley); [] where not applicable."""
+        findPIDs = getattr(self.dataIOForReads, "findPIDs", None)
+        return findPIDs() if (findPIDs and self._readsReady()) else []
 
-    def find_attributes(self):
-        for typ in self.clientForReads.data_types:
-            with self.readingLock:
-                print(f'{typ} attributes: ', self.clientForReads.data_types[typ]['attributes'])
+    def find_attributes(self) -> None:
+        """Print what the PLC defines: Allen-Bradley data types and their attributes; Siemens tag map."""
+        for method in ("printDataTypeAttributes", "printTagMap"):
+            if hasattr(self.dataIOForReads, method):
+                getattr(self.dataIOForReads, method)()
+                return
 
     def getAllTagValues(self) -> dict:
         """Read all PLC tags and return as a dictionary."""
-        if self.clientForReads is None or not self.clientForReads.connected:
+        if not self._readsReady():
             return {}
 
         tag_values = {}
 
         # Step 0: QR Code
-        tag_values[IOServer.PLC_PC_CheckQRCode] = self.read_bool(IOServer.PLC_PC_CheckQRCode, debug=False)
-        tag_values[IOServer.PC_PLC_QRCodeCheckOK] = self.read_bool(IOServer.PC_PLC_QRCodeCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_QRCodeCheckDone] = self.read_bool(IOServer.PC_PLC_QRCodeCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckQRCode] = self.read_bool(PLCIOServer.PLC_PC_CheckQRCode, debug=False)
+        tag_values[PLCIOServer.PC_PLC_QRCodeCheckOK] = self.read_bool(PLCIOServer.PC_PLC_QRCodeCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_QRCodeCheckDone] = self.read_bool(PLCIOServer.PC_PLC_QRCodeCheckDone, debug=False)
 
         # Step 1: Knuckle
-        tag_values[IOServer.PLC_PC_CheckKnuckle] = self.read_bool(IOServer.PLC_PC_CheckKnuckle, debug=False)
-        tag_values[IOServer.PC_PLC_KnuckleCheckOK] = self.read_bool(IOServer.PC_PLC_KnuckleCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_KnuckleCheckDone] = self.read_bool(IOServer.PC_PLC_KnuckleCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckKnuckle] = self.read_bool(PLCIOServer.PLC_PC_CheckKnuckle, debug=False)
+        tag_values[PLCIOServer.PC_PLC_KnuckleCheckOK] = self.read_bool(PLCIOServer.PC_PLC_KnuckleCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_KnuckleCheckDone] = self.read_bool(PLCIOServer.PC_PLC_KnuckleCheckDone, debug=False)
 
         # Step 2: Hub
-        tag_values[IOServer.PLC_PC_CheckHub] = self.read_bool(IOServer.PLC_PC_CheckHub, debug=False)
-        tag_values[IOServer.PC_PLC_HubCheckOK] = self.read_bool(IOServer.PC_PLC_HubCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_HubCheckDone] = self.read_bool(IOServer.PC_PLC_HubCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckHub] = self.read_bool(PLCIOServer.PLC_PC_CheckHub, debug=False)
+        tag_values[PLCIOServer.PC_PLC_HubCheckOK] = self.read_bool(PLCIOServer.PC_PLC_HubCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_HubCheckDone] = self.read_bool(PLCIOServer.PC_PLC_HubCheckDone, debug=False)
 
         # Step 3: Hub and Second Bearing
-        tag_values[IOServer.PLC_PC_CheckHubAndSecondBearing] = self.read_bool(IOServer.PLC_PC_CheckHubAndSecondBearing,
+        tag_values[PLCIOServer.PLC_PC_CheckHubAndSecondBearing] = self.read_bool(PLCIOServer.PLC_PC_CheckHubAndSecondBearing,
                                                                               debug=False)
-        tag_values[IOServer.PC_PLC_HubAndSecondBearingCheckOK] = self.read_bool(
-            IOServer.PC_PLC_HubAndSecondBearingCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_HubAndSecondBearingCheckDone] = self.read_bool(
-            IOServer.PC_PLC_HubAndSecondBearingCheckDone, debug=False)
+        tag_values[PLCIOServer.PC_PLC_HubAndSecondBearingCheckOK] = self.read_bool(
+            PLCIOServer.PC_PLC_HubAndSecondBearingCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_HubAndSecondBearingCheckDone] = self.read_bool(
+            PLCIOServer.PC_PLC_HubAndSecondBearingCheckDone, debug=False)
 
         # Step 4: Nut and Plate Washer
-        tag_values[IOServer.PLC_PC_CheckNutAndPlateWasher] = self.read_bool(IOServer.PLC_PC_CheckNutAndPlateWasher,
+        tag_values[PLCIOServer.PLC_PC_CheckNutAndPlateWasher] = self.read_bool(PLCIOServer.PLC_PC_CheckNutAndPlateWasher,
                                                                             debug=False)
-        tag_values[IOServer.PC_PLC_NutAndPlateWasherCheckOK] = self.read_bool(IOServer.PC_PLC_NutAndPlateWasherCheckOK,
+        tag_values[PLCIOServer.PC_PLC_NutAndPlateWasherCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NutAndPlateWasherCheckOK,
                                                                               debug=False)
-        tag_values[IOServer.PC_PLC_NutAndPlateWasherCheckDone] = self.read_bool(
-            IOServer.PC_PLC_NutAndPlateWasherCheckDone, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone] = self.read_bool(
+            PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone, debug=False)
 
         # Step 5 & 10: Station 2 Torque
-        tag_values[IOServer.PLC_PC_Station2TorqueValueSet] = self.read_bool(IOServer.PLC_PC_Station2TorqueValueSet,
+        tag_values[PLCIOServer.PLC_PC_Station2TorqueValueSet] = self.read_bool(PLCIOServer.PLC_PC_Station2TorqueValueSet,
                                                                             debug=False)
-        tag_values[IOServer.PLC_PC_Station2TorqueValue] = self.read_float(IOServer.PLC_PC_Station2TorqueValue,
+        tag_values[PLCIOServer.PLC_PC_Station2TorqueValue] = self.read_float(PLCIOServer.PLC_PC_Station2TorqueValue,
                                                                           debug=False)
-        if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
-            tag_values[IOServer.PLC_PC_Station2RotationDuringTighteningDone] = self.read_bool(
-                IOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
+        if PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone:
+            tag_values[PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone] = self.read_bool(
+                PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
 
         # Step 7: No Cap Bunk
-        tag_values[IOServer.PLC_PC_CheckNoCapBunk] = self.read_bool(IOServer.PLC_PC_CheckNoCapBunk, debug=False)
-        tag_values[IOServer.PC_PLC_NoCapBunkCheckOK] = self.read_bool(IOServer.PC_PLC_NoCapBunkCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_NoCapBunkCheckDone] = self.read_bool(IOServer.PC_PLC_NoCapBunkCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckNoCapBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckNoCapBunk, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoCapBunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoCapBunkCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoCapBunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoCapBunkCheckDone, debug=False)
 
         # Step 8: Component Press Done
-        tag_values[IOServer.PLC_PC_ComponentPressDone] = self.read_bool(IOServer.PLC_PC_ComponentPressDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_ComponentPressDone] = self.read_bool(PLCIOServer.PLC_PC_ComponentPressDone, debug=False)
 
         # Step 9: No Bunk
-        tag_values[IOServer.PLC_PC_CheckNoBunk] = self.read_bool(IOServer.PLC_PC_CheckNoBunk, debug=False)
-        tag_values[IOServer.PC_PLC_NoBunkCheckOK] = self.read_bool(IOServer.PC_PLC_NoBunkCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_NoBunkCheckDone] = self.read_bool(IOServer.PC_PLC_NoBunkCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckNoBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckNoBunk, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoBunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoBunkCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoBunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoBunkCheckDone, debug=False)
 
         # Step 11: Split Pin and Washer
-        tag_values[IOServer.PLC_PC_CheckSplitPinAndWasher] = self.read_bool(IOServer.PLC_PC_CheckSplitPinAndWasher,
+        tag_values[PLCIOServer.PLC_PC_CheckSplitPinAndWasher] = self.read_bool(PLCIOServer.PLC_PC_CheckSplitPinAndWasher,
                                                                             debug=False)
-        tag_values[IOServer.PC_PLC_SplitPinAndWasherCheckOK] = self.read_bool(IOServer.PC_PLC_SplitPinAndWasherCheckOK,
+        tag_values[PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK] = self.read_bool(PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK,
                                                                               debug=False)
-        tag_values[IOServer.PC_PLC_SplitPinAndWasherCheckDone] = self.read_bool(
-            IOServer.PC_PLC_SplitPinAndWasherCheckDone, debug=False)
+        tag_values[PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone] = self.read_bool(
+            PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone, debug=False)
 
         # Step 12: Cap
-        tag_values[IOServer.PLC_PC_CheckCap] = self.read_bool(IOServer.PLC_PC_CheckCap, debug=False)
-        tag_values[IOServer.PC_PLP_CapCheckOK] = self.read_bool(IOServer.PC_PLP_CapCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_CapCheckDone] = self.read_bool(IOServer.PC_PLC_CapCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckCap] = self.read_bool(PLCIOServer.PLC_PC_CheckCap, debug=False)
+        tag_values[PLCIOServer.PC_PLP_CapCheckOK] = self.read_bool(PLCIOServer.PC_PLP_CapCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_CapCheckDone] = self.read_bool(PLCIOServer.PC_PLC_CapCheckDone, debug=False)
 
         # Step 13: Bunk
-        tag_values[IOServer.PLC_PC_CheckBunk] = self.read_bool(IOServer.PLC_PC_CheckBunk, debug=False)
-        tag_values[IOServer.PC_PLC_BunkCheckOK] = self.read_bool(IOServer.PC_PLC_BunkCheckOK, debug=False)
-        tag_values[IOServer.PC_PLC_BunkCheckDone] = self.read_bool(IOServer.PC_PLC_BunkCheckDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CheckBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckBunk, debug=False)
+        tag_values[PLCIOServer.PC_PLC_BunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_BunkCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_BunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_BunkCheckDone, debug=False)
 
         # Step 14: Cap Press Done
-        tag_values[IOServer.PLC_PC_CapPressDone] = self.read_bool(IOServer.PLC_PC_CapPressDone, debug=False)
+        tag_values[PLCIOServer.PLC_PC_CapPressDone] = self.read_bool(PLCIOServer.PLC_PC_CapPressDone, debug=False)
 
         # Step 15: Station 3 Torque
-        tag_values[IOServer.PLC_PC_Station3TorqueValueSet] = self.read_bool(IOServer.PLC_PC_Station3TorqueValueSet,
+        tag_values[PLCIOServer.PLC_PC_Station3TorqueValueSet] = self.read_bool(PLCIOServer.PLC_PC_Station3TorqueValueSet,
                                                                             debug=False)
-        tag_values[IOServer.PLC_PC_Station3TorqueValue] = self.read_float(IOServer.PLC_PC_Station3TorqueValue,
+        tag_values[PLCIOServer.PLC_PC_Station3TorqueValue] = self.read_float(PLCIOServer.PLC_PC_Station3TorqueValue,
                                                                           debug=False)
 
         # System tags
-        tag_values[IOServer.PLC_PC_EmergencyAbort] = self.read_bool(IOServer.PLC_PC_EmergencyAbort, debug=False)
-        tag_values[IOServer.PLC_PC_WatchTag] = self.read_int(IOServer.PLC_PC_WatchTag, debug=False)
+        tag_values[PLCIOServer.PLC_PC_EmergencyAbort] = self.read_bool(PLCIOServer.PLC_PC_EmergencyAbort, debug=False)
+        tag_values[PLCIOServer.PLC_PC_WatchTag] = self.read_int(PLCIOServer.PLC_PC_WatchTag, debug=False)
 
         # Machine 2 cycle settings written by the PC in state 2
-        for tag, reader in ((IOServer.PC_PLC_LH_RH_Selection, self.read_int),
-                            (IOServer.PC_PLC_ModelSelection, self.read_int),
-                            (IOServer.PC_PLC_TighteningTorque1Setpoint, self.read_float),
-                            (IOServer.PC_PLC_TighteningTorque2Setpoint, self.read_float),
-                            (IOServer.PC_PLC_RotationRPM1, self.read_int),
-                            (IOServer.PC_PLC_RotationRPM2, self.read_int),
-                            (IOServer.PC_PLC_RotationRPM, self.read_float),
-                            (IOServer.PC_PLC_NoOfRotation1CCW, self.read_float),
-                            (IOServer.PC_PLC_NoOfRotation1CW, self.read_float)):
+        for tag, reader in ((PLCIOServer.PC_PLC_LH_RH_Selection, self.read_int),
+                            (PLCIOServer.PC_PLC_ModelSelection, self.read_int),
+                            (PLCIOServer.PC_PLC_TighteningTorque1Setpoint, self.read_float),
+                            (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, self.read_float),
+                            (PLCIOServer.PC_PLC_RotationRPM1, self.read_int),
+                            (PLCIOServer.PC_PLC_RotationRPM2, self.read_int),
+                            (PLCIOServer.PC_PLC_RotationRPM, self.read_float),
+                            (PLCIOServer.PC_PLC_NoOfRotation1CCW, self.read_float),
+                            (PLCIOServer.PC_PLC_NoOfRotation1CW, self.read_float)):
             if tag:                      # empty name = not on this PLC
                 tag_values[tag] = reader(tag, debug=False)
-        tag_values[IOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(IOServer.PC_PLC_ConnectionStatusTag, debug=False)
+        tag_values[PLCIOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, debug=False)
 
         # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)
         tag_values["_currentMachineState"] = self.machineState.getCurrentState().name
@@ -2527,15 +2525,10 @@ class IOServer:
                 self.updateTagsProcessor.stop()
             except:
                 noteSuppressed()
-        if self.clientForReads and self.clientForReads.connected:
-            try:
-                self.clientForReads.close()
-            except:
-                noteSuppressed()
-            try:
-                self.clientForWrites.close()
-            except:
-                noteSuppressed()
+        try:
+            self._closePLC()
+        except Exception:
+            noteSuppressed()
         self.logger.info(f"IOServer shutdown")
         printBoldRed(f"IOServer shutdown")
 
@@ -2543,9 +2536,9 @@ class IOServer:
 # *********************************************************************
 
 def startIOServer(mode : str = "TEST"):
-    io = IOServer(mode = mode)
+    io = PLCIOServer(mode = mode)
     printBoldBlue(f"*****************")
-    printBlue(f"Started IO Server")
+    printBlue(f"Started IO Server ({io.dataIOForReads.describe() if io.dataIOForReads else io.vendor})")
     printBoldBlue(f"*****************")
     io.heartbeatThread.join()
     io.monitorStopThread.join()
