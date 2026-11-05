@@ -1762,3 +1762,14 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   MockPLC -> PLCIOError; `missingTags`. Not run here: the integrated all-servers run (the frontend needs tkinter, not
   available in this container; the frontend is not touched by this change).
 - **Before production:** `s7_tag_check.py` on the plant PC and one real cycle with an exe built from this branch.
+
+## 75. Siemens command-line PLC tools moved to costhetaio/siemens/test (2026-11-05)
+- `s7_read_all_tags.py`, `s7_smoke_test.py`, `s7_tag_check.py` moved (`git mv`) into the new package
+  `costhetaio/siemens/test/`. They are test / commissioning tools only: nothing in the application imports them (they
+  import `plc_backend`, not the other way round; `plc_backend.py` holds copies of the pyS7 calls first proven in
+  `s7_smoke_test.py`).
+- Run from the project root: `python costhetaio/siemens/test/s7_tag_check.py`, `python
+  costhetaio/siemens/test/s7_read_all_tags.py [--ip ...] [--repeat N --interval s]`, `python
+  costhetaio/siemens/test/s7_smoke_test.py`. Project-root path in the first two adjusted for the extra folder level.
+- `runNuitka.bat`: the three exclusions replaced by `--nofollow-import-to=costhetaio.siemens.test`.
+- Verified from another working directory: both tools find the project; `s7_tag_check` PASS against the simulated S7.

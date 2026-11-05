@@ -11,9 +11,9 @@ Uses the same client as the Siemens IOServer (PyS7PLCBackend: tag name -> DB add
 byte-read fall-back for bits). The PLC IP is siemens.plc.ip in ApplicationConfiguration.properties unless given.
 
 Run from the project root:
-    python costhetaio/siemens/s7_read_all_tags.py                  # every tag once
-    python costhetaio/siemens/s7_read_all_tags.py --ip 192.168.1.10
-    python costhetaio/siemens/s7_read_all_tags.py --repeat 5 --interval 1.0     # 5 passes, 1 s apart
+    python costhetaio/siemens/test/s7_read_all_tags.py                  # every tag once
+    python costhetaio/siemens/test/s7_read_all_tags.py --ip 192.168.1.10
+    python costhetaio/siemens/test/s7_read_all_tags.py --repeat 5 --interval 1.0     # 5 passes, 1 s apart
 Exit code: 0 if every tag was read, 1 if any read failed, 2 if the PLC could not be reached.
 """
 import argparse
@@ -22,7 +22,7 @@ import sys
 import time
 import traceback
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # <root>/costhetaio/siemens/test
 sys.path.insert(0, ROOT)
 os.environ.setdefault("COSTHETA_PLC_VENDOR", "siemens")
 

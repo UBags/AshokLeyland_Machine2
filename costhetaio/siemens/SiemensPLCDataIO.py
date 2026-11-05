@@ -8,7 +8,7 @@ plc.vendor=siemens.
 The IOServer uses symbolic tag names (the siemens.* keys of ApplicationConfiguration.properties); each name is
 resolved to its absolute DB address through IOServerProperties.yaml. The S7 layer itself - address parsing, the tag
 map with its clash checks, the pyS7 client with its connect retries and the bit-read fall-back - is
-PyS7PLCBackend in plc_backend.py, which the command-line tools (s7_tag_check.py, s7_read_all_tags.py) use as well.
+PyS7PLCBackend in plc_backend.py, which the command-line tools (test/s7_tag_check.py, test/s7_read_all_tags.py) use as well.
 
 checkTagConfiguration() runs before the IOServer starts: every tag the IOServer uses must have an address in
 IOServerProperties.yaml, and no two addresses may clash.

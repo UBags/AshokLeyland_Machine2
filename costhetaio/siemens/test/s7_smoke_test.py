@@ -21,7 +21,7 @@ PLC-SIDE PREREQUISITES (the test will fail without these)
 
 USAGE
 -----
-    python s7_smoke_test.py            # reads only (writes disabled by default)
+    python costhetaio/siemens/test/s7_smoke_test.py            # reads only (writes disabled by default)
     # set ALLOW_WRITES = True below to enable the write-and-verify tests
     # set PLC_IP = "MOCK" to run the whole suite against an in-memory fake PLC
 

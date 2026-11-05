@@ -9,13 +9,13 @@ Uses exactly what the Siemens IOServer uses (PyS7PLCBackend + IOServerProperties
   3. checks the watch tag reads 1234.
 Nothing is written to the PLC.
 
-Run from the project root:   python costhetaio/siemens/s7_tag_check.py
+Run from the project root:   python costhetaio/siemens/test/s7_tag_check.py
 Exit code 0 if everything was read and the watch tag is 1234, 1 otherwise.
 """
 import os
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))  # <root>/costhetaio/siemens/test
 sys.path.insert(0, ROOT)
 os.environ.setdefault("COSTHETA_PLC_VENDOR", "siemens")
 

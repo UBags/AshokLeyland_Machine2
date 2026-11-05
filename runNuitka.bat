@@ -76,7 +76,7 @@ REM   torchaudio - torch datapipes audio decoder, inside try/except ImportError
 REM   boto3, botocore, s3transfer - PostgresBackupUtility (try/except ImportError, local backups);
 REM              pandas reads s3:// URLs only (try/except ImportError)
 REM   pymodbus + costhetaio.allenbradley.IOServer_ModbusTCP - an unused Modbus IOServer; nothing imports it
-REM   costhetaio.siemens.s7_* - command-line test tools for the Siemens PLC; nothing imports them
+REM   costhetaio.siemens.test - command-line test tools for the Siemens PLC (s7_*); nothing imports them
 REM --clang: MSVC's cl ran out of heap space (C1060 / C1002) on sympy\polys\polyquinticconst (a huge generated C file;
 REM sympy.polys.polyroots imports it, torch imports sympy) with one job per core and again with 4 jobs. clang-cl from
 REM Visual Studio ("C++ Clang Compiler for Windows" component) is used instead. The objects cached by cl are not reused,
@@ -125,9 +125,7 @@ nuitka --standalone ^
     --nofollow-import-to=s3transfer ^
     --nofollow-import-to=pymodbus ^
     --nofollow-import-to=costhetaio.allenbradley.IOServer_ModbusTCP ^
-    --nofollow-import-to=costhetaio.siemens.s7_read_all_tags ^
-    --nofollow-import-to=costhetaio.siemens.s7_smoke_test ^
-    --nofollow-import-to=costhetaio.siemens.s7_tag_check ^
+    --nofollow-import-to=costhetaio.siemens.test ^
     MainProgram.py
 
 if errorlevel 1 (

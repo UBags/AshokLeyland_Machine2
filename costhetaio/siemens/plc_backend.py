@@ -5,11 +5,11 @@
 pyS7 layer for the Siemens S7-1515: the tag map and one S7 connection.
 
 SiemensPLCDataIO (SiemensPLCDataIO.py), the IOServer's PLCDataIO for Siemens, is built on PyS7PLCBackend; the
-command-line tools (s7_tag_check.py, s7_read_all_tags.py) use it directly. PyS7PLCBackend offers
+command-line tools (test/s7_tag_check.py, test/s7_read_all_tags.py) use it directly. PyS7PLCBackend offers
     open(), close(), .connected, read(tag) -> object with .value, read(tag1, tag2, ...) -> list, write(tag, value)
 with SYMBOLIC tag names. Each name is resolved to its absolute DB address through IOServerProperties.yaml.
 
-The pyS7 calls are the ones proven in s7_smoke_test.py:
+The pyS7 calls are the ones proven in test/s7_smoke_test.py (copied here, not imported):
   * S7Client constructed with keyword arguments, falling back to the minimal constructor on a TypeError (pyS7
     versions differ: pdu_size vs max_pdu), connect() retried up to `connect_retries` times;
   * client.read([address])[0] and client.write([address], [value]);
