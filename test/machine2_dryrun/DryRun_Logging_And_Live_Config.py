@@ -2,7 +2,8 @@
 
 Runs against a COPY of ApplicationConfiguration.properties (COSTHETA_CONFIG_FILE) that the script edits while the
 code is running, the real central file logger (MasterFileLogger, in this process) writing to logs/dryrun_logging/,
-and the real Allen-Bradley IOServer on the simulated PLC of _plc_sim.py. Needs Redis and PostgreSQL.
+and the real IOServer (PLCIOServer; Allen-Bradley PLCDataIO unless COSTHETA_PLC_VENDOR=siemens) on the simulated
+PLC of _plc_sim.py. Needs Redis and PostgreSQL.
 
   L1  per-server file level (log.file.level.ioserver) applied while running; other servers keep the global level
   L2  PRODUCTION mode raises a per-server level below CONSIDER_ACTION to CONSIDER_ACTION

@@ -11,7 +11,7 @@ COSTHETA_PLC_VENDOR (as in Configuration.getPlcVendor()), and only the driver un
     write goes through the real SiemensPLCDataIO and PyS7PLCBackend: tag name -> DB500 address (IOServerProperties.yaml) -> bytes encoded
     as the S7 CPU stores them (bits in bytes, INT big-endian 16-bit, REAL / LREAL big-endian IEEE 754 32 / 64-bit). Two tags sharing an
     address would therefore disturb each other here exactly as on the real PLC. Bit reads fail the first time with
-    INVALID_DATA_SIZE, so the byte-read fall-back taken from s7_smoke_test.py is exercised too.
+    INVALID_DATA_SIZE, so the byte-read fall-back taken from costhetaio/siemens/test/s7_smoke_test.py is exercised too.
 
 TAGS[tag] reads / writes a tag as the PLC sees it (the test plays the PLC); WRITES collects every (tag, value) the PC
 writes; LOCK is the lock the tests hold while changing several tags together.
@@ -32,8 +32,11 @@ LOCK = threading.Lock()
 #   plc_restart()         the PLC restarts: all its memory goes back to the start values (False / 0), except the
 #                         watch tag, which its program sets to 1234 again.
 #   STUCK                 tag names whose writes the PLC ignores (to test write verification).
+#   ERRORS                tag names the driver fails on, each in its own way: pycomm3 returns a result with .error
+#                         set (no exception), pyS7 raises. The PLCDataIO must turn both into PLCIOError.
 LINK = {"down": False}
 STUCK = set()
+ERRORS = set()
 _RESTART = []           # set by the vendor setup: the function that clears the PLC memory
 
 
@@ -86,7 +89,7 @@ def setup(mode="Test"):
 
 # ----------------------------------------------------------------------------------------------- Allen-Bradley
 class _V:
-    def __init__(self, v): self.value = v
+    def __init__(self, v, error=None): self.value, self.error = v, error
 
 
 def _setup_allenbradley():
@@ -102,10 +105,12 @@ def _setup_allenbradley():
         def close(self): self._open = False
         def read(self, *tags):
             if LINK["down"]: raise Exception("simulated: link down")
+            if tags[0] in ERRORS: return _V(None, "simulated: tag read refused")       # pycomm3: error in the result
             with LOCK:
                 return _V(TAGS[tags[0]])
         def write(self, tag, value):
             if LINK["down"]: raise Exception("simulated: link down")
+            if tag in ERRORS: return _V(value, "simulated: tag write refused")         # pycomm3: error in the result
             with LOCK:
                 if tag not in STUCK:
                     TAGS[tag] = value
@@ -167,7 +172,7 @@ def _setup_siemens():
     failed_bit_once = set()
 
     class FakeS7Client:
-        """Stand-in for pyS7.S7Client (same surface as used by PyS7PLCBackend / s7_smoke_test.py)."""
+        """Stand-in for pyS7.S7Client (same surface as used by PyS7PLCBackend / test/s7_smoke_test.py)."""
         def __init__(self, address=None, rack=0, slot=1, **kwargs):
             self.address = address; self._connected = False
         def connect(self):
@@ -179,6 +184,8 @@ def _setup_siemens():
         def read(self, addresses):
             if LINK["down"]: raise Exception("simulated: link down")
             out = []
+            if any(by_address.get(a) in ERRORS for a in addresses):
+                raise Exception("simulated: S7ReadResponseError OBJECT_DOES_NOT_EXIST")     # pyS7: raises
             for a in addresses:
                 if ",X" in a and a not in failed_bit_once:
                     failed_bit_once.add(a)
@@ -187,6 +194,8 @@ def _setup_siemens():
             return out
         def write(self, addresses, values):
             if LINK["down"]: raise Exception("simulated: link down")
+            if any(by_address.get(a) in ERRORS for a in addresses):
+                raise Exception("simulated: S7WriteResponseError OBJECT_DOES_NOT_EXIST")    # pyS7: raises
             for a, v in zip(addresses, values):
                 if by_address.get(a, a) not in STUCK:
                     MEM.set(a, v)

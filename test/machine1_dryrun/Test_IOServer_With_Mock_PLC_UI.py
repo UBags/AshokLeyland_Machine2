@@ -279,7 +279,7 @@ class TestIOServerGUI:
         # Info banner
         info_frame = ttk.Frame(parent)
         info_frame.pack(fill=tk.X, padx=5, pady=5)
-        ttk.Label(info_frame, text="⚡ Testing REAL IOServer.py with MockPLC - Machine 2 (15 steps, 28 states) ⚡",
+        ttk.Label(info_frame, text="⚡ Testing REAL PLCIOServer.py with MockPLC - Machine 2 (15 steps, 28 states) ⚡",
                   font=("Arial", 11, "bold"), foreground="darkgreen").pack()
 
         # Status
@@ -734,7 +734,7 @@ if __name__ == "__main__":
     print("Test REAL IOServer with MockPLC - Machine 2 (28 states)")
     print("=" * 70)
     print()
-    print("This script tests your ACTUAL IOServer.py code using a MockPLC.")
+    print("This script tests your ACTUAL PLCIOServer.py code using a MockPLC.")
     print("The MockPLC simulates all PLC tag read/write operations in memory.")
     print()
     print("Starting IOServer with mockInstance=True...")

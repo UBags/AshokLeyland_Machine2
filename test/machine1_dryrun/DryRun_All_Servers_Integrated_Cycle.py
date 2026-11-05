@@ -12,7 +12,7 @@ from redis import Redis
 
 # ---------------- fake Allen-Bradley PLC ----------------
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup, setting_tags        # COSTHETA_PLC_VENDOR=siemens -> the Siemens IOServer on a simulated S7 data block
+from _plc_sim import setup, setting_tags        # COSTHETA_PLC_VENDOR=siemens -> SiemensPLCDataIO on a simulated S7 data block
 IOServer, TAGS, WRITES, LOCK, VENDOR = setup("Production")
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS

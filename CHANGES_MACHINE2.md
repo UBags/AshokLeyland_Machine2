@@ -1773,3 +1773,21 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   costhetaio/siemens/test/s7_smoke_test.py`. Project-root path in the first two adjusted for the extra folder level.
 - `runNuitka.bat`: the three exclusions replaced by `--nofollow-import-to=costhetaio.siemens.test`.
 - Verified from another working directory: both tools find the project; `s7_tag_check` PASS against the simulated S7.
+
+## 76. Dry runs for the commonplc change: DryRun_PLCDataIO; failing tags in the PLC simulator (2026-11-05)
+- **Existing dry runs:** already pointed at `PLCIOServer` in section 74 (`_plc_sim`, fault scenarios, test windows);
+  remaining wording updated (comments naming "the Siemens IOServer", the mock window's "IOServer.py", the logging dry
+  run's description, `s7_smoke_test.py` now under `costhetaio/siemens/test/`).
+- **`_plc_sim.ERRORS`** (both folders): tag names the simulated driver fails on, the way each driver does - pycomm3
+  returns a result with `.error` set and does not raise; pyS7 raises. Empty unless a test fills it.
+- **New `test/*_dryrun/DryRun_PLCDataIO.py`** (37 checks, either vendor via `COSTHETA_PLC_VENDOR`; Redis and PostgreSQL):
+  - P: the `PLCDataIO` contract on fake drivers - Allen-Bradley: not connected, error in the result on read and on
+    write, no value -> `PLCIOError`; `missingTags`; `findPIDs`; no two driver calls at once from 8 threads; close.
+    Siemens: by name through the DB address, LREAL, unknown tag, `checkTagConfiguration`. Mock: unknown tag, shared
+    MockPLC. Factory: vendor -> class, mock, unknown vendor -> ValueError.
+  - S: `PLCIOServer` on the simulated PLC with refused tags - write_bool False and nothing written, verified write gives
+    up, read_bool not expected, `_readBoolOrNone` None, read_float FALSE_FLOAT_VALUE, recovery once accepted, link down.
+  - M: `PLCIOServer(mockInstance=True)` in its own process - MockPLCDataIO, CheckQRCode armed, QR handshake with the
+    settings written, state moves on.
+- **Mutation-tested:** pycomm3 write error ignored again (the behaviour before section 74) -> P4 and S4 fail; the
+  PLCDataIO lock removed -> P9 fails.
