@@ -25,6 +25,20 @@ import collections, os, struct, threading
 WRITES = []
 LOCK = threading.Lock()
 
+# Connection and restart simulation (both vendors):
+#   LINK["down"] = True   the network link to the PLC is cut: open / connect fail, every read and write raises,
+#                         the clients report not connected; the PLC itself keeps running and keeps its memory.
+#   plc_restart()         the PLC restarts: all its memory goes back to the start values (False / 0), except the
+#                         watch tag, which its program sets to 1234 again.
+#   STUCK                 tag names whose writes the PLC ignores (to test write verification).
+LINK = {"down": False}
+STUCK = set()
+_RESTART = []           # set by the vendor setup: the function that clears the PLC memory
+
+
+def plc_restart(watch_tag=None, watch_value=1234):
+    _RESTART[0](watch_tag, watch_value)
+
 
 SETTING_ATTRS = ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
                  "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
@@ -67,15 +81,29 @@ def _setup_allenbradley():
     TAGS = collections.defaultdict(lambda: False)
 
     class FakeLogix:
-        def __init__(self, ip): self.connected = False
-        def open(self): self.connected = True
-        def close(self): self.connected = False
+        def __init__(self, ip): self._open = False
+        @property
+        def connected(self): return self._open and not LINK["down"]
+        def open(self):
+            if LINK["down"]: raise Exception("simulated: PLC not reachable")
+            self._open = True
+        def close(self): self._open = False
         def read(self, *tags):
+            if LINK["down"]: raise Exception("simulated: link down")
             with LOCK:
                 return _V(TAGS[tags[0]])
         def write(self, tag, value):
+            if LINK["down"]: raise Exception("simulated: link down")
             with LOCK:
-                TAGS[tag] = value; WRITES.append((tag, value))
+                if tag not in STUCK:
+                    TAGS[tag] = value
+                WRITES.append((tag, value))
+
+    def restart(watch_tag, watch_value):
+        with LOCK:
+            TAGS.clear()
+            if watch_tag: TAGS[watch_tag] = watch_value
+    _RESTART[:] = [restart]
 
     import costhetaio.allenbradley.IOServer as IOS
     IOS.LogixDriver = FakeLogix
@@ -128,11 +156,14 @@ def _setup_siemens():
         """Stand-in for pyS7.S7Client (same surface as used by PyS7PLCBackend / s7_smoke_test.py)."""
         def __init__(self, address=None, rack=0, slot=1, **kwargs):
             self.address = address; self._connected = False
-        def connect(self): self._connected = True
+        def connect(self):
+            if LINK["down"]: raise Exception("simulated: PLC not reachable")
+            self._connected = True
         def disconnect(self): self._connected = False
         @property
-        def is_connected(self): return self._connected
+        def is_connected(self): return self._connected and not LINK["down"]
         def read(self, addresses):
+            if LINK["down"]: raise Exception("simulated: link down")
             out = []
             for a in addresses:
                 if ",X" in a and a not in failed_bit_once:
@@ -141,9 +172,17 @@ def _setup_siemens():
                 out.append(MEM.get(a))
             return out
         def write(self, addresses, values):
+            if LINK["down"]: raise Exception("simulated: link down")
             for a, v in zip(addresses, values):
-                MEM.set(a, v)
-                WRITES.append((by_address.get(a, a), MEM.get(a)))
+                if by_address.get(a, a) not in STUCK:
+                    MEM.set(a, v)
+                WRITES.append((by_address.get(a, a), v if by_address.get(a, a) in STUCK else MEM.get(a)))
+
+    def restart(watch_tag, watch_value):
+        with MEM.lock:
+            MEM.dbs.clear()
+        if watch_tag: MEM.set(tagmap[watch_tag][0], watch_value)
+    _RESTART[:] = [restart]
 
     PB.S7Client = FakeS7Client
 

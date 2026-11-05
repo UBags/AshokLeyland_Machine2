@@ -1,6 +1,7 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import random
 import sys
+import contextlib
 import threading
 import time
 import logging
@@ -419,6 +420,9 @@ class IOServer:
     SETTINGS_WRITE_ATTEMPTS: int = 3        # per cycle-setting tag, in state 2
     WRITE_RETRY_INTERVAL: float = 0.2       # s between write attempts
     VISION_RESULT_RESET_ATTEMPTS: int = 5          # attempts to set a vision check's OK / Done back to False
+    RESET_WRITE_ATTEMPTS: int = 5           # per tag in resetForNextCycle(): write + read back until they agree
+    RESET_FLOAT_TOLERANCE: float = 1e-3     # a REAL read back within this of the value written counts as written
+    REFERENCE_READ_ATTEMPTS: int = 3        # reads of the reference tag after a reconnect before giving up for now
     NO_CONNECTION: int = -1986754392
     CONSECUTIVE_CONNECTION_DOWN_COUNT: int = 0
 
@@ -479,6 +483,22 @@ class IOServer:
         self.readingLock = threading.Lock()
         self.writingLock = threading.Lock()
 
+        # PLC restart detection (see _verifyPlcAfterReconnect):
+        #   _plcTrueTags   PLC_PC tags known to be True right now, in the order they became True (the last one is
+        #                  the reference). Added when the read loop sees the PLC raise one (or when the PC arms
+        #                  CheckQRCode); removed when the PC writes it False, or when the PLC is seen to drop it
+        #                  while connected (_followReferenceTag).
+        #   _plcCheckPending  set when the PLC connection is lost; until the PLC has been checked after the
+        #                  reconnect, only the check itself (and the reset it may do) can write to the PLC, and the
+        #                  read loop does nothing.
+        #   _resetIncomplete  resetForNextCycle() could not write and verify every tag; redone after the reconnect.
+        self._plcTrueTags: List[str] = []
+        self._plcTrueLock = threading.Lock()
+        self._plcCheckPending: bool = False
+        self._resetIncomplete: bool = False
+        self._privileged = threading.local()      # .on = this thread may write while _plcCheckPending
+        self.plcRestartsDetected: int = 0
+
         # Database connection pool for reading machine settings
         self.dbConnectionPool: Union[ThreadedConnectionPool, None] = None
         self._initDatabaseConnectionPool()
@@ -504,7 +524,9 @@ class IOServer:
         self.connectPLC()
 
         time.sleep(2)
-        self.resetAll()
+        if not (self.clientForReads and self.clientForReads.connected):
+            self._plcCheckPending = True          # checked (and reset) as soon as the PLC is connected
+        self.resetForNextCycle("IOServer start")  # every per-cycle tag to its default, then CheckQRCode = True
 
         time.sleep(3)
         # no cycle yet: clear the log context left by a previous run (until the first QR code is accepted)
@@ -1063,7 +1085,20 @@ class IOServer:
                         tryToConnect = True
 
                 if tryToConnect:
-                    objRef.connectPLC(forceRenew=True)
+                    if not objRef._plcCheckPending:
+                        objRef._plcCheckPending = True
+                        message = (f"PLC connection lost in state {objRef.machineState.getCurrentState().name}; "
+                                   f"reference tag {objRef.referenceTag()}. Writes and reads on hold until the PLC is "
+                                   f"checked after the reconnect")
+                        printBoldRed(message)
+                        objRef.logger.error(message)
+                        objRef._audit(message)
+                    if objRef.connectPLC(forceRenew=True) is True:
+                        objRef._verifyPlcAfterReconnect()
+                elif objRef._plcCheckPending:
+                    objRef._verifyPlcAfterReconnect()
+                else:
+                    objRef._followReferenceTag()
 
         self.connectionCheckThread = threading.Thread(name=f'IOServer Connection Keep Alive Thread',
                                                       target=connectionCheckingLoop,
@@ -1203,12 +1238,8 @@ class IOServer:
             self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
-            self._resultResetScheduler.cancelAll()           # resetAll() resets every tag anyway
-            with self._awaitingTriggerResetLock:
-                self._awaitingTriggerReset.clear()
-            self.resetAll()
+            self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
             self._resetOpTimestamps()  # Clear cycle timing on abort
-            self.write_bool(IOServer.PLC_PC_CheckQRCode, True)
             self.lastAbortReason = reason
             self.abortCount += 1
 
@@ -1377,7 +1408,7 @@ class IOServer:
                     finalValue: float = IOServer.FALSE_FLOAT_VALUE
 
                     if ((objRef.clientForReads is not None) and objRef.clientForReads.connected
-                            and not objRef.connectionInProgress):
+                            and not objRef.connectionInProgress and not objRef._plcCheckPending):
                         tagsToBeRead, valueTypes = objRef.getCurrentTagsToBeRead()
                         if tagsToBeRead is not None:
                             # if (writeCounter % 3) == 0:
@@ -1404,6 +1435,8 @@ class IOServer:
 
                     if goAheadToProcessing:
                         objRef._auditRead(tagsToBeRead, allok if typeOfValues == "bool" else finalValue)
+                        if typeOfValues == "bool" and allok:
+                            objRef._notePlcTagTrue(tagsToBeRead)
                         if typeOfValues == "bool":
                             returnValue = objRef.process_current_read_state(allok)
                             if returnValue:
@@ -1717,13 +1750,13 @@ class IOServer:
 
                 returnValue = successfullySent
 
-        if self.machineState.getCurrentState() == MachineState.READ_QR_CODE:
-            # Cycle just completed: compute and log machine times, then reset for next cycle
+        if currentState != MachineState.READ_QR_CODE and self.machineState.getCurrentState() == MachineState.READ_QR_CODE:
+            # Cycle just completed (or was aborted meanwhile): log machine times, then reset for the next cycle
             if self._cycleInProgress:
                 self._computeAndLogCycleTimes()
                 self._resetOpTimestamps()
-            self.resetAll()
-            self.write_bool(IOServer.PLC_PC_CheckQRCode, True)
+            self.resetForNextCycle("cycle completed" if currentState == MachineState.READ_FREE_ROTATION_TORQUE_1
+                                   else f"back at READ_QR_CODE from {currentState.name}")
 
         return returnValue
 
@@ -2019,12 +2052,15 @@ class IOServer:
         """Write a boolean to a tag to the PLC."""
         if tag is None:
             return False
+        if self._writesBlocked():
+            return False
         if (self.clientForWrites is None) or (not self.clientForWrites.connected):
             return False
         try:
             with self.writingLock:
                 self.clientForWrites.write(tag, value)
             self._auditWrite(tag, value)
+            self._notePcWrite(tag, bool(value))
             if debug:
                 printBoldYellow(f"Wrote to bool tag {tag}: {value} in write_bool()")
             return True
@@ -2036,6 +2072,8 @@ class IOServer:
     def write_float(self, tag: str, value: float, debug: bool = True) -> bool:
         """Write a float to a tag to the PLC."""
         if tag is None:
+            return False
+        if self._writesBlocked():
             return False
         if (self.clientForWrites is None) or (not self.clientForWrites.connected):
             return False
@@ -2059,6 +2097,8 @@ class IOServer:
             if debug:
                 self.logger.error(f"Invalid input for tag {tag}: value {value} must be an integer")
                 printBoldRed(f"Invalid input for tag {tag}: value {value} must be an integer")
+            return False
+        if self._writesBlocked():
             return False
         if (self.clientForWrites is None) or (not self.clientForWrites.connected):
             return False
@@ -2084,80 +2124,224 @@ class IOServer:
         """Reset a tag to 0.0."""
         return self.write_float(tag=tag, value=0.0, debug=debug)
 
+    def perCycleTags(self) -> List[Tuple[str, type]]:
+        """Every per-cycle handshake tag with its type (bool -> False, float -> 0.0), in reset order. NOT included:
+        the state-2 cycle settings (written fresh in every cycle), the PLC's watch tag and the PC's connection-status
+        toggle. PLC_PC_CheckQRCode is included (set False here; resetForNextCycle() then arms it)."""
+        tags = [
+            (IOServer.PLC_PC_CheckQRCode, bool), (IOServer.PC_PLC_QRCodeCheckOK, bool), (IOServer.PC_PLC_QRCodeCheckDone, bool),
+            (IOServer.PLC_PC_CheckKnuckle, bool), (IOServer.PC_PLC_KnuckleCheckOK, bool), (IOServer.PC_PLC_KnuckleCheckDone, bool),
+            (IOServer.PLC_PC_CheckHub, bool), (IOServer.PC_PLC_HubCheckOK, bool), (IOServer.PC_PLC_HubCheckDone, bool),
+            (IOServer.PLC_PC_CheckHubAndSecondBearing, bool), (IOServer.PC_PLC_HubAndSecondBearingCheckOK, bool),
+            (IOServer.PC_PLC_HubAndSecondBearingCheckDone, bool),
+            (IOServer.PLC_PC_CheckNutAndPlateWasher, bool), (IOServer.PC_PLC_NutAndPlateWasherCheckOK, bool),
+            (IOServer.PC_PLC_NutAndPlateWasherCheckDone, bool),
+            (IOServer.PLC_PC_Station2TorqueValueSet, bool), (IOServer.PLC_PC_Station2TorqueValue, float),
+            (IOServer.PLC_PC_Station2RotationDuringTighteningDone, bool),
+            (IOServer.PLC_PC_CheckNoCapBunk, bool), (IOServer.PC_PLC_NoCapBunkCheckOK, bool), (IOServer.PC_PLC_NoCapBunkCheckDone, bool),
+            (IOServer.PLC_PC_ComponentPressDone, bool),
+            (IOServer.PLC_PC_CheckNoBunk, bool), (IOServer.PC_PLC_NoBunkCheckOK, bool), (IOServer.PC_PLC_NoBunkCheckDone, bool),
+            (IOServer.PLC_PC_CheckSplitPinAndWasher, bool), (IOServer.PC_PLC_SplitPinAndWasherCheckOK, bool),
+            (IOServer.PC_PLC_SplitPinAndWasherCheckDone, bool),
+            (IOServer.PLC_PC_CheckCap, bool), (IOServer.PC_PLP_CapCheckOK, bool), (IOServer.PC_PLC_CapCheckDone, bool),
+            (IOServer.PLC_PC_CheckBunk, bool), (IOServer.PC_PLC_BunkCheckOK, bool), (IOServer.PC_PLC_BunkCheckDone, bool),
+            (IOServer.PLC_PC_CapPressDone, bool),
+            (IOServer.PLC_PC_Station3TorqueValueSet, bool), (IOServer.PLC_PC_Station3TorqueValue, float),
+            (IOServer.PLC_PC_EmergencyAbort, bool),
+        ]
+        return [(t, k) for t, k in tags if t]          # an empty name = not on this PLC
+
     def resetAll(self, debug: bool = False) -> bool:
-        """Reset all tags to False if bool, or to 0.0 if float."""
-
-        # Reset current QR Code
+        """Set every per-cycle tag to its default (bool False, float 0.0), each written and read back
+        (_writeVerified). Stops at the first tag that cannot be written because the PLC is not connected.
+        Returns True only if every tag was written and verified; the tags that were not are logged."""
         self.currentQRCode = ""
+        failed: List[str] = []
+        for i, (tag, kind) in enumerate(self.perCycleTags()):
+            if not self._writeVerified(tag, False if kind is bool else 0.0):
+                failed.append(tag)
+                if not self._plcConnected():
+                    failed.extend(t for t, _ in self.perCycleTags()[i + 1:])
+                    break
+        if failed:
+            message = f"Reset to defaults: {len(failed)} tag(s) not written / verified: {', '.join(failed)}"
+            printBoldRed(message)
+            self.logger.error(message)
+            self._audit(message)
+        return not failed
 
-        # Step 0: QR Code
-        self.resetTagToFalse(IOServer.PLC_PC_CheckQRCode)
-        self.resetTagToFalse(IOServer.PC_PLC_QRCodeCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_QRCodeCheckDone)
+    def resetForNextCycle(self, reason: str) -> bool:
+        """The one routine for the end of a cycle, every abort and the IOServer start: cancel pending vision-result
+        resets, set every per-cycle tag to its default (resetAll, written and read back), then arm the QR code read
+        (PLC_PC_CheckQRCode = True, written and read back). The 6 state-2 settings are left as they are.
+        If anything could not be written and verified, the reset is marked incomplete and done again as soon as the
+        PLC connection is back (_verifyPlcAfterReconnect). Returns True if everything was written and verified."""
+        with self._asPrivileged():
+            self._resultResetScheduler.cancelAll()
+            with self._awaitingTriggerResetLock:
+                self._awaitingTriggerReset.clear()
+            allReset = self.resetAll()
+            qrArmed = self._plcConnected() and self._writeVerified(IOServer.PLC_PC_CheckQRCode, True)
+            with self._plcTrueLock:
+                self._plcTrueTags = [IOServer.PLC_PC_CheckQRCode] if qrArmed else []
+            self._resetIncomplete = not (allReset and qrArmed)
+        if self._resetIncomplete:
+            message = (f"Reset for the next cycle ({reason}) INCOMPLETE: tags reset {'yes' if allReset else 'NO'}, "
+                       f"CheckQRCode armed {'yes' if qrArmed else 'NO'}; done again when the PLC connection is back")
+            printBoldRed(message)
+            self.logger.error(message)
+        else:
+            message = f"Reset for the next cycle ({reason}): all per-cycle tags at their defaults, CheckQRCode armed"
+            printBoldGreen(message)
+            self.logger.info(message)
+        self._audit(message)
+        return not self._resetIncomplete
 
-        # Step 1: Knuckle
-        self.resetTagToFalse(IOServer.PLC_PC_CheckKnuckle)
-        self.resetTagToFalse(IOServer.PC_PLC_KnuckleCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_KnuckleCheckDone)
+    # ---------------------------------------------------------------- verified writes, PLC restart detection
+    def _plcConnected(self) -> bool:
+        return bool(self.clientForReads and self.clientForReads.connected and
+                    self.clientForWrites and self.clientForWrites.connected)
 
-        # Step 2: Hub
-        self.resetTagToFalse(IOServer.PLC_PC_CheckHub)
-        self.resetTagToFalse(IOServer.PC_PLC_HubCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_HubCheckDone)
+    @contextlib.contextmanager
+    def _asPrivileged(self):
+        """Writes from this thread go through even while _plcCheckPending (the check after a reconnect, and the
+        reset or abort it starts)."""
+        previous = getattr(self._privileged, "on", False)
+        self._privileged.on = True
+        try:
+            yield
+        finally:
+            self._privileged.on = previous
 
-        # Step 3: Hub and Second Bearing
-        self.resetTagToFalse(IOServer.PLC_PC_CheckHubAndSecondBearing)
-        self.resetTagToFalse(IOServer.PC_PLC_HubAndSecondBearingCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_HubAndSecondBearingCheckDone)
+    def _writesBlocked(self) -> bool:
+        return bool(getattr(self, "_plcCheckPending", False)) and not getattr(self._privileged, "on", False)
 
-        # Step 4: Nut and Plate Washer
-        self.resetTagToFalse(IOServer.PLC_PC_CheckNutAndPlateWasher)
-        self.resetTagToFalse(IOServer.PC_PLC_NutAndPlateWasherCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_NutAndPlateWasherCheckDone)
+    def _readFloatOrNone(self, tag: str) -> Optional[float]:
+        """Read a float from the PLC; None if it could not be read."""
+        if not tag or self.clientForReads is None or not self.clientForReads.connected:
+            return None
+        try:
+            with self.readingLock:
+                value = self.clientForReads.read(tag).value
+            return None if value is None else float(value)
+        except Exception as e:
+            printBoldRed(f"Could not read {tag}: {e}")
+            return None
 
-        # Step 5 & 10: Station 2 Torque
-        self.resetTagToFalse(IOServer.PLC_PC_Station2TorqueValueSet)
-        self.resetTagToZero(IOServer.PLC_PC_Station2TorqueValue)
-        if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
-            self.resetTagToFalse(IOServer.PLC_PC_Station2RotationDuringTighteningDone)
+    def _writeVerified(self, tag: str, value, attempts: int = None) -> bool:
+        """Write a bool or float and read it back, until the PLC holds the value (up to RESET_WRITE_ATTEMPTS).
+        Gives up at once if the PLC is not connected (the caller marks the work as incomplete)."""
+        attempts = IOServer.RESET_WRITE_ATTEMPTS if attempts is None else attempts
+        isBool = isinstance(value, bool)
+        lastSeen = None
+        for attempt in range(attempts):
+            if self.shutdown or not self._plcConnected():
+                return False
+            written = self.write_bool(tag, value, debug=False) if isBool else self.write_float(tag, float(value), debug=False)
+            if written:
+                lastSeen = self._readBoolOrNone(tag) if isBool else self._readFloatOrNone(tag)
+                if lastSeen is not None and (lastSeen == value if isBool
+                                             else abs(lastSeen - float(value)) <= IOServer.RESET_FLOAT_TOLERANCE):
+                    return True
+            time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+        printBoldRed(f"{tag}: wrote {value} {attempts} times, PLC holds {lastSeen}")
+        return False
 
-        # Step 7: No Cap Bunk
-        self.resetTagToFalse(IOServer.PLC_PC_CheckNoCapBunk)
-        self.resetTagToFalse(IOServer.PC_PLC_NoCapBunkCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_NoCapBunkCheckDone)
+    def _notePlcTagTrue(self, tags) -> None:
+        """The read loop saw these PLC_PC bools True (raised by the PLC): the newest becomes the reference."""
+        with self._plcTrueLock:
+            for tag in tags:
+                if tag in self._plcPcTagNames():
+                    if tag in self._plcTrueTags:
+                        self._plcTrueTags.remove(tag)
+                    self._plcTrueTags.append(tag)
 
-        # Step 8: Component Press Done
-        self.resetTagToFalse(IOServer.PLC_PC_ComponentPressDone)
+    def _notePcWrite(self, tag: str, value: bool) -> None:
+        """The PC wrote a PLC_PC bool: False removes it from the tags known to be True; True (arming CheckQRCode)
+        adds it."""
+        if tag not in self._plcPcTagNames():
+            return
+        with self._plcTrueLock:
+            if tag in self._plcTrueTags:
+                self._plcTrueTags.remove(tag)
+            if value:
+                self._plcTrueTags.append(tag)
 
-        # Step 9: No Bunk
-        self.resetTagToFalse(IOServer.PLC_PC_CheckNoBunk)
-        self.resetTagToFalse(IOServer.PC_PLC_NoBunkCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_NoBunkCheckDone)
+    def _plcPcTagNames(self) -> set:
+        names = getattr(self, "_plcPcNamesCache", None)
+        if names is None:
+            names = {getattr(IOServer, a) for a in dir(IOServer)
+                     if a.startswith("PLC_PC_") and isinstance(getattr(IOServer, a), str) and getattr(IOServer, a)}
+            names.discard(IOServer.PLC_PC_WatchTag)
+            self._plcPcNamesCache = names
+        return names
 
-        # Step 11: Split Pin and Washer
-        self.resetTagToFalse(IOServer.PLC_PC_CheckSplitPinAndWasher)
-        self.resetTagToFalse(IOServer.PC_PLC_SplitPinAndWasherCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_SplitPinAndWasherCheckDone)
+    def referenceTag(self) -> Optional[str]:
+        with self._plcTrueLock:
+            return self._plcTrueTags[-1] if self._plcTrueTags else None
 
-        # Step 12: Cap
-        self.resetTagToFalse(IOServer.PLC_PC_CheckCap)
-        self.resetTagToFalse(IOServer.PC_PLP_CapCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_CapCheckDone)
+    def _followReferenceTag(self) -> None:
+        """While connected (every connection check): if the PLC itself has set the reference tag back to False, it
+        is no longer a reference; the one before it becomes the reference. Done only while connected, so that a
+        tag found False AFTER a reconnect means the PLC restarted."""
+        for _ in range(4):
+            tag = self.referenceTag()
+            if tag is None:
+                return
+            value = self._readBoolOrNone(tag)
+            if value is not False:                 # True, or not readable now (the connection check handles that)
+                return
+            with self._plcTrueLock:
+                if self._plcTrueTags and self._plcTrueTags[-1] == tag:
+                    self._plcTrueTags.pop()
+            self._audit(f"PLC set {tag} back to False itself; reference now {self.referenceTag()}")
 
-        # Step 13: Bunk (used for both bunk checks)
-        self.resetTagToFalse(IOServer.PLC_PC_CheckBunk)
-        self.resetTagToFalse(IOServer.PC_PLC_BunkCheckOK)
-        self.resetTagToFalse(IOServer.PC_PLC_BunkCheckDone)
-
-        # Step 14: Cap Press Done
-        self.resetTagToFalse(IOServer.PLC_PC_CapPressDone)
-
-        # Step 15: Station 3 Torque
-        self.resetTagToFalse(IOServer.PLC_PC_Station3TorqueValueSet)
-        self.resetTagToZero(IOServer.PLC_PC_Station3TorqueValue)
-
-        # Emergency Abort
-        self.resetTagToFalse(IOServer.PLC_PC_EmergencyAbort)
+    def _verifyPlcAfterReconnect(self) -> None:
+        """After the PLC connection is back: did the PLC restart while it was lost?
+        The last PLC_PC tag known to be True (the reference) is read. Still True -> the PLC kept its state: the
+        cycle carries on in the same machine state. False (or no tag was known to be True) -> the PLC restarted:
+        a cycle in progress is aborted (QR code server, camera and frontend told, as for an emergency abort), every
+        per-cycle tag is reset and CheckQRCode armed. A reset left incomplete when the connection was lost is done
+        now. Until this check is done, only it can write to the PLC and the read loop does nothing."""
+        with self._asPrivileged():
+            state = self.machineState.getCurrentState()
+            reference = self.referenceTag()
+            if self._resetIncomplete and state in (MachineState.READ_QR_CODE, MachineState.WRITE_QR_CODE):
+                # no cycle under way yet (an incomplete reset leaves the machine at the QR code); once a cycle has
+                # started, the reference tag decides (below), so a running cycle is never reset without an abort
+                self._audit("PLC connection back: completing the reset that was left incomplete")
+                if self.resetForNextCycle("completing an incomplete reset after the PLC connection came back"):
+                    self._plcCheckPending = False
+                return
+            value = None
+            if reference is not None:
+                for _ in range(IOServer.REFERENCE_READ_ATTEMPTS):
+                    value = self._readBoolOrNone(reference)
+                    if value is not None:
+                        break
+                    time.sleep(IOServer.WRITE_RETRY_INTERVAL)
+                if value is None:
+                    printBoldRed(f"PLC connection back, but {reference} cannot be read yet; checking again")
+                    return                           # still pending; the connection check calls this again
+            if value is True:
+                message = (f"PLC connection back: {reference} is still True, so the PLC did not restart; "
+                           f"carrying on in state {state.name}")
+                printBoldGreen(message)
+                self.logger.info(message)
+                self._audit(message)
+                self._plcCheckPending = False
+                return
+            self.plcRestartsDetected += 1
+            why = (f"{reference} reads False" if reference is not None else "no PLC tag was known to be True")
+            reason = f"PLC restarted while the connection was lost ({why})"
+            printBoldRed(f"{reason}; machine state was {state.name}")
+            self.logger.error(f"{reason}; machine state was {state.name}")
+            if state in (MachineState.READ_QR_CODE,):
+                self.resetForNextCycle(reason)       # no cycle in progress: nothing to abort
+            else:
+                self.abortCycle(reason)             # QR server, queues, frontend, camera (end of cycle), reset
+            if not self._resetIncomplete:
+                self._plcCheckPending = False
 
     def _readStation2RotationDuringTighteningDone(self) -> Optional[bool]:
         """Read PLC_PC_Station2RotationDuringTighteningDone, which the PLC provides with the Station 2 torque value.

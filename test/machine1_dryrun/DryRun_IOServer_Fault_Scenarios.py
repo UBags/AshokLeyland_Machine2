@@ -55,6 +55,21 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      queues), exactly once per cycle, and none while the cycle runs. (The camera server then drops the top bearing
      profile it keeps in memory for the nut / washer check.)
 
+  I. PLC connection lost / PLC restarted / verified reset
+     I0: at start the PC resets every per-cycle tag and arms PLC_PC_CheckQRCode (written and read back).
+     I1: link lost between steps, PLC keeps its memory (the PLC keeps its triggers True here): writes and reads on
+         hold, after the reconnect the reference tag (last PLC_PC tag the PLC raised, CheckKnuckle) is still True ->
+         no abort, no reset, same machine state.
+     I2: link lost while the PC waits for a camera result that arrives during the outage: nothing is written until
+         the PLC has been checked; then OK and Done are written and the cycle carries on. The PLC dropping its own
+         trigger while connected moves the reference back to the previous tag.
+     I3: PLC restarts while the link is down, part-way through a cycle: the reference reads False -> cycle aborted
+         (QR server, frontend, camera told), every per-cycle tag at its default, CheckQRCode armed; the next cycle
+         writes the settings again and completes.
+     I4: PLC restarts while idle (waiting for the QR scan): detected, reset, CheckQRCode armed again.
+     I5: reset done while the link is down -> incomplete; completed as soon as the link is back.
+     I6: a tag the PLC does not take (write ignored) -> the reset reports it (written and read back, 5 attempts).
+
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -216,6 +231,7 @@ def writes_of(tags, since):
     return [(t, v) for t, v in WRITES[since:] if t in tags]
 
 time.sleep(6)          # IOServer __init__ sleeps 5 s before starting its threads
+WRITES_AT_START = list(WRITES)
 
 # =====================================================================================================
 def run_scenarios():
@@ -612,7 +628,10 @@ def run_vision_result_reset():
     with LOCK: TAGS[HUB_TRIG] = True                              # the PLC keeps the trigger True
     assert wait_for(lambda: TAGS[HUB_DONE] is True), "hub NOT OK Done timeout"
     tDone = time.time()
-    time.sleep(max(0.0, delay - 0.6 - (time.time() - tDone)))
+    # back in the picture state after the NOT OK, still within the delay (with a short delay, e.g. 0.6 s, a fixed
+    # sleep of delay - 0.6 s checked before the IOServer had gone back)
+    wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING, delay)
+    time.sleep(max(0.0, min(0.2, delay - 0.15 - (time.time() - tDone))))
     check("G hub NOT OK: during the delay the standing trigger does NOT retake the picture",
           PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING) == req0 + 1 and
           io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
@@ -698,11 +717,148 @@ def run_end_of_cycle():
     check("H a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
 
 
+def run_plc_connection():
+    """I. PLC connection lost / PLC restarted / verified reset."""
+    print("\n=== I. PLC connection lost / PLC restarted / verified reset ===", flush=True)
+    from _plc_sim import LINK, STUCK, plc_restart
+    WATCH, QRT = IOServer.PLC_PC_WatchTag, IOServer.PLC_PC_CheckQRCode
+    KN, KN_DONE = IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone
+    HUB, HUB_DONE, HUB_OK = IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone, IOServer.PC_PLC_HubCheckOK
+    state = lambda: io.machineState.getCurrentState()
+
+    def keep_check(trigger, done):
+        """The PLC raises the trigger and keeps it True until the end of the cycle."""
+        with LOCK: TAGS[trigger] = True
+        assert wait_for(lambda: TAGS[done] is True), f"timeout waiting for {done}"
+        time.sleep(0.3)
+
+    def not_default():
+        out = {}
+        for tag, kind in io.perCycleTags():
+            want = True if tag == QRT else (False if kind is bool else 0.0)
+            have = TAGS[tag]
+            if (have != want) if kind is bool else abs(float(have) - want) > 1e-3:
+                out[tag] = have
+        return out
+
+    def checked(timeout=10):
+        return wait_for(lambda: not io._plcCheckPending, timeout)
+
+    # I0
+    start_writes = [w for w in WRITES_AT_START if w[0] in (QRT, KN)]
+    check("I0 at start: per-cycle tags reset, then CheckQRCode armed by the PC",
+          (KN, False) in start_writes and (QRT, True) in start_writes and
+          start_writes.index((KN, False)) < start_writes.index((QRT, True)), str(start_writes[:6]))
+
+    # I1
+    time.sleep(0.5); TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    keep_check(KN, KN_DONE)
+    check("I1 waiting for the hub picture; reference = CheckKnuckle",
+          wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING and io.referenceTag() == KN, 3),
+          f"{state().name}, reference {io.referenceTag()}")
+    aborts0, restarts0, mark = io.abortCount, io.plcRestartsDetected, len(WRITES)
+    LINK["down"] = True
+    check("I1 connection loss detected; writes and reads on hold", wait_for(lambda: io._plcCheckPending, 5))
+    time.sleep(2.0)
+    LINK["down"] = False
+    check("I1 PLC checked after the reconnect", checked())
+    check("I1 CheckKnuckle still True -> no restart: no abort, no reset, same state",
+          io.abortCount == aborts0 and io.plcRestartsDetected == restarts0 and
+          state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING and (KN, False) not in writes_of((KN,), mark),
+          f"aborts {io.abortCount - aborts0}, restarts {io.plcRestartsDetected - restarts0}, {state().name}")
+
+    # I2
+    with LOCK: TAGS[HUB] = True
+    assert wait_for(lambda: state() == MS.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING, 3), "hub picture not requested"
+    LINK["down"] = True
+    time.sleep(2.0)                           # the camera answers (after 0.3 s) during the outage
+    check("I2 nothing written while the link is down", TAGS[HUB_DONE] is False and TAGS[HUB_OK] is False)
+    LINK["down"] = False
+    check("I2 PLC checked after the reconnect: CheckHub still True -> no restart", checked() and io.abortCount == aborts0
+          and io.plcRestartsDetected == restarts0)
+    check("I2 the camera result is written after the check (OK, then Done)",
+          wait_for(lambda: TAGS[HUB_DONE] is True and TAGS[HUB_OK] is True, 5))
+    check("I2 reference = CheckHub", io.referenceTag() == HUB, str(io.referenceTag()))
+    with LOCK: TAGS[HUB] = False               # the PLC drops its own trigger while connected
+    check("I2 PLC dropped CheckHub itself -> reference back to CheckKnuckle", wait_for(lambda: io.referenceTag() == KN, 4),
+          str(io.referenceTag()))
+    run_steps(first="TOP")
+    check("I1/I2 cycle completes", wrapped(), f"trace {TRACE}")
+
+    # I3
+    time.sleep(0.5); TRACE.clear()
+    plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+    keep_check(KN, KN_DONE); keep_check(HUB, HUB_DONE)
+    check("I3 waiting for the top bearing picture; reference = CheckHub",
+          wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING and io.referenceTag() == HUB, 3),
+          f"{state().name}, {io.referenceTag()}")
+    aborts0, restarts0 = io.abortCount, io.plcRestartsDetected
+    emerg0, qrab0, eoc = r.xlen(emergencyq), r.xlen(io2qrcodeabortq), time.time()
+    LINK["down"] = True; time.sleep(1.5)
+    plc_restart(WATCH)
+    time.sleep(1.0); LINK["down"] = False
+    check("I3 PLC restart detected (CheckHub reads False)", wait_for(lambda: io.plcRestartsDetected == restarts0 + 1, 10),
+          io.lastAbortReason)
+    check("I3 cycle aborted; QR code server and frontend told",
+          wait_for(lambda: io.abortCount == aborts0 + 1, 5) and r.xlen(io2qrcodeabortq) > qrab0 and
+          r.xlen(emergencyq) > emerg0 and "PLC restarted" in io.lastAbortReason, io.lastAbortReason)
+    check("I3 end-of-cycle message to the camera server", wait_for(lambda: any(t > eoc for t in END_OF_CYCLE_SEEN), 3))
+    check("I3 every per-cycle tag at its default, CheckQRCode armed", wait_for(lambda: not not_default(), 5), str(not_default()))
+    check("I3 reset complete and PLC check finished", not io._resetIncomplete and not io._plcCheckPending)
+    time.sleep(0.6); TRACE.clear(); mark = len(WRITES)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    written = {t for t, _ in writes_of(SETTING_TAGS, mark)}
+    check("I3 next cycle writes the cycle settings again", written == set(SETTING_TAGS), str(sorted(written)))
+    run_steps()
+    check("I3 a full cycle completes after the PLC restart", wrapped(), f"trace {TRACE}")
+
+    # I4
+    check("I4 idle, waiting for the QR scan; reference = CheckQRCode",
+          wait_for(lambda: state() == MS.WRITE_QR_CODE and io.referenceTag() == QRT, 5), f"{state().name}, {io.referenceTag()}")
+    restarts0 = io.plcRestartsDetected
+    LINK["down"] = True; time.sleep(1.5); plc_restart(WATCH); time.sleep(0.5); LINK["down"] = False
+    check("I4 PLC restart while idle detected and reset; CheckQRCode armed again",
+          wait_for(lambda: io.plcRestartsDetected == restarts0 + 1 and not not_default() and not io._plcCheckPending, 10),
+          f"{io.lastAbortReason}; {not_default()}")
+
+    # I5
+    time.sleep(1.0)
+    with LOCK:
+        for tag, kind in io.perCycleTags():
+            if tag != IOServer.PLC_PC_EmergencyAbort:
+                TAGS[tag] = 12.34 if kind is float else True
+    LINK["down"] = True
+    assert wait_for(lambda: io._plcCheckPending, 5), "link loss not detected"
+    complete = io.resetForNextCycle("dry run I5 (link down)")
+    check("I5 reset while the link is down -> reported incomplete", complete is False and io._resetIncomplete)
+    time.sleep(1.0); LINK["down"] = False
+    check("I5 completed as soon as the link is back: every tag at its default, CheckQRCode armed",
+          wait_for(lambda: not io._resetIncomplete and not io._plcCheckPending and not not_default(), 10), str(not_default()))
+
+    # I6
+    STUCK_TAG = IOServer.PC_PLC_CapCheckDone
+    with LOCK: TAGS[STUCK_TAG] = True
+    STUCK.add(STUCK_TAG)
+    t0 = time.time(); complete = io.resetForNextCycle("dry run I6 (a tag the PLC does not take)")
+    took = time.time() - t0
+    STUCK.clear()
+    check(f"I6 a tag the PLC does not take is reported (read back, {IOServer.RESET_WRITE_ATTEMPTS} attempts, {took:.1f} s)",
+          complete is False and io._resetIncomplete and TAGS[STUCK_TAG] is True)
+    check("I6 next reset with the tag accepted -> complete", io.resetForNextCycle("dry run I6 again") and not not_default(),
+          str(not_default()))
+    time.sleep(0.6); TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("I a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+
+
 try:
     run_scenarios()
     run_frontend_abort()
     run_vision_result_reset()
     run_end_of_cycle()
+    run_plc_connection()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 
