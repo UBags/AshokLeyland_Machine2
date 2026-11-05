@@ -1,7 +1,6 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import threading
 import requests
-from requests import Response
 from requests.auth import HTTPDigestAuth
 
 import ffmpeg
@@ -134,8 +133,14 @@ class RTSPCam():
                     try:
                         response = requests.get(url, auth=auth, timeout=10)
                     except Exception as e:
-                        response = Response.status_code = 400
-                    if response.status_code == 200:
+                        # No HTTP answer (camera unreachable, timeout, refused): report the real cause.
+                        response = None
+                        logBoth('logTakeNote', RTSPCam.logSource,
+                                f"In RTSPCam.{self.name}, ISAPI keepalive failed: {type(e).__name__}: {e}",
+                                Logger.PROBLEM)
+                    if response is None:
+                        pass
+                    elif response.status_code == 200:
                         logBoth('logDebug', RTSPCam.logSource,
                                 f"In RTSPCam.{self.name}, ISAPI keepalive OK",
                                 Logger.SUCCESS)

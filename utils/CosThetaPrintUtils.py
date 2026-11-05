@@ -5,6 +5,10 @@ from datetime import datetime
 from typing import Any
 
 from utils.CosThetaColors import CosThetaColors
+from utils.WindowsConsole import enableAnsiColours
+
+# Windows console: show the colour codes as colours, not as text (once per process; harmless if repeated)
+enableAnsiColours()
 # Import Logger lazily to avoid circular imports
 # from logutils.Logger import Logger
 
