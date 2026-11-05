@@ -47,8 +47,17 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      back to the QR code at once, stop a QR scan in progress, reset the handshake tags, NOT send an emergency message
      back to the frontend, ignore a late camera answer for the aborted step, and then run a full cycle.
 
-  G. Vision result, OK or NOT OK -> the IOServer sets the check's OK and Done back to False after
-     plc.vision.result.reset.delay.sec (not before); a retry's result written before that cancels the earlier reset.
+  G. PLC handshake resets, rules (a)-(d), after plc.handshake.reset.delay.sec (0.4 s), and the field issues:
+     G1 (b) Check-Done-OK, OK: OK=True, Done=True; Check, Done, OK set False after the delay (not before), in that order.
+     G2 (a) NOT OK: OK=False and Check=False written before Done=True; Done=False after the delay, OK stays False. The
+        PLC keeps the trigger True (2HB still held): no new picture while it is held (field issue 2: pictures retaken
+        every 1-2 s without a 2HB press); after it is released, the next press takes one picture.
+     G3 NOT OK, the PLC drops its trigger on Done and the operator presses 2HB again 0.35 s later (within the delay):
+        the press is acted on (field issue 1: the PC's delayed reset cleared the new trigger -> stall, Emergency needed).
+     G4 (c) Set-Value (torque 1): Set=False, Value=0.0 (and RotationDuringTighteningDone=False) after the delay.
+     G5 (d) Done (component press): Done=False after the delay.
+     G6 a camera answer for another picture state is ignored; the answer for this check then moves the cycle on.
+     G7 one scheduler thread for all the resets.
 
   H. End of cycle -> camera server: when the cycle completes, on an abort from the frontend and on an emergency abort
      from the PLC, the IOServer sends the end-of-cycle message on the camera queue (after an abort has cleared the
@@ -70,6 +79,7 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      I5: reset done while the link is down -> incomplete; completed as soon as the link is back.
      I6: a tag the PLC does not take (write ignored) -> the reset reports it (written and read back, 5 attempts).
 
+COSTHETA_DRYRUN_SCENARIOS=G (or F,G ...) runs only those groups (A-E together).
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
 import collections, sys, threading, time
@@ -158,7 +168,7 @@ def plc_check(trigger, done):
 
 def plc_value(setTag, valTag, value):
     with LOCK: TAGS[valTag] = value; TAGS[setTag] = True
-    time.sleep(2.5)       # IOServer resets these after 1.5/2.0 s via UpdateTagsToDefaultProcessor
+    time.sleep(2.5)       # IOServer resets these plc.handshake.reset.delay.sec after reading them (rule (c))
 
 def plc_pulse(tag):
     with LOCK: TAGS[tag] = True
@@ -199,15 +209,16 @@ def run_steps(first="KNUCKLE", last="FREE_ROT", retry_on_notok=()):
         elif name == "CAP_PRESS": plc_pulse(IOServer.PLC_PC_CapPressDone)
         elif name == "FREE_ROT": plc_value(IOServer.PLC_PC_Station3TorqueValueSet, IOServer.PLC_PC_Station3TorqueValue, 2.41)
         elif name in retry_on_notok:
+            notOkMark = len(WRITES)
             with LOCK: TAGS[trig] = True
             assert wait_for(lambda: TAGS[done] is True), f"timeout waiting for NOT OK Done of {name}"
             okAtNotOk = TAGS[okTag]
-            notOkMark = len(WRITES)
             NOTOK_SEEN[name] = okAtNotOk
-            # after a NOT OK the PC resets OK, Done and the trigger after plc.vision.result.reset.delay.sec; the
-            # operator presses the two-hand buttons again after that
-            assert wait_for(lambda: (trig, False) in writes_of((trig,), notOkMark), RESET_DELAY + 3), \
-                f"timeout waiting for the PC to reset {trig} after the NOT OK of {name}"
+            # rule (a): the PC set the trigger False with the NOT OK (before Done) and sets Done False after
+            # plc.handshake.reset.delay.sec; the operator presses the two-hand buttons again after that
+            assert (trig, False) in writes_of((trig,), notOkMark), f"the PC did not reset {trig} with the NOT OK of {name}"
+            assert wait_for(lambda: TAGS[done] is False, RESET_DELAY + 3), f"Done of {name} not reset after the NOT OK"
+            time.sleep(0.25)                         # the read loop sees the trigger False (one read interval)
             plc_check(trig, done)                    # retry
             RETRY_OK[name] = TAGS[okTag]
         else:
@@ -215,7 +226,7 @@ def run_steps(first="KNUCKLE", last="FREE_ROT", retry_on_notok=()):
 
 NOTOK_SEEN, RETRY_OK = {}, {}
 from Configuration import CosThetaConfigurator as _C
-RESET_DELAY = _C.getInstance().getPlcVisionResultResetDelay()
+RESET_DELAY = _C.getInstance().getPlcHandshakeResetDelay()
 
 def wrapped():
     return wait_for(lambda: 28 in TRACE and TRACE[-1] in (1, 2), timeout=10)
@@ -597,85 +608,153 @@ def run_frontend_abort():
 
 
 def run_vision_result_reset():
-    """G. After a vision check's result (OK or NOT OK) was written, the IOServer sets its OK and Done tags back to
-    False after plc.vision.result.reset.delay.sec (default 2 s); a retry's result written before that cancels it."""
+    """G. PLC handshake resets (rules (a)-(d)) and the two field issues; see the module docstring."""
     from Configuration import CosThetaConfigurator
-    delay = CosThetaConfigurator.getInstance().getPlcVisionResultResetDelay()
-    print(f"\n=== G. Vision result (OK or NOT OK) -> OK and Done set back to False after {delay} s ===", flush=True)
-    KN_OK, KN_DONE = IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone
-    HUB_OK, HUB_DONE = IOServer.PC_PLC_HubCheckOK, IOServer.PC_PLC_HubCheckDone
+    delay = CosThetaConfigurator.getInstance().getPlcHandshakeResetDelay()
+    lo, hi = delay - 0.15, delay + 0.8                      # tolerance on "after the delay"
+    print(f"\n=== G. Handshake resets after {delay} s, rules (a)-(d); field issues 1 and 2 ===", flush=True)
+    MSP = MS
+    def ordered(writes, wanted):                            # wanted appear in this order (other writes may interleave)
+        i = 0
+        for w in writes:
+            if i < len(wanted) and w == wanted[i]:
+                i += 1
+        return i == len(wanted)
+    def timed_writes(tags, since, timeout):
+        """Wait until every (tag, value) in tags is written after index since; return seconds taken or None."""
+        t0 = time.time()
+        ok_ = wait_for(lambda: all(tv in writes_of([t for t, _ in tags], since) for tv in tags), timeout)
+        return (time.time() - t0) if ok_ else None
     assert wait_for(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 10)
     TRACE.clear()
-    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING].append(notok)
     plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+
+    # G1 (b): knuckle OK
+    KT, KO, KD = IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone
     mark = len(WRITES)
-    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = True
-    assert wait_for(lambda: TAGS[KN_DONE] is True), "knuckle Done timeout"
+    with LOCK: TAGS[KT] = True                              # the PLC raises the trigger and keeps it (PC resets it)
+    assert wait_for(lambda: TAGS[KD] is True), "knuckle Done timeout"
     tDone = time.time()
-    with LOCK: TAGS[IOServer.PLC_PC_CheckKnuckle] = False        # the PLC drops its trigger, NOT the PC's tags
-    time.sleep(max(0.0, delay - 0.6 - (time.time() - tDone)))
-    early = writes_of((KN_OK, KN_DONE), mark)
-    check(f"G knuckle OK: OK / Done still True {delay - 0.6:.1f} s after Done (no reset yet)",
-          (KN_OK, False) not in early and (KN_DONE, False) not in early and TAGS[KN_OK] is True and TAGS[KN_DONE] is True,
-          str(early))
-    reset = wait_for(lambda: TAGS[KN_OK] is False and TAGS[KN_DONE] is False, 2.0)
+    time.sleep(max(0.0, lo - 0.1))
+    early = writes_of((KT, KO, KD), mark)
+    check(f"G1 (b) knuckle OK: OK=True then Done=True; nothing reset {lo - 0.1:.2f} s after Done",
+          early == [(KO, True), (KD, True)], str(early))
+    took = timed_writes([(KT, False), (KD, False), (KO, False)], mark, 3)
     elapsed = time.time() - tDone
-    check(f"G knuckle OK: OK and Done set back to False by the PC about {delay} s after Done ({elapsed:.1f} s)",
-          reset and delay - 0.3 <= elapsed <= delay + 1.0, str(writes_of((KN_OK, KN_DONE), mark)))
-    # hub: NOT OK -> after the delay OK, Done AND the trigger set to False; the standing trigger is NOT acted on
-    HUB_TRIG = IOServer.PLC_PC_CheckHub
-    mark = len(WRITES); req0 = PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
-    with LOCK: TAGS[HUB_TRIG] = True                              # the PLC keeps the trigger True
-    assert wait_for(lambda: TAGS[HUB_DONE] is True), "hub NOT OK Done timeout"
+    w = writes_of((KT, KO, KD), mark)
+    check(f"G1 (b) ... Check, Done, OK set False about {delay} s after Done ({elapsed:.2f} s), in that order",
+          took is not None and lo <= elapsed <= hi and w[2:] == [(KT, False), (KD, False), (KO, False)], str(w))
+
+    # G2 (a) + field issue 2: hub NOT OK, the PLC keeps the trigger True while the 2HB are held
+    HT, HO, HD = IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckOK, IOServer.PC_PLC_HubCheckDone
+    HS = MSP.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING
+    CAMERA_PLAN[HS].append(notok)
+    mark = len(WRITES); req0 = PICTURE_REQUESTS.count(HS)
+    holding = {"on": True}
+    def hold():                                              # the PLC re-asserts the trigger every 10 ms
+        while holding["on"]:
+            with LOCK: TAGS[HT] = True
+            time.sleep(0.01)
+        with LOCK: TAGS[HT] = False
+    threading.Thread(target=hold, daemon=True).start()
+    assert wait_for(lambda: TAGS[HD] is True), "hub NOT OK Done timeout"
     tDone = time.time()
-    # back in the picture state after the NOT OK, still within the delay (with a short delay, e.g. 0.6 s, a fixed
-    # sleep of delay - 0.6 s checked before the IOServer had gone back)
-    wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING, delay)
-    time.sleep(max(0.0, min(0.2, delay - 0.15 - (time.time() - tDone))))
-    check("G hub NOT OK: during the delay the standing trigger does NOT retake the picture",
-          PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING) == req0 + 1 and
-          io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
-          f"{PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING) - req0} requests, "
-          f"{io.machineState.getCurrentState().name}")
-    reset = wait_for(lambda: TAGS[HUB_TRIG] is False and TAGS[HUB_DONE] is False and TAGS[HUB_OK] is False, 2.0)
+    w = writes_of((HT, HO, HD), mark)
+    check("G2 (a) hub NOT OK: OK=False, then Check=False, then Done=True (the trigger cleared before Done)",
+          w[:3] == [(HO, False), (HT, False), (HD, True)], str(w))
+    took = timed_writes([(HD, False)], mark, 3)
     elapsed = time.time() - tDone
-    w = writes_of((HUB_OK, HUB_DONE, HUB_TRIG), mark)
-    check(f"G hub NOT OK: after about {delay} s ({elapsed:.1f} s) OK, Done and the trigger {HUB_TRIG} set to False by the PC",
-          reset and w[:2] == [(HUB_OK, False), (HUB_DONE, True)] and
-          w[-3:] == [(HUB_OK, False), (HUB_DONE, False), (HUB_TRIG, False)] and delay - 0.3 <= elapsed <= delay + 1.0, str(w))
-    time.sleep(0.5)
-    check("G hub NOT OK: still no new picture until the next 2HB press",
-          PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING) == req0 + 1)
+    w = writes_of((HT, HO, HD), mark)
+    check(f"G2 (a) ... Done=False about {delay} s after Done ({elapsed:.2f} s); OK stays False (not written again)",
+          took is not None and lo <= elapsed <= hi and w.count((HO, True)) == 0 and w[-1] == (HD, False), str(w))
+    time.sleep(1.5)                                          # 2HB still held: the PLC keeps the trigger True
+    check("G2 field issue 2: trigger held True after the NOT OK -> no picture retaken (1.5 s)",
+          PICTURE_REQUESTS.count(HS) == req0 + 1 and io.machineState.getCurrentState() == HS,
+          f"{PICTURE_REQUESTS.count(HS) - req0} pictures, {io.machineState.getCurrentState().name}")
+    holding["on"] = False; time.sleep(0.4)                   # released
+    check("G2 ... released: still no picture", PICTURE_REQUESTS.count(HS) == req0 + 1)
     mark = len(WRITES)
-    plc_check(HUB_TRIG, HUB_DONE)                                 # next 2HB press: retaken, answered OK
-    w = writes_of((HUB_OK, HUB_DONE, HUB_TRIG), mark)
-    check("G hub retry OK (next 2HB press): OK and Done set back to False after the delay; the trigger is left to the PLC",
-          wait_for(lambda: (HUB_OK, False) in writes_of((HUB_OK,), mark) and (HUB_DONE, False) in writes_of((HUB_DONE,), mark),
-                   delay + 2.0) and (HUB_TRIG, False) not in writes_of((HUB_TRIG,), mark),
-          str(writes_of((HUB_OK, HUB_DONE, HUB_TRIG), mark)))
-    # top bearing: a 2HB press DURING the delay after a NOT OK is not acted on (the PC then resets the trigger)
-    TOP_TRIG, TOP_OK, TOP_DONE = (IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckOK,
-                                  IOServer.PC_PLC_HubAndSecondBearingCheckDone)
-    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING].append(notok)
-    mark = len(WRITES); req0 = PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
-    with LOCK: TAGS[TOP_TRIG] = True
-    assert wait_for(lambda: TAGS[TOP_DONE] is True), "top bearing NOT OK Done timeout"
-    with LOCK: TAGS[TOP_TRIG] = False
-    time.sleep(0.3)
-    with LOCK: TAGS[TOP_TRIG] = True                              # 2HB pressed again within the delay
-    assert wait_for(lambda: (TOP_TRIG, False) in writes_of((TOP_TRIG,), mark), delay + 2.0), "trigger not reset"
-    check("G 2HB pressed during the delay after a NOT OK: not acted on; the PC resets the trigger after the delay",
-          PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING) == req0 + 1 and TAGS[TOP_TRIG] is False,
-          str(writes_of((TOP_OK, TOP_DONE, TOP_TRIG), mark)))
-    plc_check(TOP_TRIG, TOP_DONE)                                 # pressed again after the delay: retaken, OK
-    check("G ... pressed again after the delay: picture retaken and answered OK",
-          PICTURE_REQUESTS.count(MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING) == req0 + 2 and
-          wait_for(lambda: io.machineState.getCurrentState().value >= MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER.value, 3),
+    plc_check(HT, HD)                                        # next 2HB press: one picture, answered OK
+    check("G2 ... next 2HB press: exactly one more picture, answered OK, on to the top bearing",
+          PICTURE_REQUESTS.count(HS) == req0 + 2 and (HO, True) in writes_of((HO,), mark) and
+          wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, 3),
+          f"{PICTURE_REQUESTS.count(HS) - req0} pictures, {io.machineState.getCurrentState().name}")
+
+    # G3 field issue 1: top bearing NOT OK; the PLC drops its trigger on Done; 2HB pressed again 0.35 s later
+    TT, TO, TD = (IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckOK,
+                  IOServer.PC_PLC_HubAndSecondBearingCheckDone)
+    TS = MSP.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING
+    CAMERA_PLAN[TS].append(notok)
+    mark = len(WRITES); req0 = PICTURE_REQUESTS.count(TS)
+    with LOCK: TAGS[TT] = True
+    assert wait_for(lambda: TAGS[TD] is True), "top bearing NOT OK Done timeout"
+    with LOCK: TAGS[TT] = False
+    time.sleep(0.35)
+    with LOCK: TAGS[TT] = True                               # pressed again within the delay
+    moved = wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, 5)
+    w = writes_of((TT, TO, TD), mark)
+    check("G3 field issue 1: 2HB pressed 0.35 s after the NOT OK -> picture retaken, OK, cycle moves on (no stall)",
+          moved and PICTURE_REQUESTS.count(TS) == req0 + 2 and (TO, True) in w, f"{w}; {io.machineState.getCurrentState().name}")
+    check("G3 ... the NOT OK's Done went False before the retry's Done=True (the PLC sees a new Done)",
+          ordered(w, [(TD, True), (TD, False), (TO, True), (TD, True)]), str(w))
+    with LOCK: TAGS[TT] = False
+
+    # nut (plain), then G4 (c): torque 1
+    plc_check(IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone)
+    ST, SV, RD = IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, \
+        IOServer.PLC_PC_Station2RotationDuringTighteningDone
+    assert wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_TIGHTENING_TORQUE_1_DONE, 5)
+    mark = len(WRITES)
+    with LOCK: TAGS[SV] = 19.08; TAGS[ST] = True
+    if RD: TAGS[RD] = True
+    assert wait_for(lambda: io.machineState.getCurrentState().value > MSP.READ_TIGHTENING_TORQUE_1.value, 5), "torque 1 not read"
+    tRead = time.time()
+    resets = [(ST, False), (SV, 0.0)] + ([(RD, False)] if RD else [])
+    took = timed_writes(resets, mark, 3)
+    elapsed = time.time() - tRead
+    check(f"G4 (c) torque 1 read -> Set=False, Value=0.0{', RotationDone=False' if RD else ''} about {delay} s later "
+          f"({elapsed:.2f} s)", took is not None and lo <= elapsed <= hi, str(writes_of([t for t, _ in resets], mark)))
+
+    # bunk for component press (plain), then G5 (d): component press Done
+    plc_check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
+    CPD = IOServer.PLC_PC_ComponentPressDone
+    assert wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_COMPONENT_PRESS_DONE, 5)
+    mark = len(WRITES)
+    with LOCK: TAGS[CPD] = True                              # the PLC keeps it True; the PC resets it
+    assert wait_for(lambda: io.machineState.getCurrentState() != MSP.READ_COMPONENT_PRESS_DONE, 5), "press Done not read"
+    tRead = time.time()
+    took = timed_writes([(CPD, False)], mark, 3)
+    elapsed = time.time() - tRead
+    check(f"G5 (d) component press Done read -> Done=False about {delay} s later ({elapsed:.2f} s)",
+          took is not None and lo <= elapsed <= hi and TAGS[CPD] is False, str(writes_of((CPD,), mark)))
+
+    # G6: a camera answer for another picture state is not this check's result
+    NB = MSP.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK
+    NT, NO, ND = IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckOK, IOServer.PC_PLC_NoBunkCheckDone
+    assert wait_for(lambda: io.machineState.getCurrentState() == NB, 5)
+    PAUSE.set(); time.sleep(0.3)
+    mark = len(WRITES)
+    with LOCK: TAGS[NT] = True
+    assert wait_for(lambda: io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNK, 5)
+    rr = Redis('localhost', 6379)
+    sendDataFromCameraServerToIOServer(rr, result=ok, currentMachineState=MSP.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
+    time.sleep(1.0)
+    check("G6 camera answer for the knuckle while waiting for the no-bunk result: ignored (nothing written, no move)",
+          io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNK and writes_of((NO, ND), mark) == [],
+          f"{io.machineState.getCurrentState().name} {writes_of((NO, ND), mark)}")
+    sendDataFromCameraServerToIOServer(rr, result=ok, currentMachineState=NB)
+    moved = wait_for(lambda: TAGS[ND] is True, 3)
+    rr.delete(io2cameraq)                                    # the take-picture request the paused camera did not see
+    with LOCK: TAGS[NT] = False
+    PAUSE.clear()
+    check("G6 ... the answer for the no-bunk picture: OK, Done written, on to tightening torque 2",
+          moved and wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_TIGHTENING_TORQUE_2_DONE, 3),
           io.machineState.getCurrentState().name)
-    check("G one scheduler thread for all the resets (no thread per reset)",
-          sum(1 for th in threading.enumerate() if th.name == "Vision Result Reset Scheduler") == 1 and
+    time.sleep(delay + 0.3)
+    check("G7 one scheduler thread for all the resets (no thread per reset)",
+          sum(1 for th in threading.enumerate() if th.name == "PLC Handshake Reset Scheduler") == 1 and
           not any(th.name.startswith("Reset ") for th in threading.enumerate()))
-    run_steps(first="NUT")
+    run_steps(first="TORQUE2")
     check("G cycle completes", wrapped(), f"trace {TRACE}")
 
 
@@ -853,12 +932,18 @@ def run_plc_connection():
     check("I a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
 
 
+# COSTHETA_DRYRUN_SCENARIOS=G (or e.g. "F,G"): run only these groups (A-E are one group); default: all
+import os as _os
+_ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
+def _wanted(*letters):
+    return not _ONLY or bool(_ONLY & set(letters))
+
 try:
-    run_scenarios()
-    run_frontend_abort()
-    run_vision_result_reset()
-    run_end_of_cycle()
-    run_plc_connection()
+    if _wanted("A", "B", "C", "D", "E"): run_scenarios()
+    if _wanted("F"): run_frontend_abort()
+    if _wanted("G"): run_vision_result_reset()
+    if _wanted("H"): run_end_of_cycle()
+    if _wanted("I"): run_plc_connection()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

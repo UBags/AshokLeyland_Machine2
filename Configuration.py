@@ -2729,6 +2729,7 @@ class CosThetaConfigurator():
     PLC_DEBUG_KEY = "plc.debug"
     PLC_SLEEPTIME_BETWEEN_OK_AND_DONE_KEY = "plc.sleeptime.between.ok.and.done"
     PLC_VISION_RESULT_RESET_DELAY_KEY = "plc.vision.result.reset.delay.sec"
+    PLC_HANDSHAKE_RESET_DELAY_KEY = "plc.handshake.reset.delay.sec"
 
     # ==================== Check QR Methods (Step 1) ====================
     @classmethod
@@ -2965,14 +2966,21 @@ class CosThetaConfigurator():
             return False
 
     @classmethod
-    def getPlcVisionResultResetDelay(cls) -> float:
-        """Seconds after a vision check's result (OK=True/False, Done=True) was written to the PLC before the IOServer
-        sets OK and Done back to False, for OK and NOT OK (plc.vision.result.reset.delay.sec). Read at each use."""
+    def getPlcHandshakeResetDelay(cls) -> float:
+        """Seconds after a PLC handshake before the IOServer resets its tags (plc.handshake.reset.delay.sec, 0.4):
+        rules (a)-(d) - Check-Done-OK after a NOT OK (Done) or an OK (Check, Done, OK), Set-Value after the value was
+        read (Set False, Value 0.0), a press Done after it was read. Read at each use, so a change applies at once."""
         try:
-            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_VISION_RESULT_RESET_DELAY_KEY,
-                                                                default="2.0")))
+            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_HANDSHAKE_RESET_DELAY_KEY,
+                                                                default="0.4")))
         except Exception as e:
-            return 2.0
+            return 0.4
+
+    @classmethod
+    def getPlcVisionResultResetDelay(cls) -> float:
+        """Superseded by getPlcHandshakeResetDelay() (plc.vision.result.reset.delay.sec is no longer in the properties
+        files); kept for callers of the earlier name, and returns the same value."""
+        return cls.getPlcHandshakeResetDelay()
 
     @classmethod
     def getPlcSleepTimeBetweenOKAndDone(cls) -> float:

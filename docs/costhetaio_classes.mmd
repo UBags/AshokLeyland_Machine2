@@ -1,0 +1,176 @@
+---
+title: costhetaio - PLC IO classes (commonplc, allenbradley, siemens)
+config:
+  layout: elk
+---
+classDiagram
+    direction TB
+
+    namespace commonplc {
+        class PLCIOServer {
+            <<the IOServer, both PLCs>>
+            +PLC_PC_* / PC_PLC_* : tag names, class attributes from the vendor configuration
+            +vendor : str
+            +dataIOForReads : PLCDataIO
+            +dataIOForWrites : PLCDataIO
+            +machineState : MachineStateMachine
+            -_resultResetScheduler : DelayedJobScheduler
+            +connectPLC(forceRenew)
+            +read_bool / read_float / read_int()
+            +write_bool / write_float / write_int()
+            +perform_write_state_action(tags, result)
+            +scheduleVisionResultReset(tags, state, result)
+            +scheduleTagReset(key, resets, why)
+            +resetForNextCycle(reason, keepPendingResets)
+            +abortCycle(reason)
+            +tagNamesUsed()$
+            +launch...Thread() x10
+        }
+        class PLCDataIO {
+            <<abstract>>
+            +ip : str
+            +name : str
+            -_lock : RLock
+            +open()
+            +close()
+            +connected : bool
+            +read(tag) value
+            +write(tag, value)
+            +readMany(tags) dict
+            +checkTagConfiguration(tagNames)$
+            +missingTags(names) list
+            +addressFor(tag) str
+            #_open()*
+            #_close()*
+            #_isConnected()*
+            #_read(tag)*
+            #_write(tag, value)*
+        }
+        class PLCIOError {
+            <<exception>>
+        }
+        class PLCDataIOFactory {
+            <<module>>
+            +plcVendor() str
+            +plcDataIOClass(vendor, mock) type
+            +createPLCDataIO(ip, name, vendor, mock) PLCDataIO
+        }
+        class MockPLCDataIO {
+            +plc : MockPLC
+        }
+        class MockPLC {
+            <<singleton>>
+            +open() / close() / connected
+            +read(tag) MockTagResult
+            +write(tag, value)
+            +get_tag() / set_tag()
+            +reset_all_tags()
+        }
+        class MockTagResult
+        class DelayedJobScheduler {
+            <<one thread>>
+            +schedule(key, delay, function, info)
+            +cancel(key)
+            +runNow(key)
+            +cancelAll()
+            +pendingInfos()
+        }
+        class UpdateTagsToDefaultProcessor {
+            <<kept, unused>>
+            +processItem(request)
+        }
+        class _FileLogAdapter {
+            +debug / info / warning / error / critical()
+        }
+    }
+
+    namespace allenbradley {
+        class AllenBradleyPLCDataIO {
+            -_driver : LogixDriver
+            +missingTags(names) list
+            +readRaw(*tags)
+            +readArray(name, n)
+            +readArraySlice(name, i, n)
+            +findPIDs() list
+            +printDataTypeAttributes()
+        }
+        class IOServer_ModbusTCP {
+            <<standalone prototype, unused, old states>>
+        }
+    }
+
+    namespace siemens {
+        class SiemensPLCDataIO {
+            -_backend : PyS7PLCBackend
+            +propertiesPath : str
+            +checkTagConfiguration(tagNames)$
+            +addressFor(tag) str
+            +findPIDs() list
+            +printTagMap()
+        }
+        class PyS7PLCBackend {
+            <<plc_backend.py>>
+            -_client : S7Client
+            -_tagmap : tag to (address, type, dir)
+            +open() / close() / connected
+            +read(*tags) _TagValue
+            +write(tag, value)
+            +address_for(tag) str
+        }
+        class _TagValue {
+            +tag / value / error
+        }
+        class plc_backend {
+            <<module>>
+            +load_tag_map(path)
+            +parse_address(address)
+            +safe_read_one(client, address)
+        }
+        class s7_tools {
+            <<siemens.test: command line only>>
+            s7_tag_check.py
+            s7_read_all_tags.py
+            s7_smoke_test.py
+        }
+    }
+
+    class LogixDriver {
+        <<pycomm3>>
+    }
+    class S7Client {
+        <<pyS7>>
+    }
+    class GenericQueueProcessor {
+        <<processors>>
+    }
+    class MachineStateMachine {
+        <<statemachine, 28 states>>
+    }
+    class IOServerProperties_yaml {
+        <<tag name to DB address>>
+    }
+
+    PLCDataIO <|-- AllenBradleyPLCDataIO : extends
+    PLCDataIO <|-- SiemensPLCDataIO : extends
+    PLCDataIO <|-- MockPLCDataIO : extends
+    PLCDataIO ..> PLCIOError : raises
+    PLCIOServer "1" o-- "2" PLCDataIO : reads / writes
+    PLCIOServer ..> PLCDataIOFactory : creates its PLCDataIO
+    PLCDataIOFactory ..> AllenBradleyPLCDataIO : plc.vendor=allenbradley
+    PLCDataIOFactory ..> SiemensPLCDataIO : plc.vendor=siemens
+    PLCDataIOFactory ..> MockPLCDataIO : mockInstance=True
+    PLCIOServer *-- DelayedJobScheduler : handshake resets
+    PLCIOServer *-- UpdateTagsToDefaultProcessor
+    PLCIOServer *-- _FileLogAdapter : logger
+    PLCIOServer *-- MachineStateMachine
+    UpdateTagsToDefaultProcessor --|> GenericQueueProcessor : extends
+    MockPLCDataIO --> MockPLC
+    MockPLC ..> MockTagResult
+    AllenBradleyPLCDataIO *-- LogixDriver
+    SiemensPLCDataIO *-- PyS7PLCBackend
+    PyS7PLCBackend *-- S7Client
+    PyS7PLCBackend ..> _TagValue
+    PyS7PLCBackend ..> plc_backend : uses
+    plc_backend ..> IOServerProperties_yaml : reads
+    s7_tools ..> PyS7PLCBackend : uses
+    s7_tools ..> PLCIOServer : tagNamesUsed()

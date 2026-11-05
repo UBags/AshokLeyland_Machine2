@@ -278,8 +278,13 @@ class TakePictures(GenericQueueProcessor):
     def processItem(self, item : Any) -> Any :
         logBoth('logDebug', TakePictures.logSource, f"In TakePictures, about to process item. Camera status is {self.camera.connected}", Logger.GENERAL)
         if not self.camera.connected:
-            return {timeKeyString: None, FIRST_PICTURE: None, SECOND_PICTURE: None,
-             THIRD_PICTURE: None, currentMachineStateKeyString: MachineState.INVALID_STATE}
+            # no pictures, but the answer must still name the picture state the IOServer asked for: it then gets a
+            # NOT OK for that check (and the PLC its NOT OK handshake) instead of waiting for an answer that never comes
+            logBoth('logWarning', TakePictures.logSource, "Camera not connected: no pictures; the check will be NOT OK",
+                    Logger.RISK)
+            return {timeKeyString: item[timeKeyString] if isinstance(item, dict) else None, FIRST_PICTURE: None,
+                    SECOND_PICTURE: None, THIRD_PICTURE: None,
+                    currentMachineStateKeyString: self._requestedState(item)}
         if item is not None:
             try:
                 firstPic: Union[None | np.ndarray] = None
@@ -334,7 +339,15 @@ class TakePictures(GenericQueueProcessor):
                         f"Could not take pictures in TakePictures.{self.name} as item is None",
                         Logger.RISK)
         return {timeKeyString: None, FIRST_PICTURE: None, SECOND_PICTURE: None,
-                THIRD_PICTURE: None, currentMachineStateKeyString: MachineState.INVALID_STATE}
+                THIRD_PICTURE: None, currentMachineStateKeyString: self._requestedState(item)}
+
+    @staticmethod
+    def _requestedState(item) -> MachineState:
+        """The picture state of a take-picture request (INVALID_STATE if the request has none)."""
+        try:
+            return item[currentMachineStateKeyString] if isinstance(item, dict) else MachineState.INVALID_STATE
+        except Exception:
+            return MachineState.INVALID_STATE
 
     def postWorkLoop(self):
         if self.monitorRedisQueueForStopping:

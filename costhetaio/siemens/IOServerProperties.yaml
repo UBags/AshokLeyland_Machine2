@@ -1,5 +1,5 @@
 # =====================================================================================================================
-# IOServerProperties.yaml - Siemens S7-1515: tag name -> address, for costhetaio/siemens/IOServer.py
+# IOServerProperties.yaml - Siemens S7-1515: tag name -> address, for SiemensPLCDataIO (plc_backend.py)
 # ---------------------------------------------------------------------------------------------------------------------
 # Source: 'HUb_and_Knuckle_Revised_Assembly_Process.xlsx', last column (DB500); final addresses as agreed 2026-10-31.
 # The six state-2 cycle settings are in DB101 (addresses given 2026-10-31); everything else is in DB500.

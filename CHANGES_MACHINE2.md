@@ -1825,3 +1825,76 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   `xvfb-run`).
 - **Verified (Python 3.12 + Tk under Xvfb here):** Mock window 14/14 in 12 of 12 runs (3 x both folders x both vendors;
   before the tracer / QR fixes 3 of 4 runs failed one way or another); Real-PLC window 7/7 on both folders and vendors.
+
+## 78. PLC handshake rules (a)-(d); knuckle NOT OK stall and hub retake loop fixed; costhetaio review; class diagram (2026-11-06)
+- **Field issues (Machine 2), reproduced in the simulator before any change** (two PLC behaviours, camera NOT OK at
+  the knuckle):
+  1. **NOT OK -> neither forward nor back (Emergency needed).** After a NOT OK the IOServer ignored the trigger and,
+     `plc.vision.result.reset.delay.sec` (0.6 s) later, wrote Check = False. A 2HB press within that time raised Check
+     again, was ignored, and was then cleared by the PC: the PLC waited for a result, the IOServer for a trigger.
+     Reproduced: 2HB pressed 0.3 s after the NOT OK -> stall.
+  2. **Wrong hub -> pictures every 1-2 s without a 2HB press.** With a PLC that keeps Check True (2HB held, or a
+     program holding it), the PC's Check = False was overwritten at once and every reset meant another picture.
+     Reproduced: 7 pictures in 8 s from one press (one every 1.2 s).
+  3. **State on a failure:** correct (a NOT OK goes back to the take-picture state); the stall was the trigger, not
+     the state.
+- **Rules, one setting `plc.handshake.reset.delay.sec` = 0.4 (all three properties files; replaces
+  `plc.vision.result.reset.delay.sec`; read at each use).** Every delayed reset is a job of the one scheduler thread
+  ("PLC Handshake Reset Scheduler", section 36), queued the moment the result is written / the value read.
+  - **(a) Check-Done-OK, NOT OK** (9 vision checks; QR code when its settings could not be written): OK = False,
+    Check = False, then Done = True (the trigger is cleared before Done, so any trigger the PLC raises after seeing
+    Done is a new 2HB press); Done = False after the delay. QR code: CheckQRCode = True again after that (the PC arms
+    the QR read, as at the end of a cycle) so the operator can re-scan.
+  - **(b) Check-Done-OK, OK** (9 vision checks and the QR code): OK = True, Done = True; after the delay Check, Done,
+    OK = False, in that order (Done before OK: the PLC never sees Done = True with OK = False).
+  - **(c) Set-Value** (Station 2 torque, both readings; Station 3 torque): after the value was read, Set = False,
+    Value = 0.0 (Station 2 also RotationDuringTighteningDone = False) after the delay (was 1.5 / 2.0 s).
+  - **(d) Done** (component press, cap press): after it was read, Done = False after the delay (was never reset).
+  - A new result for an operation whose previous reset is still pending: that reset is done first (the PLC sees Done
+    go False before the new Done = True).
+  - End of a completed cycle: pending resets run at their time (resetForNextCycle(keepPendingResets=True) leaves
+    their tags to them); an abort / start / PLC restart cancels them and resets every tag at once, as before.
+- **One picture per 2HB press:** after a NOT OK the take-picture state acts on the trigger only after the read loop
+  has itself read it False. A read-back right after the PC's write is no proof (the PLC can set it again within one
+  scan; tried first and failed the held-trigger case). If the trigger is still True 3 s after the NOT OK the IOServer
+  logs once that the PLC must raise it once per 2HB press, not hold it.
+- **Camera answer for another picture:** the write loop now checks that the camera's answer is for this check's
+  picture; an answer for another picture (late, from an earlier request) is ignored and audited. Before, it was taken
+  as this check's result (a stale OK would have moved the cycle on).
+- **Camera down / no pictures -> stall (camera/CameraProcessorServer.py):** TakePictures answered with INVALID_STATE
+  when the camera was not connected or the pictures could not be taken; the IOServer cannot tell that from "no answer
+  yet" and waited in the WRITE state for ever. It now keeps the requested picture state, so the check is NOT OK (and
+  the PLC gets its NOT OK handshake). Checked through the real TakePictures and ConverterScalerAndProcessor (camera
+  stand-in): before, INVALID_STATE; now the knuckle state, NOT OK. (CameraProcessorServer is not one of the vision
+  files the equivalence verifier compares.)
+- **Review of costhetaio (all modules), other findings:**
+  - `allenbradley/IOServer_ModbusTCP.py` refers to 11 machine states that no longer exist (an older sequence): it would
+    fail when built. Unused, not in the build; kept (not fixed).
+  - `PLCIOServer.launchThreadForUpdatingCombinedHeartbeat`: `currentStatus = True` ("WHILE TESTING"), so a lost server
+    connection never aborts the cycle. Unchanged (section 34); to be switched back for production.
+  - The QR reader can drop a second queued QR message (section 77). Unchanged.
+  - `UpdateTagsToDefaultProcessor` / `addTagUpdateRequest`: no longer used (the torque resets are scheduler jobs);
+    kept. The `TIME_WAIT_BEFORE_RESETTING_TORQUE*` constants removed.
+  - `IOServerProperties.yaml` header named the deleted `siemens/IOServer.py`; corrected.
+  - Everything else (PLCDataIO and its three implementations, the factory, plc_backend, MockPLC, the s7 tools): no
+    defects found; the Siemens PLC IP has one source (`siemens.plc.ip`; the yaml has no `plc.address`).
+- **Class diagram:** `docs/costhetaio_classes.mmd` (Mermaid source), `.svg`, `.png`: commonplc, allenbradley,
+  siemens - inheritance, composition, the factory's choice by vendor, the drivers.
+- **Dry runs:** fault scenarios G rewritten for the rules and the field issues (G1-G7); the harness's NOT OK retry
+  follows rule (a); `COSTHETA_DRYRUN_SCENARIOS=G` (or F,G ...) runs only those groups.
+- **Verified:**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Fault scenarios (A-I, new G) | 118/118 | 119/119 |
+  | Field reproduction, after the fix | pulse PLC: 2HB 0.3 s after the NOT OK acted on, cycle moves on; held trigger: 1 picture in 8 s (was 7) | |
+  | Mutations of scenario G (Siemens): Check not cleared with the NOT OK / no edge gate / no camera-answer check / OK reset without Check | | caught: G2-G3 / G2 / G6 / G1 |
+  | Two full cycles | exact | exact |
+  | DryRun_PLCDataIO (both folders) | 38/38 | 38/38 |
+  | Logging and live configuration | 37/37 | 37/37 |
+  | Mock-PLC window / Real-PLC window (both folders) | 14/14, 7/7 | 14/14, 7/7 |
+  | Integrated all-servers cycle (Python 3.12 + Tk + PySide6 under Xvfb) | DB row DOSTPLUS/RHS/2.5T, 19.08/19.03/2.41, all OK, 30/15/19/1/1, rotation True/False | identical |
+
+- **PLC side, to confirm on the machine:** the PLC must raise each Check once per 2HB press and let the PC's False
+  stand. A PLC that keeps Check True after a NOT OK now gets one picture (not a picture every 1-2 s) and the log line
+  above; the PLC program then has to be changed.

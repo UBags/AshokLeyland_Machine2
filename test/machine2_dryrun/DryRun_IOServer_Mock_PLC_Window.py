@@ -46,7 +46,7 @@ def scenario():
         ok1 = app._do_trigger(1) and app._do_vision_result(1, False)
         check("U6 knuckle NOT OK -> back to the knuckle picture state", ok1 and
               app._wait_for_state([MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE]), app._state().name)
-        time.sleep(2.6)                                    # vision result reset delay (2 s) clears the trigger
+        time.sleep(1.0)                                    # rule (a): the PC cleared the trigger with the NOT OK; Done goes False after 0.4 s
         ok2 = app._do_trigger(1) and app._do_vision_result(1, True)
         check("U7 knuckle retry OK -> on to the hub", ok2 and
               app._wait_for_state([MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING]), app._state().name)
