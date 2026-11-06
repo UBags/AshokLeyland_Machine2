@@ -106,7 +106,7 @@ QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ t
 | Failure | Detected by | Behaviour |
 |---|---|---|
 | PLC unreachable | IOServer connection check (1 s) | Reads and writes stop; reconnect; frontend shows disconnected |
-| PLC restart | Side tag reset to 0 by the PLC | Cycle restarts from the PLC side |
+| PLC restart | After a reconnect, the side tag no longer matches the value written in state 2 (the PLC sets it to 0) | Abort the cycle and reset |
 | Emergency button | `PLC_PC_EmergencyAbort` | Abort the cycle, go to the QR read |
 | Camera down or slow | Heartbeat; 20 s answer timeout; 12 s worker deadline | NOT OK; the worker is restarted |
 | QR server down | Heartbeat | Nothing is done to the PLC |

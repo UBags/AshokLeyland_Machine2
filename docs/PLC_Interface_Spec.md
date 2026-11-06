@@ -128,7 +128,7 @@ Rules:
 
 1. Every write is a retried write (§2). If the cycle is aborted meanwhile, the sequence stops and nothing more is written for the old cycle.
 2. **The PLC must read OK only on the rising edge of Done.** OK is valid from step (1) to step (7).
-3. After a NOT OK result, the PC goes back to the read state of the same check. **To ask for a retake, the PLC raises the Trigger again.** While a trigger that has already been answered is still held True, the PC does not answer it again (`triggerIgnoredUntilReset`) and logs a warning.
+3. After a NOT OK result, the PC goes back to the read state of the same check. **To ask for a retake, the PLC raises the Trigger again.** The PC acts on the Trigger as soon as it reads it True (the "read False first" rule was removed in CHANGES §80). **The PLC must therefore raise each Trigger once per two-hand-button press and let the PC's False stand.** A PLC that sets the Trigger True again by itself, or holds it, gets the picture retaken at once.
 4. QR code NOT OK means the cycle settings could not be written or the QR code was rejected. The PC re-arms CheckQRCode (step 8) so that the operator can scan again.
 
 ### 5.2 Settings (state 2)
@@ -180,7 +180,7 @@ On an abort the PC:
 | Event | PC behaviour | PLC expectation |
 |---|---|---|
 | PLC unreachable | Reads and writes stop. The connection is retried every 1 s. The frontend shows the PLC as disconnected | PLC sees ConnectionStatusTag stop toggling |
-| PLC restart | The PLC resets all its values and sets `PC_PLC_LH_RH_Selection` := 0. The PC sees the cycle restart from the PLC side | Both vendors do this |
+| PLC restart | The PLC resets all its values and sets `PC_PLC_LH_RH_Selection` := 0. After the reconnect the PC reads the side: if it differs from the value the PC wrote in state 2, the PC treats it as a PLC restart, aborts the cycle and resets (§5.5). The same value means the PLC kept its memory, and the cycle carries on | Both vendors do this. On Siemens, DB101 must not be retentive |
 | PC (IOServer) restart | The `ioserver:started` key exists, so the IOServer sends an abort to the frontend and camera, resets its tags, and starts in state 1 | PLC sees all PC_PLC tags at 0 |
 | WatchTag ≠ 1234 | Treated as wrong DB or not connected | — |
 

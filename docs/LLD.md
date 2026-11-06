@@ -95,9 +95,13 @@ Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_
 - `_dropCameraRequest()` clears the request.
 - `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down.
 
-**Trigger held after the result**
+**Trigger after a NOT OK**
 
-`triggerIgnoredUntilReset`, `_setAwaitingTriggerReset` and `_noteTriggerStillHeld` make sure a trigger that has already been answered is not answered again while it is still held.
+`triggerIgnoredUntilReset`, `_setAwaitingTriggerReset` and `_noteTriggerStillHeld` are kept but no longer called (CHANGES §80). After a NOT OK, the read state acts on the trigger as soon as it reads True.
+
+**PLC restart after a reconnect**
+
+If no PLC-raised tag is known to be True, the PC compares `PC_PLC_LH_RH_Selection` with the side it wrote in state 2. The same value means no restart. Any other value (0 after a restart) means the PLC restarted: abort and reset.
 
 **Delayed resets**
 
