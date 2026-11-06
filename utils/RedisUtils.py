@@ -110,6 +110,13 @@ overallResultKeyString : str = "overallResult"
 tighteningTorque1RotationDoneKeyString : str = "torque1RotationDone"
 tighteningTorque2RotationDoneKeyString : str = "torque2RotationDone"
 rotationDoneKeyString : str = "rotationDone"           # io2fe: with a Station 2 torque value
+# io2camera -> camera2io / camera2fe: the IOServer's id for one picture request, echoed in the answers, so that an
+# answer that comes too late (after the IOServer stopped waiting for it) is not taken for a later request's result
+requestIdKeyString : str = "requestId"
+reasonKeyString : str = "reason"                       # camera2fe: why a result is NOT OK (shown on the screen)
+feServerStatusKeyString : str = "festatus"             # hb2io: the frontend's status
+ACTIVE_CAMERA_REQUEST_KEY : str = "camera:activeRequest"   # the request whose answer the frontend is to show
+FRONTEND_NOTICE_PREFIX : str = "feNotice:"             # IOServer -> frontend: messages shown flashing, top right
 
 
 def encodeOptionalBool(value) -> str:
@@ -763,8 +770,11 @@ def sendDataFromIOServerToFEServer(redisConnection : redis.client.Redis, current
     else:
         return sendData(redisConnection=redisConnection, data={genericdataKeyString: HANDSHAKE}, queueName=io2feq, aProducer=f"{aProducer}")
 
-def sendDataFromIOServerToCameraServer(redisConnection : redis.client.Redis, currentMachineState : MachineState, action : ActionType = takePictureCommand, aProducer : str = "IOServer", handshake : bool = False):
+def sendDataFromIOServerToCameraServer(redisConnection : redis.client.Redis, currentMachineState : MachineState, action : ActionType = takePictureCommand, aProducer : str = "IOServer", handshake : bool = False, requestId : Optional[str] = None):
+    # requestId: echoed by the camera server in its answers (camera2io, camera2fe)
     data = {currentMachineStateKeyString: currentMachineState, actionKeyString: action}
+    if requestId:
+        data[requestIdKeyString] = requestId
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=io2cameraq, aProducer=f"{aProducer}")
     else:
@@ -796,18 +806,21 @@ def sendEmergencyAbortFromIOServerToFEServer(redisConnection : redis.client.Redi
 
 # ********************************** COMMUNICATION INWARD INTO IO SERVER *************************
 
-def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, block : int = 500):
+def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, block : int = 500,
+                                       withRequestId : bool = False):
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
+    # Returns (state, result); withRequestId: (state, result, requestId) - requestId None if the answer has none.
+    # Messages are read oldest first; only the message read is deleted (a message queued behind it is kept).
+    invalid = (MachineState.INVALID_STATE, False, None) if withRequestId else (MachineState.INVALID_STATE, False)
     if redisConnection is None:
         printBoldRed(f"Redis connection is None in readDataInIOServerFromCameraServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInIOServerFromCameraServer()")
-        return MachineState.INVALID_STATE, False
+        return invalid
     last_id = 0
     newData = {}
     timeOfMessage = None
     try:
-        redisConnection.xtrim(camera2ioq, 1)
         resp = redisConnection.xread({camera2ioq: last_id}, count=1, block=block)
         if resp:
             key, messages = resp[0]
@@ -818,14 +831,13 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
                 newData[key.decode("utf-8")] = value.decode("utf-8")
             timeOfMessage = newData[timeKeyString]
             redisConnection.xdel(camera2ioq, last_id)
-            redisConnection.xtrim(camera2ioq, 0)
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
         printBoldRed(f"Got exception - {e1}")
-        return MachineState.INVALID_STATE, False
+        return invalid
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
-            return MachineState.INVALID_STATE, False
+            return invalid
     except:
         noteSuppressed()
 
@@ -834,11 +846,13 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
             currentMachineState = MachineState.getMachineStateFromString(newData[currentMachineStateKeyString])
             result = (newData[resultKeyString] == ok)
             # print(f"In readDataInIOServerFromCameraServer(), {currentMachineState = } and {result = }")
+            if withRequestId:
+                return currentMachineState, result, (newData.get(requestIdKeyString) or None)
             return currentMachineState, result
     except:
-        return MachineState.INVALID_STATE, False
+        return invalid
 
-    return MachineState.INVALID_STATE, False
+    return invalid
 
 def readDataInIOServerFromQRCodeServer(redisConnection: redis.client.Redis, block : int = 500) -> Tuple[bool, str]:
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
@@ -959,6 +973,83 @@ def readCombinedHeartbeatInIOServerFromHeartbeatServer(redisConnection: redis.cl
     except:
         return False
     return False
+
+
+def readServerStatusesInIOServerFromHeartbeatServer(redisConnection: redis.client.Redis, block : int = 500) -> Optional[dict]:
+    """The newest status message from the heartbeat server: {"combined", "camera", "qrcode", "io", "db", "fe": bool}
+    (True = alive; a server the message does not name is left out). None if no message arrived within `block` ms
+    or it could not be read. Older messages are dropped (only the newest status matters)."""
+    if redisConnection is None:
+        return None
+    try:
+        resp = redisConnection.xrevrange(hb2ioq, count=1)
+        if not resp:
+            resp = redisConnection.xread({hb2ioq: "$"}, count=1, block=block)
+            if not resp:
+                return None
+            _, messages = resp[0]
+            lastId, data = messages[-1]
+        else:
+            lastId, data = resp[0]
+        olderAndThis = [m[0] for m in redisConnection.xrange(hb2ioq, max=lastId)]
+        if olderAndThis:
+            redisConnection.xdel(hb2ioq, *olderAndThis)       # this message and the older ones: done with
+        newData = {k.decode("utf-8"): v.decode("utf-8") for k, v in data.items()}
+    except Exception as e1:
+        printBoldRed(f"Got exception in readServerStatusesInIOServerFromHeartbeatServer - {e1}")
+        return None
+    if newData.get(genericdataKeyString) == HANDSHAKE:
+        return None
+    statuses = {"combined": newData.get(connectionStatusKeyString) == ALIVE}
+    for name, key in (("camera", cameraServerStatusKeyString), ("qrcode", qrCodeServerStatusKeyString),
+                      ("io", ioServerStatusKeyString), ("db", dbServerStatusKeyString),
+                      ("fe", feServerStatusKeyString)):
+        if key in newData:
+            statuses[name] = (newData[key] == ALIVE)
+    return statuses
+
+
+def setActiveCameraRequest(redisConnection: redis.client.Redis, requestId: Optional[str]) -> None:
+    """IOServer: the picture request whose answer the frontend is to show (None: any). Read by
+    readDataInFEServerFromCameraServer, which drops results of other requests."""
+    try:
+        if requestId:
+            redisConnection.set(ACTIVE_CAMERA_REQUEST_KEY, requestId, ex=24 * 3600)
+        else:
+            redisConnection.delete(ACTIVE_CAMERA_REQUEST_KEY)
+    except Exception:
+        noteSuppressed()
+
+
+# Frontend notices: short messages the IOServer (or the camera server) shows on the frontend, flashing, top right.
+# One Redis key per notice (FRONTEND_NOTICE_PREFIX + name), with an expiry; the frontend shows the ones present, in
+# FRONTEND_NOTICE_ORDER. Redis is the inter-process link here, as for every other IOServer -> frontend message.
+FRONTEND_NOTICE_ORDER = ("abort", "heartbeat", "db", "camera", "check", "settings")
+
+
+def setFrontendNotice(redisConnection: redis.client.Redis, name: str, text: str, ttlSecs: float = 3600) -> bool:
+    try:
+        redisConnection.set(f"{FRONTEND_NOTICE_PREFIX}{name}", text, px=max(1, int(ttlSecs * 1000)))
+        return True
+    except Exception:
+        noteSuppressed()
+        return False
+
+
+def clearFrontendNotice(redisConnection: redis.client.Redis, name: str) -> None:
+    try:
+        redisConnection.delete(f"{FRONTEND_NOTICE_PREFIX}{name}")
+    except Exception:
+        noteSuppressed()
+
+
+def readFrontendNotices(redisConnection: redis.client.Redis) -> Optional[list]:
+    """The notices to show, in FRONTEND_NOTICE_ORDER; None if Redis could not be read."""
+    try:
+        values = redisConnection.mget([f"{FRONTEND_NOTICE_PREFIX}{n}" for n in FRONTEND_NOTICE_ORDER])
+    except Exception:
+        return None
+    return [v.decode("utf-8") for v in values if v]
 
 
 # ********************************** COMMUNICATION OUTWARD FROM FE SERVER *************************
@@ -1219,7 +1310,10 @@ def readDataInFEServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
 #                    the result of the evaluation (decodedResult) as an ok or notok, and the current machine state for which the evaluation was done
 # IF decodedResult IS None, it is interpreted as if there is no message in the queue and therefore, the result should be ignored
 
-def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, block : int = 500):
+def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, block : int = 500,
+                                       filterStale : bool = True):
+    # filterStale: a result carrying a request id other than the active one (ACTIVE_CAMERA_REQUEST_KEY, set by the
+    # IOServer) is deleted and not returned - it answers a request the IOServer stopped waiting for
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
 
@@ -1237,7 +1331,6 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
 
     last_id = 0
     try:
-        redisConnection.xtrim(camera2feq, 1)
         resp = redisConnection.xread(
             {camera2feq: last_id}, count=1, block=block
         )
@@ -1251,6 +1344,15 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
                 # NOTE : Since this message carries image bytes, DO NOT apply .decode('utf-8') to all the data
                 newData[key.decode("utf-8")] = value
 
+            requestId = (newData.get(requestIdKeyString) or b"").decode('utf-8') or None
+            if requestId is not None and filterStale:
+                active = redisConnection.get(ACTIVE_CAMERA_REQUEST_KEY)
+                active = active.decode('utf-8') if active is not None else None
+                if active is not None and active != requestId:
+                    # an answer to a picture request the IOServer no longer waits for (it timed out): not shown
+                    redisConnection.xdel(camera2feq, last_id)
+                    printBoldRed(f"Camera result for request {requestId} ignored (the active request is {active})")
+                    return None, None, None, None, MachineState.INVALID_STATE
             decodedResult = newData[resultKeyString].decode('utf-8')
             timeOfMessage = newData[timeKeyString].decode('utf-8')
             currentMachineState = newData[currentMachineStateKeyString].decode('utf-8')
@@ -1273,11 +1375,16 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
                         "Facing problem in decoding processed image from byte stream in readDataInFEServerFromCameraServer()")
                     pass
             redisConnection.xdel(camera2feq, last_id)
-            redisConnection.xtrim(camera2feq, 0)
             # printBoldBlue(f"{decodedResult = }; {timeOfMessage = }; {aProducer = }; {decodedImage.shape}")
             # if isinstance(decodedImage, np.ndarray):
             #     printBoldBlue(f'Decoded startingImage has shape {decodedImage.shape} and type {decodedImage.dtype}')
-    except ConnectionError as e1:
+    except Exception as e1:
+        if last_id != 0:            # a malformed message must not block the queue: drop it
+            try:
+                redisConnection.xdel(camera2feq, last_id)
+            except Exception:
+                noteSuppressed()
+        printBoldRed(f"Could not read a camera result in readDataInFEServerFromCameraServer(): {e1}")
         return timeOfMessage, None, None, None, MachineState.INVALID_STATE
     if decodedResult == HANDSHAKE:
         return timeOfMessage, None, None, None, MachineState.INVALID_STATE
@@ -1560,7 +1667,9 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
 
 # ********************************** COMMUNICATION OUTWARD FROM CAMERA SERVER *************************
 
-def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, originalImage : Union[np.ndarray, None], processedImage : Union[np.ndarray, None], result : ResultType, currentMachineState : MachineState, aProducer : str = "CameraServer", handshake : bool = False):
+def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, originalImage : Union[np.ndarray, None], processedImage : Union[np.ndarray, None], result : ResultType, currentMachineState : MachineState, aProducer : str = "CameraServer", handshake : bool = False, requestId : Optional[str] = None, reason : Optional[str] = None):
+    # requestId: the IOServer's picture request this answers (the frontend shows it only while it is the active request)
+    # reason: why the result is NOT OK when it is not the check's own verdict (camera down, check timed out, ...)
     originalImageAsMessage = ""
     try:
         if validate_image(originalImage):
@@ -1580,13 +1689,19 @@ def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, ori
         noteSuppressed()
 
     data = {originalImageKeyString: originalImageAsMessage, processedImageKeyString: processedImageAsMessage, resultKeyString : result, currentMachineStateKeyString : currentMachineState}
+    if requestId:
+        data[requestIdKeyString] = requestId
+    if reason:
+        data[reasonKeyString] = reason
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=camera2feq, aProducer=f"{aProducer}")
     else:
         return sendData(redisConnection=redisConnection, data={genericdataKeyString: HANDSHAKE}, queueName=camera2feq, aProducer=f"{aProducer}")
 
-def sendDataFromCameraServerToIOServer(redisConnection : redis.client.Redis, result : ResultType, currentMachineState : MachineState, aProducer : str = "CameraServer", handshake : bool = False):
+def sendDataFromCameraServerToIOServer(redisConnection : redis.client.Redis, result : ResultType, currentMachineState : MachineState, aProducer : str = "CameraServer", handshake : bool = False, requestId : Optional[str] = None):
     data = {resultKeyString: result, currentMachineStateKeyString : currentMachineState}
+    if requestId:
+        data[requestIdKeyString] = requestId
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=camera2ioq, aProducer=f"{aProducer}")
     else:
@@ -1597,11 +1712,19 @@ def sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection : redis.clien
 
 # ********************************** COMMUNICATION INWARD INTO CAMERA SERVER *************************
 
+_lastCameraRequestId : dict = {"value": None}     # request id of the last message read by the camera server
+
 # returns 3 values - 1. timeOfMessage in milliseconds, 2. what state the machine is in, so that the appropriate
 # routine can be called for evaluation of the picture, and 3. a boolean, whether the request is to take and evaluate a newwidgets picture
-def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, block : int = 500):
+def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, block : int = 500,
+                                       withRequestId : bool = False):
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
+    # withRequestId: a 4th value, the IOServer's request id (None if the message has none)
+    if withRequestId:
+        result = readDataInCameraServerFromIOServer(redisConnection, block=block, withRequestId=False)
+        return (*result, _lastCameraRequestId.get("value"))
+    _lastCameraRequestId["value"] = None
     if redisConnection is None:
         printBoldRed(f"Redis connection is None in readDataInCameraServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
@@ -1640,6 +1763,7 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == takePictureCommand):
+            _lastCameraRequestId["value"] = newData.get(requestIdKeyString) or None
             currentMachineState = MachineState.getMachineStateFromString(newData[currentMachineStateKeyString])
             # printLight(f"Current state is {currentMachineState} and type is {type(currentMachineState)}")
             return timeOfMessage, currentMachineState, True
@@ -1712,13 +1836,17 @@ def sendHeartbeatsFromHeartbeatServerToFEServer(redisConnection : redis.client.R
 
 def sendCombinedHeartbeatFromHeartbeatServerToIOServer(redisConnection : redis.client.Redis,
                                                 combinedConnectionStatus : ConnectionStatusType,
-                                                aProducer : str = "HeartbeatServer", handshake : bool = False):
-    # if combinedConnectionStatus == ALIVE:
-    #     # printBoldGreen(f"About to send combined connection status as ALIVE")
-    #     pass
-    # else:
-    #     printBoldRed(f"About to send combined connection status as DEAD from RedisUtils")
+                                                aProducer : str = "HeartbeatServer", handshake : bool = False,
+                                                serverStatuses : Optional[dict] = None):
+    # serverStatuses: {"camera", "qrcode", "io", "db", "fe": ALIVE / DEAD} - each server's status, for the IOServer's
+    # rules per server (readServerStatusesInIOServerFromHeartbeatServer)
     data = {connectionStatusKeyString: combinedConnectionStatus}
+    if serverStatuses:
+        for name, key in (("camera", cameraServerStatusKeyString), ("qrcode", qrCodeServerStatusKeyString),
+                          ("io", ioServerStatusKeyString), ("db", dbServerStatusKeyString),
+                          ("fe", feServerStatusKeyString)):
+            if name in serverStatuses:
+                data[key] = serverStatuses[name]
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=hb2ioq, aProducer=f"{aProducer}")
     else:

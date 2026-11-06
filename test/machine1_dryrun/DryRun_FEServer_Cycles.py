@@ -371,6 +371,53 @@ def driver():
               and take_record(timeout=5) is not None, str(SCREENS))
         check("F8 the frontend is back at READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE, 10), state().name)
         _feModule.getConfirmation = _savedConfirm
+
+        # ---------------- F9 (2026-11-06) ----------------
+        print("\n=== F9. Notices from the IOServer: shown top right, flashing; removed when gone ===", flush=True)
+        for k in r.scan_iter("feNotice:*"):
+            r.delete(k)
+        setFrontendNotice(r, "db", "Database down: continue till end of cycle", ttlSecs=30)
+        shown = wait_for(lambda: fe.noticeLabel.isVisible() and "continue till end of cycle" in fe.noticeLabel.text(), 4)
+        styles = set()
+        for _ in range(8):
+            styles.add(fe.noticeLabel.styleSheet()); time.sleep(0.15)
+        check("F9 notice shown on the frontend (top right)", shown, fe.noticeLabel.text())
+        check("F9 ... flashing (two colour schemes alternate)", len(styles) == 2, str(len(styles)))
+        setFrontendNotice(r, "camera", "Picture NOT OK: camera server down", ttlSecs=30)
+        check("F9 two notices shown together", wait_for(lambda: "camera server down" in fe.noticeLabel.text()
+              and "Database down" in fe.noticeLabel.text(), 4), fe.noticeLabel.text())
+        clearFrontendNotice(r, "db"); clearFrontendNotice(r, "camera")
+        check("F9 notices gone -> label hidden", wait_for(lambda: not fe.noticeLabel.isVisible(), 4))
+        setFrontendNotice(r, "check", "Picture NOT OK: check timed out after 12 s", ttlSecs=1.5)
+        check("F9 a notice with an expiry disappears by itself", wait_for(lambda: fe.noticeLabel.isVisible(), 3)
+              and wait_for(lambda: not fe.noticeLabel.isVisible(), 5))
+
+        # ---------------- F10 (2026-11-06) ----------------
+        print("\n=== F10. A camera result the IOServer no longer waits for is not shown; the IOServer's NOT OK is ===", flush=True)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        assert wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
+        n0 = len(TILES)
+        setActiveCameraRequest(r, "9-1:timeout")              # the IOServer gave up on request 9-1
+        sendDataFromCameraServerToFEServer(r, originalImage=picture("late", 5), processedImage=picture("late", 6),
+                                           result=ok, currentMachineState=MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE,
+                                           requestId="9-1")
+        check("F10 late camera result of request 9-1 dropped, not shown (frontend stays on the knuckle)",
+              wait_for(lambda: consumed(camera2feq), 4) and (time.sleep(1.0) or True)
+              and state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE and len(TILES) == n0, f"{state().name} {TILES[n0:]}")
+        sendDataFromCameraServerToFEServer(r, originalImage=None, processedImage=None, result=notok,
+                                           currentMachineState=MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE,
+                                           aProducer="IOServer", requestId="9-1:timeout", reason="no answer from the camera server in 20 s")
+        check("F10 the IOServer's NOT OK (request 9-1:timeout) shown on the knuckle tile, frontend stays on the step",
+              wait_for(lambda: any(res == notok for _, res in TILES[n0:]), 5)
+              and state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, str(TILES[n0:]))
+        setActiveCameraRequest(r, None)
+        time.sleep(1.0)
+        send_step(MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, "picture", None, result=ok, seed=77)
+        check("F10 the retake's result (no request id / active cleared) is shown and the frontend moves on",
+              state() != MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, state().name)
+        sendEmergencyAbortFromIOServerToFEServer(r)
+        check("F10 cycle aborted to finish", wait_for(lambda: state() == MS.READ_QR_CODE, 10))
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:

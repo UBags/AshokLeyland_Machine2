@@ -436,6 +436,9 @@ class PLCIOServer:
     PLC_PC_EmergencyAbort: str = CosThetaConfigurator.getInstance().getPlcPcEmergencyAbortTagName()
     PLC_PC_WatchTag: str = CosThetaConfigurator.getInstance().getPlcPcWatchTagName()
     PC_PLC_ConnectionStatusTag: str = CosThetaConfigurator.getInstance().getPcPlcConnectionStatusTagName()
+    # Optional: True when the PC aborts a cycle itself (frontend abort, frontend / heartbeat server down, PLC restart),
+    # False when the next QR code is accepted. Empty = not on this PLC (not written).
+    PC_PLC_CycleAborted: str = CosThetaConfigurator.getInstance().getPcPlcCycleAbortedTagName()
 
     # ==================== Configuration Values ====================
     PLC_IP: str = CosThetaConfigurator.getInstance().getPlcIP()
@@ -544,6 +547,32 @@ class PLCIOServer:
         self._cycleInProgress: bool = False
         self._resetOpTimestamps()
 
+        # The other servers' status (from the heartbeat server) and what the IOServer does about them
+        # (_applyServerStatuses): camera down -> picture NOT OK; DB down -> next cycle held; frontend or heartbeat
+        # server down -> cycle aborted, next cycle held; QR code server -> nothing.
+        self._serverStatus: Dict[str, bool] = {}
+        self._statusLock = threading.Lock()
+        self._lastHeartbeatServerMessage: float = time.monotonic()
+        # The rules apply once the heartbeat server has been heard from: an IOServer run on its own (commissioning,
+        # the IOServer test windows) has no heartbeat server and keeps working as before. In production the heartbeat
+        # server starts with the others (and is restarted by MainProgram's supervisor if it dies).
+        self._heartbeatServerSeen: bool = False
+        self._heartbeatServerDown: bool = False
+        self._frontendDown: bool = False
+        self._databaseDown: bool = False
+        self._cameraDown: bool = False
+        self._newCycleHold: Optional[str] = None      # why a new cycle may not start now (None = it may)
+        self._heldReasonLogged: Optional[str] = None
+        self._noticeRedisConnection = None            # frontend notices (setFrontendNotice), short timeouts
+        # The picture request the write loop waits for: {"id", "pictureState", "writeState", "sentAt"}
+        self._cameraRequest: Optional[Dict[str, Any]] = None
+        self._cameraRequestSeq: int = 0
+        self._writeStateSince: float = time.monotonic()
+        self.cameraTimeouts: int = 0
+        # The cycle settings last written to the PLC ({setting key: value}): the settings the PLC holds when a later
+        # cycle's settings cannot be written (the cycle then goes ahead with them)
+        self._lastWrittenSettings: Dict[str, float] = {}
+
         # Current QR Code for this cycle
         self.currentQRCode: str = ""
         self.lastStation2RotationDuringTighteningDone: Optional[bool] = None
@@ -560,6 +589,21 @@ class PLCIOServer:
         if not self._readsReady():
             self._plcCheckPending = True          # checked (and reset) as soon as the PLC is connected
         self.resetForNextCycle("IOServer start")  # every per-cycle tag to its default, then CheckQRCode = True
+
+        # An IOServer started again (after a crash; MainProgram's supervisor restarts it) may find the frontend and the
+        # camera server in the middle of a cycle the PLC side no longer has: both are told the cycle was aborted. A
+        # restart is told from the first start by a Redis key the first start leaves (MainProgram clears Redis before
+        # it starts the servers), so a fresh start leaves no stale abort for a frontend that starts after it.
+        try:
+            r = Redis(self.redisHostname, self.redisPort, socket_timeout=1.0, socket_connect_timeout=1.0)
+            if not r.set("ioserver:started", str(time.time()), nx=True):
+                printBoldRed("IOServer started again: the frontend and the camera server are told the cycle was aborted")
+                self._audit("IOServer restarted: abort sent to the frontend and the camera server")
+                sendEmergencyAbortFromIOServerToFEServer(r)
+                sendEndOfCycleFromIOServerToCameraServer(r, aborted=True)
+            setActiveCameraRequest(r, None)
+        except Exception:
+            noteSuppressed()
 
         time.sleep(3)
         # no cycle yet: clear the log context left by a previous run (until the first QR code is accepted)
@@ -694,12 +738,15 @@ class PLCIOServer:
           TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
         cycle.settings.source = properties (the earlier Allen-Bradley set-up, not used now):
           TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
-        Every value is worked out BEFORE anything is written: if any is unavailable (unknown side/model, no machine
-        settings in the database) nothing is written. Each write is retried (SETTINGS_WRITE_ATTEMPTS).
+        Each write is retried (SETTINGS_WRITE_ATTEMPTS). The side must be written: an unknown side / model or a side
+        that cannot be written returns False (QR code NOT OK). The other settings rarely change and the PLC starts
+        with acceptable values: one that cannot be written (or no machine settings from the database) is left as the
+        PLC holds it, the failure is logged and shown on the frontend, and the cycle goes ahead (True).
         The caller writes QRCodeCheckOK / Done only AFTER this returns (OK = False if it returned False), so the PLC
         never sees Done before the settings are in place.
-        The settings written are published for the DB server (stored with the component's record).
-        Returns True only if every tag that had to be written was written.
+        The settings in force are published for the DB server (stored with the component's record): those written
+        now, else the ones last written (None if not known).
+        Returns True if the side (and, on the Allen-Bradley properties set-up, the model) was written.
         """
         if not qrCode:
             printBoldRed("Cannot write cycle settings: QR code is empty")
@@ -726,34 +773,42 @@ class PLCIOServer:
             config = CosThetaConfigurator.getInstance()
             used = {"rotation_rpm": None, "tightening_torque1_setpoint": None, "tightening_torque2_setpoint": None,
                     "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None}
+            keyOfTag = {}                   # settings tag -> its key in `used`
+            problems = []                   # settings not written this cycle (the cycle goes ahead with the PLC's)
             if config.getCycleSettingsSource() == "database":
-                settings = getMachineSettings(getDatabaseName())
+                settings = None
+                try:
+                    settings = getMachineSettings(getDatabaseName())
+                except Exception as e:
+                    problems.append(f"machine settings could not be read from the database ({e})")
                 missing = [k for k in used if settings.get(k) is None] if settings else list(used)
-                if missing:
-                    printBoldRed(f"Cannot write cycle settings: machine settings not available from the database "
-                                 f"({', '.join(missing)}); nothing written")
-                    return False
-                for tag, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
-                                 (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
-                                 (PLCIOServer.PC_PLC_RotationRPM, "rotation_rpm"),
-                                 (PLCIOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
-                                 (PLCIOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
-                    if tag:
-                        writes.append((tag, float(settings[key]), float))
-                        used[key] = float(settings[key])
+                if missing and not problems:
+                    problems.append(f"machine settings not available from the database ({', '.join(missing)})")
+                if not missing:
+                    for tag, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
+                                     (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
+                                     (PLCIOServer.PC_PLC_RotationRPM, "rotation_rpm"),
+                                     (PLCIOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
+                                     (PLCIOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
+                        if tag:
+                            writes.append((tag, float(settings[key]), float))
+                            keyOfTag[tag] = key
             else:
                 skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
                 for tag, value, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, config.getTighteningTorque1Setpoint(), "tightening_torque1_setpoint"),
                                         (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, config.getTighteningTorque2Setpoint(), "tightening_torque2_setpoint")):
                     if tag and value != skip:
                         writes.append((tag, float(value), float))
-                        used[key] = float(value)
+                        keyOfTag[tag] = key
                 for tag, value in ((PLCIOServer.PC_PLC_RotationRPM1, config.getRotation1RPM()),
                                    (PLCIOServer.PC_PLC_RotationRPM2, config.getRotation2RPM())):
                     if tag and value != skip:
                         writes.append((tag, int(value), int))
 
-            success = True
+            # The side must be written (it changes with every part): if it cannot be, the QR code is NOT OK. Any
+            # other setting that cannot be written (3 attempts) is left as the PLC holds it - the settings rarely
+            # change, and the PLC starts with acceptable values - and the cycle goes ahead (logged, shown).
+            sideWritten = False
             for tag, value, kind in writes:
                 writer = (lambda t, v: self.write_int(t, int(v))) if kind is int else \
                          (lambda t, v: self.write_float(t, float(v), debug=False))
@@ -763,23 +818,39 @@ class PLCIOServer:
                         ok_ = True
                         break
                     time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
-                if not ok_:
-                    printBoldRed(f"Could not write cycle setting {tag}={value} after "
-                                 f"{PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
-                success = success and ok_
+                key = keyOfTag.get(tag)
+                if tag == PLCIOServer.PC_PLC_LH_RH_Selection:
+                    sideWritten = ok_
+                    if not ok_:
+                        printBoldRed(f"Could not write the side {tag}={value} after "
+                                     f"{PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts: QR code NOT OK")
+                        break
+                elif ok_:
+                    if key:
+                        used[key] = float(value)
+                        self._lastWrittenSettings[key] = float(value)
+                else:
+                    problems.append(f"{tag}={value} not written after {PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
+            for key in used:                # not written this cycle: the PLC holds the value last written, if known
+                if used[key] is None and key in self._lastWrittenSettings:
+                    used[key] = self._lastWrittenSettings[key]
             written = ", ".join(f"{tag}={value}" for tag, value, kind in writes)
             # the side written this cycle: the fallback reference for PLC restart detection (_verifyPlcAfterReconnect)
-            self._sideWrittenThisCycle = (next((v for t, v, k in writes if t == PLCIOServer.PC_PLC_LH_RH_Selection), None)
-                                          if success else None)
-            if success:
-                try:
-                    publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
-                except Exception as e:
-                    printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
-                printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
-            else:
-                printBoldRed(f"Failed to write some cycle settings to PLC ({written})")
-            return success
+            self._sideWrittenThisCycle = sideCode if sideWritten else None
+            if not sideWritten:
+                printBoldRed(f"Failed to write the cycle settings to the PLC ({written})")
+                return False
+            if problems:
+                message = (f"Cycle settings NOT updated for {qrCode}: {'; '.join(problems)}. The cycle goes ahead with "
+                           f"the settings the PLC holds")
+                printBoldRed(message); self.logger.error(message); self._audit(message)
+                self._notice("settings", "Machine settings not updated: previous settings used", ttlSecs=30)
+            try:
+                publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
+            except Exception as e:
+                printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
+            printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
+            return True
         except Exception as e:
             printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
@@ -1177,42 +1248,144 @@ class PLCIOServer:
         self.heartbeatThread.start()
 
     def launchThreadForUpdatingCombinedHeartbeat(self):
+        """The other servers' status, from the heartbeat server (one message every
+        combinedheartbeat.connectionstatus.sleepinterval.sec with each server's ALIVE / DEAD), and the rules for a
+        server that is down (_applyServerStatuses). Also toggles PC_PLC_ConnectionStatus (the PC is alive), whatever
+        the other servers' status."""
         objRef = self
 
         def updateHeartbeat():
             heartbeatGap = CosThetaConfigurator.getInstance().getCombinedConnectionStatusUpdateInterval()
             while not objRef.shutdown:
+                statuses = None
                 try:
-
-                    # WHILE TESTING PLC AND PC COMMUNICATION, currentStatus is set to True.
-                    # IN PRODUCTION, set this back to readCombinedHeartbeatInIOServerFromHeartbeatServer(objRef.combinedHeartbeatRedisConnection)
-
-                    # currentStatus = readCombinedHeartbeatInIOServerFromHeartbeatServer(
-                    #     objRef.combinedHeartbeatRedisConnection)
-                    currentStatus = True
-                    if currentStatus:
-                        PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT = 0
-                        statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
-                        objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
-                        PLCIOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
-                    else:
-                        PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT += 1
-                        if (PLCIOServer.CONSECUTIVE_CONNECTION_DOWN_COUNT == 2):
-                            printBoldRed(
-                                f"Combined Heartbeat - connection problem somewhere : sendEmergencyAbortFromIOServerToFEServer")
-                            objRef.abortCycle("connection to a server lost (combined heartbeat)",
-                                              notifyQRCodeServer=False, notifyFrontend=True, clearQueues=False)
+                    statuses = readServerStatusesInIOServerFromHeartbeatServer(
+                        objRef.combinedHeartbeatRedisConnection, block=int(heartbeatGap * 1000))
+                    if statuses is not None:
+                        with objRef._statusLock:
+                            objRef._serverStatus = statuses
+                            objRef._lastHeartbeatServerMessage = time.monotonic()
+                            if not objRef._heartbeatServerSeen:
+                                objRef._heartbeatServerSeen = True
+                                objRef._audit("First status message from the heartbeat server: the rules for servers "
+                                              "that are down apply from now on")
+                    objRef._applyServerStatuses()
+                    statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
+                    objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
+                    PLCIOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
                 except Exception as e:
                     printBoldRed(f"Exception {e} encountered in heartbeat")
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 try:
-                    time.sleep(heartbeatGap)
+                    time.sleep(heartbeatGap if statuses is not None else 0.1)
                 except:
                     noteSuppressed()
 
         combinedHeartbeatThread = threading.Thread(name=f"Combined Heartbeat Update Thread", target=updateHeartbeat,
                                                    args=(), daemon=True)
         combinedHeartbeatThread.start()
+
+    # ---------------------------------------------------------------- other servers down: what the IOServer does
+    def _notice(self, name: str, text: Optional[str], ttlSecs: float = 15.0) -> None:
+        """Show (text) or remove (None) a flashing message on the frontend (top right)."""
+        try:
+            if self._noticeRedisConnection is None:
+                self._noticeRedisConnection = Redis(self.redisHostname, self.redisPort, socket_timeout=1.0,
+                                                    socket_connect_timeout=1.0)
+            if text:
+                setFrontendNotice(self._noticeRedisConnection, name, text, ttlSecs)
+            else:
+                clearFrontendNotice(self._noticeRedisConnection, name)
+        except Exception:
+            noteSuppressed()
+
+    def serverStatuses(self) -> Dict[str, Any]:
+        """{"heartbeat": alive, "camera" / "qrcode" / "db" / "fe": alive or None (not known)}. Before the first message
+        from the heartbeat server: alive, the others not known (no rule applies)."""
+        with self._statusLock:
+            statuses = dict(self._serverStatus)
+            silence = time.monotonic() - self._lastHeartbeatServerMessage
+            seen = self._heartbeatServerSeen
+        hbAlive = (not seen) or silence <= CosThetaConfigurator.getInstance().getHeartbeatServerSilenceSecs()
+        result = {"heartbeat": hbAlive}
+        for name in ("camera", "qrcode", "db", "fe"):
+            result[name] = statuses.get(name) if hbAlive else None
+        return result
+
+    def newCycleHoldReason(self) -> Optional[str]:
+        """Why a new cycle may not start now (heartbeat server, frontend or database down), or None."""
+        return self._newCycleHold
+
+    def _applyServerStatuses(self) -> None:
+        """The rules for a server that is down, applied on every status message (and when the heartbeat server
+        falls silent):
+          camera down         a picture the write loop waits for is answered NOT OK at once (write loop)
+          QR code server down nothing (it reads nothing, so nothing is sent)
+          database down       the cycle in progress is finished ("Continue till end of cycle" on the frontend);
+                              no new cycle starts until it is back
+          frontend down       the cycle in progress is aborted (it builds the cycle's record); no new cycle until
+                              it is back
+          heartbeat server    the cycle in progress is aborted (camera server and frontend told); no new cycle until
+          down                it is back"""
+        st = self.serverStatuses()
+        state = self.machineState.getCurrentState()
+        inCycle = state not in (MachineState.READ_QR_CODE, MachineState.WRITE_QR_CODE)
+
+        hbDown = not st["heartbeat"]
+        if hbDown and not self._heartbeatServerDown:
+            self._heartbeatServerDown = True
+            message = "Heartbeat server down (no status message received)"
+            printBoldRed(message); self.logger.error(message); self._audit(message)
+            if state != MachineState.READ_QR_CODE:
+                self.abortCycle("heartbeat server down", notifyQRCodeServer=True, notifyFrontend=True,
+                                clearQueues=True, pcAbort=True)
+        elif not hbDown and self._heartbeatServerDown:
+            self._heartbeatServerDown = False
+            message = "Heartbeat server back"
+            printBoldGreen(message); self.logger.info(message); self._audit(message)
+        self._notice("heartbeat", "Heartbeat server down: cycle aborted; next cycle on hold" if hbDown else None,
+                     ttlSecs=30)
+
+        feDown = st["fe"] is False
+        if feDown and not self._frontendDown:
+            self._frontendDown = True
+            message = "Frontend down (heartbeat server)"
+            printBoldRed(message); self.logger.error(message); self._audit(message)
+            if state != MachineState.READ_QR_CODE:
+                self.abortCycle("frontend down", notifyQRCodeServer=True, notifyFrontend=False,
+                                clearQueues=True, pcAbort=True)
+        elif not feDown and self._frontendDown and st["fe"] is True:
+            self._frontendDown = False
+            message = "Frontend back"
+            printBoldGreen(message); self.logger.info(message); self._audit(message)
+
+        dbDown = st["db"] is False
+        if dbDown != self._databaseDown and (dbDown or st["db"] is True):
+            self._databaseDown = dbDown
+            message = ("Database down: the cycle in progress is finished, the next one is held" if dbDown
+                       else "Database back")
+            (printBoldRed if dbDown else printBoldGreen)(message)
+            (self.logger.error if dbDown else self.logger.info)(message)
+            self._audit(message)
+        self._notice("db", ("Database down: continue till end of cycle" if inCycle
+                            else "Database down: next cycle on hold") if self._databaseDown else None, ttlSecs=30)
+
+        camDown = st["camera"] is False
+        if camDown != self._cameraDown and (camDown or st["camera"] is True):
+            self._cameraDown = camDown
+            message = "Camera server down: a picture is answered NOT OK" if camDown else "Camera server back"
+            (printBoldRed if camDown else printBoldGreen)(message)
+            (self.logger.error if camDown else self.logger.info)(message)
+            self._audit(message)
+
+        hold = ("heartbeat server down" if hbDown else "frontend down" if self._frontendDown
+                else "database down" if self._databaseDown else None)
+        if hold != self._newCycleHold:
+            self._newCycleHold = hold
+            message = f"New cycles on hold: {hold}" if hold else "New cycles may start again"
+            self._audit(message); self.logger.info(message)
+            if hold is None:
+                self._heldReasonLogged = None
 
     def launchEmergencyMonitoringThread(self):
         objRef = self
@@ -1241,13 +1414,16 @@ class PLCIOServer:
         emergencyMonitoringThread.start()
 
     def abortCycle(self, reason: str, notifyQRCodeServer: bool = True, notifyFrontend: bool = True,
-                   clearQueues: bool = True) -> None:
+                   clearQueues: bool = True, pcAbort: bool = False) -> None:
         """Abort the current cycle and go back to READ_QR_CODE, whatever state the cycle is in. Used for the emergency
         button on the machine (PLC), a lost server connection (heartbeat) and an abort sent by the frontend.
           notifyQRCodeServer: tell the QR code server to stop a scan in progress
           clearQueues:        drop the camera / QR code messages of the aborted cycle
           notifyFrontend:     tell the frontend (emergency-abort screen, abort record). False when the abort came
                               FROM the frontend, which has already done that itself.
+          pcAbort:            the PC aborted the cycle itself (not the PLC's emergency button): PC_PLC_CycleAborted
+                              (if the PLC has it) is set True after the reset, and False when the next QR code is
+                              accepted; the reason is shown on the frontend
         The read and write loops only move the state on if it is still the state they started from
         (incrementStateFrom / decrementStateFrom), so a step that finishes after the abort cannot move the reset
         cycle on."""
@@ -1280,7 +1456,14 @@ class PLCIOServer:
             self.resetTagToFalse(PLCIOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
+            self._dropCameraRequest()
             self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
+            if pcAbort and PLCIOServer.PC_PLC_CycleAborted:
+                with self._asPrivileged():
+                    if not self._writeVerified(PLCIOServer.PC_PLC_CycleAborted, True):
+                        self.logger.error(f"Could not set {PLCIOServer.PC_PLC_CycleAborted} = True")
+            if pcAbort:
+                self._notice("abort", f"Cycle aborted: {reason}", ttlSecs=20)
             self._resetOpTimestamps()  # Clear cycle timing on abort
             self.lastAbortReason = reason
             self.abortCount += 1
@@ -1440,7 +1623,8 @@ class PLCIOServer:
                     abort, reason = readAbortInIOServerFromFEServer(connection, block=500)
                     if abort:
                         objRef.abortCycle(f"abort from the frontend ({reason or 'no reason given'})",
-                                          notifyQRCodeServer=True, notifyFrontend=False, clearQueues=True)
+                                          notifyQRCodeServer=True, notifyFrontend=False, clearQueues=True,
+                                          pcAbort=True)
                 except Exception as e:
                     printBoldRed(f"Exception {e} in the frontend abort listener")
                     connection = None
@@ -1540,6 +1724,20 @@ class PLCIOServer:
         objRef = self
 
         def writeTagsLoop():
+            """The write loop, restarted after an unexpected exception (logged) so that the IOServer never stops
+            answering the PLC while it still sends ALIVE."""
+            while not objRef.shutdown:
+                try:
+                    writeTagsLoopBody()
+                except Exception as e:
+                    import traceback
+                    message = f"Write loop stopped by an exception ({e}); restarted"
+                    printBoldRed(message)
+                    objRef.logger.error(f"{message}\n{traceback.format_exc()}")
+                    objRef._audit(message)
+                    time.sleep(0.5)
+
+        def writeTagsLoopBody():
             """Main do loop to take action wherever something required."""
             written_TagsToBeWritten: int = 0
             while not objRef.shutdown:
@@ -1553,6 +1751,20 @@ class PLCIOServer:
                             written_TagsToBeWritten += 1
                         stateBeforeWrite = stateOfTags
                         if stateBeforeWrite == MachineState.WRITE_QR_CODE:
+                            hold = objRef.newCycleHoldReason()
+                            if hold:
+                                # waiting for a scan when a new cycle went on hold (database down): the QR code server
+                                # stops reading and the IOServer goes back to READ_QR_CODE (CheckQRCode left as it is);
+                                # the read is asked for again when the hold ends
+                                message = f"Waiting for a QR code scan: new cycles on hold ({hold}); QR code read stopped"
+                                printBoldRed(message); objRef.logger.error(message); objRef._audit(message)
+                                try:
+                                    sendAbortFromIOServerToQRCodeServer(self.redisConnectionForWrites)
+                                except Exception:
+                                    noteSuppressed()
+                                objRef.machineState.decrementStateFrom(MachineState.WRITE_QR_CODE)
+                                time.sleep(objRef.write_loop_interval)
+                                continue
                             success, qrCode = readDataInIOServerFromQRCodeServer(self.redisConnectionForWrites)
                             if success and objRef.machineState.getCurrentState() != stateBeforeWrite:
                                 printBoldRed("QR code received after the cycle was aborted; ignored")
@@ -1563,6 +1775,8 @@ class PLCIOServer:
                                 publishCycleContext(objRef.redisConnectionForWrites, qrCode, objRef.cycleId)
                                 objRef._audit(f"CYCLE {objRef.cycleId} START: QR code accepted by the QR server: {qrCode}")
                                 printBoldGreen(f"Received QR Code: {qrCode}")
+                                if PLCIOServer.PC_PLC_CycleAborted:      # a new cycle: the PC abort flag is cleared
+                                    objRef.write_bool(PLCIOServer.PC_PLC_CycleAborted, False, debug=False)
                                 # 1. Populate the cycle settings (side, model, setpoints) FIRST ...
                                 settingsWritten = objRef.writeCycleSettingsToPLC(qrCode)
                                 # 2. ... then QRCodeCheckOK, then QRCodeCheckDone. If the settings could not all be
@@ -1580,8 +1794,8 @@ class PLCIOServer:
                                     printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                         else:
                             # stateBeforeWrite: the WRITE state we are about to act on (captured before the read)
-                            previousMachineState, evaluation = readDataInIOServerFromCameraServer(
-                                self.redisConnectionForWrites)
+                            previousMachineState, evaluation, answerId = readDataInIOServerFromCameraServer(
+                                self.redisConnectionForWrites, withRequestId=True)
                             if objRef.machineState.getCurrentState() != stateBeforeWrite:
                                 # the cycle was aborted while waiting for the camera: this answer is for the old cycle
                                 printBoldRed(f"Camera answer for {stateBeforeWrite.name} received after the cycle was "
@@ -1589,7 +1803,19 @@ class PLCIOServer:
                                 time.sleep(objRef.write_loop_interval)
                                 continue
                             expectedPictureState = MachineState(int(stateBeforeWrite) - 1)
-                            if previousMachineState not in (MachineState.INVALID_STATE, expectedPictureState):
+                            request = objRef._cameraRequest
+                            if request is not None and request["writeState"] != stateBeforeWrite:
+                                request = None
+                            gotAnswer = answerId is not None or previousMachineState != MachineState.INVALID_STATE
+                            if gotAnswer and answerId is not None and request is not None and answerId != request["id"]:
+                                # an answer to an earlier request (it came after the IOServer stopped waiting for it)
+                                message = (f"Camera answer to request {answerId} while waiting for {request['id']} "
+                                           f"({expectedPictureState.name}); ignored")
+                                printBoldRed(message)
+                                objRef._audit(message)
+                                time.sleep(objRef.write_loop_interval)
+                                continue
+                            if gotAnswer and previousMachineState not in (MachineState.INVALID_STATE, expectedPictureState):
                                 # an answer for another picture (late, from an earlier request): not this check's result
                                 message = (f"Camera answer for {previousMachineState.name} while waiting for "
                                            f"{expectedPictureState.name}; ignored")
@@ -1597,6 +1823,23 @@ class PLCIOServer:
                                 objRef._audit(message)
                                 time.sleep(objRef.write_loop_interval)
                                 continue
+                            noAnswerReason = None
+                            if gotAnswer and answerId is not None and previousMachineState == MachineState.INVALID_STATE:
+                                evaluation = False          # the camera answered this request, without a picture state
+                            elif not gotAnswer:
+                                # no answer yet: camera server down -> NOT OK at once; none within the timeout -> NOT OK
+                                timeout = CosThetaConfigurator.getInstance().getPlcCameraAnswerTimeout()
+                                waited = time.monotonic() - (request["sentAt"] if request is not None
+                                                             else objRef._writeStateSince)
+                                if objRef._cameraDown:
+                                    noAnswerReason = "camera server down"
+                                elif waited > timeout:
+                                    noAnswerReason = f"no answer from the camera server in {timeout:g} s"
+                                if noAnswerReason is None:
+                                    time.sleep(objRef.write_loop_interval)
+                                    continue
+                                objRef._pictureNotOkWithoutAnswer(stateBeforeWrite, noAnswerReason)
+                                evaluation = False
                             if evaluation:
                                 if not objRef.perform_write_state_action(tags=tagsToBeWritten, result=True,
                                                                          expectedState=stateBeforeWrite):
@@ -1616,13 +1859,14 @@ class PLCIOServer:
                                     objRef._recordOpEnd(PLCIOServer.OP_SPLITPIN)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
                                     objRef._recordOpEnd(PLCIOServer.OP_CAP)
+                                objRef._cameraRequest = None
                                 printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                 objRef.machineState.incrementStateFrom(stateBeforeWrite)
                                 printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                             else:
-                                if previousMachineState != MachineState.INVALID_STATE and \
-                                        objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
-                                                                          expectedState=stateBeforeWrite):
+                                objRef._cameraRequest = None
+                                if objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
+                                                                     expectedState=stateBeforeWrite):
                                     # OK = False, trigger False, Done True, (0.1 s) Done False written: only now back
                                     # to the take-picture state, where trigger and Done are both False
                                     printBoldRed(
@@ -1650,35 +1894,39 @@ class PLCIOServer:
             if valueRead:
                 successfullySent: bool = False
                 try:
-                    # Step 0: QR Code
+                    # Step 0: QR Code - not while a new cycle is on hold (heartbeat server, frontend or database
+                    # down): the QR code server is then not asked to read; CheckQRCode is left as it is
                     if currentState == MachineState.READ_QR_CODE:
+                        hold = self.newCycleHoldReason()
+                        if hold:
+                            if self._heldReasonLogged != hold:
+                                self._heldReasonLogged = hold
+                                message = f"QR code read requested by the PLC, held: {hold}"
+                                printBoldRed(message); self.logger.error(message); self._audit(message)
+                            return False
                         successfullySent = sendDataFromIOServerToQRCodeServer(self.redisConnectionForReads)
 
                     # Step 1: Knuckle — START of T1
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_KNUCKLE)
 
                     # Step 2: Hub (HUB_AND_BOTTOM_BEARING state) — START of T2
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_HUB_BEARING)
 
                     # Step 3: Hub and Second Bearing (TOP_BEARING state) — START of T3
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_TOP_BEARING)
 
                     # Step 4: Nut and Plate Washer — START of T4
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_NUT_WASHER)
 
@@ -1688,8 +1936,7 @@ class PLCIOServer:
 
                     # Step 7: Bunk for Component Press — START of T5 and T6
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_NOCAP_BUNK)
                             self._recordOpStart(PLCIOServer.OP_TORQUE2)
@@ -1705,8 +1952,7 @@ class PLCIOServer:
 
                     # Step 9: No Bunk
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
 
                     # Step 10: Tightening Torque 2 Done — END of T6
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2_DONE:
@@ -1715,22 +1961,19 @@ class PLCIOServer:
 
                     # Step 11: Split Pin and Washer — START of T7
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_SPLITPIN)
 
                     # Step 12: Cap — START of T8
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_CAP)
 
                     # Step 13: Bunk for Cap Press — START of T9
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
-                        successfullySent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads,
-                                                                              currentMachineState=MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_BUNK_CAP_PRESS)
 
@@ -1832,6 +2075,58 @@ class PLCIOServer:
                                    keepPendingResets=completed)
 
         return returnValue
+
+    # ---------------------------------------------------------------- picture requests (camera server)
+    def _requestPicture(self, pictureState: MachineState) -> bool:
+        """Ask the camera server for the picture of pictureState, with a new request id. The write loop accepts only
+        the answer with this id (a late answer to an earlier request is ignored), and gives up after
+        plc.camera.answer.timeout.sec (or at once when the camera server is down): the check is then NOT OK. The
+        frontend shows only results of the active request (setActiveCameraRequest)."""
+        self._cameraRequestSeq += 1
+        requestId = f"{self.cycleId}-{self._cameraRequestSeq}"
+        setActiveCameraRequest(self.redisConnectionForReads, requestId)
+        self._cameraRequest = {"id": requestId, "pictureState": pictureState,
+                               "writeState": MachineState(int(pictureState) + 1), "sentAt": time.monotonic()}
+        sent = sendDataFromIOServerToCameraServer(self.redisConnectionForReads, currentMachineState=pictureState,
+                                                  requestId=requestId)
+        if not sent:
+            self._cameraRequest = None
+        return sent
+
+    def _dropCameraRequest(self) -> None:
+        """No answer is awaited any more (abort): the request is taken off the camera server's queue if it is still
+        there, and the frontend shows no result of it."""
+        request, self._cameraRequest = self._cameraRequest, None
+        try:
+            r = self.redisConnectionForWrites
+            if request is not None:
+                for messageId, fields in r.xrange(io2cameraq):
+                    if fields.get(requestIdKeyString.encode()) == request["id"].encode():
+                        r.xdel(io2cameraq, messageId)
+            setActiveCameraRequest(r, None)
+        except Exception:
+            noteSuppressed()
+
+    def _pictureNotOkWithoutAnswer(self, writeState: MachineState, reason: str) -> None:
+        """The camera server gave no answer (down, or none within the timeout): the frontend is shown the check as
+        NOT OK with the reason (a result of a new request id, so a late answer of the camera is not shown), the
+        request is taken off the camera's queue, and the caller writes the NOT OK handshake to the PLC."""
+        request = self._cameraRequest
+        pictureState = MachineState(int(writeState) - 1)
+        self.cameraTimeouts += 1
+        message = f"{pictureState.name}: {reason}; reported NOT OK to the PLC"
+        printBoldRed(message); self.logger.error(message); self._audit(message)
+        self._dropCameraRequest()
+        try:
+            r = self.redisConnectionForWrites
+            replacementId = f"{request['id'] if request else self.cycleId}:{'down' if 'down' in reason else 'timeout'}"
+            setActiveCameraRequest(r, replacementId)
+            sendDataFromCameraServerToFEServer(r, originalImage=None, processedImage=None, result=notok,
+                                               currentMachineState=pictureState, aProducer="IOServer",
+                                               requestId=replacementId, reason=reason)
+        except Exception as e:
+            printBoldRed(f"Could not send the NOT OK of {pictureState.name} to the frontend: {e}")
+        self._notice("camera", f"Picture NOT OK: {reason}", ttlSecs=15)
 
     def _scheduleStation2TorqueReset(self, readState: MachineState) -> None:
         """Rule (c) for the Station 2 tightening torque (read twice per cycle, same tags): ValueSet = False,
@@ -2014,6 +2309,7 @@ class PLCIOServer:
         state) - so the camera server is told (end-of-cycle message on its queue, sent after an abort has cleared the
         queues) and drops what it kept for the cycle: the top bearing profile for the nut / washer check."""
         self._auditStateChange(oldState, newState)
+        self._writeStateSince = time.monotonic()     # when the current state began (camera answer timeout)
         if newState == MachineState.READ_QR_CODE and oldState is not None and oldState != MachineState.READ_QR_CODE:
             completed = oldState == MachineState.READ_FREE_ROTATION_TORQUE_1
             how = "completed" if completed else f"aborted in {getattr(oldState, 'name', oldState)}"
@@ -2492,7 +2788,7 @@ class PLCIOServer:
             if state in (MachineState.READ_QR_CODE,):
                 self.resetForNextCycle(reason)       # no cycle in progress: nothing to abort
             else:
-                self.abortCycle(reason)             # QR server, queues, frontend, camera (end of cycle), reset
+                self.abortCycle(reason, pcAbort=True)   # QR server, queues, frontend, camera (end of cycle), reset
             if not self._resetIncomplete:
                 self._plcCheckPending = False
 

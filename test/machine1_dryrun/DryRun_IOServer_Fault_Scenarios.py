@@ -89,7 +89,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup, setting_tags, use_machine_settings        # COSTHETA_PLC_VENDOR=siemens -> SiemensPLCDataIO on a simulated S7 data block
+from _plc_sim import setup, setting_tags, use_machine_settings, HEARTBEAT        # COSTHETA_PLC_VENDOR=siemens -> SiemensPLCDataIO on a simulated S7 data block
 IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
@@ -112,6 +112,7 @@ SCAN = threading.Event()                  # operator scans once per SCAN.set()
 CAMERA_PLAN = collections.defaultdict(collections.deque)   # picture state -> deque of results (default ok)
 PICTURE_REQUESTS = []                     # picture states the camera was asked for, in order
 END_OF_CYCLE_SEEN = []                    # times the camera received the end-of-cycle message (scenario H)
+REQUEST_IDS = []                          # request ids of the picture requests, in order (scenario J)
 
 def qr_and_camera():
     rq = Redis('localhost', 6379)
@@ -123,14 +124,22 @@ def qr_and_camera():
             SCAN.clear()
             status, code = QR_PLAN.popleft()
             sendDataFromQRCodeServerToIOServer(rq, qrCode=code, qrCodeStatus=status)
-        t, state, take = readDataInCameraServerFromIOServer(rq, block=50)
+        t, state, take, requestId = readDataInCameraServerFromIOServer(rq, block=50, withRequestId=True)
         if (not take) and state == MS.READ_QR_CODE:
             END_OF_CYCLE_SEEN.append(time.time())
         if take:
             PICTURE_REQUESTS.append(state)
+            REQUEST_IDS.append(requestId)
             result = CAMERA_PLAN[state].popleft() if CAMERA_PLAN[state] else ok
+            if result == "SILENT":                       # the camera server never answers (scenario J)
+                continue
+            if isinstance(result, tuple) and result[0] == "LATE":   # ("LATE", secs, result): answers after secs
+                threading.Timer(result[1], sendDataFromCameraServerToIOServer,
+                                kwargs=dict(redisConnection=Redis('localhost', 6379), result=result[2],
+                                            currentMachineState=state, requestId=requestId)).start()
+                continue
             time.sleep(0.3)
-            sendDataFromCameraServerToIOServer(rq, result=result, currentMachineState=state)
+            sendDataFromCameraServerToIOServer(rq, result=result, currentMachineState=state, requestId=requestId)
 threading.Thread(target=qr_and_camera, daemon=True).start()
 
 def fe():                                  # consume io2frontend.q like the frontend does
@@ -234,9 +243,11 @@ def wrapped():
     return wait_for(lambda: 28 in TRACE and TRACE[-1] in (1, 2), timeout=10)
 
 def finish_qr_handshake():
+    # The PC writes the whole result handshake itself (OK, CheckQRCode=False, Done=True, Done=False, and after a NOT OK
+    # CheckQRCode=True again to re-arm the read), so the simulated PLC only waits for Done. (It used to set CheckQRCode
+    # False 0.3 s after Done, which could overwrite the PC's re-arm after a NOT OK: E2's re-scan then never came.)
     assert wait_for(lambda: TAGS[IOServer.PC_PLC_QRCodeCheckDone] is True), "QR done timeout"
     time.sleep(0.3)
-    with LOCK: TAGS[IOServer.PLC_PC_CheckQRCode] = False; TAGS[IOServer.PC_PLC_QRCodeCheckDone] = False
 
 SETTING_TAGS = setting_tags(IOServer)      # the state-2 settings tags this PLC has
 
@@ -333,7 +344,8 @@ def run_scenarios():
     # Station 2 rotation-during-tightening done: reset with the Station 2 torque tags when the PLC provides it
     if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
         RESET_TAGS["PLC_PC_Station2RotationDuringTighteningDone"] = "bool"
-    NOT_RESET_ON_ABORT = {"PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
+    NOT_RESET_ON_ABORT = {"PC_PLC_CycleAborted",        # set True after a PC-side abort, False at the next QR code
+                          "PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
                           "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                           "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
                           "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW"}
@@ -514,28 +526,50 @@ def run_scenarios():
     check("E2 cycle then completes", wrapped())
 
     if fromDatabase:
-        # E3: machine settings not available from the database -> NOTHING written, QR OK=False, Done=True
+        # E3 (2026-11-06): machine settings not available from the database -> the side is written, the other settings
+        # are left as the PLC holds them, QR OK=True, the cycle goes ahead; the record gets the settings last written
         import costhetaio.commonplc.PLCIOServer as PIO
+        lastWritten = dict(io._lastWrittenSettings)
         origGet = PIO.getMachineSettings
         PIO.getMachineSettings = lambda db: {}
         TRACE.clear(); mark = len(WRITES)
         r.delete("cycleSettings:" + QR_DOST_LHS)
+        r.delete("feNotice:settings")
         plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
         qrw = writes_of((QR_OK, QR_DONE), mark)
-        check("E3 no machine settings in the database -> no settings tag written at all", writes_of(SETTING_TAGS, mark) == [],
-              str(writes_of(SETTING_TAGS, mark)))
-        check("E3 -> QRCodeCheckOK=False then QRCodeCheckDone=True", (QR_OK, False) in qrw and (QR_OK, True) not in qrw
-              and (QR_DONE, True) in qrw and qrw.index((QR_OK, False)) < qrw.index((QR_DONE, True)), str(qrw))
-        check("E3 nothing published for the DB record", readCycleSettingsForQRCode(r, QR_DOST_LHS) == {})
+        check("E3 no machine settings in the database -> only the side written",
+              writes_of(SETTING_TAGS, mark) == [(IOServer.PC_PLC_LH_RH_Selection, 1)], str(writes_of(SETTING_TAGS, mark)))
+        check("E3 -> QRCodeCheckOK=True then QRCodeCheckDone=True (the cycle goes ahead)",
+              (QR_OK, True) in qrw and (QR_OK, False) not in qrw[:qrw.index((QR_OK, True))]
+              and qrw.index((QR_OK, True)) < qrw.index((QR_DONE, True)), str(qrw))
+        published = readCycleSettingsForQRCode(r, QR_DOST_LHS)
+        check("E3 the record gets the settings the PLC holds (last written)", lastWritten != {} and published == lastWritten,
+              f"published {published}, last written {lastWritten}")
+        check("E3 'settings not updated' shown on the frontend", bool(r.get("feNotice:settings")))
         PIO.getMachineSettings = origGet
-        mark = len(WRITES)
-        QR_PLAN.append((ok, QR_DOST_LHS))
-        wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE)
-        SCAN.set(); finish_qr_handshake()
-        check("E3 settings back -> re-scan writes them, then OK=True / Done", (QR_OK, True) in writes_of((QR_OK,), mark)
-              and len(writes_of(SETTING_TAGS, mark)) == len(SETTING_TAGS) and order_problems(mark) == [], str(order_problems(mark)))
         run_steps()
-        check("E3 cycle then completes", wrapped())
+        check("E3 cycle completes", wrapped())
+
+        # E4: one setting refused by the PLC (3 attempts) -> the cycle goes ahead; that setting's last written value
+        # is recorded
+        failTag = IOServer.PC_PLC_TighteningTorque2Setpoint
+        origWriteFloat = io.write_float
+        io.write_float = types.MethodType(lambda self, tag, value, debug=False: False if tag == failTag
+                                          else origWriteFloat(tag, value, debug), io)
+        use_machine_settings("Test", tightening_torque2_setpoint=18.5)
+        TRACE.clear(); mark = len(WRITES)
+        r.delete("cycleSettings:" + QR_DOST_LHS)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        qrw = writes_of((QR_OK, QR_DONE), mark)
+        io.write_float = origWriteFloat
+        check("E4 a setting the PLC refuses -> QR OK=True, the cycle goes ahead", (QR_OK, True) in qrw, str(qrw))
+        published = readCycleSettingsForQRCode(r, QR_DOST_LHS)
+        check("E4 the refused setting is recorded with its last written value, the others with the new ones",
+              published.get("tightening_torque2_setpoint") == lastWritten.get("tightening_torque2_setpoint")
+              and published.get("tightening_torque1_setpoint") is not None, str(published))
+        run_steps()
+        check("E4 cycle completes", wrapped())
+        use_machine_settings("Test")
 
 
 def run_frontend_abort():
@@ -939,6 +973,151 @@ def run_plc_connection():
     check("I a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
 
 
+def run_servers_down():
+    """J (2026-11-06). Camera answer timeout and request ids; what the IOServer does when another server is down:
+    camera -> picture NOT OK at once; database -> cycle finished, next one held; frontend / heartbeat server -> cycle
+    aborted, next one held. The simulated heartbeat server (_plc_sim.HEARTBEAT) plays the statuses."""
+    print("\n=== J. Camera answer timeout; request ids; camera / database / frontend / heartbeat server down ===", flush=True)
+    from Configuration import CosThetaConfigurator as C
+    origTimeout = C.getPlcCameraAnswerTimeout
+    C.getPlcCameraAnswerTimeout = classmethod(lambda cls: 3.0)
+    def notok_handshake(trig, done, okTag, mark):
+        w = writes_of((okTag, done, trig), mark)
+        return (okTag, False) in w and (done, True) in w and w.index((okTag, False)) < w.index((done, True))
+    def press_and_wait_done(trig, done, timeout):
+        with LOCK: TAGS[trig] = True
+        t0 = time.time()
+        got = wait_for(lambda: TAGS[done] is True, timeout)
+        return got, time.time() - t0
+    def release(trig, done):
+        with LOCK: TAGS[trig] = False
+        wait_for(lambda: TAGS[done] is False, 3); time.sleep(0.3)
+
+    # J1: the camera server never answers -> NOT OK after the timeout; the frontend gets the NOT OK (new request id)
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE].append("SILENT")
+    r.delete("feNotice:camera")
+    fe0 = r.xlen(camera2feq); mark = len(WRITES); n0 = len(REQUEST_IDS)
+    got, took = press_and_wait_done(IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone, 8)
+    check("J1 no camera answer -> NOT OK written after the 3 s timeout", got and 2.5 <= took <= 5.5
+          and notok_handshake(IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone, IOServer.PC_PLC_KnuckleCheckOK, mark),
+          f"{took:.1f} s {writes_of((IOServer.PC_PLC_KnuckleCheckOK, IOServer.PC_PLC_KnuckleCheckDone), mark)}")
+    release(IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone)
+    check("J1 back to the knuckle picture state", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, 3))
+    active = (r.get(ACTIVE_CAMERA_REQUEST_KEY) or b"").decode()
+    last = r.xrevrange(camera2feq, count=1)
+    feMsg = last[0][1] if last else {}
+    check("J1 frontend sent the NOT OK of the knuckle with the replacement request id (active)",
+          r.xlen(camera2feq) == fe0 + 1 and feMsg.get(b"result") == notok.encode()
+          and active == f"{REQUEST_IDS[n0]}:timeout" and feMsg.get(requestIdKeyString.encode()) == active.encode(),
+          f"active {active}, request {REQUEST_IDS[n0:]}")
+    check("J1 'Picture NOT OK: no answer ...' notice for the frontend", b"no answer" in (r.get("feNotice:camera") or b""))
+    # a late camera result of the old request is not shown by the frontend
+    sendDataFromCameraServerToFEServer(r, None, None, ok, MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, requestId=REQUEST_IDS[n0])
+    r.xdel(camera2feq, *[m[0] for m in r.xrange(camera2feq)][:-1])     # keep only the late one
+    t_, _, _, res_, _ = readDataInFEServerFromCameraServer(r, block=100)
+    check("J1 the frontend reader drops a late result of the timed-out request", res_ is None and r.xlen(camera2feq) == 0)
+    plc_check(IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone)       # retry: answered OK
+    check("J1 retry -> OK, on to the hub", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING, 3))
+
+    # J2: the camera answers NOT OK too late (after the timeout); the retry's OK is taken, not the late NOT OK
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING].append(("LATE", 4.0, notok))
+    mark = len(WRITES); n0 = len(REQUEST_IDS)
+    got, took = press_and_wait_done(IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone, 8)
+    release(IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone)
+    time.sleep(1.5)                                    # the late NOT OK arrives (now in the queue)
+    mark2 = len(WRITES)
+    plc_check(IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone)              # retry, answered OK
+    check("J2 timeout -> NOT OK; the late NOT OK of the first request ignored; the retry's OK taken",
+          got and (IOServer.PC_PLC_HubCheckOK, True) in writes_of((IOServer.PC_PLC_HubCheckOK,), mark2)
+          and wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, 3)
+          and len(set(REQUEST_IDS[n0:])) == 2, f"ids {REQUEST_IDS[n0:]} {writes_of((IOServer.PC_PLC_HubCheckOK,), mark2)}")
+
+    # J3: camera server down -> the picture is NOT OK at once (no waiting for the timeout)
+    HEARTBEAT["camera"] = False
+    check("J3 camera server reported down", wait_for(lambda: io._cameraDown, 5))
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING].append("SILENT")
+    mark = len(WRITES)
+    got, took = press_and_wait_done(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone, 5)
+    check("J3 camera down -> NOT OK at once (< 1.5 s)", got and took < 1.5
+          and notok_handshake(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone,
+                              IOServer.PC_PLC_HubAndSecondBearingCheckOK, mark), f"{took:.2f} s")
+    check("J3 notice 'camera server down'", b"camera server down" in (r.get("feNotice:camera") or b""))
+    release(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone)
+    HEARTBEAT["camera"] = True
+    check("J3 camera server back", wait_for(lambda: not io._cameraDown, 5))
+    run_steps(first="TOP", last="NOBUNK")
+
+    # J4: database down part-way -> the cycle is finished ("Continue till end of cycle"), the next one is held
+    HEARTBEAT["db"] = False
+    check("J4 database reported down", wait_for(lambda: io._databaseDown, 5))
+    check("J4 notice 'Continue till end of cycle' during the cycle",
+          wait_for(lambda: b"continue till end of cycle" in (r.get("feNotice:db") or b"").lower(), 4))
+    run_steps(first="TORQUE2")
+    check("J4 the cycle in progress completes", wrapped(), f"trace {TRACE}")
+    check("J4 next cycle held: stays at READ_QR_CODE (CheckQRCode armed, QR code server not asked)",
+          not wait_for(lambda: io.machineState.getCurrentState() != MS.READ_QR_CODE, 3)
+          and TAGS[IOServer.PLC_PC_CheckQRCode] is True, io.machineState.getCurrentState().name)
+    check("J4 notice 'next cycle on hold' after the cycle", b"next cycle on hold" in (r.get("feNotice:db") or b"").lower())
+    HEARTBEAT["db"] = True
+    check("J4 database back -> the QR code read is asked for (WRITE_QR_CODE)",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6), io.machineState.getCurrentState().name)
+    check("J4 notice removed", wait_for(lambda: r.get("feNotice:db") is None, 4))
+
+    # J5: database down while waiting for the scan -> QR code read stopped, back to READ_QR_CODE; back when it returns
+    a0 = r.xlen(io2qrcodeabortq)
+    HEARTBEAT["db"] = False
+    check("J5 database down while waiting for the scan -> ABORT to the QR code server, back to READ_QR_CODE",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_QR_CODE and r.xlen(io2qrcodeabortq) > a0, 6))
+    HEARTBEAT["db"] = True
+    check("J5 database back -> WRITE_QR_CODE again", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
+
+    if VENDOR == "allenbradley":          # the simulated Allen-Bradley takes any tag name; the Siemens one needs an address
+        IOServer.PC_PLC_CycleAborted = "PC_PLC_CycleAborted"
+    # J6: frontend down part-way -> abort (the frontend not told: it is down), next cycle held until it is back
+    TRACE.clear()
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="KNUCKLE")
+    e0, aborts0 = r.xlen(emergencyq), io.abortCount
+    HEARTBEAT["fe"] = False
+    check("J6 frontend down -> cycle aborted, back at the QR code",
+          wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() == MS.READ_QR_CODE, 6)
+          and "frontend down" in io.lastAbortReason, io.lastAbortReason)
+    check("J6 no emergency message to the (down) frontend", r.xlen(emergencyq) == e0)
+    if VENDOR == "allenbradley":
+        check("J6 PC_PLC_CycleAborted = True after the PC's abort", TAGS["PC_PLC_CycleAborted"] is True)
+    check("J6 next cycle held while the frontend is down",
+          not wait_for(lambda: io.machineState.getCurrentState() != MS.READ_QR_CODE, 3))
+    HEARTBEAT["fe"] = True
+    check("J6 frontend back -> QR code read asked for", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
+
+    # J7: heartbeat server silent part-way -> abort, frontend and camera server told, next cycle held
+    TRACE.clear()
+    QR_PLAN.append((ok, QR_DOSTPLUS_RHS)); SCAN.set(); finish_qr_handshake()
+    if VENDOR == "allenbradley":
+        check("J6 PC_PLC_CycleAborted = False once the next QR code is accepted", TAGS["PC_PLC_CycleAborted"] is False)
+    run_steps(last="HUB")
+    e0, aborts0, eoc0 = r.xlen(emergencyq), io.abortCount, len(END_OF_CYCLE_SEEN)
+    HEARTBEAT["silent"] = True
+    silence = C.getInstance().getHeartbeatServerSilenceSecs()
+    check(f"J7 heartbeat server silent > {silence:g} s -> cycle aborted, frontend and camera server told",
+          wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() == MS.READ_QR_CODE, silence + 5)
+          and "heartbeat server down" in io.lastAbortReason and r.xlen(emergencyq) > e0
+          and wait_for(lambda: len(END_OF_CYCLE_SEEN) > eoc0, 3), io.lastAbortReason)
+    check("J7 next cycle held while the heartbeat server is down",
+          not wait_for(lambda: io.machineState.getCurrentState() != MS.READ_QR_CODE, 3))
+    HEARTBEAT["silent"] = False
+    check("J7 heartbeat server back -> QR code read asked for",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
+    TRACE.clear()
+    QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("J a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+    IOServer.PC_PLC_CycleAborted = ""
+    C.getPlcCameraAnswerTimeout = origTimeout
+
+
 # COSTHETA_DRYRUN_SCENARIOS=G (or e.g. "F,G"): run only these groups (A-E are one group); default: all
 import os as _os
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
@@ -951,6 +1130,7 @@ try:
     if _wanted("G"): run_vision_result_reset()
     if _wanted("H"): run_end_of_cycle()
     if _wanted("I"): run_plc_connection()
+    if _wanted("J"): run_servers_down()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

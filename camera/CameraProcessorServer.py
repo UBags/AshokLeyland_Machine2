@@ -110,22 +110,26 @@ class MonitorGetPicQueue(GenericQueueProcessor):
         timeOfMessage : Union[str, float, None] = None
         currentMachineState : MachineState = MachineState.INVALID_STATE
         takePicture : bool = False
+        requestId = None
         try:
-            timeOfMessage, currentMachineState, takePicture = readDataInCameraServerFromIOServer(self.redisConnectionQ, block=500)
+            timeOfMessage, currentMachineState, takePicture, requestId = readDataInCameraServerFromIOServer(
+                self.redisConnectionQ, block=500, withRequestId=True)
         except Exception as e:
             logBoth('logWarning', MonitorGetPicQueue.logSource, f"Exception reading camera queue: {e}", Logger.ISSUE)
             self.connectToRedis()
         if (not takePicture) and currentMachineState == MachineState.READ_QR_CODE:
-            # End-of-cycle message from the IOServer (cycle completed or aborted): drop what was kept for the cycle
-            ImageProcessor.clearBearingCentreAndRadii()
+            # End-of-cycle message from the IOServer (cycle completed or aborted): drop what was kept for the cycle -
+            # the QR code, the earlier pictures and the top bearing profile
+            ImageProcessor.endOfCycle()
             logBoth('logInfo', MonitorGetPicQueue.logSource,
-                    "End of cycle from the IOServer: top bearing profile dropped", Logger.SUCCESS)
+                    "End of cycle from the IOServer: QR code, pictures and top bearing profile of the cycle dropped",
+                    Logger.SUCCESS)
             return None
         if takePicture:
             timeOfMessage = float(timeOfMessage)
             logBoth('logInfo', MonitorGetPicQueue.logSource, f"Got takePicture command in MonitorGetPicQueue", Logger.SUCCESS)
             messageToBeSentToConsumer = {timeKeyString: timeOfMessage, currentMachineStateKeyString : currentMachineState,
-                    actionKeyString: takePictureCommand}
+                    actionKeyString: takePictureCommand, requestIdKeyString: requestId}
             logBoth('logDebug', MonitorGetPicQueue.logSource, f"In MonitorGetPic, sending message {messageToBeSentToConsumer}", Logger.GENERAL)
             return messageToBeSentToConsumer
         else:
@@ -284,7 +288,7 @@ class TakePictures(GenericQueueProcessor):
                     Logger.RISK)
             return {timeKeyString: item[timeKeyString] if isinstance(item, dict) else None, FIRST_PICTURE: None,
                     SECOND_PICTURE: None, THIRD_PICTURE: None,
-                    currentMachineStateKeyString: self._requestedState(item)}
+                    currentMachineStateKeyString: self._requestedState(item), requestIdKeyString: self._requestId(item)}
         if item is not None:
             try:
                 firstPic: Union[None | np.ndarray] = None
@@ -327,7 +331,8 @@ class TakePictures(GenericQueueProcessor):
                 #         reduced_image = img
                 #     else:
                 #         reduced_image = cv2.resize(img, (self.targetWidth, self.targetHeight), interpolation=cv2.INTER_AREA)
-                return {timeKeyString : item[timeKeyString], FIRST_PICTURE : firstPic, SECOND_PICTURE : secondPic, THIRD_PICTURE : thirdPic, currentMachineStateKeyString : item[currentMachineStateKeyString]}
+                return {timeKeyString : item[timeKeyString], FIRST_PICTURE : firstPic, SECOND_PICTURE : secondPic, THIRD_PICTURE : thirdPic, currentMachineStateKeyString : item[currentMachineStateKeyString],
+                        requestIdKeyString: self._requestId(item)}
             except Exception as e:
                 if self.debugOtherExceptions:
                     logBoth('logCritical', TakePictures.logSource,
@@ -339,7 +344,13 @@ class TakePictures(GenericQueueProcessor):
                         f"Could not take pictures in TakePictures.{self.name} as item is None",
                         Logger.RISK)
         return {timeKeyString: None, FIRST_PICTURE: None, SECOND_PICTURE: None,
-                THIRD_PICTURE: None, currentMachineStateKeyString: self._requestedState(item)}
+                THIRD_PICTURE: None, currentMachineStateKeyString: self._requestedState(item),
+                requestIdKeyString: self._requestId(item)}
+
+    @staticmethod
+    def _requestId(item):
+        """The IOServer's id of the picture request (echoed in the answers), or None."""
+        return item.get(requestIdKeyString) if isinstance(item, dict) else None
 
     @staticmethod
     def _requestedState(item) -> MachineState:
@@ -421,6 +432,20 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
 
     def preWorkLoop(self):
         return
+
+    def runAssessment(self, currentMachineState: MachineState, imagesToBeProcessed: list):
+        """assessPictures with a deadline (<vendor>.vision.check.timeout.sec, read at each check):
+        (allok, processed image, original image, reason). reason is None when the check itself gave the verdict, else
+        why the result is NOT OK without one (check timed out, worker not ready, ...).
+        <vendor>.vision.check.in.worker.process = True: the check runs in the vision check worker process (models
+        loaded there); one that times out is stopped with the process, which is started again. Else it runs in a
+        thread here; one that times out is NOT OK, but its thread cannot be stopped and keeps running."""
+        config = CosThetaConfigurator.getInstance()
+        timeout = config.getVisionCheckTimeout()
+        if config.getVisionCheckInWorkerProcess():
+            from camera.VisionCheckWorker import getVisionCheckWorker
+            return getVisionCheckWorker().assess(currentMachineState, imagesToBeProcessed, timeout)
+        return _assessInThread(currentMachineState, imagesToBeProcessed, timeout)
 
     def getTargetWidthAndHeight(self, currentMachineState : MachineState):
         currentMachineStateAsInt : int = MachineState.getMachineStateAsInt(currentMachineState)
@@ -514,325 +539,39 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                 modified_ThirdPic, modified_ThirdPic
             ]
 
-            methodToBeExecuted = None
-            try:
-                methodToBeExecuted = ImageProcessor.methodMapping[currentMachineState]
-            except Exception as e:
-                logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                        f"Exception getting methodMapping for state {currentMachineState}: {e}",
-                        Logger.RISK)
-
-            # Set flags based on currentMachineState directly (not dependent on methodMapping)
-            # This ensures batch processing works even when methodMapping entry is None
-            is_hub_and_bearing = (
-                        currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
-            is_nut_and_washer = (
-                        currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
-            is_nocap_bunk = (
-                        currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
-            is_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
-            is_no_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
-            is_top_bearing = (
-                        currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
-
-            # Defensive defaults — overwritten by all branches below
-            allok = False
-            chosenProcessedImage = None
-            chosenOriginalImage = None
-
-            # Enter this block if we have a method to execute OR if it's a batch processing state
-            if methodToBeExecuted is not None or is_hub_and_bearing or is_nut_and_washer or is_nocap_bunk or is_bunk or is_no_bunk or is_top_bearing:
-                nameOfMethod = ""
-                try:
-                    nameOfMethod : str = str(methodToBeExecuted.__name__) if hasattr(methodToBeExecuted, '__name__') else "unknown"
-                    if "checkknuckle" in nameOfMethod.lower():
-                        ImageProcessor.currentComponentQRCodeValue = None
-                        ImageProcessor.currentModelName = None
-                        ImageProcessor.currentSide = None
-                        ImageProcessor.clearCurrentPictures()
-                        ImageProcessor.clearBearingCentreAndRadii()
-                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                "Reset ImageProcessor attributes for checkKnuckle method",
-                                Logger.SUCCESS)
-                except Exception as e:
-                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                            f"methodToBeExecuted lacks __name__: {methodToBeExecuted}, , error: {e}",
-                            Logger.RISK)
-
-                try:
-                    if is_hub_and_bearing:
-                        # NEW: Use batch processing instead of threading
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckHubAndBottomBearing", Logger.GENERAL)
-
-                        try:
-                            # Use the first image (they're all duplicates in imagesToBeProcessed)
-                            test_image = imagesToBeProcessed[0]
-
-                            ImageProcessor.currentPictures[hubAndBottomBearingPictureKeyString] = test_image
-
-                            chosenProcessedImage, allok, winning_gamma = \
-                                CheckHubAndBottomBearing.checkHubAndBottomBearing(
-                                    test_image,
-                                    ImageProcessor.currentComponentQRCodeValue,
-                                    use_smart_gamma=True  # Enable smart ordering
-                                )
-
-                            chosenOriginalImage = test_image
-
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        f"CheckHubAndBottomBearing PASSED with gamma={winning_gamma}", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckHubAndBottomBearing FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckHubAndBottomBearing exception: {e}", Logger.ISSUE)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    elif is_nut_and_washer:
-                        # Use batch processing for CheckNutAndPlateWasher
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNutAndPlateWasher", Logger.GENERAL)
-
-                        try:
-                            test_image = imagesToBeProcessed[0]  # Just need one image
-
-                            ImageProcessor.currentPictures[nutAndPlateWasherPictureKeyString] = test_image
-
-                            chosenProcessedImage, allok = CheckNutAndPlateWasher.checkNutAndPlateWasher(
-                                test_image,
-                                ImageProcessor.currentPictures,
-                                ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.getBearingProfile()
-                            ) # Note: gamma not passed, relies on default
-
-                            chosenOriginalImage = test_image
-
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckNutAndPlateWasher PASSED", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckNutAndPlateWasher FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckNutAndPlateWasher exception: {e}", Logger.ISSUE)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    elif is_nocap_bunk:
-                        # NEW: Use batch processing for CheckNoCapBunk
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoCapBunk", Logger.GENERAL)
-
-                        try:
-                            # Use the first image (they're all duplicates in imagesToBeProcessed)
-                            test_image = imagesToBeProcessed[0]
-
-                            ImageProcessor.currentPictures[componentPressBunkPictureKeyString] = test_image
-
-                            chosenProcessedImage, allok, winning_gamma = CheckNoCapBunk.checkNoCapBunk(
-                                test_image,
-                                ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.getBearingProfile()
-                            )
-
-                            chosenOriginalImage = test_image
-
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        f"CheckNoCapBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckNoCapBunk FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckNoCapBunk exception: {e}", Logger.ISSUE)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    elif is_bunk:
-                        # NEW: Use batch processing for CheckBunk
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckBunk", Logger.GENERAL)
-
-                        try:
-                            # Use the first image (they're all duplicates in imagesToBeProcessed)
-                            test_image = imagesToBeProcessed[0]
-
-                            ImageProcessor.currentPictures[capPressBunkPictureKeyString] = test_image
-
-                            chosenProcessedImage, allok, winning_gamma = CheckBunk.checkBunk(
-                                test_image,
-                                ImageProcessor.currentComponentQRCodeValue,
-                                bearing_geometry=ImageProcessor.getBearingProfile()
-                            )
-
-                            chosenOriginalImage = test_image
-
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        f"CheckBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckBunk FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckBunk exception: {e}", Logger.ISSUE)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    elif is_no_bunk:
-                        # Use batch processing for CheckNoBunk (avoids ThreadPoolExecutor timeout issues)
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoBunk", Logger.GENERAL)
-
-                        try:
-                            test_image = imagesToBeProcessed[0]
-
-                            ImageProcessor.currentPictures[noBunkPictureKeyString] = test_image
-
-                            chosenProcessedImage, allok = CheckNoBunk.checkNoBunk(
-                                anImage=test_image,
-                                currentPictures=ImageProcessor.currentPictures,
-                                componentQRCode=ImageProcessor.currentComponentQRCodeValue
-                            )
-
-                            chosenOriginalImage = test_image
-
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckNoBunk PASSED", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckNoBunk FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckNoBunk exception: {e}", Logger.ISSUE)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    elif is_top_bearing:
-                        logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckTopBearing", Logger.GENERAL)
-                        try:
-                            test_image = imagesToBeProcessed[0]
-
-                            ImageProcessor.currentPictures[topBearingPictureKeyString] = test_image
-
-                            annotated_img, allok, geometry = CheckTopBearing.checkTopBearing(
-                                anImage=test_image,
-                                currentPictures=ImageProcessor.currentPictures,
-                                componentQRCode=ImageProcessor.currentComponentQRCodeValue
-                            )
-
-                            chosenProcessedImage = annotated_img if annotated_img is not None else test_image
-                            chosenOriginalImage = test_image
-
-                            # The ring found (with its edge profile) is kept for the nut / washer check; a NOT OK
-                            # result (also a retake) removes any ring kept earlier in the cycle
-                            ImageProcessor.saveBearingProfile(geometry if allok else None)
-                            if allok:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        f"CheckTopBearing PASSED, ring centre {geometry['center']}, radii "
-                                        f"{geometry['inner_radius']}-{geometry['outer_radius']}, outer diameter "
-                                        f"{geometry.get('outer_diameter')}, width {geometry.get('width')}", Logger.SUCCESS)
-                            else:
-                                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                        "CheckTopBearing FAILED", Logger.ISSUE)
-
-                        except Exception as e:
-                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                    f"CheckTopBearing exception: {e}", Logger.ISSUE)
-                            ImageProcessor.saveBearingProfile(None)
-                            import traceback
-                            traceback.print_exc()
-                            allok = False
-                            chosenProcessedImage = imagesToBeProcessed[0]
-                            chosenOriginalImage = imagesToBeProcessed[0]
-
-                    else:
-                        # Original threading logic for other checks (non-hub-bearing)
-                        with ThreadPoolExecutor(max_workers=6) as executor:
-                            futures = [executor.submit(methodToBeExecuted.__func__, ImageProcessor, anImage, index,
-                                                       gamma=index + 1)
-                                       for index, anImage in enumerate(imagesToBeProcessed)]
-
-                            wait(futures, timeout=5.0)
-
-                            for index, future in enumerate(futures):
-                                processedImage, evaluation = future.result(timeout=3.0)
-                                if processedImage is not None:
-                                    logBoth('logDebug', ConverterScalerAndProcessor.logSource,
-                                            f"Shape of processedImage = {processedImage.shape}, evaluation result is {evaluation}",
-                                            Logger.GENERAL)
-                                else:
-                                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                                            "processedImage is None", Logger.ISSUE)
-                                addAResult(anImage=processedImage, aResult=evaluation, index=index // 2)
-
-                except Exception as e:
-                    logBoth('logCritical', ConverterScalerAndProcessor.logSource,
-                            f'Could not complete ThreadPoolExecutor actions due to {e} in CameraProcessorServer',
-                            Logger.PROBLEM)
-                    pass
-
-            if not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
-                allok = False
-                # Original voting mechanism
-                okcount: int = 0
-                for result in resultsStatus:
-                    if result:
-                        okcount += 1
-
-                chosenProcessedImage = None
-                chosenOriginalImage = None
-
-                allok = (okcount >= 2)
-
-                for index, aPair in enumerate(resultsFromPictureAssessment):
-                    if aPair[0] == allok:
-                        chosenProcessedImage = aPair[1]
-                        chosenOriginalImage = imagesToBeProcessed[index * 2]  # Map back to original (0→0, 1→2, 2→4)
-                        break
+            requestId = item.get(requestIdKeyString) if isinstance(item, dict) else None
+            if currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE:
+                ImageProcessor.prepareForKnuckleCheck()
+            allok, chosenProcessedImage, chosenOriginalImage, reason = self.runAssessment(currentMachineState,
+                                                                                          imagesToBeProcessed)
             if allok:
                 logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: OK", Logger.SUCCESS)
             else:
-                logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: FAILED", Logger.ISSUE)
+                logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                        f"Final result: FAILED{f' ({reason})' if reason else ''}", Logger.ISSUE)
                 sendAlarmSignalToHeartbeatServer(redisConnection=self.redisConnection)
+                if reason:
+                    chosenProcessedImage = _withReason(chosenProcessedImage if chosenProcessedImage is not None
+                                                       else imagesToBeProcessed[0], reason)
+                    setFrontendNotice(self.redisConnection, "check", f"Picture NOT OK: {reason}", ttlSecs=15)
 
             sendDataFromCameraServerToFEServer(redisConnection=self.redisConnection, originalImage=chosenOriginalImage,
                                                processedImage=chosenProcessedImage, result=ok if allok else notok,
-                                               currentMachineState=currentMachineState)
+                                               currentMachineState=currentMachineState, requestId=requestId,
+                                               reason=reason)
             sendDataFromCameraServerToIOServer(redisConnection=self.redisConnection, result=ok if allok else notok,
-                                               currentMachineState=currentMachineState)
+                                               currentMachineState=currentMachineState, requestId=requestId)
         else:
             if self.debugOtherExceptions:
                 logBoth('logWarning', ConverterScalerAndProcessor.logSource,
                         f"Did not reduce {'None startingImage' if item is None else type(item)} in ConverterScalerAndProcessor.{self.name}",
                         Logger.RISK)
+            requestId = item.get(requestIdKeyString) if isinstance(item, dict) else None
             sendDataFromCameraServerToFEServer(redisConnection=self.redisConnection, originalImage=None,
                                                processedImage=None, result=notok,
-                                               currentMachineState=MachineState.INVALID_STATE)
+                                               currentMachineState=MachineState.INVALID_STATE, requestId=requestId)
             sendDataFromCameraServerToIOServer(redisConnection=self.redisConnection, result=notok,
-                                               currentMachineState=MachineState.INVALID_STATE)
+                                               currentMachineState=MachineState.INVALID_STATE, requestId=requestId)
 
         return None
 
@@ -842,6 +581,353 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             sendStoppedResponse(self.redisConnectionForMonitoringStop, f"{ConverterScalerAndProcessor.logSource}.{self.name}")
 
 # *******************************ConverterAndScaler end*********************************************
+
+def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list) -> Tuple[bool, Any, Any]:
+    """The vision check of one picture state on its (resized) pictures: (allok, processed image, original image).
+    Uses and updates the cycle's state kept in ImageProcessor (earlier pictures, bearing ring, QR code). Runs in the
+    camera server's assessment thread or in the vision check worker process (camera/VisionCheckWorker.py)."""
+    resetResults()
+    allok = False
+    chosenProcessedImage = None
+    chosenOriginalImage = None
+    methodToBeExecuted = None
+    try:
+        methodToBeExecuted = ImageProcessor.methodMapping[currentMachineState]
+    except Exception as e:
+        logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                f"Exception getting methodMapping for state {currentMachineState}: {e}",
+                Logger.RISK)
+
+    # Set flags based on currentMachineState directly (not dependent on methodMapping)
+    # This ensures batch processing works even when methodMapping entry is None
+    is_hub_and_bearing = (
+                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
+    is_nut_and_washer = (
+                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
+    is_nocap_bunk = (
+                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+    is_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
+    is_no_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+    is_top_bearing = (
+                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
+
+    # Defensive defaults — overwritten by all branches below
+    allok = False
+    chosenProcessedImage = None
+    chosenOriginalImage = None
+
+    # Enter this block if we have a method to execute OR if it's a batch processing state
+    if methodToBeExecuted is not None or is_hub_and_bearing or is_nut_and_washer or is_nocap_bunk or is_bunk or is_no_bunk or is_top_bearing:
+        # (the knuckle check's start of a new cycle - QR code, earlier pictures, bearing ring - is handled before the
+        # assessment, in ImageProcessor.prepareForKnuckleCheck, so that a knuckle retake keeps the cycle's QR code)
+
+        try:
+            if is_hub_and_bearing:
+                # NEW: Use batch processing instead of threading
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckHubAndBottomBearing", Logger.GENERAL)
+
+                try:
+                    # Use the first image (they're all duplicates in imagesToBeProcessed)
+                    test_image = imagesToBeProcessed[0]
+
+                    ImageProcessor.currentPictures[hubAndBottomBearingPictureKeyString] = test_image
+
+                    chosenProcessedImage, allok, winning_gamma = \
+                        CheckHubAndBottomBearing.checkHubAndBottomBearing(
+                            test_image,
+                            ImageProcessor.currentComponentQRCodeValue,
+                            use_smart_gamma=True  # Enable smart ordering
+                        )
+
+                    chosenOriginalImage = test_image
+
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                f"CheckHubAndBottomBearing PASSED with gamma={winning_gamma}", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckHubAndBottomBearing FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckHubAndBottomBearing exception: {e}", Logger.ISSUE)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            elif is_nut_and_washer:
+                # Use batch processing for CheckNutAndPlateWasher
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNutAndPlateWasher", Logger.GENERAL)
+
+                try:
+                    test_image = imagesToBeProcessed[0]  # Just need one image
+
+                    ImageProcessor.currentPictures[nutAndPlateWasherPictureKeyString] = test_image
+
+                    chosenProcessedImage, allok = CheckNutAndPlateWasher.checkNutAndPlateWasher(
+                        test_image,
+                        ImageProcessor.currentPictures,
+                        ImageProcessor.currentComponentQRCodeValue,
+                        bearing_geometry=ImageProcessor.getBearingProfile()
+                    ) # Note: gamma not passed, relies on default
+
+                    chosenOriginalImage = test_image
+
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckNutAndPlateWasher PASSED", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckNutAndPlateWasher FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckNutAndPlateWasher exception: {e}", Logger.ISSUE)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            elif is_nocap_bunk:
+                # NEW: Use batch processing for CheckNoCapBunk
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoCapBunk", Logger.GENERAL)
+
+                try:
+                    # Use the first image (they're all duplicates in imagesToBeProcessed)
+                    test_image = imagesToBeProcessed[0]
+
+                    ImageProcessor.currentPictures[componentPressBunkPictureKeyString] = test_image
+
+                    chosenProcessedImage, allok, winning_gamma = CheckNoCapBunk.checkNoCapBunk(
+                        test_image,
+                        ImageProcessor.currentComponentQRCodeValue,
+                        bearing_geometry=ImageProcessor.getBearingProfile()
+                    )
+
+                    chosenOriginalImage = test_image
+
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                f"CheckNoCapBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckNoCapBunk FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckNoCapBunk exception: {e}", Logger.ISSUE)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            elif is_bunk:
+                # NEW: Use batch processing for CheckBunk
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckBunk", Logger.GENERAL)
+
+                try:
+                    # Use the first image (they're all duplicates in imagesToBeProcessed)
+                    test_image = imagesToBeProcessed[0]
+
+                    ImageProcessor.currentPictures[capPressBunkPictureKeyString] = test_image
+
+                    chosenProcessedImage, allok, winning_gamma = CheckBunk.checkBunk(
+                        test_image,
+                        ImageProcessor.currentComponentQRCodeValue,
+                        bearing_geometry=ImageProcessor.getBearingProfile()
+                    )
+
+                    chosenOriginalImage = test_image
+
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                f"CheckBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckBunk FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckBunk exception: {e}", Logger.ISSUE)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            elif is_no_bunk:
+                # Use batch processing for CheckNoBunk (avoids ThreadPoolExecutor timeout issues)
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoBunk", Logger.GENERAL)
+
+                try:
+                    test_image = imagesToBeProcessed[0]
+
+                    ImageProcessor.currentPictures[noBunkPictureKeyString] = test_image
+
+                    chosenProcessedImage, allok = CheckNoBunk.checkNoBunk(
+                        anImage=test_image,
+                        currentPictures=ImageProcessor.currentPictures,
+                        componentQRCode=ImageProcessor.currentComponentQRCodeValue
+                    )
+
+                    chosenOriginalImage = test_image
+
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckNoBunk PASSED", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckNoBunk FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckNoBunk exception: {e}", Logger.ISSUE)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            elif is_top_bearing:
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckTopBearing", Logger.GENERAL)
+                try:
+                    test_image = imagesToBeProcessed[0]
+
+                    ImageProcessor.currentPictures[topBearingPictureKeyString] = test_image
+
+                    annotated_img, allok, geometry = CheckTopBearing.checkTopBearing(
+                        anImage=test_image,
+                        currentPictures=ImageProcessor.currentPictures,
+                        componentQRCode=ImageProcessor.currentComponentQRCodeValue
+                    )
+
+                    chosenProcessedImage = annotated_img if annotated_img is not None else test_image
+                    chosenOriginalImage = test_image
+
+                    # The ring found (with its edge profile) is kept for the nut / washer check; a NOT OK
+                    # result (also a retake) removes any ring kept earlier in the cycle
+                    ImageProcessor.saveBearingProfile(geometry if allok else None)
+                    if allok:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                f"CheckTopBearing PASSED, ring centre {geometry['center']}, radii "
+                                f"{geometry['inner_radius']}-{geometry['outer_radius']}, outer diameter "
+                                f"{geometry.get('outer_diameter')}, width {geometry.get('width')}", Logger.SUCCESS)
+                    else:
+                        logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                                "CheckTopBearing FAILED", Logger.ISSUE)
+
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckTopBearing exception: {e}", Logger.ISSUE)
+                    ImageProcessor.saveBearingProfile(None)
+                    import traceback
+                    traceback.print_exc()
+                    allok = False
+                    chosenProcessedImage = imagesToBeProcessed[0]
+                    chosenOriginalImage = imagesToBeProcessed[0]
+
+            else:
+                # Original threading logic for other checks (non-hub-bearing)
+                # not "with ThreadPoolExecutor(...)": leaving that block waits for every thread, so a stuck one would
+                # hold the pipeline whatever the timeouts below; the executor is shut down without waiting instead
+                executor = ThreadPoolExecutor(max_workers=6)
+                try:
+                    futures = [executor.submit(methodToBeExecuted.__func__, ImageProcessor, anImage, index,
+                                               gamma=index + 1)
+                               for index, anImage in enumerate(imagesToBeProcessed)]
+
+                    wait(futures, timeout=5.0)
+
+                    for index, future in enumerate(futures):
+                        if not future.done():
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    f"Picture {index // 2 + 1} not assessed in time: counted as NOT OK", Logger.ISSUE)
+                            addAResult(anImage=imagesToBeProcessed[index], aResult=False, index=index // 2)
+                            continue
+                        processedImage, evaluation = future.result(timeout=0)
+                        if processedImage is not None:
+                            logBoth('logDebug', ConverterScalerAndProcessor.logSource,
+                                    f"Shape of processedImage = {processedImage.shape}, evaluation result is {evaluation}",
+                                    Logger.GENERAL)
+                        else:
+                            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                                    "processedImage is None", Logger.ISSUE)
+                        addAResult(anImage=processedImage, aResult=evaluation, index=index // 2)
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
+
+        except Exception as e:
+            logBoth('logCritical', ConverterScalerAndProcessor.logSource,
+                    f'Could not complete ThreadPoolExecutor actions due to {e} in CameraProcessorServer',
+                    Logger.PROBLEM)
+            pass
+
+    if not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
+        allok = False
+        # Original voting mechanism
+        okcount: int = 0
+        for result in resultsStatus:
+            if result:
+                okcount += 1
+
+        chosenProcessedImage = None
+        chosenOriginalImage = None
+
+        allok = (okcount >= 2)
+
+        for index, aPair in enumerate(resultsFromPictureAssessment):
+            if aPair[0] == allok:
+                chosenProcessedImage = aPair[1]
+                chosenOriginalImage = imagesToBeProcessed[index * 2]  # Map back to original (0→0, 1→2, 2→4)
+                break
+    return allok, chosenProcessedImage, chosenOriginalImage
+
+
+def _assessInThread(currentMachineState: MachineState, imagesToBeProcessed: list, timeout: float):
+    """assessPictures in a thread of the camera server, waited for at most `timeout` s. A check over the timeout is
+    NOT OK; its thread cannot be stopped and finishes (or not) on its own - its result and any state it changes are
+    then discarded (the cycle's state is restored from before the check)."""
+    snapshot = ImageProcessor.snapshotState()
+    box = {}
+
+    def run():
+        try:
+            box["result"] = assessPictures(currentMachineState, imagesToBeProcessed)
+        except Exception as e:
+            box["error"] = e
+
+    worker = threading.Thread(target=run, name=f"Vision check {getattr(currentMachineState, 'name', currentMachineState)}",
+                              daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        ImageProcessor.restoreState(snapshot)
+        reason = f"check timed out after {timeout:g} s"
+        logBoth('logCritical', logSource, f"{getattr(currentMachineState, 'name', currentMachineState)}: {reason} "
+                f"(the check's thread keeps running)", Logger.PROBLEM)
+        return False, imagesToBeProcessed[0], imagesToBeProcessed[0], reason
+    if "error" in box:
+        logBoth('logCritical', logSource, f"Vision check raised {box['error']}", Logger.PROBLEM)
+        return False, imagesToBeProcessed[0], imagesToBeProcessed[0], f"check failed ({box['error']})"
+    allok, processed, original = box["result"]
+    return allok, processed, original, None
+
+
+def _withReason(anImage, reason: str):
+    """A copy of the picture with the reason of a NOT OK written on it (red), for the frontend."""
+    try:
+        if not isinstance(anImage, np.ndarray):
+            anImage = np.full((720, 1280, 3), 255, dtype=np.uint8)
+        marked = anImage.copy()
+        cv2.putText(marked, f"NOT OK: {reason}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3, cv2.LINE_AA)
+        return marked
+    except Exception:
+        return anImage
+
 
 # *******************************ImageProcessor begin***********************************************
 
@@ -877,6 +963,76 @@ class ImageProcessor():
 
     # this lock is needed because 3 threads simultaneously call this function, and only 1 message is in the queue
     getQRCodeLock = threading.Lock()
+    # checkKnuckle fetches the QR code itself when none is set (standalone use). The camera server fetches it before
+    # the knuckle check (prepareForKnuckleCheck) and turns this off, so a check never waits on the QR queue.
+    fetchQRCodeInChecks: bool = True
+    _STATE_ATTRIBUTES = ("currentComponentQRCodeValue", "currentModelName", "currentSide", "bearingCentreAndRadii",
+                         "bearingProfileQRCode")
+
+    @classmethod
+    def snapshotState(cls) -> Dict[str, Any]:
+        """The cycle's state the checks use and update: earlier pictures, QR code / model / side, bearing ring."""
+        state = {name: getattr(ImageProcessor, name) for name in ImageProcessor._STATE_ATTRIBUTES}
+        state["currentPictures"] = dict(ImageProcessor.currentPictures)
+        return state
+
+    @classmethod
+    def restoreState(cls, state: Dict[str, Any]) -> None:
+        for name in ImageProcessor._STATE_ATTRIBUTES:
+            if name in state:
+                setattr(ImageProcessor, name, state[name])
+        if "currentPictures" in state:
+            ImageProcessor.currentPictures.clear()
+            ImageProcessor.currentPictures.update(state["currentPictures"])
+
+    @classmethod
+    def applyStateChanges(cls, changes: Dict[str, Any]) -> None:
+        """State changed by a check in the worker process: attributes, and the pictures it set."""
+        for name in ImageProcessor._STATE_ATTRIBUTES:
+            if name in changes:
+                setattr(ImageProcessor, name, changes[name])
+        ImageProcessor.currentPictures.update(changes.get("currentPictures", {}))
+
+    @classmethod
+    def endOfCycle(cls) -> None:
+        """The IOServer's end of cycle (completed or aborted): nothing of the cycle is kept."""
+        ImageProcessor.currentComponentQRCodeValue = None
+        ImageProcessor.currentModelName = None
+        ImageProcessor.currentSide = None
+        ImageProcessor.clearCurrentPictures()
+        ImageProcessor.clearBearingCentreAndRadii()
+
+    @classmethod
+    def prepareForKnuckleCheck(cls) -> None:
+        """Before a knuckle check. A QR code sent by the QR code server since the last knuckle check means a new
+        cycle: the previous cycle's QR code, pictures and bearing ring are dropped and the new QR code is used. No new
+        QR code: a retake of the knuckle in the same cycle - the cycle's QR code is kept (before 2026-11-06 it was
+        dropped at every knuckle check, so a retake after a NOT OK waited 5 s per picture for a QR code that had
+        already been read, and was NOT OK). No QR code at all: wait up to 5 s for one, as before."""
+        try:
+            ImageProcessor.connectToRedis()
+            newCode, received = None, False
+            for _ in range(20):             # the newest QR code queued (a re-scan can leave an earlier one)
+                code, got = readComponentQRCodeInCameraServerFromQRCodeServer(ImageProcessor.redisConnectionQ, block=50)
+                if not got:
+                    break
+                newCode, received = code, True
+        except Exception as e:
+            newCode, received = None, False
+            logBoth('logWarning', ImageProcessor.logSource, f"Could not read the QR code queue: {e}", Logger.RISK)
+        if received:
+            ImageProcessor.endOfCycle()
+            ImageProcessor.setCurrentComponentName(qrCodeValue=newCode)
+            logBoth('logInfo', ImageProcessor.logSource, f"New cycle at the knuckle check: QR code {newCode}",
+                    Logger.SUCCESS)
+        elif ImageProcessor.currentComponentQRCodeValue is not None:
+            ImageProcessor.currentPictures[knucklePictureKeyString] = None
+            logBoth('logInfo', ImageProcessor.logSource,
+                    f"Knuckle retake: QR code {ImageProcessor.currentComponentQRCodeValue} kept", Logger.SUCCESS)
+        else:
+            ImageProcessor.endOfCycle()
+            with ImageProcessor.getQRCodeLock:
+                ImageProcessor.fetchAndPopulateCurrentComponentQRCode()
 
     redisConnectionQ = None
     clientRedisConnectedQ = False
@@ -985,9 +1141,10 @@ class ImageProcessor():
 
         try:
             logBoth('logDebug', ImageProcessor.logSource, "Entered checkKnuckle() of class ImageProcessor", Logger.GENERAL)
-            with ImageProcessor.getQRCodeLock:
-                if ImageProcessor.currentComponentQRCodeValue is None:
-                    ImageProcessor.fetchAndPopulateCurrentComponentQRCode()
+            if ImageProcessor.fetchQRCodeInChecks:
+                with ImageProcessor.getQRCodeLock:
+                    if ImageProcessor.currentComponentQRCodeValue is None:
+                        ImageProcessor.fetchAndPopulateCurrentComponentQRCode()
 
             if ImageProcessor.saveTrialPictures:
                 currentMethodName = f"{inspect.currentframe().f_code.co_name}"
@@ -1253,7 +1410,7 @@ class ImageProcessor():
 
 # **************************************************************************************************
 
-def verifyVisionDependencies() -> list:
+def verifyVisionDependencies(loadModels: bool = True) -> list:
     """Start-up check for everything the visual checks need. Several check modules guard their ML imports with
     try/except (so they can also run standalone); in production that turned a missing dependency or model file into
     "every check of that type fails" with no clear error. Returns a list of problems (empty = all good) and also
@@ -1275,7 +1432,7 @@ def verifyVisionDependencies() -> list:
         for label, path in (("MobileSAM weights", manager.mobile_sam_path), ("ObjectAwareModel (YOLO) weights", manager.yolo_path)):
             if not os.path.isfile(path):
                 problems.append(f"{label} not found at {path}")
-        if not problems:
+        if not problems and loadModels:       # with the worker process, the models are loaded there, not here
             manager.load_models()
     except Exception as e:
         problems.append(f"Model manager / model loading failed: {e}")
@@ -1283,12 +1440,20 @@ def verifyVisionDependencies() -> list:
 
 
 def CameraServer(mode : str = "Test"):
-    problems = verifyVisionDependencies()
+    inWorker = CosThetaConfigurator.getInstance().getVisionCheckInWorkerProcess()
+    problems = verifyVisionDependencies(loadModels=not inWorker)
     if problems:
         message = "Camera server NOT started - missing vision dependencies:\n  - " + "\n  - ".join(problems)
         logBoth('logCritical', logSource, message, MessageType.PROBLEM)
         # Exiting makes the failure visible at once: the heartbeat server marks the camera DEAD (red tile + siren)
         sys.exit(1)
+    # the camera server fetches the QR code before the knuckle check itself (ImageProcessor.prepareForKnuckleCheck)
+    ImageProcessor.fetchQRCodeInChecks = False
+    if inWorker:
+        # the vision checks run in their own process (models loaded there), stopped and started again when a check
+        # takes longer than <vendor>.vision.check.timeout.sec; started now so that the models are ready for cycle 1
+        from camera.VisionCheckWorker import getVisionCheckWorker
+        getVisionCheckWorker()
 
     # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.

@@ -76,7 +76,43 @@ def use_machine_settings(mode="Test", **values):
     return settings
 
 
+# Simulated heartbeat server (the IOServer acts on each server's status, from the heartbeat server, and takes the
+# heartbeat server itself as down after ioserver.heartbeat.server.silence.sec without a message). The dry runs have no
+# heartbeat server, so setup() starts this one: every 1 s it sends the statuses in HEARTBEAT (all ALIVE to start).
+#   HEARTBEAT["db"] = False         the database server is reported down (likewise "camera", "fe", "qrcode", "io")
+#   HEARTBEAT["silent"] = True      no messages: the heartbeat server is down
+# COSTHETA_DRYRUN_NO_HEARTBEAT_SIM=1: not started (a real heartbeat server is running).
+HEARTBEAT = {"camera": True, "qrcode": True, "io": True, "db": True, "fe": True, "silent": False}
+_HB_THREAD = []
+
+
+def start_heartbeat_sim():
+    if _HB_THREAD or os.environ.get("COSTHETA_DRYRUN_NO_HEARTBEAT_SIM"):
+        return
+    import time as _time
+    from redis import Redis
+    from utils.RedisUtils import sendCombinedHeartbeatFromHeartbeatServerToIOServer, ALIVE, DEAD
+
+    def run():
+        r = Redis("localhost", 6379)
+        while True:
+            try:
+                if not HEARTBEAT["silent"]:
+                    statuses = {k: (ALIVE if HEARTBEAT[k] else DEAD) for k in ("camera", "qrcode", "io", "db", "fe")}
+                    allok = all(HEARTBEAT[k] for k in ("camera", "qrcode", "io", "db", "fe"))
+                    sendCombinedHeartbeatFromHeartbeatServerToIOServer(r, ALIVE if allok else DEAD,
+                                                                        serverStatuses=statuses)
+            except Exception:
+                pass
+            _time.sleep(1.0)
+
+    t = threading.Thread(target=run, name="simulated heartbeat server", daemon=True)
+    t.start()
+    _HB_THREAD.append(t)
+
+
 def setup(mode="Test"):
+    start_heartbeat_sim()
     # The PLC make the IOServer will use: COSTHETA_PLC_VENDOR if set, else plc.vendor in the properties file - exactly as
     # PLCIOServer / PLCDataIOFactory decide. It is then pinned in the environment, so the driver simulated here and the
     # PLCDataIO the server creates are always the same make (otherwise the server would reach for the real PLC).

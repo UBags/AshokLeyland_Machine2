@@ -511,6 +511,41 @@ def main():
     redisConnectionForMonitoringStop = Redis(CosThetaConfigurator.getInstance().getRedisHost(),
                                              CosThetaConfigurator.getInstance().getRedisPort(), retry_on_timeout=True)
 
+    # Restart a server process that dies (not after a stop command): utils/ProcessSupervisor.py
+    if CosThetaConfigurator.getInstance().getSupervisorRestartDeadProcesses():
+        from utils.ProcessSupervisor import ProcessSupervisor
+        supervisorRedis = Redis(CosThetaConfigurator.getInstance().getRedisHost(),
+                                CosThetaConfigurator.getInstance().getRedisPort(), socket_timeout=2.0)
+
+        def stopRequested() -> bool:
+            try:
+                return bool(getStopCommandFromQueue(supervisorRedis, block=1)[1])
+            except Exception:
+                return False
+
+        def startProcess(target, args):
+            process = Process(target=target, args=args)
+            process.start()
+            return process
+
+        supervisor = ProcessSupervisor(processFactory=startProcess, isStopping=stopRequested,
+                                       pidList=currentProcessPIDs,
+                                       checkInterval=CosThetaConfigurator.getInstance().getSupervisorCheckInterval(),
+                                       maxRestartsPerHour=CosThetaConfigurator.getInstance().getSupervisorMaxRestartsPerHour(),
+                                       log=lambda message: printBoldRed(f"Supervisor: {message}"))
+        known = locals()
+        for name, var, target, args in (("Logging server", "P1", startTheLoggingServer, ()),
+                                        ("Camera server", "P2", startTheCameraServer, (currentMode,)),
+                                        ("QR code server", "P3", startTheQRCodeServer, (currentMode,)),
+                                        ("IO server", "P4", startTheIOServer, (currentMode,)),
+                                        ("DB server", "P5", startTheDBServer, (currentMode, currentUser,)),
+                                        ("Frontend", "P6", startTheFrontendServer, (currentMode, currentUser, currentRole)),
+                                        ("Heartbeat server", "P7", startTheHeartbeatServer, ())):
+            if known.get(var) is not None:
+                supervisor.add(name, target, args, known[var])
+        supervisor.start()
+        printBoldBlue("Process supervisor started: a server process that dies is restarted")
+
     startingTime: float = time.time()
 
     stopMonitoringThread = threading.Thread(name="Stop Monitoring Thread", target=monitorStop,

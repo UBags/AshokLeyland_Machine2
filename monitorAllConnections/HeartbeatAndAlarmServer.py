@@ -165,9 +165,18 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                         objRef.consecutiveFrontendServerConnectionStatusDown < _MIN_,
                     ])
 
+                    # the combined status and each server's own: the IOServer acts per server (camera down -> the
+                    # picture is NOT OK, DB down -> next cycle held, frontend down -> abort; QR code: nothing)
                     sendCombinedHeartbeatFromHeartbeatServerToIOServer(
                         redisConnection=objRef.redisConnectionQ,
                         combinedConnectionStatus=ALIVE if allok else DEAD,
+                        serverStatuses={
+                            "camera": ALIVE if objRef.consecutiveCameraServerConnectionStatusDown < _MIN_ else DEAD,
+                            "qrcode": ALIVE if objRef.consecutiveQRCodeServerConnectionDown < _MIN_ else DEAD,
+                            "io": ALIVE if objRef.consecutiveIOServerConnectionStatusDown < _MIN_ else DEAD,
+                            "db": ALIVE if objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_ else DEAD,
+                            "fe": ALIVE if objRef.consecutiveFrontendServerConnectionStatusDown < _MIN_ else DEAD,
+                        },
                     )
 
                     objRef.clearQueue()

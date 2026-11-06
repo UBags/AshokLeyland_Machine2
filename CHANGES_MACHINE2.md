@@ -1963,3 +1963,105 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   | Mock-PLC / Real-PLC windows (both folders) | 14/14, 7/7 | 14/14, 7/7 |
   | Integrated all-servers cycle | DB row unchanged (DOSTPLUS/RHS/2.5T, 19.08/19.03/2.41, all OK, 30/15/19/1/1, True/False) | identical |
   | Field reproduction (rule removed) | PLC raising Check once per press: retry acted on, cycle moves on. 2HB still held when the NOT OK arrives: one extra picture during the hold. PLC holding Check: 13 pictures in 8 s | |
+
+## 81. Servers down, camera answer timeout, vision check deadline, settings fallback, process restart; knuckle retake fixed (2026-11-06)
+- **How the IOServer learns the other servers' status.** Before: one combined ALIVE / DEAD on `hb2io.q`, and that read
+  was commented out (`currentStatus = True`). Now the heartbeat server also sends each server's status (camera, QR
+  code, IO, DB, frontend) on `hb2io.q` (`sendCombinedHeartbeatFromHeartbeatServerToIOServer(..., serverStatuses=)`),
+  read by `readServerStatusesInIOServerFromHeartbeatServer` (newest message, older ones dropped). The heartbeat
+  server itself is taken as down after `ioserver.heartbeat.server.silence.sec` (8 s) without a message - once it has
+  sent one: an IOServer run on its own (commissioning, the IOServer test windows) has no heartbeat server and works
+  as before. `PC_PLC_ConnectionStatus` keeps toggling whatever the other servers' status.
+- **Rules per server (user), `PLCIOServer._applyServerStatuses`:**
+
+  | Server down | IOServer |
+  |---|---|
+  | Camera | the picture the write loop waits for is reported NOT OK at once (normal NOT OK handshake) |
+  | QR code | nothing (the CheckQRCode tag is left alone) |
+  | Database | the cycle in progress is finished ("Database down: continue till end of cycle", flashing, top right); no new cycle until it is back ("next cycle on hold"): the QR code server is not asked to read; while waiting for a scan, the read is stopped (ABORT to the QR code server) and the state goes back to READ_QR_CODE |
+  | Frontend | the cycle is aborted (QR code server and camera server told, not the frontend); no new cycle until it is back |
+  | Heartbeat server | the cycle is aborted (frontend and camera server told); no new cycle until it is back |
+
+- **PLC told of a PC-side abort (optional).** There was no such tag: an abort only reset the handshake tags and armed
+  CheckQRCode. New `pc.plc.cycle.aborted.tagname` (`PC_PLC_CycleAborted`, bool): True after a PC-side abort
+  (frontend abort, frontend / heartbeat server down, PLC restart), False when the next QR code is accepted. Empty in
+  all three properties files until the PLC has the tag (Siemens: also needs its address in `IOServerProperties.yaml`).
+- **Camera answer timeout (option A, user) and request ids.** Every picture request carries an id (`<cycle>-<n>`),
+  echoed by the camera server in its answers to the IOServer and the frontend. No answer within
+  `plc.camera.answer.timeout.sec` (20 s; longer than the 12 s check timeout plus the pictures) -> NOT OK to the PLC,
+  the request taken off the camera queue, a NOT OK sent to the frontend with the replacement id `<id>:timeout`, notice
+  "Picture NOT OK: no answer from the camera server in 20 s". An answer to an earlier request is ignored (IOServer:
+  id mismatch; frontend: `camera:activeRequest` - `readDataInFEServerFromCameraServer` drops results of other
+  requests). Answers without an id (test tools) are taken as before, by picture state. The camera readers now delete
+  only the message read (they relied on an approximate `xtrim` that did nothing, section 29).
+- **Vision check deadline (user: 12 s, killable).** `<vendor>.vision.check.timeout.sec` = 12. With
+  `<vendor>.vision.check.in.worker.process` = True (default) the checks run in one worker process
+  (`camera/VisionCheckWorker.py`, models loaded there, a warm-up check on a blank picture before it reports ready):
+  the camera server keeps the cycle's state (QR code, earlier pictures, bearing ring) and sends it with each job; a
+  check over the deadline is NOT OK ("check timed out after 12 s", written on the picture and shown as a notice), the
+  worker process is stopped and a new one started; until it is ready a check is NOT OK at once ("vision check worker
+  starting"). A stopped check changes nothing of the cycle's state, so its retake has the earlier pictures and the
+  ring. Flags in the checks (cooperative cancellation) were not added: they cannot stop a call that hangs inside
+  torch / MobileSAM, and would have meant changing the four verified vision files. `False`: the checks run in a thread
+  of the camera server with the same deadline; a check over it is NOT OK, but its thread cannot be stopped.
+  The check code itself is unchanged; `ConverterScalerAndProcessor.processItem`'s dispatch moved, unchanged, into
+  `assessPictures()`. Vote mode (knuckle, split pin, cap): the `with ThreadPoolExecutor` (whose exit waited for a stuck
+  thread whatever the timeouts) is now shut down without waiting; a picture not assessed in time counts as NOT OK.
+- **Knuckle retake after a NOT OK was always NOT OK (found here; fixed).** Every knuckle check dropped the QR code and
+  fetched it again from the QR code server's queue, but the code had been read at the first knuckle check: a retake
+  waited 5 s per picture (6 pictures in series, 33.9 s measured on the old code) and was NOT OK for "QR code is None",
+  so after a knuckle NOT OK the cycle could only be aborted. Now `ImageProcessor.prepareForKnuckleCheck()`: a new QR
+  code on the queue = a new cycle (state dropped, the newest code used); none = a retake, the cycle's QR code kept;
+  none at all = wait up to 5 s, as before. The end-of-cycle message from the IOServer now also drops the QR code and
+  the pictures, not only the bearing ring.
+- **Settings write fails 3 times (user): carry on with the earlier settings.** The torque setpoints, RPM and rotation
+  counts: one that cannot be written (3 attempts), or no machine settings from the database -> logged, audited,
+  notice "Machine settings not updated: previous settings used", QR OK, the cycle goes ahead; the record gets the
+  values last written (None if not known). The side (`PC_PLC_LH_RH_Selection`) stays required: it changes with every
+  part, so if it cannot be written the QR code is NOT OK (as before).
+- **NOT OK Done pulse 0.1 -> 0.3 s (user):** `plc.sleeptime.between.done.and.re_read=0.3` (all three files; getter
+  default 0.3).
+- **Process restart (`utils/ProcessSupervisor.py`, started by MainProgram).** A server process that dies is restarted
+  (same function and arguments) unless a stop command is on the stop queue; at most `supervisor.max.restarts.per.hour`
+  (10) per server, then it is left down (logged); the pid list used at shutdown is kept up to date;
+  `supervisor.restart.dead.processes=False` turns it off. A restarted IOServer tells the frontend and the camera
+  server that the cycle was aborted (only on a restart: Redis key `ioserver:started`, cleared by MainProgram at start;
+  sending it at the first start too left a stale abort that the integrated dry run's frontend acted on).
+- **Write loop:** restarted (logged with the traceback) if an unexpected exception ever ends it; before, the thread
+  would have stopped while the IOServer kept reporting ALIVE.
+- **Frontend:** flashing notice label at the top right of the mode bar (`FrontendNoticeWorker`, Redis keys
+  `feNotice:<name>` with an expiry, `setFrontendNotice` / `readFrontendNotices`): database, camera, check timed out,
+  settings, heartbeat server, PC abort.
+- **Dry runs (both folders).** `_plc_sim` starts a simulated heartbeat server (`HEARTBEAT[...]` = False plays a server
+  down, `HEARTBEAT["silent"]`); the fault-scenario camera echoes request ids and can stay silent or answer late.
+  Fault scenarios: E3 rewritten (no settings -> only the side written, cycle goes ahead, record = last written), new
+  E4 (a setting refused -> cycle goes ahead), new J (J1 no answer -> NOT OK after the timeout, frontend NOT OK with the
+  replacement id, a late result dropped by the frontend reader; J2 late NOT OK of the first request ignored, the
+  retry's OK taken; J3 camera down -> NOT OK at once; J4 DB down mid-cycle -> cycle finished, next held, notices;
+  J5 DB down while waiting for the scan; J6 frontend down -> abort, no emergency to it, `PC_PLC_CycleAborted`
+  True / False (Allen-Bradley simulator); J7 heartbeat server silent -> abort, frontend and camera told). Harness flake
+  fixed: the simulated PLC set CheckQRCode False 0.3 s after Done, overwriting the PC's re-arm after a QR NOT OK (E2's
+  re-scan then never came; failed once in the baseline run here). FE dry run: F9 notices (shown, flashing, two
+  together, hidden, expiry), F10 a late result dropped, the IOServer's NOT OK shown, the retake's result shown. New
+  `DryRun_Vision_Check_Timeout.py` (W worker, T in-thread mode, K knuckle retake in the real pipeline with the real
+  CheckKnuckle, R timeout in the pipeline) and `DryRun_Process_Supervisor.py`.
+- **Mutations caught:** camera-down rule off -> J3 fails; request-id check off -> J2 fails; the old knuckle code ->
+  retake NOT OK after 33.9 s (K2's case).
+- **Verified (Linux; Python 3.13 for the IOServer / camera, 3.12 + Tk + PySide6 under Xvfb for the frontend and the
+  windows; torch 2.15 CPU and MobileSAM installed, no model weights):**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Fault scenarios A-J | 151/151 | 150/150 |
+  | Two full cycles | exact | exact |
+  | DryRun_PLCDataIO; logging; heartbeat / start-up | 38/38; 37/37; 16/16 | 38/38; 37/37; 16/16 |
+  | Mock-PLC window; Real-PLC window | 14/14; 7/7 | 14/14; 7/7 |
+  | Integrated all-servers cycle | DB row unchanged (DOSTPLUS/RHS/2.5T, 19.08/19.03/2.41, all OK, 30/15/19/1/1, True/False) | identical |
+  | FE dry run; DB dry run; vision verifier | | 75/75; 49/49; ALL EQUIVALENT |
+  | Vision check timeout; process supervisor | | 22/22; 6/6 |
+
+- **Not run here:** the Nuitka exe (the worker is a spawned child of the camera server - also a spawned process -
+  as MainProgram's servers are; if it misbehaves in the exe, `<vendor>.vision.check.in.worker.process=False`), the
+  model-based checks on real pictures with the weights, a real camera, PLC or Windows.
+- **For the PLC programmer:** an address for `PC_PLC_CycleAborted` if the PLC is to know of PC-side aborts; whether a
+  two-hand-button press made while Check is already True is discarded (not queued).

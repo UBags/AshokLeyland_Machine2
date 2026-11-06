@@ -81,6 +81,7 @@ from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
 from utils.RedisUtils import (
+    readFrontendNotices,
     ok,
     notok,
     ALIVE,
@@ -402,6 +403,20 @@ class AshokLeylandFrontEnd(QMainWindow):
         modeLayout.addWidget(self.modeLabel, 1)
         modeLayout.addWidget(CosThetaQVLine(), 0)
         modeLayout.addWidget(self.qrCodeLabel, 1)
+
+        # Notices from the IOServer / camera server (e.g. "Database down: continue till end of cycle"), top right,
+        # flashing while there are any (FrontendNoticeWorker reads them; hidden when there are none)
+        self.noticeLabel = QLabel("")
+        self.noticeLabel.setContentsMargins(6, 0, 6, 0)
+        self.noticeLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.noticeLabel.setWordWrap(True)
+        self.noticeLabel.setMaximumWidth(max(420, int(AshokLeylandFrontEnd.CURRENT_WIDTH * 0.32)))
+        self.noticeLabel.setFont(QFont('Segoe UI', pointSize=max(10, initialFontSize - 2), weight=QFont.Weight.Bold))
+        self.noticeLabel.setVisible(False)
+        self._noticeFlashOn = False
+        self._noticeFlashTimer = QTimer(self)
+        self._noticeFlashTimer.timeout.connect(self._flashNotice)
+        modeLayout.addWidget(self.noticeLabel, 0)
 
         grid_layout.addWidget(modeGroupBox, 0, 0, 1, 2)
 
@@ -962,6 +977,43 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.createConnectionStatusUpdateWorker()
         self.createEmergencyAbortUpdateWorker()
         self.createHeartbeatWorker()
+        self.createFrontendNoticeWorker()
+
+    # ********************************************
+
+    def createFrontendNoticeWorker(self):
+        self.frontendNoticeWorker = FrontendNoticeWorker()
+        self.frontendNoticeThread = QThread()
+        self.frontendNoticeWorker.moveToThread(self.frontendNoticeThread)
+        self.frontendNoticeWorker.gotNotices.connect(self.showNotices)
+        self.frontendNoticeThread.started.connect(self.frontendNoticeWorker.start)
+        self.frontendNoticeThread.start()
+
+    @Slot(list)
+    def showNotices(self, notices: list):
+        """The notices to show now (empty: none). Shown together, flashing (red / white) every 0.5 s."""
+        text = "\n".join(notices)
+        if not notices:
+            if self.noticeLabel.isVisible():
+                self._noticeFlashTimer.stop()
+                self.noticeLabel.setVisible(False)
+                self.noticeLabel.setText("")
+            return
+        if text != self.noticeLabel.text():
+            self.noticeLabel.setText(text)
+        if not self.noticeLabel.isVisible():
+            self.noticeLabel.setVisible(True)
+            self._noticeFlashOn = False
+            self._flashNotice()
+            self._noticeFlashTimer.start(500)
+
+    @Slot()
+    def _flashNotice(self):
+        self._noticeFlashOn = not self._noticeFlashOn
+        if self._noticeFlashOn:
+            self.noticeLabel.setStyleSheet("QLabel { background-color: #d00000; color: white; }")
+        else:
+            self.noticeLabel.setStyleSheet("QLabel { background-color: white; color: #d00000; }")
 
     # ********************************************
 
@@ -1915,6 +1967,42 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
         self.timer.deleteLater()
 
 # ****************************************************
+
+class FrontendNoticeWorker(QObject):
+    """Reads the notices the IOServer and the camera server leave for the frontend (Redis, readFrontendNotices) once
+    a second, in its own thread, and passes them to the window when they change."""
+    gotNotices = Signal(list)
+
+    def __init__(self):
+        super().__init__()
+        self.timer = None
+        self.connection = None
+        self.last = None
+
+    def start(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check)
+        self.timer.start(1000)
+
+    def check(self):
+        if AshokLeylandFrontEnd.shutdownThreads:
+            self.timer.stop()
+            return
+        try:
+            if self.connection is None:
+                self.connection = Redis(CosThetaConfigurator.getInstance().getRedisHost(),
+                                        CosThetaConfigurator.getInstance().getRedisPort(),
+                                        socket_timeout=0.5, socket_connect_timeout=0.5)
+            notices = readFrontendNotices(self.connection)
+        except Exception:
+            notices = None
+        if notices is None:
+            self.connection = None
+            return
+        if notices != self.last:
+            self.last = notices
+            self.gotNotices.emit(notices)
+
 
 class HeartbeatSenderWorker(QObject):
     def __init__(self):
