@@ -2280,6 +2280,9 @@ Architecture items not included (user).
   check; a PNG write takes longer than 1 ms); log and fault files opened without `with` (kept open on purpose);
   `replaceChar=[...]` default (never changed); the frontend record built 0.75 s after the last result (no scan can
   start a cycle in that time); `VerifyIntegrity.py` globals (licensing code, not called).
+- **Repository:** commits `3e09521` and `ab42d6e` contained 24 test pictures written by a dry run on Linux under a
+  folder literally named `C:` (`C:/Temp/TrialImages/...`); removed in `8b231c8` and `C:/` added to `.gitignore`. A
+  Windows checkout of those two commits fails ("invalid path"); a pull straight to `8b231c8` or later is fine.
 - **Dry runs (both folders):** new `DryRun_Work_Thread_Health.py` (17 checks: WorkerWatch, GenericQueueProcessor
   tick, camera / QR / DB heartbeats DEAD and back), `DryRun_QRCode_Validation.py` (9); fault scenarios L (IOServer
   heartbeat DEAD while the read / write loop is stuck, ALIVE again, then a full cycle); frontend F11 (DEAD while the
