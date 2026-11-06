@@ -112,7 +112,7 @@ class GenericQueueProcessor(Thread, ABC):
                                                                  f"Added item in Queue of GenericQueueProcessor.{self.name}",
                                                                  Logger.RISK)
                 return item
-            except:
+            except Exception:
                 return None  # lose the item, if the queue is full
         else:
             if self.debugAddItem:
@@ -185,7 +185,7 @@ class GenericQueueProcessor(Thread, ABC):
                         try:
                             # This call is put inside try block to ensure that exception is caught if addItem does not exist
                             self.consumer.addItem(processed_item)
-                        except:
+                        except Exception:
                             noteSuppressed()
                     if (self.consumer is not None) and isinstance(self.consumer, list) and (processed_item is not None):
                         # SlaveConsoleLogger.getInstance().logTakeNote(GenericQueueProcessor.logSource,
@@ -196,7 +196,7 @@ class GenericQueueProcessor(Thread, ABC):
                                 try:
                                     # This call is put inside try block to ensure that exception is caught if addItem does not exist
                                     aConsumer.addItem(processed_item)
-                                except:
+                                except Exception:
                                     noteSuppressed()
                 except Exception as e:
                     if self.debugOtherExceptions:
@@ -220,7 +220,7 @@ class GenericQueueProcessor(Thread, ABC):
                     _, shallStop = getStopCommandFromQueue(self.redisConnectionForMonitoringStop)
                     if shallStop:
                         self.stop()
-                except:
+                except Exception:
                     self.connectToRedisForMonitoringStop(True)
             if self.sleepTime > 0:
                 endOfProcessing = time.time()

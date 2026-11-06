@@ -3156,7 +3156,7 @@ class HubAndBearingSegmenter:
                     'center': center,
                     'aspect_ratio': aspect_ratio
                 }
-        except:
+        except Exception:
             return {'type': 'other', 'center': None}
 
     def _group_by_distance_from_center(self, masks: List[Dict]) -> Dict[int, List[int]]:

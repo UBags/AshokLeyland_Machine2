@@ -2065,3 +2065,67 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   model-based checks on real pictures with the weights, a real camera, PLC or Windows.
 - **For the PLC programmer:** an address for `PC_PLC_CycleAborted` if the PLC is to know of PC-side aborts; whether a
   two-hand-button press made while Check is already True is discarded (not queued).
+
+## 82. Review follow-up: emergency documented, image folder per day, QR scan no longer re-creates the database, REINDEX per insert removed, settings read back, code clean-up, old files archived (2026-11-06)
+- **Emergency button held down (documented, user):** the button is pushed and released; held longer, the PLC keeps
+  `PLC_PC_EmergencyAbort` True and the IOServer aborts once per read (about every 1.7 s) for as long as it is held:
+  several aborts one after the other. Harmless - each resets the same tags and arms the QR read; the frontend acts on
+  the first only (it is at the QR code for the later ones) and sends one abort record. Docstring of
+  `launchEmergencyMonitoringThread`.
+- **PLC restart detection (user):** both PLCs set every value back to its default on a restart / reboot, so the
+  fallback reference of section 80 (the side written in state 2 reads 0 after a restart) works on the Allen-Bradley
+  too; the note in section 80 that Logix tags keep their values does not apply to this machine's programme.
+- **Threads that must not stop:** the write loop already restarts after an exception (section 81); the emergency
+  thread and the PLC connection check now also catch and log any exception per pass (before, an exception in an
+  abort or a reconnect would have ended them).
+- **Image folders follow the day (`DBServer.watchForNewDay`):** the folders were worked out once at DB server start,
+  so on a PC left on, images after midnight went into the start day's folder. A thread wakes every 60 s, keeps the
+  date of its last wake-up, and when the date has changed makes the new day's folders; images saved from then on go
+  there.
+- **QR code server no longer re-creates the database on every scan:** `createDisplayString` (the duplicate check of
+  each scan) called `setDatabaseName(mode)`, which runs createDatabase / createSchema / createAllTables /
+  ensureIndexesExist / seed rows every time. Now `createDB=False` there and in the QR server's start-up (MainProgram
+  creates the databases before it starts the servers; the DB server still makes sure once at its start).
+- **REINDEX after every insert removed; duplicate indexes dropped.** PostgreSQL updates every index of a table inside
+  the insert's own transaction: the new QR code is found through `idx_qr_code` as soon as the insert is committed, so
+  the duplicate check needs no REINDEX. REINDEX only rebuilds an index (corruption, heavy bloat); while it runs it
+  blocks inserts and the reads that would use the index, and its cost grows with the table. Found on the way:
+  `ensureIndexesExist` created a second index on each of qr_code / model_name / created_on (long names, cut to 63
+  characters) next to `idx_*` from the DDL, so every insert maintained 7 indexes instead of 4. The duplicates are
+  dropped at start-up (`DROP INDEX IF EXISTS`); `reindexIndices()` is kept for maintenance by hand.
+- **State-2 settings read back:** every settings write is read back from the PLC (INT exactly, REAL / LREAL within
+  1e-3); a value the PLC does not hold counts as not written (3 attempts), then the rule of section 81 (the cycle goes
+  ahead with the PLC's settings; the side stays required).
+- **Code clean-up (production code; test/ and archive/ not touched, except as noted):**
+  - all 249 bare `except:` -> `except Exception:` (KeyboardInterrupt / SystemExit are no longer swallowed; none of the
+    `try` bodies exits or re-raises on purpose - checked). The 5 that only passed now log through `noteSuppressed()`,
+    except in the vision files (equivalence verifier) and logutils (logging about logging).
+    `Verify_Vision_Config_Equivalence.py` treats `except:` and `except Exception:` as the same on both sides (the
+    only normalisation added; ALL EQUIVALENT).
+  - 240 unused imports removed in 34 files, and 182 unused `except ... as e` names. Left in place on purpose: any
+    import in a module that another file star-imports (`from X import *` re-exports it), any name another file
+    imports from that module or reaches as `module.name` (tests included), imports inside try / if / functions /
+    classes (availability checks), plain `import x` of anything but well-known side-effect-free modules, a
+    `from <project module> import ...` whose every name is unused (importing it may be what runs that module's
+    set-up), multi-line imports with comments, the vision files, `__init__.py`; and the other 43 unused variables
+    (their assignments may call something). Checked: no undefined names anywhere (ruff F821 over the whole repo),
+    every changed module imports as before (54 of 56; the 2 that do not, did not before either: `TestCheckHub.py`,
+    and `frontend/widgets/CosThetaGeltecResultsContainer.py` which imports a module that is not in the repo).
+  - Pre-existing bug fixed in three test windows (`Test_FEServer_Mock_With_Image_Files_UI`,
+    `Test_FEServer_With_Live_Camera_UI`, `Test_IOServer_With_Real_PLC_UI`, both folders): a lambda used `e` after
+    its `except` block had ended (Python deletes it), so showing the error raised NameError.
+- **Old files archived:** 50 files moved with `git mv` to `archive/<original path>` (see `archive/README.md`): the
+  `_Old` / `_v0.x` versions (`VerifyIntegrity_v0.9_...`, `runNuitka_v0.6.bat`, `frontend/SimplePopups_Old.py`, 13 in
+  test/) and general experiments not about this machine (Python / Qt trials, other projects' hardware: KEMS, capsule
+  counting, Adam-6052, Micro850, webcam). Nothing imports or runs them (checked). Machine-related tools stay in test/.
+- **Not done (user):** torque limits (the PLC tightens to the torque); one dry-run runner; vision reload in the exe;
+  the QR reader keeping only the newest message (intentional) and `taskkill /im cmd.exe` (the PC is for this machine
+  only) stay as they are; bung checks to be tested later.
+- **Heartbeat abort debouncing, re-evaluated:** not needed as a separate step. A server is reported DEAD only after
+  `min.continuous.disconnections.to.send.alarm` (3) missed checks of 2 s (about 6 s), and the heartbeat server itself
+  after 8 s of silence - that is the debounce; the frontend's heartbeat is already one of the five statuses
+  (frontend down -> abort).
+- **Dry runs:** fault scenarios E5 (a setting the PLC does not hold after the write); new
+  `DryRun_DB_Indexes_And_Day_Folder.py` (X1 one index per column, duplicates dropped; X2 no REINDEX, the new QR code
+  found at once, idx_qr_code usable; X3 a scan's duplicate check does not re-create the database - mutation: the old
+  call -> X3 fails; D1 the folders move to the new day). Both folders.

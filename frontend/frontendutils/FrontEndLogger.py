@@ -34,7 +34,7 @@ def makeLoggingMessage(loggingLevel : str, source : str, message : str, messageT
         co = callerFrame.f_code
         func_name = co.co_name
         lno = callerFrame.f_lineno
-    except:
+    except Exception:
         # if not hasattr(self, func_name):
         func_name = ""
         lno = ""

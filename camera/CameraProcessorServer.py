@@ -1,5 +1,4 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
-import copy
 import time
 from threading import Thread
 from queue import *
@@ -90,7 +89,7 @@ class MonitorGetPicQueue(GenericQueueProcessor):
                                               retry_on_timeout=True)
                 self.clientRedisConnectedQ = True
                 logBoth('logInfo', MonitorGetPicQueue.logSource, 'Redis connection established', Logger.SUCCESS)
-            except:
+            except Exception:
                 self.clientRedisConnectedQ = False
                 logBoth('logCritical', MonitorGetPicQueue.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
@@ -186,7 +185,7 @@ def resetResults():
         try:
             resultsFromPictureAssessment = [[INVALID_RESULT, None],[INVALID_RESULT, None],[INVALID_RESULT, None]]
             resultsStatus = [False, False, False]
-        except:
+        except Exception:
             noteSuppressed()
         resultsLock.release()
     # printBold("Exiting reset results")
@@ -205,7 +204,7 @@ def addAResult(anImage : np.ndarray, aResult : bool, index: int):
         try:
             resultsFromPictureAssessment[index] = (aResult, anImage)
             resultsStatus[index] = aResult
-        except:
+        except Exception:
             noteSuppressed()
 
 
@@ -378,11 +377,11 @@ class TakePictures(GenericQueueProcessor):
                         sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=DEAD)
                     else:
                         sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=ALIVE)
-                except:
+                except Exception:
                     objRef.connectToRedisForHeartbeat(forceRenew=True)
                 try:
                     time.sleep(cameraHeartbeatGap)
-                except:
+                except Exception:
                     noteSuppressed()
         heartbeatThread = threading.Thread(name=f"Camera Heartbeat Thread", target=reportHeartbeat, args=(), daemon = True)
         heartbeatThread.start()
@@ -419,7 +418,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                                              retry_on_timeout=True)
                 self.clientRedisConnected = True
                 logBoth('logInfo', ConverterScalerAndProcessor.logSource, 'Redis connection established', Logger.SUCCESS)
-            except:
+            except Exception:
                 self.clientRedisConnected = False
                 logBoth('logCritical', ConverterScalerAndProcessor.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
@@ -1048,7 +1047,7 @@ class ImageProcessor():
                                               retry_on_timeout=True)
                 ImageProcessor.clientRedisConnectedQ = True
                 logBoth('logInfo', ImageProcessor.logSource, 'Redis connection established', Logger.SUCCESS)
-            except:
+            except Exception:
                 ImageProcessor.clientRedisConnectedQ = False
                 logBoth('logCritical', ImageProcessor.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass

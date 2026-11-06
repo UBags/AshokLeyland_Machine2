@@ -370,10 +370,10 @@ def getPixmapImage(image : QImage | QPixmap | ndarray | str):
         except Exception:
             try:
                 imageData = image.tobytes()
-            except:
+            except Exception:
                 try:
                     imageData = np.require(image, np.uint8, 'C')
-                except:
+                except Exception:
                     imageData = image
 
         height, width, channel = image.shape

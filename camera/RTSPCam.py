@@ -198,7 +198,7 @@ class RTSPCam():
                     self.camProcess.kill()
                     self.camProcess = None
                     self.stopFrameUpdateThread = True
-            except:
+            except Exception:
                 self.camProcess = None
                 self.stopFrameUpdateThread = True
             self.connected = False
@@ -224,7 +224,7 @@ class RTSPCam():
                         self.camProcess.kill()
                         self.camProcess = None
                         self.stopFrameUpdateThread = True
-                except:
+                except Exception:
                     self.camProcess = None
                     self.stopFrameUpdateThread = True
                 self.connected = False
@@ -254,7 +254,7 @@ class RTSPCam():
                         self.camProcess.kill()
                         self.camProcess = None
                         self.stopFrameUpdateThread = True
-                except:
+                except Exception:
                     self.camProcess = None
                     self.stopFrameUpdateThread = True
                 self.connected = False
@@ -300,7 +300,7 @@ class RTSPCam():
                 self.camProcess.kill()
                 self.camProcess = None
                 self.stopFrameUpdateThread = True
-            except:
+            except Exception:
                 self.camProcess = None
                 self.stopFrameUpdateThread = True
                 # pass
@@ -311,7 +311,7 @@ class RTSPCam():
                 self.stopFrameUpdateThread = False
                 self.connected = True
                 self.connectionAttempts = 0
-        except:
+        except Exception:
             self.camProcess = None
             self.camAvailable = False
             self.stopFrameUpdateThread = True
@@ -626,7 +626,7 @@ class RTSPCam():
                     try:
                         objRef.camProcess.kill()
                         objRef.camProcess = None
-                    except:
+                    except Exception:
                         objRef.camProcess = None
                 logBoth('logTakeNote', RTSPCam.logSource,
                         f"In RTSPCam.{objRef.name}, frame update thread exited after {frameCount} frames",
@@ -676,7 +676,7 @@ class RTSPCam():
                 if sleepTime > 0:
                     try:
                         time.sleep(sleepTime)
-                    except:
+                    except Exception:
                         noteSuppressed()
 
             logBoth('logTakeNote', RTSPCam.logSource,
@@ -722,7 +722,7 @@ class RTSPCam():
             if self.camProcess is not None:
                 try:
                     self.camProcess.kill()
-                except:
+                except Exception:
                     noteSuppressed()
             self.camProcess = None
         self.camAvailable = False
@@ -1183,7 +1183,7 @@ def testToSeeFrames():
                     cv2.imshow("Frame", actualFrame)
                     if cv2.waitKey(1) == ord('q'):
                         break
-            except:
+            except Exception:
                 noteSuppressed()
             time.sleep(0.05)
     except Exception as e:

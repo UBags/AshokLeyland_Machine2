@@ -149,6 +149,15 @@ class _Normalise(ast.NodeTransformer):
             return None
         return node
 
+    def visit_ExceptHandler(self, node):
+        # 2026-11-06 (CHANGES section 82): every bare "except:" in the production code became "except Exception:"
+        # (KeyboardInterrupt / SystemExit are no longer swallowed). Deliberate, project-wide, and not a change to any
+        # check's logic, so both forms compare as equal here - on both sides of the comparison.
+        self.generic_visit(node)
+        if isinstance(node.type, ast.Name) and node.type.id == "Exception":
+            node.type = None
+        return node
+
     def _drop_def(self, node):
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
         names = {t.id if isinstance(t, ast.Name) else (t.attr if isinstance(t, ast.Attribute) else None) for t in targets}

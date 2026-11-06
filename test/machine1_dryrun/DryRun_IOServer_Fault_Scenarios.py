@@ -89,7 +89,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _plc_sim import setup, setting_tags, use_machine_settings, HEARTBEAT        # COSTHETA_PLC_VENDOR=siemens -> SiemensPLCDataIO on a simulated S7 data block
+from _plc_sim import setup, setting_tags, use_machine_settings, HEARTBEAT, STUCK        # COSTHETA_PLC_VENDOR=siemens -> SiemensPLCDataIO on a simulated S7 data block
 IOServer, TAGS, WRITES, LOCK, VENDOR = setup()
 print(f"=== PLC vendor: {VENDOR} ({IOServer.__module__}) ===", flush=True)
 from statemachine.StateMachine import MachineState as MS
@@ -569,6 +569,23 @@ def run_scenarios():
               and published.get("tightening_torque1_setpoint") is not None, str(published))
         run_steps()
         check("E4 cycle completes", wrapped())
+
+        # E5 (section 82): a setting written but not held by the PLC (read back differs) counts as not written
+        rpmTag = IOServer.PC_PLC_RotationRPM
+        lastRpm = io._lastWrittenSettings.get("rotation_rpm")
+        use_machine_settings("Test", rotation_rpm=35)
+        STUCK.add(rpmTag)
+        TRACE.clear(); mark = len(WRITES)
+        r.delete("cycleSettings:" + QR_DOST_LHS)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        STUCK.discard(rpmTag)
+        published = readCycleSettingsForQRCode(r, QR_DOST_LHS)
+        rpmWrites = [v for t, v in writes_of((rpmTag,), mark)]
+        check("E5 RPM written but the PLC holds the old value (read back) -> 3 attempts, recorded as the PLC's (last written)",
+              len(rpmWrites) == IOServer.SETTINGS_WRITE_ATTEMPTS and published.get("rotation_rpm") == lastRpm
+              and TAGS[rpmTag] == lastRpm, f"writes {rpmWrites}, published {published.get('rotation_rpm')}, PLC {TAGS[rpmTag]}")
+        run_steps()
+        check("E5 cycle completes", wrapped())
         use_machine_settings("Test")
 
 

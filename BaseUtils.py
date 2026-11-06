@@ -101,7 +101,7 @@ def getFullyQualifiedName(filePathRef: str, classRef: Optional[type] | None = No
 
         return fullyQualifiedName
 
-    except Exception as e:
+    except Exception:
         # Fallback to basic module name if something goes wrong
         return inspect.getmodulename(filePathRef) or "unknown_module"
 
@@ -205,7 +205,7 @@ def getYMDHMSmFormatFromTimeDotTime(timeStr: Union[str, float]) -> str:
         finalString = f"{firstPart}-{microseconds}"
 
         return finalString
-    except Exception as e:
+    except Exception:
         # Return original string if conversion fails
         return str(timeStr)
 
@@ -283,7 +283,7 @@ def process_memory() -> int:
         process = psutil.Process(os.getpid())
         mem_info = process.memory_info()
         return mem_info.rss
-    except Exception as e:
+    except Exception:
         # Return 0 if unable to get memory info
         return 0
 
@@ -449,7 +449,7 @@ def getGeneralLoggingMessage(source: str, message: str) -> str:
         messageToBeLogged = f'{currentTime}: {sourceStr}{sourceSuffix}{func_name.strip()}:{lno}->{message}'
 
         return messageToBeLogged
-    except Exception as e:
+    except Exception:
         # Fallback to basic message if something goes wrong
         return f"{datetime.now()}: {message}"
 

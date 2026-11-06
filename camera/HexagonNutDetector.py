@@ -198,7 +198,7 @@ if hasattr(torch.serialization, "add_safe_globals"):
     try:
         from ultralytics.nn.tasks import SegmentationModel, DetectionModel
         safe_classes.extend([SegmentationModel, DetectionModel])
-    except:
+    except Exception:
         pass
     torch.serialization.add_safe_globals(safe_classes)
 
@@ -2131,7 +2131,7 @@ def worker_thread(thread_id, task_queue, result_queue, model_manager, shutdown_e
                 try:
                     failure_metrics = {'reason': 'no_nut', 'area': None}
                     result_queue.put((image_uuid, batch_idx, False, params_desc, None, None, None, failure_metrics, None, 0, (0, 0), 0.0, 0.0))
-                except:
+                except Exception:
                     pass
                 task_queue.task_done()
 

@@ -1,4 +1,3 @@
-from PySide6 import QtCore
 from PySide6.QtWidgets import QWidget, QLabel, QFrame, QVBoxLayout
 from PySide6.QtGui import *
 from multimethod import multimethod
@@ -9,7 +8,6 @@ from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet
 from frontend.frontendutils.CosThetaLabelUtils import *
 from frontend.frontendutils.CosThetaImageUtils import *
 from Configuration import *
-import cv2
 from typing import Union
 
 app = getAppInstance()

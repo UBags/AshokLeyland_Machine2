@@ -8,8 +8,8 @@ from frontend.CosThetaMonitorDimensions import getMonitorWidth, getMonitorHeight
 from frontend.widgets.CosThetaOutcomeContainerWithOKNotokTotal import *
 from frontend.frontendutils.CosThetaLabelUtils import *
 from frontend.frontendutils.CosThetaImageUtils import createImage
-from typing import Union, get_origin, get_args
-from persistence.GetTodaysCountsFromDB import getTodaysOKRecordsCount, getTodaysTotalRecordsCount, getTodaysNotOKRecordsCount, getTodaysInvalidResultsRecordsCount, getOKRecordsForBatchNumber, getNotOKRecordsForBatchNumber, getInvalidResultRecordsForBatchNumber
+from typing import Union, get_args
+from persistence.GetTodaysCountsFromDB import (getTodaysOKRecordsCount, getTodaysNotOKRecordsCount, getOKRecordsForBatchNumber, getNotOKRecordsForBatchNumber)
 # from logutils.SlaveLoggers import *
 from persistence.Persistence import *
 

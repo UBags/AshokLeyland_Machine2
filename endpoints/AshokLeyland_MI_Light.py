@@ -19,7 +19,6 @@ start on Monday. Started by OtherServices.py (startMIServer).
 """
 import json
 import os
-import socket
 import sys
 from datetime import datetime, timedelta
 from html import escape
@@ -28,7 +27,6 @@ from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # project root, when run directly
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio

@@ -238,7 +238,7 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
     try:
         if isinstance(anImage, np.ndarray) and anImage is not None:
             retval, buffer = cv2.imencode('.png', anImage)
-    except Exception as e:
+    except Exception:
         # raise e
         return False
     imageAsMessage = ""
@@ -258,7 +258,7 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
             timeTaken = round((time2 - time1) * 1000, 2)
             # printPlain(f'{queueName} : Producer sent anImage in {timeTaken} ms')
         return True
-    except ConnectionError as e1:
+    except ConnectionError:
         # raise e1
         # return False
         noteSuppressed()
@@ -349,7 +349,7 @@ def getImage(redisConnection: redis.client.Redis, queueName: str = commonStreamK
             try:
                 if newData[originalImageKeyString] is not None:
                     decodedImage = cv2.imdecode(np.frombuffer(newData[originalImageKeyString], np.uint8), 1)
-            except:
+            except Exception:
                 printBoldRed("Facing problem in decoding image from byte stream")
                 pass
             redisConnection.xdel(queueName, last_id)
@@ -406,7 +406,7 @@ def getImageWithResult(redisConnection: redis.client.Redis, queueName: str = com
                 try:
                     if newData[originalImageKeyString] is not None:
                         decodedImage = cv2.imdecode(np.frombuffer(newData[originalImageKeyString], np.uint8), 1)
-                except:
+                except Exception:
                     printBoldRed("Facing problem in decoding image from byte stream")
                     pass
             redisConnection.xdel(queueName, last_id)
@@ -495,7 +495,7 @@ def getStopCommandFromQueue(redisConnection: redis.client.Redis, block : int = 1
     stopNow = None
     try:
         stopNow = newData[genericdataKeyString].decode('utf-8')
-    except:
+    except Exception:
         noteSuppressed()
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'in getStopCommand()')} {stopNow =}")
     if stopNow is not None:
@@ -536,7 +536,7 @@ def getStoppedResponseFromQueue(redisConnection: redis.client.Redis, block : int
     try:
         producer = newData[producerKeyString].decode('utf-8')
         stoppedNow = newData[genericdataKeyString].decode('utf-8')
-    except:
+    except Exception:
         noteSuppressed()
     if (producer is not None) and (stoppedNow is not None):
         if stoppedNow == stoppedResponse:
@@ -589,7 +589,7 @@ def getTakeNextPictureCommandFromCameraId(redisConnection: redis.client.Redis, c
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == TAKE_NEXT_PICTURE):
             return timeOfMessage, True
-    except:
+    except Exception:
         return timeOfMessage, False
     return timeOfMessage, False
 
@@ -623,12 +623,12 @@ def getRequestResultCommandFromIOServer(redisConnection: redis.client.Redis, req
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
-    except:
+    except Exception:
         noteSuppressed()
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == requestCommand):
             return timeOfMessage, True
-    except:
+    except Exception:
         return timeOfMessage, False
     return timeOfMessage, False
 
@@ -663,12 +663,12 @@ def getTakeNextPictureCommandFromCameraQ(redisConnection: redis.client.Redis, ca
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
-    except:
+    except Exception:
         noteSuppressed()
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == TAKE_NEXT_PICTURE):
             return timeOfMessage, True
-    except:
+    except Exception:
         return timeOfMessage, False
     return timeOfMessage, False
 
@@ -749,7 +749,7 @@ def getDiscInterlockMessage(redisConnection: redis.client.Redis, block : int = 1
     currentStatus = False
     try:
         currentStatus = newData[genericdataKeyString].decode('utf-8')
-    except:
+    except Exception:
         noteSuppressed()
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'in getStopCommand()')} {stopNow =}")
     if currentStatus is not None:
@@ -838,7 +838,7 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return invalid
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
@@ -849,7 +849,7 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
             if withRequestId:
                 return currentMachineState, result, (newData.get(requestIdKeyString) or None)
             return currentMachineState, result
-    except:
+    except Exception:
         return invalid
 
     return invalid
@@ -885,7 +885,7 @@ def readDataInIOServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False, ""
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
@@ -893,7 +893,7 @@ def readDataInIOServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
             qrCodeIsOK = (newData[qrCodeStatusKeyString] == ok)
             qrCode = newData.get(qrCodeKeyString, "")
             return qrCodeIsOK, qrCode
-    except:
+    except Exception:
         return False, ""
 
     return False, ""
@@ -928,14 +928,14 @@ def readDataInIOServerFromFEServer(redisConnection: redis.client.Redis, block : 
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if (newData[connectionStatusKeyString] is not None):
             connStatus = (newData[connectionStatusKeyString] == ok)
             return connStatus
-    except:
+    except Exception:
         return False
 
     return False
@@ -970,7 +970,7 @@ def readCombinedHeartbeatInIOServerFromHeartbeatServer(redisConnection: redis.cl
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -1292,7 +1292,7 @@ def readDataInFEServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, None, False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
@@ -1301,7 +1301,7 @@ def readDataInFEServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
             actualQRCodeValue = newData[qrCodeKeyString]
             qrCodeDisplayString = newData[qrCodeDisplayKeyString]
             return actualQRCodeValue, qrCodeDisplayString, validQRCode
-    except:
+    except Exception:
         return None, None, False
 
     return None, None, False
@@ -1364,13 +1364,13 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
                 try:
                     if newData[originalImageKeyString] is not None:
                         decodedOriginalImage = cv2.imdecode(np.frombuffer(newData[originalImageKeyString], np.uint8), 1)
-                except:
+                except Exception:
                     printBoldRed("Facing problem in decoding original image from byte stream in readDataInFEServerFromCameraServer()")
                     pass
                 try:
                     if newData[processedImageKeyString] is not None:
                         decodedProcessedImage = cv2.imdecode(np.frombuffer(newData[processedImageKeyString], np.uint8), 1)
-                except:
+                except Exception:
                     printBoldRed(
                         "Facing problem in decoding processed image from byte stream in readDataInFEServerFromCameraServer()")
                     pass
@@ -1422,7 +1422,7 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
             timeOfMessage = newData[timeKeyString]
             redisConnection.xdel(hb2feq, last_id)
             redisConnection.xtrim(hb2feq, 0)
-    except ConnectionError as e1:
+    except ConnectionError:
         newData = {}
 
     received = cameraServerStatusKeyString in newData
@@ -1431,7 +1431,7 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
         qrCodeServerStatus = (newData[qrCodeServerStatusKeyString] == ALIVE)
         ioServerStatus = (newData[ioServerStatusKeyString] == ALIVE)
         dbServerStatus = (newData[dbServerStatusKeyString] == ALIVE)
-    except:
+    except Exception:
         noteSuppressed()
     statuses = (cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus)
     return statuses + (received,) if withReceived else statuses
@@ -1482,7 +1482,7 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
@@ -1494,12 +1494,12 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
             result = newData[resultKeyString]
             try:
                 value = float(value)
-            except:
+            except Exception:
                 noteSuppressed()
 
             return _withRotation(withRotationDone, (currentMachineState, moveToState, action, value, result),
                                  decodeOptionalBool(newData.get(rotationDoneKeyString)))
-    except:
+    except Exception:
         return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
     return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
@@ -1530,7 +1530,7 @@ def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis
             try:
                 redisConnection.xdel(emergencyq, last_id)
                 redisConnection.xtrim(emergencyq, 0)
-            except:
+            except Exception:
                 noteSuppressed()
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
@@ -1539,13 +1539,13 @@ def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if (newData[emergencyStatusKeyString] is not None) and (newData[emergencyStatusKeyString] == ok):
             return True
-    except:
+    except Exception:
         return False
 
     return False
@@ -1607,13 +1607,13 @@ def readDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == readQRCodeCommand):
             return timeOfMessage, True
-    except:
+    except Exception:
         return None, False
 
     return None, False
@@ -1644,7 +1644,7 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
             try:
                 redisConnection.xdel(io2qrcodeabortq, last_id)
                 redisConnection.xtrim(io2qrcodeabortq, 0)
-            except:
+            except Exception:
                 noteSuppressed()
             # printBoldGreen(f"Got data = {newData}")
     except Exception as e1:
@@ -1654,13 +1654,13 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if (newData[actionKeyString] is not None) and (newData[actionKeyString] == ABORT):
             return True
-    except:
+    except Exception:
         noteSuppressed()
 
     return False
@@ -1676,7 +1676,7 @@ def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, ori
             retval, buffer = cv2.imencode('.png', originalImage)
             if buffer is not None:
                 originalImageAsMessage = np.array(buffer).tobytes()
-    except:
+    except Exception:
         noteSuppressed()
 
     processedImageAsMessage = ""
@@ -1685,7 +1685,7 @@ def sendDataFromCameraServerToFEServer(redisConnection : redis.client.Redis, ori
             retval, buffer = cv2.imencode('.png', processedImage)
             if buffer is not None:
                 processedImageAsMessage = np.array(buffer).tobytes()
-    except:
+    except Exception:
         noteSuppressed()
 
     data = {originalImageKeyString: originalImageAsMessage, processedImageKeyString: processedImageAsMessage, resultKeyString : result, currentMachineStateKeyString : currentMachineState}
@@ -1752,13 +1752,13 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, None, False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if newData.get(actionKeyString) == END_OF_CYCLE:          # the cycle is over: no picture, state READ_QR_CODE
             return timeOfMessage, MachineState.READ_QR_CODE, False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
@@ -1767,7 +1767,7 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
             currentMachineState = MachineState.getMachineStateFromString(newData[currentMachineStateKeyString])
             # printLight(f"Current state is {currentMachineState} and type is {type(currentMachineState)}")
             return timeOfMessage, currentMachineState, True
-    except:
+    except Exception:
         return None, None, False
 
     return None, None, False
@@ -1807,13 +1807,13 @@ def readComponentQRCodeInCameraServerFromQRCodeServer(redisConnection: redis.cli
     try:
         if (newData[genericdataKeyString] is not None) and (newData[genericdataKeyString] == HANDSHAKE):
             return None, False
-    except:
+    except Exception:
         noteSuppressed()
 
     try:
         if (newData[componentQRCodeKeyString] is not None):
             return newData[componentQRCodeKeyString], True
-    except:
+    except Exception:
         return None, False
 
     return None, False
@@ -1884,7 +1884,7 @@ def readDataInHeartbeatServerFromIOServer(redisConnection: redis.client.Redis, b
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -1918,7 +1918,7 @@ def readDataInHeartbeatServerFromQRCodeServer(redisConnection: redis.client.Redi
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -1952,7 +1952,7 @@ def readDataInHeartbeatServerFromFEServer(redisConnection: redis.client.Redis, b
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -1986,7 +1986,7 @@ def readDataInHeartbeatServerFromDatabaseServer(redisConnection: redis.client.Re
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -2020,7 +2020,7 @@ def readDataInHeartbeatServerFromCameraServer(redisConnection: redis.client.Redi
     try:
         if (newData[connectionStatusKeyString] is not None) and (newData[connectionStatusKeyString] == ALIVE):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -2054,7 +2054,7 @@ def readAlarmInHeartbeatServer(redisConnection: redis.client.Redis, block : int 
     try:
         if (newData[alarmStatusKeyString] is not None) and (newData[alarmStatusKeyString] == ok):
             return True
-    except:
+    except Exception:
         return False
     return False
 
@@ -2223,26 +2223,26 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
 
             try:
                 qrCode = str(newData[qrCodeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 qrCode = UNKNOWN
 
             try:
                 knucklePicture = cv2.imdecode(np.frombuffer(newData[knucklePictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(knucklePicture.shape)
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get knucklePicture")
                 knucklePicture = None
 
             try:
                 if knucklePicture is not None:
                     knuckleCheckResult = str(newData[knuckleCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 knuckleCheckResult = notok
 
             try:
                 knuckleCheckDatetime = str(newData[knuckleDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get knuckleCheckDatetime")
                 knuckleCheckDatetime = '1970-01-01 00:00:00'
 
@@ -2250,19 +2250,19 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 hubAndBottomBearingPicture = cv2.imdecode(np.frombuffer(newData[hubAndBottomBearingPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(hubAndBottomBearingPicture.shape)
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get hubAndBottomBearingPicture")
                 hubAndBottomBearingPicture = None
 
             try:
                 if hubAndBottomBearingPicture is not None:
                     hubAndBottomBearingCheckResult = str(newData[hubAndBottomBearingCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 hubAndBottomBearingCheckResult = notok
 
             try:
                 hubAndBottomBearingCheckDatetime = str(newData[hubAndBottomBearingDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get hubAndBottomBearingCheckDatetime")
                 hubAndBottomBearingCheckDatetime = '1970-01-01 00:00:00'
 
@@ -2270,19 +2270,19 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 topBearingPicture = cv2.imdecode(np.frombuffer(newData[topBearingPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(topBearingPicture.shape)
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get topBearingPicture")
                 topBearingPicture = None
 
             try:
                 if topBearingPicture is not None:
                     topBearingCheckResult = str(newData[topBearingCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 topBearingCheckResult = notok
 
             try:
                 topBearingCheckDatetime = str(newData[topBearingDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get topBearingCheckDatetime")
                 topBearingCheckDatetime = '1970-01-01 00:00:00'
 
@@ -2290,35 +2290,35 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 nutAndPlateWasherPicture = cv2.imdecode(np.frombuffer(newData[nutAndPlateWasherPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(nutAndPlateWasherPicture.shape)
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get nutAndPlateWasherPicture")
                 nutAndPlateWasherPicture = None
 
             try:
                 if nutAndPlateWasherPicture is not None:
                     nutAndPlateWasherCheckResult = str(newData[nutAndPlateWasherCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 nutAndPlateWasherCheckResult = notok
 
             try:
                 nutAndPlateWasherCheckDatetime = str(newData[nutAndPlateWasherDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get nutAndPlateWasherCheckDatetime")
                 nutAndPlateWasherCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 tighteningTorque1 = float(newData[tighteningTorque1ValueKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 tighteningTorque1 = 0.0
 
             try:
                 tighteningTorque1Result = str(newData[tighteningTorque1ResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 tighteningTorque1Result = notok
 
             try:
                 tighteningTorque1Datetime = str(newData[tighteningTorque1DatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get tighteningTorque1CheckDatetime")
                 tighteningTorque1Datetime = '1970-01-01 00:00:00'
 
@@ -2326,29 +2326,29 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 componentPressBunkPicture = cv2.imdecode(np.frombuffer(newData[componentPressBunkPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(componentPressBunkPicture.shape)
-            except:
+            except Exception:
                 componentPressBunkPicture = None
 
             try:
                 if componentPressBunkPicture is not None:
                     componentPressBunkCheckResult = str(newData[componentPressBunkCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 componentPressBunkCheckResult = notok
 
             try:
                 componentPressBunkCheckDatetime = str(newData[componentPressBunkCheckDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get componentPressBunkCheckDatetime")
                 componentPressBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 componentPressDone = str(newData[componentPressDoneResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 componentPressDone = notok
 
             try:
                 componentPressDoneDatetime = str(newData[componentPressDoneDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get componentPressDatetime")
                 componentPressDoneDatetime = '1970-01-01 00:00:00'
 
@@ -2356,34 +2356,34 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 noBunkPicture = cv2.imdecode(np.frombuffer(newData[noBunkPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(noBunkPicture.shape)
-            except:
+            except Exception:
                 noBunkPicture = None
 
             try:
                 if noBunkPicture is not None:
                     noBunkCheckResult = str(newData[noBunkCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 noBunkCheckResult = notok
 
             try:
                 noBunkCheckDatetime = str(newData[noBunkCheckDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get noBunkCheckDatetime")
                 noBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 tighteningTorque2 = float(newData[tighteningTorque2ValueKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 tighteningTorque2 = 0.0
 
             try:
                 tighteningTorque2Result = str(newData[tighteningTorque2ResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 tighteningTorque2Result = notok
 
             try:
                 tighteningTorque2Datetime = str(newData[tighteningTorque2DatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get tighteningTorque2Datetime")
                 tighteningTorque2Datetime = '1970-01-01 00:00:00'
 
@@ -2391,18 +2391,18 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 splitPinAndWasherPicture = cv2.imdecode(np.frombuffer(newData[splitPinAndWasherPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(splitPinAndWasherPicture.shape)
-            except:
+            except Exception:
                 splitPinAndWasherPicture = None
 
             try:
                 if splitPinAndWasherPicture is not None:
                     splitPinAndWasherCheckResult = str(newData[splitPinAndWasherCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 splitPinAndWasherCheckResult = notok
 
             try:
                 splitPinAndWasherCheckDatetime = str(newData[splitPinAndWasherCheckDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get splitPinAndWasherCheckDatetime")
                 splitPinAndWasherCheckDatetime = '1970-01-01 00:00:00'
 
@@ -2410,18 +2410,18 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 capPicture = cv2.imdecode(np.frombuffer(newData[capPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(capPicture.shape)
-            except:
+            except Exception:
                 capPicture = None
 
             try:
                 if capPicture is not None:
                     capCheckResult = str(newData[capCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 capCheckResult = notok
 
             try:
                 capCheckDatetime = str(newData[capCheckDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get capCheckDatetime")
                 capCheckDatetime = '1970-01-01 00:00:00'
 
@@ -2429,51 +2429,51 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 capPressBunkPicture = cv2.imdecode(np.frombuffer(newData[capPressBunkPictureKeyString], np.uint8), 1)
                 if printStatements:
                     print(capPressBunkPicture.shape)
-            except:
+            except Exception:
                 capPressBunkPicture = None
 
             try:
                 if capPressBunkPicture is not None:
                     capPressBunkCheckResult = str(newData[capPressBunkCheckResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 capPressBunkCheckResult = notok
 
             try:
                 capPressBunkCheckDatetime = str(newData[capPressBunkCheckDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get capPressBunkCheckDatetime")
                 capPressBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 capPressDone = str(newData[capPressDoneResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 capPressDone = notok
 
             try:
                 capPressDoneDatetime = str(newData[capPressDoneDatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get capPressDoneDatetime")
                 capPressDoneDatetime = '1970-01-01 00:00:00'
 
             try:
                 freeRotationTorque1 = float(newData[freeRotationTorque1ValueKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 freeRotationTorque1 = 0.0
 
             try:
                 freeRotationTorque1Result = str(newData[freeRotationTorque1ResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 freeRotationTorque1Result = notok
 
             try:
                 freeRotationTorque1Datetime = str(newData[freeRotationTorque1DatetimeKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 printBoldRed(f"Couldn't get freeRotationTorque1Datetime")
                 freeRotationTorque1Datetime = '1970-01-01 00:00:00'
 
             try:
                 overallResult = str(newData[overallResultKeyString].decode('utf-8'))
-            except:
+            except Exception:
                 overallResult = notok
 
             tighteningTorque1RotationDone = decodeOptionalBool(newData.get(tighteningTorque1RotationDoneKeyString))
@@ -2681,7 +2681,7 @@ def clearKeyCommunicationQueuesOnAbort():
     for q in queues:
         try:
             redisConnection.xtrim(q,0)
-        except:
+        except Exception:
             noteSuppressed()
 
 # ================================================================================

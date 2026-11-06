@@ -1,7 +1,7 @@
 import threading
 import time
 import logging
-from typing import Any, List, Optional
+from typing import List, Optional
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 from statemachine.StateMachine import MachineState

@@ -1,10 +1,6 @@
 # from multidispatch import dispatch
-from PySide6.QtWidgets import QMainWindow, QGroupBox, QHBoxLayout, QMessageBox, QLabel, QVBoxLayout, QWidget, QLineEdit
-from PySide6 import QtCore
-from PySide6.QtCore import QThread, Signal, Slot, QRunnable, QThreadPool
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QAction, Qt
-from PySide6.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget, QLineEdit
+from PySide6.QtGui import Qt
 from utils.CosThetaPrintUtils import *
 
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions

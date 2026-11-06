@@ -14,12 +14,10 @@ come from the vendor's keys of ApplicationConfiguration.properties (Configuratio
 """
 
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
-import random
 import sys
 import contextlib
 import threading
 import time
-import logging
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 from psycopg2.pool import ThreadedConnectionPool
 
@@ -34,7 +32,7 @@ from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from persistence.Persistence import getDatabaseName, setDatabaseName, getMachineSettings
-from costhetaio.commonplc.PLCDataIO import PLCDataIO, PLCIOError
+from costhetaio.commonplc.PLCDataIO import PLCDataIO
 from costhetaio.commonplc.PLCDataIOFactory import createPLCDataIO, plcDataIOClass, plcVendor
 
 
@@ -625,7 +623,7 @@ class PLCIOServer:
                 self.redisConnectionForReads = Redis(self.redisHostname, self.redisPort,
                                                      retry_on_timeout=True)
                 self.clientRedisConnectedForReads = True
-            except:
+            except Exception:
                 self.clientRedisConnectedForReads = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Redis Connection for Reads',
@@ -638,7 +636,7 @@ class PLCIOServer:
                 self.redisConnectionForWrites = Redis(self.redisHostname, self.redisPort,
                                                       retry_on_timeout=True)
                 self.clientRedisConnectedForWrites = True
-            except:
+            except Exception:
                 self.clientRedisConnectedForWrites = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Redis Connection for Writes',
@@ -666,7 +664,7 @@ class PLCIOServer:
                 SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Heartbeat Redis Connection is {self.heartbeatRedisConnection}',
                                                        Logger.SUCCESS)
-            except:
+            except Exception:
                 self.heartbeatRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Heartbeat Redis Connection',
@@ -684,7 +682,7 @@ class PLCIOServer:
                 SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Combined Heartbeat Redis Connection is {self.combinedHeartbeatRedisConnection}',
                                                        Logger.SUCCESS)
-            except:
+            except Exception:
                 self.combinedHeartbeatRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Heartbeat Redis Connection',
@@ -702,7 +700,7 @@ class PLCIOServer:
                 SlaveFileLogger.getInstance().logDebug(PLCIOServer.logSource,
                                                        f'Emergency Redis Connection is {self.emergencyRedisConnection}',
                                                        Logger.SUCCESS)
-            except:
+            except Exception:
                 self.emergencyRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
                                                                f'Could not get Emergency Redis Connection',
@@ -814,7 +812,9 @@ class PLCIOServer:
                          (lambda t, v: self.write_float(t, float(v), debug=False))
                 ok_ = False
                 for attempt in range(PLCIOServer.SETTINGS_WRITE_ATTEMPTS):
-                    if writer(tag, value):
+                    # written and read back (as the resets are): a value the PLC does not hold as written (wrong
+                    # width or address - section 22's LREAL case - or refused) counts as not written
+                    if writer(tag, value) and self._settingReadBack(tag, value, kind):
                         ok_ = True
                         break
                     time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
@@ -854,6 +854,17 @@ class PLCIOServer:
         except Exception as e:
             printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
+
+    def _settingReadBack(self, tag: str, value, kind) -> bool:
+        """A cycle setting just written: read it back from the PLC; True if it holds the value written (INT exactly,
+        REAL / LREAL within RESET_FLOAT_TOLERANCE). Logged when it does not."""
+        held = self._readIntOrNone(tag) if kind is int else self._readFloatOrNone(tag)
+        if held is not None and (held == int(value) if kind is int
+                                 else abs(held - float(value)) <= PLCIOServer.RESET_FLOAT_TOLERANCE):
+            return True
+        message = f"Cycle setting {tag}: wrote {value}, PLC holds {held}"
+        printBoldRed(message); self.logger.error(message); self._audit(message)
+        return False
 
     # ==================== Cycle Time Tracking ====================
     #
@@ -1201,26 +1212,37 @@ class PLCIOServer:
                             printBoldRed(f"PLC connection test failed. Reconnecting...")
                         tryToConnect = True
 
-                if tryToConnect:
-                    if not objRef._plcCheckPending:
-                        objRef._plcCheckPending = True
-                        message = (f"PLC connection lost in state {objRef.machineState.getCurrentState().name}; "
-                                   f"reference tag {objRef.referenceTag()}. Writes and reads on hold until the PLC is "
-                                   f"checked after the reconnect")
-                        printBoldRed(message)
-                        objRef.logger.error(message)
-                        objRef._audit(message)
-                    if objRef.connectPLC(forceRenew=True) is True:
-                        objRef._verifyPlcAfterReconnect()
-                elif objRef._plcCheckPending:
-                    objRef._verifyPlcAfterReconnect()
-                else:
-                    objRef._followReferenceTag()
+                try:
+                    objRef._connectionCheckStep(tryToConnect)
+                except Exception as e:              # the connection check must never stop
+                    import traceback
+                    message = f"Connection check: {e}"
+                    printBoldRed(message); objRef.logger.error(f"{message}\n{traceback.format_exc()}")
 
         self.connectionCheckThread = threading.Thread(name=f'IOServer Connection Keep Alive Thread',
                                                       target=connectionCheckingLoop,
                                                       args=(), daemon=True)
         self.connectionCheckThread.start()
+
+    def _connectionCheckStep(self, tryToConnect: bool) -> None:
+        """One step of the connection check: reconnect (and check the PLC after the reconnect), or follow the
+        reference tag."""
+        objRef = self
+        if tryToConnect:
+            if not objRef._plcCheckPending:
+                objRef._plcCheckPending = True
+                message = (f"PLC connection lost in state {objRef.machineState.getCurrentState().name}; "
+                           f"reference tag {objRef.referenceTag()}. Writes and reads on hold until the PLC is "
+                           f"checked after the reconnect")
+                printBoldRed(message)
+                objRef.logger.error(message)
+                objRef._audit(message)
+            if objRef.connectPLC(forceRenew=True) is True:
+                objRef._verifyPlcAfterReconnect()
+        elif objRef._plcCheckPending:
+            objRef._verifyPlcAfterReconnect()
+        else:
+            objRef._followReferenceTag()
 
     def launchHeartbeatThread(self):
         objRef = self
@@ -1240,7 +1262,7 @@ class PLCIOServer:
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 try:
                     time.sleep(ioHeartbeatGap)
-                except:
+                except Exception:
                     noteSuppressed()
 
         self.heartbeatThread = threading.Thread(name=f"IO Heartbeat Thread", target=reportHeartbeat, args=(),
@@ -1278,7 +1300,7 @@ class PLCIOServer:
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 try:
                     time.sleep(heartbeatGap if statuses is not None else 0.1)
-                except:
+                except Exception:
                     noteSuppressed()
 
         combinedHeartbeatThread = threading.Thread(name=f"Combined Heartbeat Update Thread", target=updateHeartbeat,
@@ -1388,6 +1410,13 @@ class PLCIOServer:
                 self._heldReasonLogged = None
 
     def launchEmergencyMonitoringThread(self):
+        """PLC_PC_EmergencyAbort, read every 1 s; True -> abortCycle (which also sets the tag back to False).
+        The emergency button is pushed and released. If the operator holds it down longer, the PLC keeps the tag True
+        and the PC sees it True again after its own reset: the cycle is then aborted once per read (about every 1.7 s:
+        1 s poll + the abort's 0.7 s) for as long as the button is held - several aborts one after the other. That is
+        harmless (user, 2026-11-06): every abort resets the same tags and arms the QR code read again, the frontend acts
+        only on the first (it is at the QR code for the later ones, which it ignores) and sends one abort record. A
+        press shorter than the 1 s poll is caught only if the PLC holds the tag until the PC has reset it."""
         objRef = self
 
         def monitorEmergency():
@@ -1402,11 +1431,15 @@ class PLCIOServer:
                 if emergencyActivated:
                     printBoldRed(
                         f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
-                    objRef.abortCycle("emergency button pressed on the machine (PLC)",
-                                      notifyQRCodeServer=True, notifyFrontend=True, clearQueues=True)
+                    try:
+                        objRef.abortCycle("emergency button pressed on the machine (PLC)",
+                                          notifyQRCodeServer=True, notifyFrontend=True, clearQueues=True)
+                    except Exception as e:          # the emergency thread must never stop
+                        import traceback
+                        objRef.logger.error(f"Emergency abort failed: {e}\n{traceback.format_exc()}")
                 try:
                     time.sleep(1.0)
-                except:
+                except Exception:
                     noteSuppressed()
 
         emergencyMonitoringThread = threading.Thread(name=f"Emergency Monitoring Thread", target=monitorEmergency,
@@ -1645,7 +1678,7 @@ class PLCIOServer:
                             sendStoppedResponse(objRef.heartbeatRedisConnection, aProducer=PLCIOServer.logSource)
                     else:
                         objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(False)
-                except:
+                except Exception:
                     noteSuppressed()
                 if not objRef.shutdown:
                     time.sleep(2)
@@ -2411,7 +2444,7 @@ class PLCIOServer:
         value = ""
         try:
             value = self.dataIOForReads.read(aTag)
-        except:
+        except Exception:
             noteSuppressed()
         return value
 
@@ -2424,7 +2457,7 @@ class PLCIOServer:
         value = {}
         try:
             value = self.dataIOForReads.readMany(listOfTags)
-        except:
+        except Exception:
             noteSuppressed()
         return value
 
@@ -2440,7 +2473,7 @@ class PLCIOServer:
         value = []
         try:
             value = self.dataIOForReads.readArray(arrayName, numberOfElements)
-        except:
+        except Exception:
             noteSuppressed()
         return value
 
@@ -2451,7 +2484,7 @@ class PLCIOServer:
             return value
         try:
             value = self.dataIOForReads.readArraySlice(arrayName, index, numberOfElements)
-        except:
+        except Exception:
             noteSuppressed()
         return value
 
@@ -2958,7 +2991,7 @@ class PLCIOServer:
                         # Put response in receiveTags queue
                         objRef.redisConnectionForReads.rpush(RECEIVE_TAGS_QUEUE, json.dumps(tag_values))
 
-                except Exception as e:
+                except Exception:
                     noteSuppressed()  # Silently ignore errors to not disrupt main operation
 
         self.tagRequestThread = threading.Thread(name='Tag Request Listener Thread',
@@ -2973,7 +3006,7 @@ class PLCIOServer:
         if hasattr(self, 'updateTagsProcessor') and self.updateTagsProcessor is not None:
             try:
                 self.updateTagsProcessor.stop()
-            except:
+            except Exception:
                 noteSuppressed()
         try:
             self._closePLC()

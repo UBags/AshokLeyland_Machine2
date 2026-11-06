@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import copy
 import Crypto
 from Crypto import Cipher
@@ -86,7 +87,7 @@ class WindowsRegistry:
                 winreg.QueryValueEx(opened_key, value_list[2])
                 return True
 
-        except (Exception, Error) as e:
+        except (Exception, Error):
             # print(e)
             return False
 
@@ -98,7 +99,7 @@ class WindowsRegistry:
                 value_of_value, value_type = winreg.QueryValueEx(opened_key, value_list[2])
                 # winreg.CloseKey(opened_key)
             return value_of_value
-        except (Exception, Error) as e:
+        except (Exception, Error):
             # print(e)
             return None
 
@@ -111,7 +112,7 @@ class WindowsRegistry:
                 winreg.SetValueEx(opened_key, value_list[2], 0, getattr(winreg, value_type), value)
                 # winreg.CloseKey(opened_key)
             return True
-        except (Exception, Error) as e:
+        except (Exception, Error):
             # print(e)
             return False
 
@@ -123,7 +124,7 @@ class WindowsRegistry:
                 winreg.DeleteValue(opened_key, value_list[2])
                 # winreg.CloseKey(opened_key)
             return True
-        except (Exception, Error) as e:
+        except (Exception, Error):
             # print(e)
             return False
 
@@ -136,7 +137,7 @@ class WindowsRegistry:
                 pass
                 # winreg.CloseKey(opened_key)
             return True
-        except (Exception, Error) as e:
+        except (Exception, Error):
             # print(e)
             return False
 
@@ -221,14 +222,14 @@ def setRegistryValue(value):
             except (Exception, Error) as e:
                 print(e)
                 return False
-    except:
+    except Exception:
         return False
 
 def getRegistryValue():
     global windowsRegistryKey
     try:
         return WindowsRegistry.get_value(full_path=windowsRegistryKey)
-    except:
+    except Exception:
         return ""
 
 def stopProcesses(process_pids: list):
@@ -237,13 +238,13 @@ def stopProcesses(process_pids: list):
         try:
             if psutil.pid_exists(pid):
                 os.kill(pid, signal.SIGTERM)
-        except:
-            pass
+        except Exception:
+            noteSuppressed()
     printBoldGreen("All processes shut down. Closing terminal window.")
     try:
         os.system("taskkill /f /im cmd.exe")
-    except:
-        pass
+    except Exception:
+        noteSuppressed()
     sys.exit(0)
 
 
@@ -259,7 +260,7 @@ def run(cmd):
     return (subprocess.run(cmd, shell=True, capture_output=True, check=True, encoding="utf-8")
             .stdout
             .strip())
-  except:
+  except Exception:
     return None
 
 def verifyExistenceAndTamperingOfAllFiles():
@@ -1125,14 +1126,14 @@ def encryptAndStoreMoUAndHoULimits():
     mouLimit = getJustPassword(textToShow="Enter MoU")
     try:
         mouLimit = float(mouLimit)
-    except:
+    except Exception:
         mouLimit = 1
     mouLimit = round(mouLimit, 2)
     # houLimit = passwordbox('HOU')
     houLimit = getJustPassword(textToShow="Enter HoU")
     try:
         houLimit = float(houLimit)
-    except:
+    except Exception:
         houLimit = 250
     houLimit = round(houLimit, 2)
     stringToBeEncoded = f"{mouLimit}{commonMouLimitString}{commonHouLimitString[::-1]}_{houLimit}{commonHouLimitString}{commonMouLimitString[::-1]}"
@@ -1222,8 +1223,8 @@ def decryptMoUandHoULimits():
                                                          Logger.GENERAL)
                 SlaveFileLogger.getInstance().logInfo(logSource, f"Successfully found mouL, houL",
                                                       Logger.GENERAL)
-            except:
-                pass
+            except Exception:
+                noteSuppressed()
             # printBoldBlue(f"Found {mouLimit = }, {houLimit = }")
             return True
     except Exception as e:

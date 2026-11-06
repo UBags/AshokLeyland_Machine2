@@ -80,22 +80,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (
-    readFrontendNotices,
-    ok,
-    notok,
-    ALIVE,
-    DEAD,
-    sendHeartbeatFromFEServerToHeartbeatServer,
-    sendDataFromFEServerToDatabaseServer,
-    readDataInFEServerFromQRCodeServer,
-    readDataInFEServerFromCameraServer,
-    readDataInFEServerFromIOServer,
-    readEmergencyAbortInFEServerFromIOServer,
-    clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer,
-    getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage,
-    readHeartbeatsInFEServerFromHeartbeatServer,
-)
+from utils.RedisUtils import (readFrontendNotices, ok, notok, ALIVE, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -107,18 +92,7 @@ from persistence.Persistence import (
 )
 
 # From utils.CosThetaPrintUtils
-from utils.CosThetaPrintUtils import (
-    printBoldBlue,
-    printBlue,
-    printBoldRed,
-    printBoldGreen,
-    printBoldYellow,
-    printYellow,
-    printGreen,
-    printRed,
-    printLight,
-    getCurrentTime
-)
+from utils.CosThetaPrintUtils import (printBoldBlue, printBlue, printBoldRed, printYellow, printGreen, printRed, getCurrentTime)
 
 from frontend.frontendutils.CosThetaImageUtils import (
     createImage,
@@ -318,7 +292,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 AshokLeylandFrontEnd.processUpdationRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 AshokLeylandFrontEnd.processUpdationRedisConnected = True
-            except:
+            except Exception:
                 AshokLeylandFrontEnd.processUpdationRedisConnected = False
                 printBoldRed(f'Redis Connection status in frontend for getting pictures from camera server is {self.processUpdationRedisConnected}')
 
@@ -326,7 +300,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 AshokLeylandFrontEnd.connectionsUpdationRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 AshokLeylandFrontEnd.connectionsUpdationRedisConnected = True
-            except:
+            except Exception:
                 AshokLeylandFrontEnd.connectionsUpdationRedisConnected = False
                 printBoldRed(f'Redis Connection status in frontend for getting connection statuses from Heartbeat Server is {self.connectionsUpdationRedisConnected}')
 
@@ -334,7 +308,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 AshokLeylandFrontEnd.emergencyUpdationRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 AshokLeylandFrontEnd.emergencyUpdationRedisConnected = True
-            except:
+            except Exception:
                 AshokLeylandFrontEnd.emergencyUpdationRedisConnected = False
                 printBoldRed(f'Redis Connection status in frontend for getting emergency status from IO server is {self.emergencyUpdationRedisConnected}')
 
@@ -342,14 +316,14 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 AshokLeylandFrontEnd.heartbeatRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 AshokLeylandFrontEnd.heartbeatRedisConnected = True
-            except:
+            except Exception:
                 AshokLeylandFrontEnd.heartbeatRedisConnected = False
                 printBoldRed(f'Redis Connection status for frontend heartbeat is {self.heartbeatRedisConnected}')
         if not AshokLeylandFrontEnd.databaseUpdationRedisConnected:
             try:
                 AshokLeylandFrontEnd.databaseUpdationRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 AshokLeylandFrontEnd.databaseUpdationRedisConnected = True
-            except:
+            except Exception:
                 AshokLeylandFrontEnd.databaseUpdationRedisConnected = False
                 printBoldRed(f'Redis Connection status in frontend for updating state is {self.databaseUpdationRedisConnected}')
 
@@ -782,7 +756,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                 thread.quit()
                 thread.wait()
                 thread.deleteLater()
-        except:
+        except Exception:
             noteSuppressed()
 
     def goToClose(self):
@@ -794,7 +768,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         elif ret == QMessageBox.StandardButton.Yes:
             try:
                 pass
-            except:
+            except Exception:
                 noteSuppressed()
 
             AshokLeylandFrontEnd.shutdownThreads = True
@@ -810,7 +784,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             try:
                 self.heartbeatWorker.stop()
                 self.stopAndCleanThread(self.heartbeatThread)
-            except Exception as e:
+            except Exception:
                 noteSuppressed()
             self.stopAndCleanThread(self.timeDurationUpdateThread)
             self.stopAndCleanThread(self.getQRCodeThread)
@@ -849,7 +823,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             event.accept()
             try:
                 pass
-            except:
+            except Exception:
                 noteSuppressed()
             AshokLeylandFrontEnd.shutdownThreads = True
             sendStopToAll()
@@ -858,13 +832,13 @@ class AshokLeylandFrontEnd(QMainWindow):
             if self.largeImageWindow is not None:
                 try:
                     self.largeImageWindow.close()
-                except Exception as e:
+                except Exception:
                     noteSuppressed()
             endSplash.display()
             try:
                 self.heartbeatWorker.stop()
                 self.stopAndCleanThread(self.heartbeatThread)
-            except Exception as e:
+            except Exception:
                 noteSuppressed()
             self.stopAndCleanThread(self.timeDurationUpdateThread)
             self.stopAndCleanThread(self.getQRCodeThread)
@@ -1140,7 +1114,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         sendAbortFromIOServerToQRCodeServer(AshokLeylandFrontEnd.processUpdationRedisConnection)
         try:
             QThread.msleep(200)
-        except:
+        except Exception:
             noteSuppressed()
         clearKeyCommunicationQueuesOnAbort()
         # Tell the IOServer: it resets its PLC handshake and goes back to reading the QR code. Without this the

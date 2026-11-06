@@ -3,41 +3,18 @@ import time
 import threading
 import os
 from typing import Union
-from pathlib import Path
 from datetime import datetime
-from configparser import ConfigParser
 
 import numpy as np
 import psycopg2
 from psycopg2 import Error
-from psycopg2 import sql
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import pprint
 
 from redis import Redis
 
 # From persistence package
 import persistence
-from persistence.Persistence import (
-    setDatabaseName,
-    makeFoldersForImages,
-    getDatabaseName,
-    getSchemaName,
-    getCurrentMode,
-    getDataSubFolder,
-    checkConnection,
-    checkIfDatabaseExists,
-    checkIfQRCodeExists,
-    insertData,
-    getFolderForKnuckleImages,
-    getFolderForHubAndBottomBearingImages,
-    getFolderForTopBearingImages,
-    getFolderForNutAndPlateWasherImages,
-    getFolderForSplitPinAndWasherImages,
-    getFolderForCapImages,
-    getFolderForBunkAndNoBunkImages,
-    printAllVariables,
-)
+from persistence.Persistence import (setDatabaseName, makeFoldersForImages, getDatabaseName, getSchemaName, getDataSubFolder, checkConnection, checkIfDatabaseExists, checkIfQRCodeExists, insertData, getFolderForKnuckleImages, getFolderForHubAndBottomBearingImages, getFolderForTopBearingImages, getFolderForNutAndPlateWasherImages, getFolderForSplitPinAndWasherImages, getFolderForCapImages, getFolderForBunkAndNoBunkImages)
 
 # From utils package
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
@@ -58,11 +35,7 @@ from utils.RedisUtils import (
 )
 
 # From BaseUtils
-from BaseUtils import (
-    getFullyQualifiedName,
-    getCurrentTime,
-    getYMDHMSmFormatFromTimeDotTime,
-)
+from BaseUtils import getFullyQualifiedName, getCurrentTime
 
 from utils.CosThetaPrintUtils import (printBoldBlue,
     printBlue,
@@ -198,7 +171,7 @@ class DataPersistence():
                 SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                                f"Redis Connection in {DataPersistence.logSource} is {self.redisConnection} in process {os.getpid()}",
                                                                Logger.SUCCESS)
-            except:
+            except Exception:
                 self.clientRedisConnected = False
                 SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                             f"Could not get Redis Connection in {DataPersistence.logSource} in process {os.getpid()}",
@@ -216,7 +189,7 @@ class DataPersistence():
                 SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                                f"Redis Connection in {DataPersistence.logSource} is {self.heartbeatRedisConnection} in process {os.getpid()}",
                                                                Logger.SUCCESS)
-            except:
+            except Exception:
                 self.heartbeatRedisConnected = False
                 SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                             f"Could not get Redis Connection for heartneat in {DataPersistence.logSource} in process {os.getpid()}",
@@ -495,7 +468,7 @@ class DataPersistence():
                 if shallStop and not self.stopRequested:
                     printBoldRed(f"Got stop command in process {os.getpid()} in DBServer; draining fe2db.q first")
                     self.stopRequested = True
-            except:
+            except Exception:
                 self.connectToRedis(True)
         printBoldRed(f"In DBServer, stopping doWork")
         print("DEBUG: Exiting doWork loop")
@@ -556,7 +529,7 @@ class DataPersistence():
                         sendHeartbeatFromDBServerToHeartbeatServer(self.heartbeatRedisConnection, DEAD)
                     else:
                         self.connectToRedis(forceRenew=True)
-            except:
+            except Exception:
                 SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
                                                             f"Could not send heartbeat from DBServer",
                                                             Logger.PROBLEM)
@@ -570,7 +543,7 @@ class DataPersistence():
                     # Do not stop here: the main work thread drains fe2db.q first, then sets self.stopped
                     printBoldRed(f"Got stop command in process {os.getpid()} in DBServer (heartbeat thread)")
                     self.stopRequested = True
-            except:
+            except Exception:
                 self.connectToRedis(True)
             # time.sleep(sleepTime)
             for _ in range(int(sleepTime * 10)):  # Check every 0.1 seconds
@@ -578,7 +551,36 @@ class DataPersistence():
                     break
                 time.sleep(0.1)
 
+    DAY_CHECK_INTERVAL_SECS: float = 60.0
+
+    def watchForNewDay(self) -> None:
+        """Images are saved in a folder per day (<base>/<mode>/<step>/<YYYY-MM-DD>/). The folders were worked out once,
+        when the DB server started, so on a PC that stays on, every image after midnight went into the start day's
+        folder. This thread wakes up every DAY_CHECK_INTERVAL_SECS (60 s), keeps the date of its last wake-up, and
+        when the date has changed since then it makes the new day's folders (makeFoldersForImages) - the images saved
+        from then on go there."""
+        lastDate = datetime.now().date()
+        while not self.stopped:
+            for _ in range(int(DataPersistence.DAY_CHECK_INTERVAL_SECS * 2)):
+                if self.stopped:
+                    return
+                time.sleep(0.5)
+            try:
+                today = datetime.now().date()
+                if today != lastDate:
+                    makeFoldersForImages(self.mode)
+                    message = (f"New day ({lastDate} -> {today}): images are now saved under "
+                               f"{getFolderForKnuckleImages()} and the other {today} folders")
+                    printBoldGreen(message)
+                    SlaveFileLogger.getInstance().logTakeNote(DataPersistence.logSource, message, Logger.SUCCESS)
+                    lastDate = today
+            except Exception as e:
+                printBoldRed(f"Could not make the image folders of the new day: {e}")      # tried again next minute
+
     def startPersistenceAndHeartbeatThreads(self) -> None:
+        self.dayWatchThread = threading.Thread(name='Image folder day change', target=self.watchForNewDay,
+                                               args=(), daemon=True)
+        self.dayWatchThread.start()
         self.threadForDoingMainWork = threading.Thread(
             name=f'Thread for saving images and updating the database',
             target=self.doWork,

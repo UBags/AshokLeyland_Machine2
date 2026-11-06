@@ -3,13 +3,10 @@ CORRECTED: Gamma implementation with proper convention (1/gamma).
 FIXED: Label visibility issue resolved with subplots_adjust.
 FIXED: All methods now properly limit their work to the mask region.
 """
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Tuple
 
 import numpy as np
-from scipy.ndimage import (
-    minimum_filter, maximum_filter, uniform_filter,
-    grey_opening, grey_closing, gaussian_filter, rank_filter
-)
+from scipy.ndimage import grey_opening, gaussian_filter, rank_filter
 from scipy.interpolate import RectBivariateSpline
 import cv2
 # matplotlib is only used by the commented-out plotting code at the end of this file; import it there if re-enabled

@@ -716,12 +716,12 @@ def check_database_exists(config: Dict[str, str]) -> bool:
         if cur:
             try:
                 cur.close()
-            except:
+            except Exception:
                 noteSuppressed()
         if conn:
             try:
                 conn.close()
-            except:
+            except Exception:
                 noteSuppressed()
 
 # ============================================================================
@@ -1091,7 +1091,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
             if local_file_path and os.path.exists(local_file_path):
                 try:
                     os.remove(local_file_path)
-                except:
+                except Exception:
                     noteSuppressed()
             return False
 
@@ -1100,7 +1100,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
         if compressed:
             try:
                 os.remove(local_file_path)
-            except:
+            except Exception:
                 noteSuppressed()
             final_file = compressed
         else:
@@ -1118,7 +1118,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
                     try:
                         os.remove(os.path.join(backup_dir, old_file))
                         printBoldBlue(f"  Removed: {old_file}")
-                    except:
+                    except Exception:
                         noteSuppressed()
         except Exception as e:
             printBoldYellow(f"Warning: Cleanup failed: {e}")
@@ -1136,7 +1136,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
         if local_file_path and os.path.exists(local_file_path):
             try:
                 os.remove(local_file_path)
-            except:
+            except Exception:
                 noteSuppressed()
         return False
 
@@ -1150,7 +1150,7 @@ def doBackup(keep_last_n: int = 5) -> bool:
         if local_file_path and os.path.exists(local_file_path):
             try:
                 os.remove(local_file_path)
-            except:
+            except Exception:
                 noteSuppressed()
         return False
 
@@ -1206,7 +1206,7 @@ def doRestore(backup_file_path: str,
             if working_file != backup_file_path:
                 try:
                     os.remove(working_file)
-                except:
+                except Exception:
                     noteSuppressed()
             return False
 
@@ -1215,7 +1215,7 @@ def doRestore(backup_file_path: str,
             if working_file != backup_file_path:
                 try:
                     os.remove(working_file)
-                except:
+                except Exception:
                     noteSuppressed()
             return False
 
@@ -1225,7 +1225,7 @@ def doRestore(backup_file_path: str,
             if working_file != backup_file_path:
                 try:
                     os.remove(working_file)
-                except:
+                except Exception:
                     noteSuppressed()
             return False
 
@@ -1233,7 +1233,7 @@ def doRestore(backup_file_path: str,
         if working_file != backup_file_path:
             try:
                 os.remove(working_file)
-            except:
+            except Exception:
                 noteSuppressed()
 
         printBoldBlue("=" * 70)
@@ -1301,7 +1301,7 @@ def list_available_backups(storage_engine: str, manager_config: Dict[str, str]) 
             if not folder or not os.path.exists(folder):
                 return []
             return sorted(os.listdir(folder), reverse=True)
-        except:
+        except Exception:
             return []
 
     elif storage_engine == 'S3' and BOTO3_AVAILABLE:
@@ -1313,7 +1313,7 @@ def list_available_backups(storage_engine: str, manager_config: Dict[str, str]) 
             response = s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
             if 'Contents' in response:
                 return sorted([obj['Key'] for obj in response['Contents']], reverse=True)
-        except:
+        except Exception:
             return []
 
     return []

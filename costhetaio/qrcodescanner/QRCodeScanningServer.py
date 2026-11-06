@@ -7,8 +7,6 @@ from typing import Union, Any
 from threading import Thread, Lock
 import time
 import sys
-import signal
-import platform
 from time import sleep
 
 import serial
@@ -260,7 +258,9 @@ class QRCodeDispatcher(GenericQueueProcessor):
         if (qrCode is None) or qrCode == "":
             self.displayString = ""
             return None
-        setDatabaseName(self.mode)
+        # the database name only: creating the database / schema / tables / seed rows is done once, by MainProgram at
+        # start (before 2026-11-06 it was re-run here on every scan)
+        setDatabaseName(self.mode, createDB=False)
         duplicateExists = checkIfQRCodeExists(qr_code=qrCode, db_name=getDatabaseName())
         copyOfQRCode = copy.deepcopy(qrCode)
         tempDisplayValue: str = ""
@@ -313,7 +313,7 @@ class QRCodeDispatcher(GenericQueueProcessor):
                 sendComponentQRCodeFromQRCodeServerToCameraServer(redisConnection=self.redisConnectionQRCodeResponse, componentQRCode=self.currentQRCodeValue)
                 SlaveConsoleLogger.getInstance().logInfo(QRCodeDispatcher.logSource, f"Dispatched QRCode {qrCode}", Logger.SUCCESS)
                 SlaveFileLogger.getInstance().logInfo(QRCodeDispatcher.logSource, f"Dispatched QRCode {qrCode}", Logger.SUCCESS)
-            except:
+            except Exception:
                 SlaveConsoleLogger.getInstance().logTakeAction(QRCodeDispatcher.logSource, f"Could not dispatch QRCode {qrCode}", Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(QRCodeDispatcher.logSource, f"Could not dispatch QRCode {qrCode}", Logger.PROBLEM)
         except Exception as e:
@@ -339,7 +339,7 @@ class QRCodeScanningServer:
     def __init__(self, mode: str):
         QRCodeScanningServer.logSource = getFullyQualifiedName(__file__, __class__)
         self.mode: str = mode
-        setDatabaseName(self.mode)
+        setDatabaseName(self.mode, createDB=False)      # MainProgram creates the databases before it starts the servers
         self.name: str = "QRCodeServer"
         self.hostname: str = CosThetaConfigurator.getInstance().getRedisHost()
         self.port: int = CosThetaConfigurator.getInstance().getRedisPort()

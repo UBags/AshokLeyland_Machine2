@@ -120,7 +120,7 @@ argParams = getCommandLineArgumentsAsDictionary()
 
 try:
     camId = int(argParams[CAM_ID])
-except:
+except Exception:
     SlaveConsoleLogger.getInstance().logTakeAction(logSource, f"Cannot start CameraServer as no camid provided. Usage : python CameraServer camid=1 [or camid=2]", Logger.PROBLEM)
     SlaveFileLogger.getInstance().logTakeAction(logSource,
                                                  f"Cannot start CameraServer as no camid provided. Usage : python CameraServer camid=1 [or camid=2]",

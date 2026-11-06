@@ -106,7 +106,7 @@ def showMessage(textToShow: str = "A Message", theme: str = 'DarkBlue15', auto_c
     try:
         window['-TEXT-'].set_focus()
         # print("Text element focused")
-    except Exception as e:
+    except Exception:
         # print(f"Focus failed: {e}")
         window.bring_to_front()  # Fallback
 
@@ -168,7 +168,7 @@ def getSimpleInput(textToShow: str = "Type Input", modal: bool = False):
     try:
         window['-INPUT-'].set_focus()  # Set focus to input field
         window['-INPUT-'].bind("<Return>", "_Enter")  # Bind Enter key to input field
-    except:
+    except Exception:
         window.bring_to_front()
 
     while True:
@@ -274,7 +274,7 @@ def getConfirmation(message: str, question: str = "Please click OK to confirm, C
     try:
         window["-OK-"].set_focus()  # Set focus to OK button
         window["-OK-"].bind("<Return>", "_Enter")  # Bind Enter key to OK button
-    except:
+    except Exception:
         window.bring_to_front()
 
     while True:
@@ -418,7 +418,7 @@ def flashSimpleMessage(simpleMessage: str = "A simple message", auto_close_durat
     try:
         window['-OK-'].set_focus()
         # print("OK button focused")  # Debug
-    except Exception as e:
+    except Exception:
         # print(f"Focus failed: {e}")
         window.bring_to_front()  # Fallback
 
@@ -522,7 +522,7 @@ def getJustPassword(textToShow: str = "Enter password", modal: bool = False):
     try:
         window['-PASSWORD-'].set_focus()
         # print("Password input focused")  # Debug
-    except Exception as e:
+    except Exception:
         # print(f"Focus failed: {e}")
         window.bring_to_front()  # Fallback
 
@@ -717,7 +717,7 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                                     # insertAuditRecord(db_name=db_name, action=ADDED_NEW_USER, user=currentUser, role=currentRole,
                                     #                   remarks=f"Created user {username} with role {role}")
                                     progressBar(message="Creating newwidgets account...")
-                                except:
+                                except Exception:
                                     showErrorMessage(
                                         "Account could not be created. Likely reason is a database access problem.")
                                     sg.theme('LightBlue3')
@@ -728,9 +728,9 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                                     # insertAuditRecord(db_name=db_name, action=ADDED_NEW_USER, user=currentUser, role=currentRole,
                                     #                   remarks=f"Could not create user {username} with role {role}")
                                     sg.theme('LightBlue3')
-                                except:
+                                except Exception:
                                     noteSuppressed()
-                        except:
+                        except Exception:
                             username = ''
                             password = ''
                             email = ''
@@ -840,7 +840,7 @@ def login(modal: bool = True):
                                                auto_close_duration=4)
                             sg.theme("LightBlue2")
                             # insertAuditRecord(db_name=db_name, action=LOGGED_IN, user=username, role=rolename, remarks=f"Successfully logged in")
-                        except:
+                        except Exception:
                             noteSuppressed()
                     else:
                         try:
@@ -849,7 +849,7 @@ def login(modal: bool = True):
                             # insertAuditRecord(db_name=db_name, action=LOGGED_IN, user=username, role=rolename,
                             #                   remarks=f"Could not log into system due to wrong password")
                             sg.theme("LightBlue2")
-                        except:
+                        except Exception:
                             noteSuppressed()
                         username: str = ''
                         password: str = ''
@@ -919,7 +919,7 @@ def changePasswordForSelf(currentUser: str, currentRole: str, modal: bool = True
                         progressBar(f"Changing password for {currentUser}", theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OWN_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed own password")
-                    except:
+                    except Exception:
                         noteSuppressed()
                     break
                 elif len(password1) < 6:
@@ -1076,7 +1076,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
                         progressBar(f"Changing password for {chosenUser}", theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OTHERS_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed password for {chosenUser}")
-                    except:
+                    except Exception:
                         noteSuppressed()
                     break
     window.close()
@@ -1157,7 +1157,7 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
                         # insertAuditRecord(db_name=db_name, action=INACTIVATED_USER, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully inactivated user {username}")
                         progressBar(f"Inactivating user {username}", theme="LightBrown6")
-                    except:
+                    except Exception:
                         noteSuppressed()
                     break
                 else:
@@ -1220,7 +1220,7 @@ def activateUser(currentUser: str, currentRole: str, modal: bool = True):
                         # insertAuditRecord(db_name=db_name, action=ACTIVATED_USER, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully re-activated user {username}")
                         progressBar(f"Activating user {username}", theme="LightBlue6")
-                    except:
+                    except Exception:
                         submitted = True
                         username = None
                         pass
@@ -1369,7 +1369,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
                         progressBar(f"Changing role for {username}", theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_USER_ROLE, user=currentUser, role=currentRole,
                         #                   remarks=f"Changed role of {username} to role {role}")
-                    except:
+                    except Exception:
                         username = None
                         role = None
                         pass
@@ -1452,9 +1452,9 @@ def createProductionReportByDateLimits():
                             # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                             #                   role=currentRole,
                             #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
-                        except:
+                        except Exception:
                             showErrorMessage("Report generation failed.\n", auto_close_duration=1)
-                    except:
+                    except Exception:
                         showErrorMessage("Report generation failed.\n", auto_close_duration=1)
                     break
                 else:
@@ -1495,7 +1495,7 @@ def createProductionReportByModelNameAndDateLimits():
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
-    except:
+    except Exception:
         window.bring_to_front()
 
     def clear_input(window):
@@ -1539,9 +1539,9 @@ def createProductionReportByModelNameAndDateLimits():
                             # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                             #                   role=currentRole,
                             #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
-                        except:
+                        except Exception:
                             showErrorMessage("Report generation failed.\n", auto_close_duration=1)
-                    except:
+                    except Exception:
                         showErrorMessage("Report generation failed.\n", auto_close_duration=1)
                     break
                 else:
@@ -1577,7 +1577,7 @@ def createProductionReportByModelName():
     try:
         window['-modelname-'].set_focus()
         window['-modelname-'].bind("<Return>", "_Enter")
-    except:
+    except Exception:
         window.bring_to_front()
 
     def clear_input(window):
@@ -1607,9 +1607,9 @@ def createProductionReportByModelName():
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
-                    except:
+                    except Exception:
                         showErrorMessage("Report generation failed.\n", auto_close_duration=1)
-                except:
+                except Exception:
                     showErrorMessage("Report generation failed.\n", auto_close_duration=1)
 
                 break
@@ -1646,7 +1646,7 @@ def createProductionReportOfTodayByModelName():
     try:
         window['-modelname-'].set_focus()
         window['-modelname-'].bind("<Return>", "_Enter")
-    except:
+    except Exception:
         window.bring_to_front()
 
     def clear_input(window):
@@ -1675,9 +1675,9 @@ def createProductionReportOfTodayByModelName():
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
-                    except:
+                    except Exception:
                         showErrorMessage("Report generation failed.\n", auto_close_duration=1)
-                except:
+                except Exception:
                     showErrorMessage("Report generation failed.\n", auto_close_duration=1)
                 break
             else:
@@ -1732,9 +1732,9 @@ def createProductionReportOfToday():
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
-                    except:
+                    except Exception:
                         showErrorMessage("Report generation failed.\n", auto_close_duration=1)
-                except:
+                except Exception:
                     showErrorMessage("Report generation failed.\n", auto_close_duration=1)
                 break
             else:

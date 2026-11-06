@@ -649,7 +649,7 @@ class ImageProcessorTestUI:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.root.after(0, lambda: self._handle_check_error(step_idx, str(e)))
+            self.root.after(0, lambda err=str(e): self._handle_check_error(step_idx, err))
 
     def _run_check(self, check_name: str, image: np.ndarray) -> Tuple[bool, Optional[np.ndarray]]:
         """

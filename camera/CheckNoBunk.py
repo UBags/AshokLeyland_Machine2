@@ -22,7 +22,7 @@ try:
     _PROJECT_ROOT = get_project_root()
     if _PROJECT_ROOT not in sys.path:
         sys.path.insert(0, _PROJECT_ROOT)
-except:
+except Exception:
     pass
 
 from camera.HexagonNutDetector import NutDetector

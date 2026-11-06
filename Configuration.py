@@ -551,7 +551,7 @@ class CosThetaConfigurator():
     def getPictureRecordingFPS(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.PICTURE_RECORDING_FPS_KEY, default="16"))
-        except Exception as e:
+        except Exception:
             return 16
 
     # ***********************************
@@ -609,7 +609,7 @@ class CosThetaConfigurator():
     def getBackupLogsCount(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.BACKUPLOGS_COUNT_KEY, default="10"))
-        except Exception as e:
+        except Exception:
             return 10
 
     # ***********************************
@@ -648,14 +648,14 @@ class CosThetaConfigurator():
     def getInitialFontsize(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.INITIAL_FONTSIZE_KEY, default="10"))
-        except Exception as e:
+        except Exception:
             return 10
 
     @classmethod
     def getLabelInitialHeight(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.LABEL_INITIAL_HEIGHT_KEY, default="50"))
-        except Exception as e:
+        except Exception:
             return 50
 
     # ***********************************
@@ -741,7 +741,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.TIME_DURATION_SLEEP_INTERVAL_KEY,
                                               default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -750,7 +750,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.GENERAL_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                               default="5.0"))
-        except Exception as e:
+        except Exception:
             return 5.0
 
     @classmethod
@@ -760,7 +760,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.COMBINED_HEARTBEAT_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                     default="2.0"))
-        except Exception as e:
+        except Exception:
             return 2.0
 
     @classmethod
@@ -774,7 +774,7 @@ class CosThetaConfigurator():
                 value = CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.OLD_FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY, default="1.0")
             return float(value)
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -783,7 +783,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.FRONTEND_HEARTBEAT_SLEEP_INTERVAL_KEY,
                                                        default="0.5"))
-        except Exception as e:
+        except Exception:
             return 0.5
 
     @classmethod
@@ -792,7 +792,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.CAMERA_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                               default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -800,7 +800,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.IO_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                                        default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -809,7 +809,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.DATABASE_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                               default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -818,7 +818,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.QRCODE_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                               default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -826,7 +826,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.CAMERA_TIME_TO_RESPOND_AFTER_POWER_IS_RESTORED_KEY, default="30.0"))
-        except Exception as e:
+        except Exception:
             return 30.0
 
     @classmethod
@@ -835,7 +835,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.GET_QRCODE_REQUEST_SLEEP_INTERVAL_KEY,
                                               default="0.1"))
-        except Exception as e:
+        except Exception:
             return 0.1
 
     @classmethod
@@ -844,7 +844,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.COMBINED_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                                               default="2.0"))
-        except Exception as e:
+        except Exception:
             return 2.0
 
     @classmethod
@@ -853,7 +853,7 @@ class CosThetaConfigurator():
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.MIN_CONTINUOUS_DISCONNECTIONS_TO_SEND_ALARM_KEY,
                                               default="5"))
-        except Exception as e:
+        except Exception:
             return 5
 
     @classmethod
@@ -862,7 +862,7 @@ class CosThetaConfigurator():
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.LOG_DISCONNECTION_EVERY_N_SECS_KEY,
                                               default="10"))
-        except Exception as e:
+        except Exception:
             return 1
 
     # ***********************************
@@ -875,14 +875,14 @@ class CosThetaConfigurator():
     def getSplashScreenTime(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.SPLASHSCREEN_TIME_KEY, default="20"))
-        except Exception as e:
+        except Exception:
             return 20
 
     @classmethod
     def getEndScreenTime(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.ENDSCREEN_TIME_KEY, default="15"))
-        except Exception as e:
+        except Exception:
             return 15
 
     # ***********************************
@@ -897,7 +897,7 @@ class CosThetaConfigurator():
     def getShowReconnectDialog(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.SHOW_RECONNECT_DIALOG_KEY, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -908,7 +908,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.WAITTIME_AFTER_RECONNECT_KEY, default="5"))
-        except Exception as e:
+        except Exception:
             return 5
 
     @classmethod
@@ -916,7 +916,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.CONSECUTIVE_CONNECTION_RETRIES_KEY, default="3"))
-        except Exception as e:
+        except Exception:
             return 3
 
     @classmethod
@@ -924,7 +924,7 @@ class CosThetaConfigurator():
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.INTERVAL_BETWEEN_CONNECTION_RETRIES_KEY,
                                                      default="20"))
-        except Exception as e:
+        except Exception:
             return 20
 
     # ***********************************
@@ -937,7 +937,7 @@ class CosThetaConfigurator():
     def getUploadToGoogleDrive(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.UPLOAD_TO_GOOGLE_DRIVE_KEY, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -949,7 +949,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.GOOGLEDRIVE_UPLOAD_INTERVAL_KEY, default="10"))
-        except Exception as e:
+        except Exception:
             return 10
 
     # ***********************************
@@ -967,7 +967,7 @@ class CosThetaConfigurator():
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MINIMUM_DELAY_BETWEEN_PICTURES_KEY,
                                                      default="175"))
-        except Exception as e:
+        except Exception:
             return 175
 
     @classmethod
@@ -975,7 +975,7 @@ class CosThetaConfigurator():
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MINIMUM_DELAY_BETWEEN_VIDEO_FRAMES_KEY,
                                                      default="80"))
-        except Exception as e:
+        except Exception:
             return 80
 
     @classmethod
@@ -987,7 +987,7 @@ class CosThetaConfigurator():
                 return True
             else:
                 return False
-        except Exception as e:
+        except Exception:
             return False
 
     @classmethod
@@ -995,7 +995,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.SLEEP_TIME_FOR_MONITORING_TAKEPICQ_KEY,
                                                        default="0.02"))
-        except Exception as e:
+        except Exception:
             return 0.02
 
     @classmethod
@@ -1003,7 +1003,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MAX_ALLOWED_MULTIPLE_FOR_PIC_DELAY_KEY,
                                                        default="0.7"))
-        except Exception as e:
+        except Exception:
             return 0.7
 
     @classmethod
@@ -1011,7 +1011,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MAX_ALLOWED_TIME_TAKING_PICTURE_KEY,
                                                        default="0.15"))
-        except Exception as e:
+        except Exception:
             return 0.15
 
     @classmethod
@@ -1020,7 +1020,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.CUTOFF_TIME_THAT_TRIGGERS_CAMERA_CONNECTION_RENEWAL,
                 default="0.2"))
-        except Exception as e:
+        except Exception:
             return 0.2
 
     # ***********************************
@@ -1038,7 +1038,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.GAP_BETWEEN_CONNECTION_RETRIES, default="5"))
-        except Exception as e:
+        except Exception:
             return 5
 
     # ***********************************
@@ -1055,7 +1055,7 @@ class CosThetaConfigurator():
     def getControlLights(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.CONTROL_LIGHTS_KEY, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -1066,7 +1066,7 @@ class CosThetaConfigurator():
         try:
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.LIGHTS_ON_POSITION_TIME_KEY, default="0.1"))
-        except Exception as e:
+        except Exception:
             return 0.1
 
     @classmethod
@@ -1074,7 +1074,7 @@ class CosThetaConfigurator():
         attr_name = f"LIGHT{lightId}_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{lightId + 1}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1083,7 +1083,7 @@ class CosThetaConfigurator():
         attr_name = f"LIGHT{lightId}_ACTIVATED_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1104,7 +1104,7 @@ class CosThetaConfigurator():
     def getControlTowerlamps(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.CONTROL_TOWER_LAMPS, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -1115,7 +1115,7 @@ class CosThetaConfigurator():
         attr_name = f"TOWERLAMP{towerlampId}_GREEN_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{4 + towerlampId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1124,7 +1124,7 @@ class CosThetaConfigurator():
         attr_name = f"TOWERLAMP{towerlampId}_RED_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{6 + towerlampId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1133,7 +1133,7 @@ class CosThetaConfigurator():
         attr_name = f"TOWERLAMP{towerlampId}_ACTIVATED_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1141,14 +1141,14 @@ class CosThetaConfigurator():
     def getGreenLightDuration(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.GREENLIGHT_DURATION_KEY, default="800"))
-        except Exception as e:
+        except Exception:
             return 800
 
     @classmethod
     def getRedLightDuration(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.REDLIGHT_DURATION_KEY, default="200"))
-        except Exception as e:
+        except Exception:
             return 200
 
     # ***********************************
@@ -1169,7 +1169,7 @@ class CosThetaConfigurator():
         attr_name = f"ACTUATOR{actuatorId}_OUTPUT_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{actuatorId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1178,7 +1178,7 @@ class CosThetaConfigurator():
         attr_name = f"ACTUATOR{actuatorId}_INPUT_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{4 + actuatorId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1187,7 +1187,7 @@ class CosThetaConfigurator():
         attr_name = f"ACTUATOR{actuatorId}_OUTPUT_ACCEPT_BOTTLES_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1196,7 +1196,7 @@ class CosThetaConfigurator():
         attr_name = f"ACTUATOR{actuatorId}_INPUT_ACCEPT_BOTTLES_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1213,7 +1213,7 @@ class CosThetaConfigurator():
         attr_name = f"DISC{discId}_INPUT_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{discId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1222,7 +1222,7 @@ class CosThetaConfigurator():
         attr_name = f"DISC{discId}_ACTIVATED_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1239,7 +1239,7 @@ class CosThetaConfigurator():
         attr_name = f"BOTTLE_RELEASE{bottleReleaseId}_INPUT_ADDRESS_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default=f"{2 + bottleReleaseId}"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1248,7 +1248,7 @@ class CosThetaConfigurator():
         attr_name = f"BOTTLE_RELEASE{bottleReleaseId}_ACTIVATED_STATE_KEY"
         try:
             value = int(CosThetaConfigurator.getValue(getattr(cls, attr_name), default="1"))
-        except Exception as e:
+        except Exception:
             value = 1
         return value
 
@@ -1261,7 +1261,7 @@ class CosThetaConfigurator():
     def getAllConnectionsOutputAddress(cls) -> int:
         try:
             value = int(CosThetaConfigurator.getValue(f"ALL_CONNECTIONS_OUTPUT_ADDRESS_KEY", default="7"))
-        except Exception as e:
+        except Exception:
             value = 7
         return value
 
@@ -1269,7 +1269,7 @@ class CosThetaConfigurator():
     def getFalseCounterActivationLimit(cls) -> int:
         try:
             value = int(CosThetaConfigurator.getValue(f"FALSE_COUNTER_ACTIVATION_LIMIT_KEY", default="2"))
-        except Exception as e:
+        except Exception:
             value = 2
         return value
 
@@ -1283,7 +1283,7 @@ class CosThetaConfigurator():
     def getRedisHost(cls) -> str:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.REDIS_HOST_KEY, default='localhost')
-        except Exception as e:
+        except Exception:
             value = 'localhost'
         return value
 
@@ -1291,7 +1291,7 @@ class CosThetaConfigurator():
     def getRedisPort(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.REDIS_PORT_KEY, default="6379"))
-        except Exception as e:
+        except Exception:
             return 6379
 
     # ***********************************
@@ -1425,7 +1425,7 @@ class CosThetaConfigurator():
         try:
             return float(
                 CosThetaConfigurator.getValue(CosThetaConfigurator.GAP_BETWEEN_CONNECTION_ALARMS_KEY, default="60.0"))
-        except Exception as e:
+        except Exception:
             return 60.0
 
     # ***********************************
@@ -1582,7 +1582,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.TIME_BETWEEN_PICTURES_MS_KEY,
                                                        default="100.0"))
-        except Exception as e:
+        except Exception:
             return 100.0
 
     @classmethod   # was missing (fixed in production): CosThetaConfigurator.getPollingTimeForCounterUpdates() raised TypeError
@@ -1590,7 +1590,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_COUNTER_UPDATES_KEY,
                                                        default="0.05"))
-        except Exception as e:
+        except Exception:
             return 0.05
 
     @classmethod
@@ -1598,7 +1598,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_READING_THREADS_KEY,
                                                        default="0.03"))
-        except Exception as e:
+        except Exception:
             return 0.03
 
     @classmethod
@@ -1606,7 +1606,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_DISC_SIGNAL_KEY,
                                                        default="0.03"))
-        except Exception as e:
+        except Exception:
             return 0.03
 
     @classmethod
@@ -1614,7 +1614,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_ACTUATOR_POSITION_KEY,
                                                        default="0.025"))
-        except Exception as e:
+        except Exception:
             return 0.025
 
     @classmethod
@@ -1622,7 +1622,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.POLLING_TIME_FOR_BOTTLE_RELEASE_KEY,
                                                        default="0.025"))
-        except Exception as e:
+        except Exception:
             return 0.025
 
     @classmethod
@@ -1630,7 +1630,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.HOLDING_TIME_FOR_GREEN_SIGNAL_KEY,
                                                        default="0.250"))
-        except Exception as e:
+        except Exception:
             return 0.250
 
     @classmethod
@@ -1638,7 +1638,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(key=CosThetaConfigurator.HOLDING_TIME_FOR_GREEN_SIGNAL_KEY,
                                                        default="0.1"))
-        except Exception as e:
+        except Exception:
             return 0.1
 
     @classmethod
@@ -1646,7 +1646,7 @@ class CosThetaConfigurator():
         try:
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.HOLDING_TIME_FOR_HOOTER_KEY, default="0.05"))
-        except Exception as e:
+        except Exception:
             return 0.05
 
     @classmethod
@@ -1655,7 +1655,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.ANTICIPATED_TIME_FOR_ACTUATOR_ACTIVATION_KEY,
                                               default="0.25"))
-        except Exception as e:
+        except Exception:
             return 0.25
 
     @classmethod
@@ -1663,7 +1663,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.ANTICIPATED_TIME_FOR_BOTTLE_TRAVEL_TO_ACTUATOR_KEY, default="0.3"))
-        except Exception as e:
+        except Exception:
             return 0.3
 
     @classmethod
@@ -1672,7 +1672,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.WAIT_TIME_BEFORE_ACTUATOR_ACTIVATION_KEY,
                                               default="0.05"))
-        except Exception as e:
+        except Exception:
             return 0.05
 
     @classmethod
@@ -1682,7 +1682,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.FASTEST_POSSIBLE_TIME_BETWEEN_TAKEPIC_REQUESTS_KEY,
                     default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -1691,7 +1691,7 @@ class CosThetaConfigurator():
             return float(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.TIME_TO_GET_A_PICTURE_KEY,
                                               default="0.06"))
-        except Exception as e:
+        except Exception:
             return 0.06
 
     @classmethod
@@ -1702,7 +1702,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.MAX_DELAY_ALLOWED_BETWEEN_TAKEPIC_AND_BOTTLERELEASE_KEY,
                     default="15.0"))
-        except Exception as e:
+        except Exception:
             return 15.0
 
     @classmethod
@@ -1712,7 +1712,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.FASTEST_POSSIBLE_TIME_BETWEEN_TAKEPIC_AND_BOTTLERELEASE_KEY,
                     default="1.3"))
-        except Exception as e:
+        except Exception:
             return 1.3
 
     @classmethod
@@ -1722,7 +1722,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.LEFT_DISC_DELAY_TIME_BETWEEN_SIGNAL_AND_TAKE_PIC_KEY,
                     default="0.2"))
-        except Exception as e:
+        except Exception:
             return 0.2
 
     @classmethod
@@ -1732,7 +1732,7 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.RIGHT_DISC_DELAY_TIME_BETWEEN_SIGNAL_AND_TAKE_PIC_KEY,
                     default="0.2"))
-        except Exception as e:
+        except Exception:
             return 0.2
 
     # ***********************************
@@ -1760,7 +1760,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=CosThetaConfigurator.BEEPER_REPEATS_KEY, default="1"))
-        except Exception as e:
+        except Exception:
             return 1
 
     # ***********************************
@@ -1774,14 +1774,14 @@ class CosThetaConfigurator():
         try:
             return int(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.RECORDING_DURATION_SECS_KEY, default="10"))
-        except Exception as e:
+        except Exception:
             return 10
 
     @classmethod
     def getRecordVideo(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.RECORD_VIDEO_KEY, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -1791,7 +1791,7 @@ class CosThetaConfigurator():
     def getRecordPictures(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.RECORD_PICTURES_KEY, default='true')
-        except Exception as e:
+        except Exception:
             value = 'true'
         if value.lower() == 'true':
             return True
@@ -1818,7 +1818,7 @@ class CosThetaConfigurator():
                 default="[[1235, 270], [1140, 215], [1170, 160], [965, 80], [965, 45], [800, 30], [800, 10], [1000, 10], [1275, 100]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[1235, 270], [1140, 215], [1170, 160], [965, 80], [965, 45], [800, 30], [800, 10], [1000, 10], [1275, 100]]"),
                 dtype=np.int32)
@@ -1831,7 +1831,7 @@ class CosThetaConfigurator():
                 default="[[465, 600], [500, 240], [560, 220], [620, 650]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads("[[465, 600], [500, 240], [560, 220], [620, 650]]"), dtype=np.int32)
 
     @classmethod
@@ -1842,7 +1842,7 @@ class CosThetaConfigurator():
                 default="[[990, 60], [875, 235], [740, 370], [590, 450], [540, 280],[720, 170], [765, 30]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(
                 json.loads("[[990, 60], [875, 235], [740, 370], [590, 450], [540, 280],[720, 170], [765, 30]]"),
                 dtype=np.int32)
@@ -1855,7 +1855,7 @@ class CosThetaConfigurator():
                 default="[[1150, 165], [1015, 90], [845, 335], [700, 430], [590, 445], [610, 615], [820, 535], [1040, 345]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[1150, 165], [1015, 90], [845, 335], [700, 430], [590, 445], [610, 615], [820, 535], [1040, 345]]"),
                 dtype=np.int32)
@@ -1868,7 +1868,7 @@ class CosThetaConfigurator():
                 default="[[1200, 310], [1180, 395], [1090, 510], [1005, 570], [925, 620], [880, 640], [815, 675], [688, 700], [655, 610], [825, 540], [925, 480], [1035, 350], [1100, 250]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[1200, 310], [1180, 395], [1090, 510], [1005, 570], [925, 620], [880, 640], [815, 675], [688, 700], [655, 610], [825, 540], [925, 480], [1035, 350], [1100, 250]]"),
                 dtype=np.int32)
@@ -1883,7 +1883,7 @@ class CosThetaConfigurator():
                 default="[[20, 300], [70, 220], [60, 210], [235, 110], [220, 80], [390, 10], [230, 10], [7, 130]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(
                 json.loads("[[20, 300], [70, 220], [60, 210], [235, 110], [220, 80], [390, 10], [230, 10], [7, 130]]"),
                 dtype=np.int32)
@@ -1896,7 +1896,7 @@ class CosThetaConfigurator():
                 default="[[755, 570], [755, 500], [735, 505], [740, 400], [720, 395], [730, 260], [665, 275], [665, 400], [630, 410], [625, 550], [570, 550], [570, 645]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[755, 570], [755, 500], [735, 505], [740, 400], [720, 395], [730, 260], [665, 275], [665, 400], [630, 410], [625, 550], [570, 550], [570, 645]]"),
                 dtype=np.int32)
@@ -1909,7 +1909,7 @@ class CosThetaConfigurator():
                 default="[[225, 80], [327, 235], [415, 320], [515, 378], [715, 395], [700, 280], [590, 230], [475, 135], [405, 25]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[225, 80], [327, 235], [415, 320], [515, 378], [715, 395], [700, 280], [590, 230], [475, 135], [405, 25]]"),
                 dtype=np.int32)
@@ -1922,7 +1922,7 @@ class CosThetaConfigurator():
                 default="[[70, 215], [180, 370], [315, 485], [410, 520], [485, 535], [705, 535], [705, 440], [485, 400], [310, 275], [210, 120]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[70, 215], [180, 370], [315, 485], [410, 520], [485, 535], [705, 535], [705, 440], [485, 400], [310, 275], [210, 120]]"),
                 dtype=np.int32)
@@ -1935,7 +1935,7 @@ class CosThetaConfigurator():
                 default="[[25, 365], [90, 255], [215, 385], [370, 495], [480, 540], [625, 550], [635, 630], [520, 640], [395, 625], [295, 590], [200,540], [100,450], [30,370]]")
             listOfPoints = json.loads(pointsAsString)
             return np.asarray(listOfPoints, dtype=np.int32)
-        except Exception as e:
+        except Exception:
             return np.asarray(json.loads(
                 "[[25, 365], [90, 255], [215, 385], [370, 495], [480, 540], [625, 550], [635, 630], [520, 640], [395, 625], [295, 590], [200,540], [100,450], [30,370]]"),
                 dtype=np.int32)
@@ -1950,7 +1950,7 @@ class CosThetaConfigurator():
         try:
             return int(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.NO_OF_MEDICINES_KEY, default="1"))
-        except Exception as e:
+        except Exception:
             return 1
 
     @classmethod
@@ -1960,7 +1960,7 @@ class CosThetaConfigurator():
         currentKey = attr_name.format(medNo)
         try:
             return CosThetaConfigurator.getValue(key=currentKey, default="Becadexamin")
-        except Exception as e:
+        except Exception:
             return "Becadexamin"
 
     # ***********************************
@@ -1974,7 +1974,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.CONNECTION_STATUS_FONT_MULTIPLE_KEY, default="1.4"))
-        except Exception as e:
+        except Exception:
             return 1.4
 
     @classmethod
@@ -1982,7 +1982,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.DATETIME_FONT_MULTIPLE_KEY, default="0.5"))
-        except Exception as e:
+        except Exception:
             return 0.5
 
     @classmethod
@@ -1990,7 +1990,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.COSTHETA_FONT_MULTIPLE_KEY, default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     # NO OF BOTTLES PER IMAGE
@@ -2002,7 +2002,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.NO_OF_BOTTLES_PER_IMAGE_KEY}",
                 default="3"))
-        except Exception as e:
+        except Exception:
             return 3
 
     # ***********************************Handling Buffering Delay*********************************
@@ -2016,7 +2016,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.RIGHT_DISC_FIRST_PICTURE_DELAY_KEY, default="0.1"))
-        except Exception as e:
+        except Exception:
             return 0.1
 
     @classmethod
@@ -2024,7 +2024,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.LEFT_DISC_FIRST_PICTURE_DELAY_KEY, default="1.2"))
-        except Exception as e:
+        except Exception:
             return 1.2
 
     @classmethod
@@ -2032,7 +2032,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.INTERIM_PICTURES_DELAY, default="0.1"))
-        except Exception as e:
+        except Exception:
             return 0.1
 
     # ***********************************Handling Buffering Delay*********************************
@@ -2044,7 +2044,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.TIME_TO_DISPLAY_OK_IMAGES, default="1.0"))
-        except Exception as e:
+        except Exception:
             return 1.0
 
     @classmethod
@@ -2052,7 +2052,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=CosThetaConfigurator.TIME_TO_DISPLAY_NOT_OK_IMAGES, default="5.0"))
-        except Exception as e:
+        except Exception:
             return 5.0
 
     # ***********************************Counting Aid Parameters*********************************
@@ -2069,7 +2069,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.NEIGHBOURING_DISTANCE_RIGHT_DISC_KEY}",
                 default="55.0"))
-        except Exception as e:
+        except Exception:
             return 55.0
 
     @classmethod
@@ -2078,7 +2078,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.NEIGHBOURING_DISTANCE_LEFT_DISC_KEY}",
                 default="55.0"))
-        except Exception as e:
+        except Exception:
             return 55.0
 
     @classmethod
@@ -2087,7 +2087,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.MIN_AREA_FRACTION_RIGHT_DISC_KEY}",
                 default="0.4"))
-        except Exception as e:
+        except Exception:
             return 0.4
 
     @classmethod
@@ -2096,7 +2096,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.MIN_AREA_FRACTION_LEFT_DISC_KEY}",
                 default="0.33"))
-        except Exception as e:
+        except Exception:
             return 0.33
 
     @classmethod
@@ -2104,7 +2104,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.BASE_MIN_AREA_KEY}", default="30.0"))
-        except Exception as e:
+        except Exception:
             return 30.0
 
     # ***********************************Desired Capsule Counts *********************************
@@ -2122,7 +2122,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_OUTER_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     @classmethod
@@ -2131,7 +2131,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_MIDDLE_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     @classmethod
@@ -2140,7 +2140,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_INNER_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     @classmethod
@@ -2149,7 +2149,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_OUTER_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     @classmethod
@@ -2158,7 +2158,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_MIDDLE_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     @classmethod
@@ -2167,7 +2167,7 @@ class CosThetaConfigurator():
             return int(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_INNER_COUNT_KEY}",
                 default="60"))
-        except Exception as e:
+        except Exception:
             return 60
 
     # ***********************************Coordinates for Repporting Result*********************************
@@ -2187,7 +2187,7 @@ class CosThetaConfigurator():
                 default="[470,270]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[470,270]"))
 
     @classmethod
@@ -2198,7 +2198,7 @@ class CosThetaConfigurator():
                 default="[355,420]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[355,420]"))
 
     @classmethod
@@ -2209,7 +2209,7 @@ class CosThetaConfigurator():
                 default="[320,565]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[320,565]"))
 
     @classmethod
@@ -2220,7 +2220,7 @@ class CosThetaConfigurator():
                 default="[830,340]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[830,340]"))
 
     @classmethod
@@ -2231,7 +2231,7 @@ class CosThetaConfigurator():
                 default="[1010,300]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[1010,300]"))
 
     @classmethod
@@ -2242,7 +2242,7 @@ class CosThetaConfigurator():
                 default="[1150,280]")
             listOfPoints = json.loads(pointsAsString)
             return tuple(listOfPoints)
-        except Exception as e:
+        except Exception:
             return tuple(json.loads("[1150,280]"))
 
     # ***********************************Min and Max Areas for various parts of the disc*********************************
@@ -2267,7 +2267,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_OUTER_MINAREA_KEY}",
                 default="8.0"))
-        except Exception as e:
+        except Exception:
             return 8.0
 
     @classmethod
@@ -2276,7 +2276,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_OUTER_MAXAREA_KEY}",
                 default="295.0"))
-        except Exception as e:
+        except Exception:
             return 295.0
 
     @classmethod
@@ -2285,7 +2285,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_MIDDLE_MINAREA_KEY}",
                 default="40.0"))
-        except Exception as e:
+        except Exception:
             return 40.0
 
     @classmethod
@@ -2294,7 +2294,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_MIDDLE_MAXAREA_KEY}",
                 default="295.0"))
-        except Exception as e:
+        except Exception:
             return 295.0
 
     @classmethod
@@ -2303,7 +2303,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_INNER_MINAREA_KEY}",
                 default="72.5"))
-        except Exception as e:
+        except Exception:
             return 72.5
 
     @classmethod
@@ -2312,7 +2312,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.LEFT_DISC_INNER_MAXAREA_KEY}",
                 default="295.0"))
-        except Exception as e:
+        except Exception:
             return 295.0
 
     @classmethod
@@ -2321,7 +2321,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_OUTER_MINAREA_KEY}",
                 default="15.0"))
-        except Exception as e:
+        except Exception:
             return 15.0
 
     @classmethod
@@ -2330,7 +2330,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_OUTER_MAXAREA_KEY}",
                 default="287.5"))
-        except Exception as e:
+        except Exception:
             return 287.5
 
     @classmethod
@@ -2339,7 +2339,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_MIDDLE_MINAREA_KEY}",
                 default="15.0"))
-        except Exception as e:
+        except Exception:
             return 15.0
 
     @classmethod
@@ -2348,7 +2348,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_MIDDLE_MAXAREA_KEY}",
                 default="293.0"))
-        except Exception as e:
+        except Exception:
             return 293.0
 
     @classmethod
@@ -2357,7 +2357,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_INNER_MINAREA_KEY}",
                 default="72.5"))
-        except Exception as e:
+        except Exception:
             return 72.5
 
     @classmethod
@@ -2366,7 +2366,7 @@ class CosThetaConfigurator():
             return float(CosThetaConfigurator.getValue(
                 key=f"{cust_name.lower()}.{med_name.lower()}.{CosThetaConfigurator.RIGHT_DISC_INNER_MAXAREA_KEY}",
                 default="21.0"))
-        except Exception as e:
+        except Exception:
             return 277.5
 
     # ***********************************Classification for Invalid Result : To ensure picture does not reflected as Not OK*********************************
@@ -2379,21 +2379,21 @@ class CosThetaConfigurator():
     def getMinimumOuterCount(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MINIMUM_OUTER_COUNT_KEY, default="0"))
-        except Exception as e:
+        except Exception:
             return 0
 
     @classmethod
     def getMinimumMiddleCount(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MINIMUM_MIDDLE_COUNT_KEY, default="0"))
-        except Exception as e:
+        except Exception:
             return 0
 
     @classmethod
     def getMinimumInnerCount(cls) -> int:
         try:
             return int(CosThetaConfigurator.getValue(key=CosThetaConfigurator.MINIMUM_INNER_COUNT_KEY, default="0"))
-        except Exception as e:
+        except Exception:
             return 0
 
     # ***********************************Classification for Reporting and Database Backups *********************************
@@ -2407,7 +2407,7 @@ class CosThetaConfigurator():
     def getReportInvalidResults(cls) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key=CosThetaConfigurator.REPORT_INVALID_RESULTS_KEY, default='false')
-        except Exception as e:
+        except Exception:
             value = 'false'
         if value.lower() == 'true':
             return True
@@ -2447,7 +2447,7 @@ class CosThetaConfigurator():
         try:
             return int(
                 CosThetaConfigurator.getValue(key=f"{CosThetaConfigurator.QRCODE_BAUD_RATE_KEY}", default='19200'))
-        except Exception as e:
+        except Exception:
             return 38400
 
     @classmethod
@@ -2459,7 +2459,7 @@ class CosThetaConfigurator():
                     key=f"{CosThetaConfigurator.QRCODE_REGEX_PATTERN_KEY}.{i}", default='')
                 if (aPattern is not None) and (aPattern != ''):
                     patterns.append(aPattern.strip())
-            except Exception as e:
+            except Exception:
                 pass
         return patterns
 
@@ -2474,7 +2474,7 @@ class CosThetaConfigurator():
                 if (aPattern is not None) and (aPattern != ''):
                     index_list = [int(item.strip()) for item in aPattern.strip().split(",")]
                     extractionPatterns.append(index_list)
-            except Exception as e:
+            except Exception:
                 pass
         # print(f"{extractionPatterns = }")
         return extractionPatterns
@@ -2485,7 +2485,7 @@ class CosThetaConfigurator():
             return int(
                 CosThetaConfigurator.getValue(key=f"{CosThetaConfigurator.QRCODE_NUMBER_OF_CHARACTERS_TO_CHECK_KEY}",
                                               default='54'))
-        except Exception as e:
+        except Exception:
             return 54
 
     @classmethod
@@ -2504,7 +2504,7 @@ class CosThetaConfigurator():
                             aKey = f"{dollarSignSeparatedValues[0]}${aPattern[0]}"
                             aValue = f"{aPattern[1]} - {aPattern[2]} - {dollarSignSeparatedValues[2].strip()}"
                             partMappings[aKey] = aValue
-            except Exception as e:
+            except Exception:
                 pass
         return partMappings
 
@@ -2965,7 +2965,7 @@ class CosThetaConfigurator():
         try:
             val = str(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_DEBUG_KEY, default="False"))
             return True if val.lower() == "true" else False
-        except Exception as e:
+        except Exception:
             return False
 
     @classmethod
@@ -2975,7 +2975,7 @@ class CosThetaConfigurator():
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_HANDSHAKE_RESET_DELAY_KEY,
                                                                 default="0.4")))
-        except Exception as e:
+        except Exception:
             return 0.4
 
     @classmethod
@@ -2990,7 +2990,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE_KEY,
                                                        default="0.05"))
-        except Exception as e:
+        except Exception:
             return 0.05
 
     @classmethod
@@ -3000,7 +3000,7 @@ class CosThetaConfigurator():
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(
                 CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_DONE_AND_REREAD_KEY, default="0.3")))
-        except Exception as e:
+        except Exception:
             return 0.3
 
     # ---- 2026-11-06: what the IOServer does when another server is down, camera answer timeout, abort tag ----
@@ -3085,7 +3085,7 @@ class CosThetaConfigurator():
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(
                 CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_DONE_AND_RESET_DONE_KEY, default="0.4")))
-        except Exception as e:
+        except Exception:
             return 0.4
 
     @classmethod
@@ -3093,7 +3093,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_READ_INTERVAL_KEY,
                                                        default="0.2"))
-        except:
+        except Exception:
             return 0.2
 
     @classmethod
@@ -3101,7 +3101,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_WRITE_INTERVAL_KEY,
                                                        default="0.1"))
-        except:
+        except Exception:
             return 0.1
 
     @classmethod
@@ -3109,7 +3109,7 @@ class CosThetaConfigurator():
         try:
             return float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_CONNECTION_CHECK_INTERVAL_KEY,
                                                        default="1.0"))
-        except:
+        except Exception:
             return 1.0
 
     # ==================== Rotation Settings Tag Getters ====================

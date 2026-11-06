@@ -7,7 +7,6 @@ import logging
 import logging.handlers
 import os
 import time
-from typing import Optional
 
 import regex as re
 

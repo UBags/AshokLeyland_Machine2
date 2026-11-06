@@ -1,7 +1,6 @@
 # Writes the images that have been processed by the Image Processor.
 # Uses the ffmpeg library to write compressed images at good speed
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
-import threading
 
 import cv2
 import ffmpeg
@@ -29,7 +28,7 @@ class ImageWriter(GenericQueueProcessor):
 		try :
 			os.makedirs(os.path.dirname(self.savingDir))
 			# print(f"Made directory {self.savingDir}")
-		except Exception as e:
+		except Exception:
 			noteSuppressed()
 		self.width = width
 		self.height = height

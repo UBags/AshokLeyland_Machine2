@@ -1,5 +1,5 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import threading
-from threading import Thread
 import os
 import winsound
 from logutils.SlaveLoggers import *
@@ -9,11 +9,7 @@ import sys
 
 from Configuration import *
 
-from utils.RedisUtils import readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, \
-    sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, readDataInHeartbeatServerFromQRCodeServer, \
-    readDataInHeartbeatServerFromCameraServer, readDataInHeartbeatServerFromIOServer, \
-    readDataInHeartbeatServerFromDatabaseServer, readDataInHeartbeatServerFromFEServer, DEAD, \
-    readAllHeartbeatsInHeartbeatServer
+from utils.RedisUtils import (readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, DEAD, readAllHeartbeatsInHeartbeatServer)
 
 CosThetaConfigurator.getInstance()
 
@@ -78,7 +74,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
             try:
                 self.redisConnectionQ = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort, retry_on_timeout=True)
                 self.clientRedisConnectedQ = True
-            except:
+            except Exception:
                 self.clientRedisConnectedQ = False
                 logBoth('logTakeAction', HeartbeatAndAlarmServer.logSource, 'Could not get Redis Connection', Logger.PROBLEM)
                 # pass
@@ -242,12 +238,12 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                             #     time.sleep(0.5)
                             winsound.PlaySound(HeartbeatAndAlarmServer.badComponentSoundFile, winsound.SND_FILENAME)
 
-                except:
+                except Exception:
                     objRef.connectToRedis(forceRenew=True)
                 try:
                     time.sleep(1.0)
-                except:
-                    pass
+                except Exception:
+                    noteSuppressed()
         monitorAlarmThread = threading.Thread(name=f"Alarm Monitoring Thread", target=sniffForAlarm, args=(), daemon = True)
         monitorAlarmThread.start()
 

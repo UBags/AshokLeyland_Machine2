@@ -24,7 +24,7 @@ multiprocessing "spawn" (as MainProgram starts the servers), daemon: it ends wit
 import multiprocessing
 import threading
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 READY_TIMEOUT_SECS = 600.0        # loading the models on a cold start can take a while
 STOP_TIMEOUT_SECS = 3.0

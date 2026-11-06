@@ -4,7 +4,6 @@ from PySide6.QtCore import Qt
 from frontend.frontendutils.CosThetaImageUtils import *
 from frontend.CosThetaMonitorDimensions import *
 import time
-from time import sleep
 
 app = getAppInstance()
 

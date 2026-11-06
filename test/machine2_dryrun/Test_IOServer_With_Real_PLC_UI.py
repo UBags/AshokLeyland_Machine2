@@ -440,8 +440,8 @@ step for easy reading.
                         text="Timeout - no response", foreground="red"))
 
             except Exception as e:
-                self.root.after(0, lambda: self.tag_status_label.config(
-                    text=f"Error: {str(e)[:30]}", foreground="red"))
+                self.root.after(0, lambda err=str(e): self.tag_status_label.config(
+                    text=f"Error: {err[:30]}", foreground="red"))
             finally:
                 self.tag_request_pending = False
                 self.root.after(0, lambda: self.get_tags_btn.config(state='normal'))

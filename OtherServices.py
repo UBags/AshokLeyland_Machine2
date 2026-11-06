@@ -1,3 +1,4 @@
+from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import multiprocessing
 import sys
 from multiprocessing import Process
@@ -31,8 +32,8 @@ def threadToKeepProgramFromShuttingDown():
         try:
             time.sleep(10)
             printBoldBlue(f"Services are alive")
-        except:
-            pass
+        except Exception:
+            noteSuppressed()
 
 def main():
     # global showSplash
@@ -42,7 +43,7 @@ def main():
         P1.start()
         time.sleep(3)
         printBoldBlue("Started the WebService Endpoints")
-    except:
+    except Exception:
         printBoldRed("Could not start the WebService Endpoints")
 
     try:
@@ -50,7 +51,7 @@ def main():
         P2.start()
         time.sleep(1)
         printBoldBlue("Started the MI Dashboard Service")
-    except:
+    except Exception:
         printBoldRed("Could not start the MI Dashboard Service")
 
     try:
@@ -58,7 +59,7 @@ def main():
         P3.start()
         time.sleep(1)
         printBoldBlue("Started the Show Screen Service")
-    except:
+    except Exception:
         printBoldRed("Could not start the Show Screen Service")
 
     keepAliveThread = threading.Thread(name="Stop Monitoring Thread", target=threadToKeepProgramFromShuttingDown,

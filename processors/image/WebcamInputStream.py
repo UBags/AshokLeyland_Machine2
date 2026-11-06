@@ -8,7 +8,6 @@ from processors.image.GenericImageProcessor import *
 from processors.image.ImageWriter import *
 from processors.image.ImageDisplayer import *
 from processors.image.Bytes2ImageAndScaler import *
-from datetime import datetime
 from processors.GenericQueueProcessor import *
 from utils.RedisUtils import *
 from BaseUtils import *

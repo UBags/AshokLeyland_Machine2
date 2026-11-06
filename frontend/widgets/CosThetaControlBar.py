@@ -41,7 +41,7 @@ class CosThetaControlBar(QWidget):
             x_w = self.offset.x()
             y_w = self.offset.y()
             self.move(x-x_w, y-y_w)
-        except: noteSuppressed()
+        except Exception: noteSuppressed()
 
     def paintEvent(self, ev):
         painter = QPainter(self)

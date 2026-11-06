@@ -1,9 +1,4 @@
-from PySide6.QtWidgets import QMainWindow, QGroupBox, QHBoxLayout, QMessageBox
-from PySide6 import QtCore
-from PySide6.QtCore import QThread, Signal, Slot, QRunnable, QThreadPool, Qt
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QAction
-from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel, QFrame
+from PySide6.QtWidgets import QSizePolicy, QFrame
 from frontend.frontendutils.CosThetaImageUtils import *
 
 class CosThetaQHLine(QFrame):

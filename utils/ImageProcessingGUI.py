@@ -33,10 +33,9 @@ from PIL import Image, ImageTk
 import numpy as np
 import cv2
 import os
-from typing import List, Tuple, Optional, Callable, Any
-from dataclasses import dataclass, field
+from typing import List, Tuple, Optional
+from dataclasses import dataclass
 from enum import Enum
-import copy
 
 # Import image processing functions
 from ImageNormalisationWithMask import (

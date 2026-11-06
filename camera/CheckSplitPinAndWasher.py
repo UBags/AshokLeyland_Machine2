@@ -1,14 +1,10 @@
-import copy
-from threading import Thread
 from queue import *
-import cv2
 
 from utils.CosThetaFileUtils import *
 from utils.RedisUtils import *
 from BaseUtils import *
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
-from concurrent.futures import ThreadPoolExecutor, wait
 
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )

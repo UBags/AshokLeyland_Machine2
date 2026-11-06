@@ -1,5 +1,3 @@
-import sys
-import os
 
 def compute_median(data, start, end):
     length = end - start + 1

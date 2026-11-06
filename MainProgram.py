@@ -175,13 +175,13 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
                 # printBoldBlue(f"Closed process {pid}")
                 # p = psutil.Process(pid)
                 # p.terminate()
-        except:
+        except Exception:
             noteSuppressed()
         # Close Redis connections
         try:
             if redisConnection:
                 redisConnection.close()
-        except:
+        except Exception:
             noteSuppressed()
     printBoldGreen("All processes shut down. Closing terminal window.")
     sys.exit(1)
@@ -352,7 +352,7 @@ def main():
         try:
             stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
             os.system("taskkill /f /im cmd.exe")
-        except:
+        except Exception:
             noteSuppressed()
         sys.exit(0)
 
@@ -386,7 +386,7 @@ def main():
                 stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
                 try:
                     os.system("taskkill /f /im cmd.exe")
-                except:
+                except Exception:
                     noteSuppressed()
                 sys.exit(0)
 
@@ -395,7 +395,7 @@ def main():
         stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
         try:
             os.system("taskkill /f /im cmd.exe")
-        except:
+        except Exception:
             noteSuppressed()
         sys.exit(0)
 
@@ -441,7 +441,7 @@ def main():
         printBoldBlue("Started QR Code Server")
         currentProcessPIDs.append(P3.pid)
         printBoldBlue(f"QR Code process 1 is {P3.pid}")
-    except:
+    except Exception:
         printBoldRed("Could not start QR Code Server")
 
     try:
@@ -451,7 +451,7 @@ def main():
         printBoldBlue("Started IO Server")
         currentProcessPIDs.append(P4.pid)
         printBoldBlue(f"IO process is {P4.pid}")
-    except:
+    except Exception:
         printBoldRed("Could not start IO Server")
 
     # The following message is needed to get rid of the previous pop-up from line 303
@@ -465,7 +465,7 @@ def main():
         time.sleep(1)
         currentProcessPIDs.append(P6.pid)
         printBoldBlue(f"Frontend process is {P6.pid}")
-    except:
+    except Exception:
         printBoldRed("Could not start Front End Server")
 
     try:
@@ -474,7 +474,7 @@ def main():
         printBoldBlue("Started Heartbeat Monitoring Service")
         currentProcessPIDs.append(P7.pid)
         printBoldBlue(f"Heartbeat Monitoring process is {P7.pid}")
-    except:
+    except Exception:
         printBoldRed("Could not start the HeartbeatServer")
 
     try:
@@ -484,7 +484,7 @@ def main():
         printBoldBlue("Started DB Server")
         currentProcessPIDs.append(P5.pid)
         printBoldBlue(f"DB process is {P5.pid}")
-    except:
+    except Exception:
         printBoldRed("Could not start DB Server")
 
     # try:
@@ -558,7 +558,7 @@ def main():
     printBoldBlue(f"Main Program shutting down at {datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}")
     try:
         os.system("taskkill /f /im cmd.exe")
-    except:
+    except Exception:
         noteSuppressed()
     time.sleep(3)
     sys.exit(0)

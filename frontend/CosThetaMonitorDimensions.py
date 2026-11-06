@@ -242,7 +242,7 @@ def getMonitorDimensions(measurement="px"):
                     else:
                         raise NotImplementedError("Handling %s is not implemented." % measurement)
                     monitorDimensionsFound = True
-                except Exception as e:
+                except Exception:
                     # printBoldRed(e)
                     try:  # Linux/Unix
                         # printBoldBlue("Trying to find dimensions of monitor in Linux environment through xrandr")
@@ -271,7 +271,7 @@ def getMonitorDimensions(measurement="px"):
                                             "Handling %s is not implemented." % measurement)
                                     monitorDimensionsFound = True
                                     break
-                    except Exception as e:
+                    except Exception:
                         # printBoldRed(e)
                         raise NotImplementedError(
                             "Handling %s is not implemented." % measurement)
@@ -292,7 +292,7 @@ def getMonitorDimensions(measurement="px"):
                     else:
                         raise NotImplementedError("Handling %s is not implemented." % measurement)
                     monitorDimensionsFound = True
-                except Exception as e:
+                except Exception:
                     # printBoldRed(e)
                     try:  # Windows only
                         user32 = ctypes.windll.user32
@@ -309,7 +309,7 @@ def getMonitorDimensions(measurement="px"):
                         else:
                             raise NotImplementedError("Handling %s is not implemented." % measurement)
                         monitorDimensionsFound = True
-                    except Exception as e:
+                    except Exception:
                         # printBoldRed(e)
                         raise NotImplementedError("Handling %s is not implemented." % measurement)
             if isMac:
@@ -331,11 +331,11 @@ def getMonitorDimensions(measurement="px"):
                             raise NotImplementedError("Handling %s is not implemented." % measurement)
                         monitorDimensionsFound = True
                         break
-                except Exception as e:
+                except Exception:
                     # printBoldRed(e)
                     raise NotImplementedError("Handling %s is not implemented." % measurement)
             monitorDimensionsFound = True
-        except Exception as e:
+        except Exception:
             # printBoldRed(e)
             try:  # Probably the most OS independent way
                 root = tkinter.Tk()
@@ -352,10 +352,10 @@ def getMonitorDimensions(measurement="px"):
                 else:
                     raise NotImplementedError("Handling %s is not implemented." % measurement)
                 monitorDimensionsFound = True
-            except Exception as e:
+            except Exception:
                 # printBoldRed(e)
                 raise NotImplementedError("Handling %s is not implemented." % measurement)
-    except Exception as e:
+    except Exception:
         # printBoldRed(e)
         try:
             # app = QApplication([])
@@ -366,7 +366,7 @@ def getMonitorDimensions(measurement="px"):
             monitorWidth, monitorHeight = screenSize.width(), screenSize.height()
             monitorDimensionsFound = True
             # app.exit()
-        except Exception as e:
+        except Exception:
             # printPlain(e)
             # Failover
             monitorWidth = 1366
@@ -390,7 +390,7 @@ def getMonitorDimensions(measurement="px"):
 def populateMonitorDimensions():
     try:
         getMonitorDimensions()
-    except:
+    except Exception:
         print(f"No monitor found - exiting")
         # printBoldSeparator()
         sys.exit(1)

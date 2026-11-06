@@ -1,8 +1,5 @@
-from PySide6.QtWidgets import QMainWindow, QGroupBox, QHBoxLayout, QVBoxLayout, QMessageBox
-from PySide6 import QtCore
-from PySide6.QtCore import QThread, Signal, Slot, QRunnable, QThreadPool, Qt
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QAction, QColor, QFont, QFontMetrics
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel, QFrame
 
 from frontend.CosThetaMonitorDimensions import *

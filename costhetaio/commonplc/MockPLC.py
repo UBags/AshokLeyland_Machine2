@@ -13,7 +13,7 @@ Vendor-neutral: keyed by tag name, it starts with the tag names of the configure
 """
 
 import threading
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict
 from Configuration import CosThetaConfigurator
 
 

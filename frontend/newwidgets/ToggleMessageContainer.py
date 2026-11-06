@@ -1,10 +1,7 @@
-from PySide6.QtWidgets import QMainWindow, QGroupBox, QHBoxLayout, QVBoxLayout, QMessageBox
-from PySide6 import QtCore, QtGui
+from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtGui import QFont, QFontMetrics, QColor
-from PySide6.QtCore import QThread, Signal, Slot, QRunnable, QThreadPool, Qt
-from PySide6.QtCore import QTimer
-from PySide6.QtGui import QResizeEvent, QMouseEvent, QKeyEvent, QAction
-from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel, QFrame
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel
 
 class ToggleMessageContainer(QWidget):
 

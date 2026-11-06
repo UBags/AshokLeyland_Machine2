@@ -205,7 +205,7 @@ def checkIfDatabaseExists(dbname: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -213,7 +213,7 @@ def checkIfDatabaseExists(dbname: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         # raise error
     return exists
@@ -223,7 +223,7 @@ def createDatabase(db_name: str) -> None:
     aConnection = None
     try:
         exists = checkIfDatabaseExists(dbname=db_name)
-    except:
+    except Exception:
         exists = False
     if exists:
         return
@@ -247,7 +247,7 @@ def createDatabase(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -255,7 +255,7 @@ def createDatabase(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         # raise error
 
@@ -282,7 +282,7 @@ def showAllDatabases() -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
 
 
@@ -315,7 +315,7 @@ def checkConnection(db_name: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         return False
 
@@ -349,7 +349,7 @@ def createSchema(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -357,7 +357,7 @@ def createSchema(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         # raise error
 
@@ -591,7 +591,7 @@ def createAllTables(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -599,7 +599,7 @@ def createAllTables(db_name: str) -> None:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
 
 
@@ -661,7 +661,7 @@ def insertRole(db_name: str, role_name: str, module_access="") -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -669,7 +669,7 @@ def insertRole(db_name: str, role_name: str, module_access="") -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         # raise error
     return done
@@ -703,7 +703,7 @@ def checkIfRecordExists(selectStatement: str, db_name: str) -> tuple[bool, int]:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     return False, 0
 
@@ -819,7 +819,7 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     except Exception as error:
         if not isinstance(error, psycopg2.errors.UniqueViolation):
@@ -827,7 +827,7 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         # False == not executed; 0 == no existing record found
         return False, 0
@@ -870,7 +870,7 @@ def getIdAndUsernamesAndPasswordsAndRolesForActiveUsers(db_name: str):
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     return resultRecords
 
@@ -910,7 +910,7 @@ def getIdAndUsernamesAndPasswordsForInactiveUsers(db_name: str) -> List[List]:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     return resultRecords
 
@@ -950,7 +950,7 @@ def getIdAndUsernamesAndPasswordsForAllUsers(db_name: str) -> List[List]:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
     return resultRecords
 
@@ -982,7 +982,7 @@ def updatePassword(username: str, password: str, db_name: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         return False
     return True
@@ -1015,7 +1015,7 @@ def updateRole(username: str, role_name: str, db_name: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         return False
     return True
@@ -1048,7 +1048,7 @@ def inactivateUserInDatabase(username: str, db_name: str) -> bool:
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         return False
     return True
@@ -1081,7 +1081,7 @@ def activateInactiveUserInDatabase(username: str, db_name: str):
         if aConnection is not None:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         return False
     return True
@@ -1153,11 +1153,11 @@ def getUniqueModelNames(db_name: str) -> List[str]:
                 # Extract model names from results (single column)
                 model_names = [row[0] for row in results if row[0] != 'Not Populated']
 
-    except Error as e:
+    except Error:
         # print(f"Database error: {e}")
         # raise Exception(f"Failed to fetch model names: {e}")
         return []
-    except Exception as e:
+    except Exception:
         # print(f"Unexpected error: {e}")
         # raise Exception(f"Unexpected error: {e}")
         return []
@@ -1203,13 +1203,13 @@ def checkIfQRCodeExists(qr_code: str, db_name: str) -> bool:
 
                 return exists
 
-    except Error as e:
+    except Error:
         # print(f"Database error: {e}")
         return False
-    except ValueError as e:
+    except ValueError:
         # print(f"Input error: {e}")
         return False
-    except Exception as e:
+    except Exception:
         # print(f"Unexpected error: {e}")
         # raise Exception(f"Unexpected error: {e}")
         return False
@@ -1245,11 +1245,11 @@ def reindexIndices(db_name: str) -> bool:
                 # print("Successfully reindexed idx_model_name, idx_qr_code, and idx_created_on")
                 return True
 
-    except Error as e:
+    except Error:
         # print(f"Database error during reindexing: {e}")
         # raise Exception(f"Failed to reindex indices: {e}")
         return False
-    except Exception as e:
+    except Exception:
         # print(f"Unexpected error: {e}")
         # raise Exception(f"Unexpected error: {e}")
         return False
@@ -1286,11 +1286,11 @@ def reindexQRCodeIndex(db_name: str) -> bool:
                 # print("Successfully reindexed idx_model_name, idx_qr_code, and idx_created_on")
                 return True
 
-    except Error as e:
+    except Error:
         # print(f"Database error during reindexing: {e}")
         # raise Exception(f"Failed to reindex indices: {e}")
         return False
-    except Exception as e:
+    except Exception:
         # print(f"Unexpected error: {e}")
         # raise Exception(f"Unexpected error: {e}")
         return False
@@ -1580,7 +1580,10 @@ def insertData(
 
         cur.execute(query, params)
         conn.commit()
-        reindexIndices(db_name=db_name)
+        # No REINDEX here (it ran after every insert before 2026-11-06). PostgreSQL updates every index of the table
+        # in the insert's own transaction, so the new QR code is found through idx_qr_code as soon as the insert is
+        # committed; REINDEX only rebuilds an index (after corruption or heavy bloat), and while it runs it blocks
+        # inserts and the reads that would use the index. reindexIndices() is kept for maintenance by hand.
         return True
 
     except psycopg2.errors.UniqueViolation:
@@ -1801,12 +1804,12 @@ def getDataByModelName(modelName: str, db_name: str, debug: bool = False) -> str
         if aCursor:
             try:
                 aCursor.close()
-            except:
+            except Exception:
                 noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         csv_output.close()
     if debug:
@@ -2024,12 +2027,12 @@ def getDataByModelNameAndDateLimits(
         if aCursor:
             try:
                 aCursor.close()
-            except:
+            except Exception:
                 noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         csv_output.close()
 
@@ -2405,12 +2408,12 @@ def getDataByDateLimits(
         if aCursor:
             try:
                 aCursor.close()
-            except:
+            except Exception:
                 noteSuppressed()
         if aConnection:
             try:
                 aConnection.close()
-            except:
+            except Exception:
                 noteSuppressed()
         csv_output.close()
 
@@ -2517,12 +2520,12 @@ def reindexHubAndDiscAssemblyData(db_name: str, verbose: bool = True) -> bool:
         if cursor:
             try:
                 cursor.close()
-            except:
+            except Exception:
                 noteSuppressed()
         if connection:
             try:
                 connection.close()
-            except:
+            except Exception:
                 noteSuppressed()
 
     return success
@@ -2551,21 +2554,22 @@ def ensureIndexesExist(db_name: str, verbose: bool = True) -> bool:
         schema = getSchemaName()
         table = f"{schema}.hub_and_disc_assembly_data"
 
+        # One index per column (2026-11-06). This function used to create a second index on each of these columns
+        # under long names that PostgreSQL cuts to 63 characters, next to idx_qr_code / idx_model_name /
+        # idx_created_on from the table DDL: every insert then maintained two indexes per column. The duplicates are
+        # dropped here (identifiers longer than 63 characters are cut the same way in DROP INDEX).
+        for duplicate in ("qr_code", "model_name", "created_on"):
+            cursor.execute(f"DROP INDEX IF EXISTS {schema}.{schema}_hub_and_disc_assembly_data_{duplicate}_idx;")
+
         index_definitions = [
-            # Fast lookups by QR code (should be unique or near-unique)
-            (f"{schema}_hub_and_disc_assembly_data_qr_code_idx",
-             f"CREATE INDEX IF NOT EXISTS {schema}_hub_and_disc_assembly_data_qr_code_idx "
-             f"ON {table} (qr_code);"),
+            # Fast lookups by QR code (duplicate check of every scan)
+            ("idx_qr_code", f"CREATE INDEX IF NOT EXISTS idx_qr_code ON {table} (qr_code);"),
 
             # Filter by model (very common in reports)
-            (f"{schema}_hub_and_disc_assembly_data_model_name_idx",
-             f"CREATE INDEX IF NOT EXISTS {schema}_hub_and_disc_assembly_data_model_name_idx "
-             f"ON {table} (model_name);"),
+            ("idx_model_name", f"CREATE INDEX IF NOT EXISTS idx_model_name ON {table} (model_name);"),
 
             # Time-based queries & sorting
-            (f"{schema}_hub_and_disc_assembly_data_created_on_idx",
-             f"CREATE INDEX IF NOT EXISTS {schema}_hub_and_disc_assembly_data_created_on_idx "
-             f"ON {table} (created_on);"),
+            ("idx_created_on", f"CREATE INDEX IF NOT EXISTS idx_created_on ON {table} (created_on);"),
 
             # Optional composite index for frequent model + date queries
             # (f"{schema}_hub_and_disc_assembly_data_model_created_idx",

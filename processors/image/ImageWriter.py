@@ -23,7 +23,7 @@ class ImageWriter(GenericQueueProcessor):
 		self.path = path
 		try :
 			os.makedirs(os.path.dirname(self.path))
-		except Exception as e:
+		except Exception:
 			noteSuppressed()
 		self.fps = fps 	# Though fps does not mean anything for a writer,
 						# this is being specified so that an appropriate sleep time can be given

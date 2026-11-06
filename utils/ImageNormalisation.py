@@ -4,11 +4,7 @@ Based on Leptonica 1.82+ source code.
 """
 
 import numpy as np
-from scipy.ndimage import (
-    minimum_filter, maximum_filter, uniform_filter,
-    grey_opening, grey_closing, grey_erosion, grey_dilation,
-    gaussian_filter, rank_filter
-)
+from scipy.ndimage import grey_opening, grey_closing, gaussian_filter, rank_filter
 from scipy.interpolate import RectBivariateSpline
 import cv2
 

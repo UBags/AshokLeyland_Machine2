@@ -194,7 +194,7 @@ def rename_images(folder_path: str, prefix: str, auto_confirm: bool = False):
             try:
                 if os.path.exists(temp_path):
                     os.rename(temp_path, old_path)
-            except:
+            except Exception:
                 noteSuppressed()
 
         print("Rollback attempted. Please check your files.")
