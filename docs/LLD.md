@@ -298,11 +298,13 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 
 | Dry run | Covers |
 |---|---|
-| `DryRun_IOServer_Fault_Scenarios.py` | Handshakes, retakes, aborts, PLC loss, server-down rules (J1–J8, including redis), abort during a handshake write and the toggle during an abort (K1–K2), both vendors |
+| `DryRun_IOServer_Fault_Scenarios.py` | Handshakes, retakes, aborts, PLC loss, server-down rules (J1–J8, including redis), abort during a handshake write and the toggle during an abort (K1–K2), IOServer heartbeat DEAD while a loop is stuck (L), both vendors |
+| `DryRun_Work_Thread_Health.py` | Heartbeats follow the work threads: `WorkerWatch`, the GenericQueueProcessor tick, camera / QR / DB heartbeats (frontend: FE dry run F11) |
+| `DryRun_QRCode_Validation.py` | Every QR code in the tests (real format) accepted, side and model read; wrong codes refused |
 | `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |
 | Frontend / DB / index and day-folder | FE workers; inserts; indexes; day folder |
-| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R5; database backup at shutdown (H10) |
+| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R6 (R6: the check survives a recovery); database backup at shutdown (H10) |
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors |
 
