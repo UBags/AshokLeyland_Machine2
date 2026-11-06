@@ -2195,6 +2195,8 @@ From the code review of 2026-11-07 (architecture items not included).
   - QR code validation: `re.fullmatch` on the stripped code (`re.match` accepted trailing characters, or two scans
     run together); the date dots in the 6 patterns are escaped (`\.`; `.` matched any character). The sample codes
     in the repo still match. Check with a few real scans on the plant PC.
+    **Wrong - reverted in section 85:** real codes go on after the pattern ("...$1$SPDL ASSY-KNULH$SNPL-MAT$"), so
+    `fullmatch` rejected every one; the samples checked here had been cut at the space. The escaped dots stay.
   - `checkIfQRCodeExists`: `connect_timeout=5` and the connection closed (psycopg2's `with connection` does not close).
   - `Configuration.py`: `getPcPlcNoOfRotation1CCWTagName` / `...CWTagName` defined once (the earlier, shadowed copy
     removed; the one in use is unchanged).

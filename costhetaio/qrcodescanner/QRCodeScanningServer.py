@@ -139,9 +139,10 @@ class GetAndValidateQRCode(GenericQueueProcessor):
             copyOfQRCode = copy.deepcopy(qrCode)
             for index, regexPattern in enumerate(self.regexPatterns):
                 try:
-                    # the whole code must match (re.match only anchored the start: trailing characters, or two
-                    # scans run together, were accepted)
-                    results = re.fullmatch(regexPattern, copyOfQRCode.strip())
+                    # The pattern matches the START of the code: a real code goes on after it (e.g. "...$1$SPDL
+                    # ASSY-KNULH$SNPL-MAT$"). re.fullmatch (CHANGES 84) rejected every real code - back to re.match
+                    # (CHANGES 85).
+                    results = re.match(regexPattern, copyOfQRCode.strip())
                     if results:
                         qrCodeIsValid = True
                         if printQRCode:
@@ -193,6 +194,7 @@ class GetAndValidateQRCode(GenericQueueProcessor):
         self.readInProgress = True
         messageToConsumer : Union[dict, None] = None
         while not self.abortRead and not self.getStopped():
+            self.lastLoopAt = time.monotonic()        # waiting for a scan is going round the loop (WorkerHealth)
             try:
                 if self.parent.getQRCodeConnectionStatus():
                     data = self.parent.qrCodeSerialConnection.readline()
@@ -365,6 +367,9 @@ class QRCodeScanningServer:
         self.connectionAttempts: int = 0
 
         self.getAndValidateQRCodeObject: Union[GetAndValidateQRCode, None] = None  # Set after instantiation
+        # the reading / dispatching threads, for the heartbeat (DEAD while one is not running or stuck: WorkerHealth)
+        from utils.WorkerHealth import WorkerWatch
+        self.workers = WorkerWatch("QR code server")
 
         self.connect()
 
@@ -523,8 +528,10 @@ class QRCodeScanningServer:
             with self.heartbeatLock:
                 if self.heartbeatRedisConnected:
                     try:
+                        working = self.connected and not self.workers.problemsLogged(
+                            log=lambda m: SlaveConsoleLogger.getInstance().logTakeAction(QRCodeScanningServer.logSource, m, Logger.PROBLEM))
                         sendHeartbeatFromQRCodeServerToHeartbeatServer(redisConnection=self.heartbeatRedisConnection,
-                                                                       status=ALIVE if self.connected else DEAD)
+                                                                       status=ALIVE if working else DEAD)
                     except Exception as e:
                         SlaveConsoleLogger.getInstance().logTakeAction(QRCodeScanningServer.logSource, f'Heartbeat send failed: {e}', Logger.PROBLEM)
                         self.connectToRedisForHeartbeat(True)
@@ -566,6 +573,9 @@ def startQRCodeServer(mode : str):
 
     # Link for abort handling
     server.getAndValidateQRCodeObject = get_validate_qr_code
+    server.workers.add("scan requests (MonitorGetQRCodeQueue)", monitor)
+    server.workers.add("reading the scanner (GetAndValidateQRCode)", get_validate_qr_code)
+    server.workers.add("dispatching (QRCodeDispatcher)", dispatcher)
 
     dispatcher.start()
     get_validate_qr_code.start()
