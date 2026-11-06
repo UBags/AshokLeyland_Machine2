@@ -49,7 +49,8 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
 
   G. PLC handshake resets, rules (a)-(d), after plc.handshake.reset.delay.sec (0.4 s), and the field issues:
      G1 (b) Check-Done-OK, OK: OK=True, Done=True; Check, Done, OK set False after the delay (not before), in that order.
-     G2 (a) NOT OK: OK=False and Check=False written before Done=True; Done=False after the delay, OK stays False. The
+     G2 (a) NOT OK: OK=False, Done=True, then Check=False, and only then back to the picture state; Done=False after
+        the delay, OK stays False. The
         PLC keeps the trigger True (2HB still held): no new picture while it is held (field issue 2: pictures retaken
         every 1-2 s without a 2HB press); after it is released, the next press takes one picture.
      G3 NOT OK, the PLC drops its trigger on Done and the operator presses 2HB again 0.35 s later (within the delay):
@@ -214,9 +215,10 @@ def run_steps(first="KNUCKLE", last="FREE_ROT", retry_on_notok=()):
             assert wait_for(lambda: TAGS[done] is True), f"timeout waiting for NOT OK Done of {name}"
             okAtNotOk = TAGS[okTag]
             NOTOK_SEEN[name] = okAtNotOk
-            # rule (a): the PC set the trigger False with the NOT OK (before Done) and sets Done False after
-            # plc.handshake.reset.delay.sec; the operator presses the two-hand buttons again after that
-            assert (trig, False) in writes_of((trig,), notOkMark), f"the PC did not reset {trig} with the NOT OK of {name}"
+            # rule (a): with the NOT OK the PC writes OK=False, Done=True, then the trigger False, and sets Done False
+            # after plc.handshake.reset.delay.sec; the operator presses the two-hand buttons again after that
+            assert wait_for(lambda: (trig, False) in writes_of((trig,), notOkMark), 3), \
+                f"the PC did not reset {trig} with the NOT OK of {name}"
             assert wait_for(lambda: TAGS[done] is False, RESET_DELAY + 3), f"Done of {name} not reset after the NOT OK"
             time.sleep(0.25)                         # the read loop sees the trigger False (one read interval)
             plc_check(trig, done)                    # retry
@@ -656,12 +658,23 @@ def run_vision_result_reset():
             with LOCK: TAGS[HT] = True
             time.sleep(0.01)
         with LOCK: TAGS[HT] = False
+    spy = {}                                                 # WRITES index when the state goes back
+    _decrement = io.machineState.decrementStateFrom
+    def _spyDecrement(state):
+        spy.setdefault("at", len(WRITES))
+        return _decrement(state)
+    io.machineState.decrementStateFrom = _spyDecrement
     threading.Thread(target=hold, daemon=True).start()
     assert wait_for(lambda: TAGS[HD] is True), "hub NOT OK Done timeout"
     tDone = time.time()
+    wait_for(lambda: "at" in spy, 3)
+    io.machineState.decrementStateFrom = _decrement
     w = writes_of((HT, HO, HD), mark)
-    check("G2 (a) hub NOT OK: OK=False, then Check=False, then Done=True (the trigger cleared before Done)",
-          w[:3] == [(HO, False), (HT, False), (HD, True)], str(w))
+    check("G2 (a) hub NOT OK: OK=False, then Done=True, then Check=False",
+          w[:3] == [(HO, False), (HD, True), (HT, False)], str(w))
+    check("G2 (a) ... the state goes back to the picture state only after Check=False was written",
+          "at" in spy and (HT, False) in writes_of((HT,), mark)[:1] and
+          (HT, False) in [(t, v) for t, v in WRITES[mark:spy["at"]] if t == HT], f"spy {spy}, writes {w}")
     took = timed_writes([(HD, False)], mark, 3)
     elapsed = time.time() - tDone
     w = writes_of((HT, HO, HD), mark)

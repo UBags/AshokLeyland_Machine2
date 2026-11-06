@@ -1898,3 +1898,18 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - **PLC side, to confirm on the machine:** the PLC must raise each Check once per 2HB press and let the PC's False
   stand. A PLC that keeps Check True after a NOT OK now gets one picture (not a picture every 1-2 s) and the log line
   above; the PLC program then has to be changed.
+
+## 79. NOT OK of a vision check: OK, Done, then Check; state back only after that (2026-11-06)
+- **Order (user):** a NOT OK is written OK = False, Done = True, then Check = False, and only after that is the machine
+  state set back to the take-picture (READ_...) state, so that when the read loop next reads the trigger it is already
+  False. Section 78 wrote OK = False, Check = False, then Done = True. The QR code's NOT OK (settings not written) has
+  the same order. Done = False after `plc.handshake.reset.delay.sec` and the rest of section 78 are unchanged.
+- `perform_write_state_action` now writes the trigger last, retried until written (as OK and Done are), and returns only
+  after it; the write loop sets the state back after it returns. The "read False first" safeguard stays, for a PLC that
+  sets the trigger True again at once.
+- **Fault scenario G2:** expects OK=False, Done=True, Check=False in that order, and a new check that the state goes back
+  only after Check=False was written (spy on the state change). Mutation: Check written 0.3 s after the state went back
+  -> G2 order and state checks fail, and the standing trigger retakes the picture at once (field issue 2 again).
+- `plc.handshake.reset.delay.sec` comment in the three properties files: the order.
+- **Verified:** fault scenarios Siemens 120/120, Allen-Bradley 119/119; field reproduction: pulse PLC retry acted on, cycle
+  moves on; hold-to-trigger PLC one picture per press; held trigger 1 picture in 8 s; Mock-PLC window 14/14 on both vendors.

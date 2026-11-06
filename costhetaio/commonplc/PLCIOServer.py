@@ -1354,8 +1354,8 @@ class PLCIOServer:
     # One delay for all of them: plc.handshake.reset.delay.sec (0.4 s), read at each use (applies while running).
     # Every delayed reset is a job of ONE scheduler thread (DelayedJobScheduler), queued the moment the result is
     # written or the value read, keyed by the operation, so a newer result of the same operation replaces it.
-    #   (a) Check-Done-OK, NOT OK: OK = False, Check = False, then Done = True (perform_write_state_action);
-    #       Done = False after the delay. QR code: CheckQRCode = True again after that (the PC arms the QR read).
+    #   (a) Check-Done-OK, NOT OK: OK = False, Done = True, then Check = False (perform_write_state_action), and only
+    #       then the state back to the take-picture state; Done = False after the delay. QR code: CheckQRCode = True again after that (the PC arms the QR read).
     #   (b) Check-Done-OK, OK:     OK = True, then Done = True; Check, Done and OK = False after the delay.
     #   (c) Set-Value (torques):   after the value was read, Set = False and Value = 0.0 after the delay
     #                              (Station 2: also RotationDuringTighteningDone = False).
@@ -1392,7 +1392,8 @@ class PLCIOServer:
         checkState = the operation's WRITE state.
           OK     (b): after the delay, Check, Done and OK = False (Done before OK, so the PLC never sees Done = True
                       with OK = False, which would read as a NOT OK).
-          NOT OK (a): OK and Check were already set False with the result; after the delay, Done = False. For the QR
+          NOT OK (a): OK = False, Done = True, Check = False were written with the result; after the delay, Done =
+                      False. For the QR
                       code, CheckQRCode is then set True again: the PC arms the QR read (as at the end of a cycle), so
                       the operator can scan again."""
         okTag = tags[0] if len(tags) > 0 else None
@@ -1621,8 +1622,9 @@ class PLCIOServer:
                                 if previousMachineState != MachineState.INVALID_STATE and \
                                         objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
                                                                           expectedState=stateBeforeWrite):
-                                    # rule (a): OK and Check were set False with the result; Done back to False
-                                    # after plc.handshake.reset.delay.sec
+                                    # rule (a): OK = False, Done = True and Check = False written (in that order);
+                                    # only now back to the take-picture state; Done back to False after
+                                    # plc.handshake.reset.delay.sec
                                     objRef.scheduleVisionResultReset(tagsToBeWritten, stateBeforeWrite, result=False)
                                     printBoldRed(
                                         f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
@@ -1865,26 +1867,31 @@ class PLCIOServer:
             time.sleep(PLCIOServer.WRITE_RETRY_INTERVAL)
         return False
 
-    def _clearTriggerWithNotOk(self, triggerTag: str, writeState: MachineState) -> None:
-        """Rule (a): the PLC's trigger is set False with a NOT OK. Then the take-picture state acts on the trigger only
-        after the read loop has itself read it False (an edge): one picture per 2HB press, never a retake on a trigger
-        the PLC keeps raised (2HB still held, or a PLC program that holds it). A read-back right after the write is
-        not proof - the PLC can set it again within one scan - so the read loop's own reading decides."""
-        self._writeWithRetries(triggerTag, False, f"with the NOT OK of {writeState.name}")
+    def _clearTriggerWithNotOk(self, triggerTag: str, writeState: MachineState) -> bool:
+        """Rule (a), last write of a NOT OK (after OK = False and Done = True): the PLC's trigger = False, retried until
+        written. The caller sets the state back to the take-picture state only after this, so the read loop finds the
+        trigger already False there. As a second safeguard the take-picture state acts on the trigger only after the
+        read loop has itself read it False (an edge): a PLC that sets it True again at once (2HB still held, or a
+        program holding it) gets no retake until it has been False. Returns False only if the cycle was reset (abort)
+        before the trigger could be written."""
+        if not self._writeBoolUntilWritten(triggerTag, False, writeState):
+            return False
+        printBoldYellow(f"Wrote False to {triggerTag}")
         if writeState != MachineState.WRITE_QR_CODE:          # the PC arms the QR read itself
             self._setAwaitingTriggerReset(MachineState(int(writeState) - 1), True)
+        return True
 
     def perform_write_state_action(self, tags: list[str], result: bool = True,
                                    expectedState: Optional[MachineState] = None) -> bool:
         """
         Handshake of a WRITE state: tags = [<Check>OK, <Check>Done, <Check> trigger].
         The result (OK tag) is written FIRST and must be written before Done is set: the PLC reads OK when it sees
-        Done, so Done is never written unless OK was written. With a NOT OK the trigger is set False too, before Done
-        (rule (a)): when the PLC sees Done, its request is already cleared, so any trigger it raises after that is a
-        new request (the next 2HB press). Each write is retried until it succeeds (or the cycle
+        Done, so Done is never written unless OK was written. With a NOT OK the order is OK = False, Done = True, then
+        the trigger (<Check>) = False (rule (a)); the caller sets the state back to the take-picture state only after
+        this returns, so the read loop finds the trigger already False. Each write is retried until it succeeds (or the cycle
         is reset by an abort). Any values the PLC needs with this step (e.g. the cycle settings in state 2) must be
         written by the caller BEFORE calling this.
-        Returns True if both OK and Done were written.
+        Returns True if OK and Done (and with a NOT OK the trigger) were written.
         """
         stateAtStart = self.machineState.getCurrentState() if expectedState is None else expectedState
         self.completePendingResultReset(tags)   # a reset still pending from this operation's last result: done now
@@ -1896,8 +1903,6 @@ class PLCIOServer:
             self.logger.info(f"Could not write {tags[0]}; {tags[1]} NOT written")
             return False
         printBoldYellow(f"Wrote {result} to {tags[0]}")
-        if not result and len(tags) > 2 and tags[2]:
-            self._clearTriggerWithNotOk(tags[2], stateAtStart)
         time.sleep(PLCIOServer.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE)
         if self.machineState.getCurrentState() != stateAtStart:
             # aborted between OK and Done: the abort has reset the tags; Done must not be set for the old cycle
@@ -1907,6 +1912,9 @@ class PLCIOServer:
             self.logger.info(f"Could not write {tags[1]}")
             return False
         printBoldYellow(f"Wrote True to {tags[1]}")
+        if not result and len(tags) > 2 and tags[2]:
+            if not self._clearTriggerWithNotOk(tags[2], stateAtStart):    # rule (a): OK, Done, then Check
+                return False
         self.logger.info(f"Performed action for, and wrote to tags {tags}")
         return True
 
