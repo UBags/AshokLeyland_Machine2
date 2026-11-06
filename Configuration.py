@@ -2728,6 +2728,8 @@ class CosThetaConfigurator():
     PLC_IP_KEY = "plc.ip"
     PLC_DEBUG_KEY = "plc.debug"
     PLC_SLEEPTIME_BETWEEN_OK_AND_DONE_KEY = "plc.sleeptime.between.ok.and.done"
+    PLC_SLEEPTIME_BETWEEN_DONE_AND_REREAD_KEY = "plc.sleeptime.between.done.and.re_read"
+    PLC_SLEEPTIME_BETWEEN_DONE_AND_RESET_DONE_KEY = "plc.sleeptime.between.done.and.reset_done"
     PLC_VISION_RESULT_RESET_DELAY_KEY = "plc.vision.result.reset.delay.sec"
     PLC_HANDSHAKE_RESET_DELAY_KEY = "plc.handshake.reset.delay.sec"
 
@@ -2967,9 +2969,8 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPlcHandshakeResetDelay(cls) -> float:
-        """Seconds after a PLC handshake before the IOServer resets its tags (plc.handshake.reset.delay.sec, 0.4):
-        rules (a)-(d) - Check-Done-OK after a NOT OK (Done) or an OK (Check, Done, OK), Set-Value after the value was
-        read (Set False, Value 0.0), a press Done after it was read. Read at each use, so a change applies at once."""
+        """Seconds after the PC has read a torque value or a press Done before it resets those tags
+        (plc.handshake.reset.delay.sec, 0.4): Set False and Value 0.0; Done False. Read at each use."""
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_HANDSHAKE_RESET_DELAY_KEY,
                                                                 default="0.4")))
@@ -2984,11 +2985,32 @@ class CosThetaConfigurator():
 
     @classmethod
     def getPlcSleepTimeBetweenOKAndDone(cls) -> float:
+        """Pause after <Check>OK is written, before the trigger and Done (plc.sleeptime.between.ok.and.done)."""
         try:
             return float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_OK_AND_DONE_KEY,
-                                                       default="0.2"))
+                                                       default="0.05"))
         except Exception as e:
-            return 0.2
+            return 0.05
+
+    @classmethod
+    def getPlcSleepTimeBetweenDoneAndReRead(cls) -> float:
+        """NOT OK: how long Done stays True before it is set False and the state goes back to the take-picture state
+        (plc.sleeptime.between.done.and.re_read). Read at each use."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(
+                CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_DONE_AND_REREAD_KEY, default="0.1")))
+        except Exception as e:
+            return 0.1
+
+    @classmethod
+    def getPlcSleepTimeBetweenDoneAndResetDone(cls) -> float:
+        """OK: how long Done stays True before it is set False and the state moves on
+        (plc.sleeptime.between.done.and.reset_done). Read at each use."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(
+                CosThetaConfigurator.PLC_SLEEPTIME_BETWEEN_DONE_AND_RESET_DONE_KEY, default="0.4")))
+        except Exception as e:
+            return 0.4
 
     @classmethod
     def getPlcReadInterval(cls) -> float:

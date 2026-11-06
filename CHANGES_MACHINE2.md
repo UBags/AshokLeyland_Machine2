@@ -1913,3 +1913,53 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
 - `plc.handshake.reset.delay.sec` comment in the three properties files: the order.
 - **Verified:** fault scenarios Siemens 120/120, Allen-Bradley 119/119; field reproduction: pulse PLC retry acted on, cycle
   moves on; hold-to-trigger PLC one picture per press; held trigger 1 picture in 8 s; Mock-PLC window 14/14 on both vendors.
+
+## 80. Result handshake as one sequence before the state changes; "trigger read False first" rule removed (2026-11-06)
+- **Sequence (user), vision checks and the QR code, each write retried until it succeeds, all before the state changes:**
+
+  | Step | NOT OK | OK |
+  |---|---|---|
+  | 1 | OK = False | OK = True |
+  | 2 | pause `plc.sleeptime.between.ok.and.done` = 0.05 s (was 0.2) | same |
+  | 3 | Check = False | Check = False |
+  | 4 | Done = True | Done = True |
+  | 5 | pause `plc.sleeptime.between.done.and.re_read` = 0.1 s (new) | pause `plc.sleeptime.between.done.and.reset_done` = 0.4 s (new) |
+  | 6 | Done = False | Done = False |
+  | 7 | Check = False again | OK = False |
+  | 8 | state back to the take-picture state (Check and Done both False there) | next state |
+
+  QR code NOT OK (settings not written) only: after step 7 CheckQRCode = True again (the PC arms the QR read), then
+  back to READ_QR_CODE. The sequence stops if the cycle is aborted meanwhile.
+- `perform_write_state_action` writes the whole sequence; the write loop changes the state after it returns. The
+  delayed Check-Done-OK resets of sections 78/79 (`scheduleVisionResultReset`) are no longer called (kept);
+  `plc.handshake.reset.delay.sec` (0.4 s) now only times the torque Set/Value and press Done resets, unchanged.
+- **"Trigger read False first" rule removed (user):** after a NOT OK the take-picture state acts on the trigger as soon as
+  it reads True. Its methods (`triggerIgnoredUntilReset`, `_setAwaitingTriggerReset`, `_noteTriggerStillHeld`) are kept,
+  no longer called. **PLC requirement this leaves:** the PLC must raise each Check once per 2HB press and let the PC's
+  False stand. A PLC that sets Check True again by itself after the PC cleared it (2HB still held when the NOT OK
+  arrives, or a program that holds Check while the step is active) gets the picture retaken at once; with a held Check,
+  every 0.5-1 s (field issue 2).
+- **PLC restart detection: fallback reference (user's choice).** With these sequences the PC clears every trigger before
+  the state moves on, so between steps no PLC-raised tag is True and the rule of section 74+ (the last PLC_PC tag the
+  PLC raised, still True after the reconnect = no restart) had nothing to read: every connection loss between steps
+  was taken for a PLC restart and aborted the cycle (found by fault scenario I1). Now, when no PLC-raised tag is known
+  to be True during a cycle, `PC_PLC_LH_RH_Selection` decides: the PC records the side it wrote in state 2 (1 / 2); after
+  the reconnect, the same value -> the PLC kept its memory, the cycle carries on; another value (0 after a restart) ->
+  restart, abort and reset as before. **PLC requirement:** DB101 (Siemens) must not be retentive, so that a restart
+  sets the side back to 0; on the Allen-Bradley, Logix controller tags normally keep their values through a power cycle,
+  so there a restart between steps is not detected by this fallback.
+- **Fault scenario G rewritten:** G1 OK and G2 NOT OK check the order, how long Done stays True (0.4 / 0.1 s), that the
+  state changes only after the last write, and (G2) no picture without a 2HB press, one per press; G3-G7 unchanged.
+  The held-trigger check was removed with the rule. Scenario I: I1-I3 expect the fallback reference (I1 side still 1 ->
+  carry on; I3 side reads 0 -> restart detected).
+- **Verified:**
+
+  | Run | Allen-Bradley | Siemens |
+  |---|---|---|
+  | Fault scenarios A-I | 118/118 | 119/119 |
+  | Mutations of G (Siemens): Check after Done / Done never False / NOT OK holding Done 0.4 s | | caught (G1-G2 / abort / G2 timing) |
+  | Scenario I without the fallback (before it was added) | I1 failed: connection loss between steps aborted the cycle | same |
+  | Two full cycles; DryRun_PLCDataIO; logging | exact; 38/38; 37/37 | exact; 38/38; 37/37 |
+  | Mock-PLC / Real-PLC windows (both folders) | 14/14, 7/7 | 14/14, 7/7 |
+  | Integrated all-servers cycle | DB row unchanged (DOSTPLUS/RHS/2.5T, 19.08/19.03/2.41, all OK, 30/15/19/1/1, True/False) | identical |
+  | Field reproduction (rule removed) | PLC raising Check once per press: retry acted on, cycle moves on. 2HB still held when the NOT OK arrives: one extra picture during the hold. PLC holding Check: 13 pictures in 8 s | |
