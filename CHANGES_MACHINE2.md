@@ -2129,3 +2129,31 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   `DryRun_DB_Indexes_And_Day_Folder.py` (X1 one index per column, duplicates dropped; X2 no REINDEX, the new QR code
   found at once, idx_qr_code usable; X3 a scan's duplicate check does not re-create the database - mutation: the old
   call -> X3 fails; D1 the folders move to the new day). Both folders.
+
+## 83. Redis health check; PLC interface specification, HLD and LLD in docs/ (2026-11-06)
+
+- **Redis health check (architecture review item 7):** `checkRedisHealth()` (utils/RedisUtils.py) writes a token to
+  `redis.healthcheck.q` (a stream used by nothing else, maxlen 10), reads that entry back, compares and deletes it.
+  - Heartbeat server: a thread runs it every `redis.health.check.interval.sec` (new, 60 s; 10 s while failing). On
+    failure: console message, file log, siren, reconnect. The result goes to the frontend (`redisStatus`: notice
+    "Redis is not storing data: restart the PC") and to the IOServer (`redis` in the server statuses: the next cycle
+    is held with "Redis not storing data"; a QR read in progress is aborted back to READ_QR_CODE, as for the other
+    holds).
+  - MainProgram: runs it once after clearing the queues; the application does not start if Redis does not store.
+  - Limitation (honest): when Redis stops storing, the messages that carry "redis down" to the frontend and the
+    IOServer cannot be delivered either. What the check really adds is the refusal to start and the heartbeat
+    server's siren and console message; the hold and the notice work only if Redis is partly working (for example
+    out of memory with `noeviction`, where small writes may still pass).
+- **docs/PLC_Interface_Spec.md** (review item 1): the full tag table with Siemens addresses and writers; protocol
+  v1 as built (handshake order, timings and the properties that set them, value / event states, the PC writes to
+  PLC_PC tags, abort, restarts, server-down rules); protocol v2 proposal (every tag has one writer, four-phase
+  request / acknowledge, acknowledge tags for torque and press events, optional request number, timeouts on both
+  sides, proposed addresses for the 7 new tags to be confirmed by the PLC programmer, migration behind
+  `plc.handshake.protocol`); sign-off table. v2 is not implemented.
+- **docs/HLD.md** and **docs/LLD.md**: processes, queues, Redis keys, the cycle, failure handling, configuration,
+  data model, IOServer threads and state table, message schemas, tests.
+- Docstring of `perform_write_state_action`: the NOT OK hold is 0.3 s (the property value), not 0.1 s.
+- **Dry runs:** `DryRun_Heartbeat_And_Startup.py` R1-R5 (healthy check; check through the heartbeat server; Redis
+  out of memory -> failure with the reason; recovery; MainProgram runs the check before starting any process);
+  fault scenario J8 (redis down -> next cycle held at READ_QR_CODE; redis back -> cycle starts). `_plc_sim.py`
+  heartbeat includes redis. Both folders.

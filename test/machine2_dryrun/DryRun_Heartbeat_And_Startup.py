@@ -103,6 +103,7 @@ def servers():
 
 
 threading.Thread(target=servers, daemon=True).start()
+C.getRedisHealthCheckInterval = classmethod(lambda cls: 1.0)       # R: every 1 s here (60 s in production)
 hb = HeartbeatAndAlarmServer()
 hb.start()
 
@@ -139,6 +140,31 @@ sendCamera.set()
 ok = wait_for(lambda: latest(RU.hb2ioq).get(RU.connectionStatusKeyString) == RU.ALIVE, 2 * INTERVAL + 3)
 check("H8 camera back: combined ALIVE again", ok, latest(RU.hb2ioq))
 stopSending.set()
+
+# ---------------------------------------------------------------- R Redis health check (2026-11-06, section 83)
+print("\n=== R. Redis health check (write to a stream nothing else uses, read back) ===", flush=True)
+healthy, why = RU.checkRedisHealth(r)
+check("R1 checkRedisHealth on a working Redis: OK, and the check entry is not left behind",
+      healthy and r.xlen(RU.REDIS_HEALTH_CHECK_STREAM) == 0, why)
+check("R2 the heartbeat server reports Redis ALIVE to the IOServer and the frontend",
+      wait_for(lambda: latest(RU.hb2ioq).get(RU.redisServerStatusKeyString) == RU.ALIVE
+               and latest(RU.hb2feq).get(RU.redisServerStatusKeyString) == RU.ALIVE, 5) and hb.redisChecks >= 1,
+      (latest(RU.hb2ioq), hb.redisChecks))
+r.config_set("maxmemory-policy", "noeviction"); r.config_set("maxmemory", "1")    # Redis answers, but stores nothing
+try:
+    healthy, why = RU.checkRedisHealth(r)
+    check("R3 Redis answering PING but refusing writes: the check fails (PING alone would pass)",
+          (not healthy) and "memory" in why.lower() and r.ping(), why)
+    check("R3 the heartbeat server sees it within its retry interval", wait_for(lambda: hb.redisHealthy is False, 5),
+          hb.redisHealthReason)
+finally:
+    r.config_set("maxmemory", "0")
+check("R4 Redis storing again: the heartbeat server reports it healthy again",
+      wait_for(lambda: hb.redisHealthy is True, 12) and
+      wait_for(lambda: latest(RU.hb2ioq).get(RU.redisServerStatusKeyString) == RU.ALIVE, 5), latest(RU.hb2ioq))
+src = (ROOT / "MainProgram.py").read_text(encoding="utf-8")
+check("R5 MainProgram checks Redis (write / read back) at start-up, after clearing it, before any server starts",
+      "checkRedisHealth(redisConnection)" in src.split("def main()")[1].split("Process(target=startTheLoggingServer")[0])
 hb.stopped = True
 
 # ---------------------------------------------------------------- H9 MainProgram import does not flush Redis

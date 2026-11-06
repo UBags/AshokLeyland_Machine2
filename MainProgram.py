@@ -315,6 +315,15 @@ def main():
         printBoldRed(f"Queues have to work properly for the application to work. Hence, exiting...")
         sys.exit(0)
 
+    # Start-up check of Redis beyond the PING above: it must also store data (write to a stream nothing else uses and
+    # read it back). The heartbeat server repeats this every redis.health.check.interval.sec while running.
+    redisHealthy, why = checkRedisHealth(redisConnection)
+    if not redisHealthy:
+        printBoldRed(f"Redis answers but does not store data ({why}).")
+        printBoldRed(f"Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
+        sys.exit(1)
+    printBoldGreen("Redis check passed: data written and read back")
+
     currentProcessPIDs = []
 
     # printBoldBlue(f"MainProgram process is {os.getpid()}")

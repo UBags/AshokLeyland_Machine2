@@ -1330,7 +1330,7 @@ class PLCIOServer:
             seen = self._heartbeatServerSeen
         hbAlive = (not seen) or silence <= CosThetaConfigurator.getInstance().getHeartbeatServerSilenceSecs()
         result = {"heartbeat": hbAlive}
-        for name in ("camera", "qrcode", "db", "fe"):
+        for name in ("camera", "qrcode", "db", "fe", "redis"):
             result[name] = statuses.get(name) if hbAlive else None
         return result
 
@@ -1400,8 +1400,17 @@ class PLCIOServer:
             (self.logger.error if camDown else self.logger.info)(message)
             self._audit(message)
 
+        redisDown = st["redis"] is False
+        if redisDown != getattr(self, "_redisDown", False) and (redisDown or st["redis"] is True):
+            self._redisDown = redisDown
+            message = ("Redis not storing data (heartbeat server's check): no new cycle until it is" if redisDown
+                       else "Redis storing data again")
+            (printBoldRed if redisDown else printBoldGreen)(message)
+            (self.logger.error if redisDown else self.logger.info)(message)
+            self._audit(message)
         hold = ("heartbeat server down" if hbDown else "frontend down" if self._frontendDown
-                else "database down" if self._databaseDown else None)
+                else "database down" if self._databaseDown
+                else "Redis not storing data" if getattr(self, "_redisDown", False) else None)
         if hold != self._newCycleHold:
             self._newCycleHold = hold
             message = f"New cycles on hold: {hold}" if hold else "New cycles may start again"
@@ -2205,7 +2214,7 @@ class PLCIOServer:
           2. pause plc.sleeptime.between.ok.and.done (0.05 s)
           3. <Check> trigger = False
           4. <Check>Done = True
-          5. pause - NOT OK: plc.sleeptime.between.done.and.re_read (0.1 s);
+          5. pause - NOT OK: plc.sleeptime.between.done.and.re_read (0.3 s);
                      OK:     plc.sleeptime.between.done.and.reset_done (0.4 s)
           6. <Check>Done = False
           7. NOT OK: <Check> trigger = False again;  OK: <Check>OK = False

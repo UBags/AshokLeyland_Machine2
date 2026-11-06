@@ -1,4 +1,5 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
+import os
 import time
 from typing import Literal, Union, Tuple, Optional
 
@@ -1003,10 +1004,33 @@ def readServerStatusesInIOServerFromHeartbeatServer(redisConnection: redis.clien
     statuses = {"combined": newData.get(connectionStatusKeyString) == ALIVE}
     for name, key in (("camera", cameraServerStatusKeyString), ("qrcode", qrCodeServerStatusKeyString),
                       ("io", ioServerStatusKeyString), ("db", dbServerStatusKeyString),
-                      ("fe", feServerStatusKeyString)):
+                      ("fe", feServerStatusKeyString), ("redis", redisServerStatusKeyString)):
         if key in newData:
             statuses[name] = (newData[key] == ALIVE)
     return statuses
+
+
+REDIS_HEALTH_CHECK_STREAM : str = "redis.healthcheck.q"     # used by nothing else: written and read back to test Redis
+redisServerStatusKeyString : str = "redisstatus"              # hb2io / hb2fe: Redis write / read-back check result
+
+
+def checkRedisHealth(redisConnection: redis.client.Redis) -> Tuple[bool, str]:
+    """Write a unique entry to a stream nothing else uses, read it back by its id, compare, delete it.
+    (True, "") if Redis accepted the write and returned the same data; else (False, why) - not reachable, writes
+    refused (out of memory, persistence error, read-only replica), or different data read back. Catches the cases a
+    PING does not: a Redis that answers but no longer stores."""
+    if redisConnection is None:
+        return False, "no connection"
+    token = f"{time.time():.6f}-{os.getpid()}"
+    try:
+        entryId = redisConnection.xadd(REDIS_HEALTH_CHECK_STREAM, {"token": token}, maxlen=10, approximate=False)
+        found = redisConnection.xrange(REDIS_HEALTH_CHECK_STREAM, min=entryId, max=entryId)
+        redisConnection.xdel(REDIS_HEALTH_CHECK_STREAM, entryId)
+        if not found or found[0][1].get(b"token", b"").decode("utf-8") != token:
+            return False, f"wrote {token}, read back {found!r}"
+        return True, ""
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
 
 
 def setActiveCameraRequest(redisConnection: redis.client.Redis, requestId: Optional[str]) -> None:
@@ -1391,6 +1415,9 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
     return timeOfMessage, decodedOriginalImage, decodedProcessedImage, decodedResult, currentMachineState
 
 # returns 4 things - cameraServerStatus, qrCodeServerStatus, ioServerStatus, dbServerStatus as booleans, in that order
+lastReportedRedisStatus : dict = {"alive": True}     # the Redis check result last received by this process (frontend)
+
+
 def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Redis, block : int = 500,
                                                 withReceived : bool = False):
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
@@ -1426,6 +1453,8 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
         newData = {}
 
     received = cameraServerStatusKeyString in newData
+    if redisServerStatusKeyString in newData:            # Redis write / read-back check (heartbeat server, every 60 s)
+        lastReportedRedisStatus["alive"] = (newData[redisServerStatusKeyString] == ALIVE)
     try:
         cameraServerStatus = (newData[cameraServerStatusKeyString] == ALIVE)
         qrCodeServerStatus = (newData[qrCodeServerStatusKeyString] == ALIVE)
@@ -1826,9 +1855,12 @@ def sendHeartbeatsFromHeartbeatServerToFEServer(redisConnection : redis.client.R
                                                 cameraServerStatus : ConnectionStatusType,
                                                 ioServerStatus : ConnectionStatusType,
                                                 dbServerStatus : ConnectionStatusType,
-                                                aProducer : str = "HeartbeatServer", handshake : bool = False):
+                                                aProducer : str = "HeartbeatServer", handshake : bool = False,
+                                                redisStatus : Optional[ConnectionStatusType] = None):
     data = {cameraServerStatusKeyString: cameraServerStatus, qrCodeServerStatusKeyString : qrCodeServerStatus,
             ioServerStatusKeyString : ioServerStatus, dbServerStatusKeyString : dbServerStatus}
+    if redisStatus is not None:
+        data[redisServerStatusKeyString] = redisStatus
     if not handshake:
         return sendData(redisConnection=redisConnection, data=data, queueName=hb2feq, aProducer=f"{aProducer}")
     else:
@@ -1844,7 +1876,7 @@ def sendCombinedHeartbeatFromHeartbeatServerToIOServer(redisConnection : redis.c
     if serverStatuses:
         for name, key in (("camera", cameraServerStatusKeyString), ("qrcode", qrCodeServerStatusKeyString),
                           ("io", ioServerStatusKeyString), ("db", dbServerStatusKeyString),
-                          ("fe", feServerStatusKeyString)):
+                          ("fe", feServerStatusKeyString), ("redis", redisServerStatusKeyString)):
             if name in serverStatuses:
                 data[key] = serverStatuses[name]
     if not handshake:

@@ -80,7 +80,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (readFrontendNotices, ok, notok, ALIVE, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
+from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -965,7 +965,10 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     @Slot(list)
     def showNotices(self, notices: list):
-        """The notices to show now (empty: none). Shown together, flashing (red / white) every 0.5 s."""
+        """The notices to show now (empty: none): those read from Redis plus the frontend's own (Redis check failed,
+        which cannot travel through Redis reliably). Shown together, flashing (red / white) every 0.5 s."""
+        self._remoteNotices = list(notices)
+        notices = list(getattr(self, "_localNotices", [])) + self._remoteNotices
         text = "\n".join(notices)
         if not notices:
             if self.noticeLabel.isVisible():
@@ -1061,6 +1064,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         now = time.monotonic()
         if received:
             AshokLeylandFrontEnd.lastConnectionStatusReceivedAt = now
+            local = [] if lastReportedRedisStatus["alive"] else ["Redis is not storing data: restart the PC"]
+            if local != getattr(self, "_localNotices", []):
+                self._localNotices = local
+                self.showNotices(getattr(self, "_remoteNotices", []))
         else:
             staleAfter = AshokLeylandFrontEnd.STATUS_STALE_AFTER_INTERVALS * max(
                 CosThetaConfigurator.getInstance().getCombinedHeartbeatConnectionStatusSleepInterval(),

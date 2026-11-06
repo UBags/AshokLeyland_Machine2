@@ -9,7 +9,7 @@ import sys
 
 from Configuration import *
 
-from utils.RedisUtils import (readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, DEAD, readAllHeartbeatsInHeartbeatServer)
+from utils.RedisUtils import (readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, DEAD, readAllHeartbeatsInHeartbeatServer, checkRedisHealth)
 
 CosThetaConfigurator.getInstance()
 
@@ -54,6 +54,11 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
         self.consecutiveDatabaseServerConnectionStatusDown : int = 0
         self.consecutiveFrontendServerConnectionStatusDown : int = 0
 
+        # Redis health: written and read back every redis.health.check.interval.sec (60 s; every 10 s while it fails)
+        self.redisHealthy: bool = True
+        self.redisHealthReason: str = ""
+        self.redisChecks: int = 0
+        self.launchRedisHealthCheckThread()
         self.launchConnectionAlarmMonitoringThread()
         self.launchThreadForBadComponentAlarm()
         logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"************", Logger.SUCCESS)
@@ -85,6 +90,41 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
 
     def clearQueue(self):
         self.processingQueue.queue.clear()
+
+    def launchRedisHealthCheckThread(self):
+        """Redis is very stable, so it is checked only every redis.health.check.interval.sec (60 s): an entry is
+        written to a stream nothing else uses (redis.healthcheck.q) and read back (checkRedisHealth). A failure -
+        Redis not reachable, or reachable but no longer storing (out of memory, persistence error) - is reported in
+        the status messages to the IOServer (no new cycle starts) and the frontend (notice), sounds the siren, and is
+        printed (the central log goes through Redis too). While it fails, it is checked every 10 s."""
+        objRef = self
+
+        def check():
+            interval = CosThetaConfigurator.getInstance().getRedisHealthCheckInterval()
+            while not objRef.stopped:
+                healthy, why = checkRedisHealth(objRef.redisConnectionQ)
+                objRef.redisChecks += 1
+                if healthy != objRef.redisHealthy:
+                    objRef.redisHealthy, objRef.redisHealthReason = healthy, why
+                    if healthy:
+                        printBoldGreen("Redis check: storing data again")
+                    else:
+                        printBoldRed(f"Redis check FAILED: {why}")
+                        objRef.addItem(HeartbeatAndAlarmServer.beepMessage)
+                    try:
+                        logBoth('logInfo' if healthy else 'logCritical', HeartbeatAndAlarmServer.logSource,
+                                "Redis check: OK again" if healthy else f"Redis check FAILED: {why}",
+                                Logger.SUCCESS if healthy else Logger.PROBLEM)
+                    except Exception:
+                        noteSuppressed()
+                if not healthy:
+                    objRef.connectToRedis(forceRenew=True)
+                wait = interval if healthy else min(10.0, interval)
+                end = time.monotonic() + wait
+                while not objRef.stopped and time.monotonic() < end:
+                    time.sleep(0.5)
+
+        threading.Thread(name="Redis Health Check Thread", target=check, daemon=True).start()
 
     def launchConnectionAlarmMonitoringThread(self):
         objRef = self
@@ -151,6 +191,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                         qrCodeServerStatus=ALIVE if objRef.consecutiveQRCodeServerConnectionDown < _MIN_ else DEAD,
                         ioServerStatus=ALIVE if objRef.consecutiveIOServerConnectionStatusDown < _MIN_ else DEAD,
                         dbServerStatus=ALIVE if objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_ else DEAD,
+                        redisStatus=ALIVE if objRef.redisHealthy else DEAD,
                     )
 
                     allok = all([
@@ -159,6 +200,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                         objRef.consecutiveIOServerConnectionStatusDown < _MIN_,
                         objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_,
                         objRef.consecutiveFrontendServerConnectionStatusDown < _MIN_,
+                        objRef.redisHealthy,
                     ])
 
                     # the combined status and each server's own: the IOServer acts per server (camera down -> the
@@ -172,6 +214,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                             "io": ALIVE if objRef.consecutiveIOServerConnectionStatusDown < _MIN_ else DEAD,
                             "db": ALIVE if objRef.consecutiveDatabaseServerConnectionStatusDown < _MIN_ else DEAD,
                             "fe": ALIVE if objRef.consecutiveFrontendServerConnectionStatusDown < _MIN_ else DEAD,
+                            "redis": ALIVE if objRef.redisHealthy else DEAD,
                         },
                     )
 

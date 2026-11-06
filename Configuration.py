@@ -3061,6 +3061,13 @@ class CosThetaConfigurator():
         of the camera server; a check over the timeout is still NOT OK, but its thread cannot be stopped."""
         return cls._boolValue(cls.VISION_CHECK_IN_WORKER_PROCESS_KEY, True)
 
+    REDIS_HEALTH_CHECK_INTERVAL_KEY = "redis.health.check.interval.sec"
+
+    @classmethod
+    def getRedisHealthCheckInterval(cls) -> float:
+        """How often the heartbeat server writes to Redis and reads it back (redis.health.check.interval.sec, 60)."""
+        return cls._floatValue(cls.REDIS_HEALTH_CHECK_INTERVAL_KEY, 60.0, minimum=1.0)
+
     @classmethod
     def getSupervisorRestartDeadProcesses(cls) -> bool:
         """MainProgram restarts a server process that has died (supervisor.restart.dead.processes, True)."""

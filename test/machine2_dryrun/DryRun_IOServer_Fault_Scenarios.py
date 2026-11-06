@@ -1131,6 +1131,15 @@ def run_servers_down():
     QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
     run_steps()
     check("J a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+    # J8 (section 83): the heartbeat server's Redis check fails -> no new cycle (QR read stopped / not asked for)
+    check("J8 at the QR code after the cycle", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
+    HEARTBEAT["redis"] = False
+    check("J8 Redis reported not storing -> QR read stopped, held at READ_QR_CODE",
+          wait_for(lambda: io.newCycleHoldReason() == "Redis not storing data"
+                   and io.machineState.getCurrentState() == MS.READ_QR_CODE, 6)
+          and not wait_for(lambda: io.machineState.getCurrentState() != MS.READ_QR_CODE, 2), io.newCycleHoldReason())
+    HEARTBEAT["redis"] = True
+    check("J8 Redis storing again -> QR read asked for", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
     IOServer.PC_PLC_CycleAborted = ""
     C.getPlcCameraAnswerTimeout = origTimeout
 

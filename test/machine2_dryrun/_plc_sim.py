@@ -82,7 +82,7 @@ def use_machine_settings(mode="Test", **values):
 #   HEARTBEAT["db"] = False         the database server is reported down (likewise "camera", "fe", "qrcode", "io")
 #   HEARTBEAT["silent"] = True      no messages: the heartbeat server is down
 # COSTHETA_DRYRUN_NO_HEARTBEAT_SIM=1: not started (a real heartbeat server is running).
-HEARTBEAT = {"camera": True, "qrcode": True, "io": True, "db": True, "fe": True, "silent": False}
+HEARTBEAT = {"camera": True, "qrcode": True, "io": True, "db": True, "fe": True, "redis": True, "silent": False}
 _HB_THREAD = []
 
 
@@ -98,7 +98,7 @@ def start_heartbeat_sim():
         while True:
             try:
                 if not HEARTBEAT["silent"]:
-                    statuses = {k: (ALIVE if HEARTBEAT[k] else DEAD) for k in ("camera", "qrcode", "io", "db", "fe")}
+                    statuses = {k: (ALIVE if HEARTBEAT[k] else DEAD) for k in ("camera", "qrcode", "io", "db", "fe", "redis")}
                     allok = all(HEARTBEAT[k] for k in ("camera", "qrcode", "io", "db", "fe"))
                     sendCombinedHeartbeatFromHeartbeatServerToIOServer(r, ALIVE if allok else DEAD,
                                                                         serverStatuses=statuses)
