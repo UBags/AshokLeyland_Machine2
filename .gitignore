@@ -50,3 +50,6 @@ test/*_dryrun/integrated_end_of_cycle.png
 # Redis snapshot and a rendered report page (runtime output, not source)
 dump.rdb
 rendered.html
+
+# test output written under "C:/..." by dry runs on Linux (a folder literally named C:)
+C:/
