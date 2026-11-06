@@ -94,7 +94,7 @@ STEPS = [
      ("PLC_PC_CheckSplitPinAndWasher", "PC_PLC_SplitPinAndWasherCheckOK", "PC_PLC_SplitPinAndWasherCheckDone")),
     (11, "Cap", VISION, "PLC_PC_CheckCap",
      MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.WRITE_RESULT_OF_CHECKING_CAP,
-     ("PLC_PC_CheckCap", "PC_PLP_CapCheckOK", "PC_PLC_CapCheckDone")),
+     ("PLC_PC_CheckCap", "PC_PLC_CapCheckOK", "PC_PLC_CapCheckDone")),
     (12, "Bunk for Cap Press", VISION, "PLC_PC_CheckBunk",
      MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS,
      ("PLC_PC_CheckBunk", "PC_PLC_BunkCheckOK", "PC_PLC_BunkCheckDone")),

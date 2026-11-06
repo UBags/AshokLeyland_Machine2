@@ -28,6 +28,7 @@ from typing import Any, Optional, Tuple
 
 READY_TIMEOUT_SECS = 600.0        # loading the models on a cold start can take a while
 STOP_TIMEOUT_SECS = 3.0
+TIMEOUTS_IN_A_ROW_FOR_ALARM = 3   # this many timed-out checks in a row: the checks are too slow on this PC (alarm)
 
 _worker = None
 _workerLock = threading.Lock()
@@ -132,6 +133,7 @@ class VisionCheckWorker:
         self._jobSeq: int = 0
         self.starts: int = 0
         self.timeouts: int = 0
+        self.timeoutsInARow: int = 0       # reset by a check that gives its verdict in time
         self.lastStopReason: str = ""
 
     # ------------------------------------------------------------------------------------------------ process
@@ -228,7 +230,16 @@ class VisionCheckWorker:
                 try:
                     if remaining <= 0 or not self._conn.poll(remaining):
                         self.timeouts += 1
+                        self.timeoutsInARow += 1
                         reason = f"check timed out after {timeout:g} s"
+                        if self.timeoutsInARow >= TIMEOUTS_IN_A_ROW_FOR_ALARM:
+                            # every check times out (e.g. no GPU / a GPU fault on this PC): restarting the worker
+                            # does not help; say so clearly instead of only "timed out" after every reload
+                            reason = (f"{reason} ({self.timeoutsInARow} in a row: vision checks too slow on this PC - "
+                                      f"check the GPU, then restart the application)")
+                            _log('logCritical', f"Vision checks: {self.timeoutsInARow} timed out in a row (limit "
+                                                f"{timeout:g} s). The checks are too slow on this PC; check the GPU "
+                                                f"(nvidia-smi) and restart the application")
                         self._restart(f"{getattr(state, 'name', state)}: {reason}")
                         return False, fallback, fallback, reason
                     message = self._conn.recv()
@@ -238,6 +249,7 @@ class VisionCheckWorker:
                 if message and message[0] == "result" and message[1] == jobId:
                     break
             _, _, allok, processed, original, changes, error = message
+            self.timeoutsInARow = 0
         ImageProcessor.applyStateChanges(changes)
         if error:
             _log('logCritical', f"{getattr(state, 'name', state)}: the check raised {error}")

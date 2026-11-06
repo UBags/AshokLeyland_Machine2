@@ -139,7 +139,9 @@ class GetAndValidateQRCode(GenericQueueProcessor):
             copyOfQRCode = copy.deepcopy(qrCode)
             for index, regexPattern in enumerate(self.regexPatterns):
                 try:
-                    results = re.match(regexPattern, copyOfQRCode)
+                    # the whole code must match (re.match only anchored the start: trailing characters, or two
+                    # scans run together, were accepted)
+                    results = re.fullmatch(regexPattern, copyOfQRCode.strip())
                     if results:
                         qrCodeIsValid = True
                         if printQRCode:

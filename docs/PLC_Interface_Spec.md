@@ -101,7 +101,7 @@ All of these tags are in DB500. The split pin check is on hold until production 
 | `plc.sleeptime.between.done.and.reset_done` | 0.4 | Time Done is held True after an OK result |
 | `plc.sleeptime.between.done.and.re_read` | 0.3 | Time Done is held True after a NOT OK result |
 | `plc.handshake.reset.delay.sec` | 0.4 | Delay before the PC resets a Set or Done tag it has read |
-| `plc.camera.answer.timeout.sec` | 20 | No camera answer in this time means NOT OK |
+| `plc.camera.answer.timeout.sec` | 20 | No camera answer in this time means NOT OK. At least the vision check timeout + 8 s; a smaller value is raised |
 | Vision worker deadline | 12 | A check still running at 12 s is killed and counts as NOT OK |
 
 ## 5. Sequences

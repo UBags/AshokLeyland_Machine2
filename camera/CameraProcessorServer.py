@@ -40,6 +40,7 @@ CosThetaConfigurator.getInstance()
 FIRST_PICTURE : str = "firstPicture"
 SECOND_PICTURE : str = "secondPicture"
 THIRD_PICTURE : str = "thirdPicture"
+NO_PICTURE_REASON : str = "noPictureReason"     # set by TakePictures when it has no (new) picture: the check is NOT OK
 
 # GLOBAL VARIABLES
 logSource = getFullyQualifiedName(__file__)
@@ -287,12 +288,22 @@ class TakePictures(GenericQueueProcessor):
                     Logger.RISK)
             return {timeKeyString: item[timeKeyString] if isinstance(item, dict) else None, FIRST_PICTURE: None,
                     SECOND_PICTURE: None, THIRD_PICTURE: None,
-                    currentMachineStateKeyString: self._requestedState(item), requestIdKeyString: self._requestId(item)}
+                    currentMachineStateKeyString: self._requestedState(item), requestIdKeyString: self._requestId(item),
+                    NO_PICTURE_REASON: "camera not connected"}
         if item is not None:
             try:
+                # Each picture must be a frame that arrived after the request (and after the previous picture):
+                # a stalled stream keeps its last frame, which shows the part where it was before (CHANGES 84)
+                maxWait = CosThetaConfigurator.getInstance().getCameraFrameMaxWait()
+                requestedAt = time.monotonic()
+                frameTime = requestedAt
+                stalled: list = []
                 firstPic: Union[None | np.ndarray] = None
                 try:
-                    _, firstPic = self.camera.getLatestFrame()
+                    got, firstPic, frameTime = self.camera.getFrameAfter(requestedAt, maxWait)
+                    if not got:
+                        stalled.append("first")
+                        frameTime = requestedAt
                 except Exception as e1:
                     logBoth('logWarning', TakePictures.logSource,
                             f"Exception getting first frame: {e1}", Logger.RISK)
@@ -302,7 +313,11 @@ class TakePictures(GenericQueueProcessor):
                 time.sleep(self.gapBetweenPictures)
                 secondPic : Union[None | np.ndarray] = None
                 try:
-                    _, secondPic = self.camera.getLatestFrame()
+                    got, secondPic, t2 = self.camera.getFrameAfter(frameTime, maxWait)
+                    if got:
+                        frameTime = t2
+                    else:
+                        stalled.append("second")
                 except Exception as e2:
                     logBoth('logWarning', TakePictures.logSource,
                             f"Exception getting second frame: {e2}", Logger.RISK)
@@ -311,7 +326,9 @@ class TakePictures(GenericQueueProcessor):
                 time.sleep(self.gapBetweenPictures)
                 thirdPic: Union[None | np.ndarray] = None
                 try:
-                    _, thirdPic = self.camera.getLatestFrame()
+                    got, thirdPic, _ = self.camera.getFrameAfter(frameTime, maxWait)
+                    if not got:
+                        stalled.append("third")
                 except Exception as e3:
                     logBoth('logWarning', TakePictures.logSource,
                             f"Exception getting third frame: {e3}", Logger.RISK)
@@ -330,8 +347,13 @@ class TakePictures(GenericQueueProcessor):
                 #         reduced_image = img
                 #     else:
                 #         reduced_image = cv2.resize(img, (self.targetWidth, self.targetHeight), interpolation=cv2.INTER_AREA)
-                return {timeKeyString : item[timeKeyString], FIRST_PICTURE : firstPic, SECOND_PICTURE : secondPic, THIRD_PICTURE : thirdPic, currentMachineStateKeyString : item[currentMachineStateKeyString],
+                answer = {timeKeyString : item[timeKeyString], FIRST_PICTURE : firstPic, SECOND_PICTURE : secondPic, THIRD_PICTURE : thirdPic, currentMachineStateKeyString : item[currentMachineStateKeyString],
                         requestIdKeyString: self._requestId(item)}
+                if stalled:
+                    reason = f"camera stream stalled: no new frame in {maxWait:g} s ({', '.join(stalled)} picture)"
+                    logBoth('logCritical', TakePictures.logSource, f"{reason}; the check is NOT OK", Logger.PROBLEM)
+                    answer[NO_PICTURE_REASON] = reason
+                return answer
             except Exception as e:
                 if self.debugOtherExceptions:
                     logBoth('logCritical', TakePictures.logSource,
@@ -539,10 +561,17 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
             ]
 
             requestId = item.get(requestIdKeyString) if isinstance(item, dict) else None
-            if currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE:
-                ImageProcessor.prepareForKnuckleCheck()
-            allok, chosenProcessedImage, chosenOriginalImage, reason = self.runAssessment(currentMachineState,
-                                                                                          imagesToBeProcessed)
+            noPictureReason = item.get(NO_PICTURE_REASON)
+            if noPictureReason is None and all(pic is None for pic in imagesToBeProcessed):
+                noPictureReason = "no picture from the camera"
+            if noPictureReason:
+                # no (new) picture: NOT OK without running a check on it (a check on an old frame could pass)
+                allok, chosenProcessedImage, chosenOriginalImage, reason = False, None, None, noPictureReason
+            else:
+                if currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE:
+                    ImageProcessor.prepareForKnuckleCheck()
+                allok, chosenProcessedImage, chosenOriginalImage, reason = self.runAssessment(currentMachineState,
+                                                                                              imagesToBeProcessed)
             if allok:
                 logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: OK", Logger.SUCCESS)
             else:

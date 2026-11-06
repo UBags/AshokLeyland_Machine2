@@ -2157,3 +2157,58 @@ It is serialised, logged and audited ("CYCLE ABORTED in state ...: reason"). `ab
   out of memory -> failure with the reason; recovery; MainProgram runs the check before starting any process);
   fault scenario J8 (redis down -> next cycle held at READ_QR_CODE; redis back -> cycle starts). `_plc_sim.py`
   heartbeat includes redis. Both folders.
+
+## 84. Review fixes: stale camera frames, abort during a handshake write, shutdown backup, toggle thread, timeouts (2026-11-07)
+
+From the code review of 2026-11-07 (architecture items not included).
+
+- **No check on an old camera frame (a1).** `RTSPCam.getLatestFrame()` returned the last frame however old: while the
+  stream stalled (ffmpeg alive, no frames) the last frame was kept through the 5 s read timeouts until the 15 s
+  watchdog, so a picture taken then showed the part where it was before (an earlier station), and the three pictures
+  of a 2-of-3 vote could be the same old frame - a possible false OK.
+  - `RTSPCam` keeps `latestCamFrameAndTime` (frame, arrival time, set together); new `getFrameAfter(afterTime,
+    maxWaitSecs)` returns only a frame that arrived after `afterTime`. `getLatestFrame()` is unchanged (other callers).
+  - `TakePictures`: each picture is a frame that arrived after the request and after the previous picture, waiting at
+    most `camera.frame.max.wait.sec` (new, 1.0 s; about 20 frames a second normally). None in time: the answer
+    carries `noPictureReason` ("camera stream stalled: no new frame in 1 s (second, third picture)"); camera not
+    connected: "camera not connected".
+  - `ConverterScalerAndProcessor`: with a `noPictureReason`, or no picture at all, the vision check is NOT run;
+    NOT OK to the IOServer and the frontend with the request id, the reason on the picture and in the "check" notice.
+- **Abort during a handshake write (a2).** `perform_write_state_action` checked the state, then wrote: an abort
+  (emergency, frontend, heartbeat) could reset every tag in between, and the write in flight landed after the reset
+  (e.g. Done=True left set for the next cycle). `_writeBoolUntilWritten` now checks the state and writes while holding
+  `_abortLock` (abortCycle holds it for the whole abort); the lock is released between retries, so an abort waits at
+  most for one write in progress, never for the retries while the PLC is unreachable.
+- **Database backup at shutdown (a3).** `stopProcesses()` ended with `sys.exit(1)`; called from the `monitorStop`
+  thread that only ended the thread (SystemExit is not an Exception), so the `doBackup()` after it never ran -
+  backups were made only at start. New `exitAfterwards` (default True; monitorStop passes False); the backup is
+  logged and guarded. The Redis connection is closed once, after the loop (it was closed inside the loop).
+- **PC_PLC_ConnectionStatus toggle in its own thread (a5).** It was toggled by the server-status thread, which also
+  runs the aborts for a server that is down (abortCycle: about 1-4 s), so the toggle stopped for that long.
+- **Camera answer timeout at least the vision check timeout + 8 s (a6).** `getPlcCameraAnswerTimeout()` raises a
+  smaller `plc.camera.answer.timeout.sec` to `<vendor>.vision.check.timeout.sec` + 8 s (stopping a timed-out worker
+  up to 2 x 3 s, and the pictures), printed once. 12 + 8 = 20: the present values are unchanged.
+- **Vision checks timing out in a row (a7).** `VisionCheckWorker`: from the 3rd timeout in a row the reason (shown
+  on the frontend) and a critical log say "vision checks too slow on this PC - check the GPU, then restart the
+  application"; a check that answers in time resets the count. (Restarting the worker cannot help then.)
+- **Smaller items:**
+  - QR code validation: `re.fullmatch` on the stripped code (`re.match` accepted trailing characters, or two scans
+    run together); the date dots in the 6 patterns are escaped (`\.`; `.` matched any character). The sample codes
+    in the repo still match. Check with a few real scans on the plant PC.
+  - `checkIfQRCodeExists`: `connect_timeout=5` and the connection closed (psycopg2's `with connection` does not close).
+  - `Configuration.py`: `getPcPlcNoOfRotation1CCWTagName` / `...CWTagName` defined once (the earlier, shadowed copy
+    removed; the one in use is unchanged).
+  - `PC_PLC_CapCheckOK` is the attribute's name (was `PC_PLP_CapCheckOK`, kept as an alias); test windows and dry
+    runs use the new name.
+  - Comments: NOT OK Done hold is 0.3 s (three comments still said 0.1 s).
+  - `dump.rdb` (a Redis snapshot) and `rendered.html` (a rendered report page) no longer tracked; in `.gitignore`.
+    A `git pull` deletes them from the laptop's working folder; nothing uses them.
+- **Dry runs (both folders):**
+  - New `DryRun_Camera_Stale_Frames.py` (22 checks): `getFrameAfter` (new frame only, old one refused, nothing while
+    the camera is unavailable), `TakePictures` (live: three different new frames; stalled; stall after the first
+    picture; not connected), the pipeline (NOT OK with the reason, check not run; with pictures run as before), the
+    timeouts-in-a-row reason and its reset, the camera answer timeout raised.
+  - Fault scenarios K1 (abort while Done=True is being written: Done False afterwards) and K2 (the toggle goes on
+    during a 5 s abort). With the old code K1 and K2 fail.
+  - `DryRun_Heartbeat_And_Startup.py` H10: the stop command in monitorStop ends the processes and then backs up the
+    database. With the old code it fails (no backup).

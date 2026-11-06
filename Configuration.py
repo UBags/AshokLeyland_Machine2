@@ -3032,8 +3032,37 @@ class CosThetaConfigurator():
     def getPlcCameraAnswerTimeout(cls) -> float:
         """Seconds the IOServer waits for the camera's answer to a picture request before it reports the check NOT OK
         to the PLC (plc.camera.answer.timeout.sec, 20). Longer than the vision check timeout plus the picture-taking
-        time, so that the camera server's own NOT OK (check timed out) normally comes first. Read at each use."""
-        return cls._floatValue(cls.PLC_CAMERA_ANSWER_TIMEOUT_KEY, 20.0, minimum=1.0)
+        time, so that the camera server's own NOT OK (check timed out) normally comes first. Read at each use.
+        The order is enforced: a value below getMinimumPlcCameraAnswerTimeout() (the vision check timeout plus the
+        time to stop a timed-out worker and to take the pictures) is raised to it, and that is printed once."""
+        configured = cls._floatValue(cls.PLC_CAMERA_ANSWER_TIMEOUT_KEY, 20.0, minimum=1.0)
+        minimum = cls.getMinimumPlcCameraAnswerTimeout()
+        if configured >= minimum:
+            cls._cameraAnswerTimeoutRaisedFrom = None
+            return configured
+        if getattr(cls, "_cameraAnswerTimeoutRaisedFrom", None) != configured:
+            cls._cameraAnswerTimeoutRaisedFrom = configured
+            print(f"{cls.PLC_CAMERA_ANSWER_TIMEOUT_KEY}={configured:g} is below the vision check timeout plus "
+                  f"{cls.CAMERA_ANSWER_TIMEOUT_MARGIN_SECS:g} s; {minimum:g} s is used", flush=True)
+        return minimum
+
+    CAMERA_FRAME_MAX_WAIT_KEY = "camera.frame.max.wait.sec"
+
+    @classmethod
+    def getCameraFrameMaxWait(cls) -> float:
+        """Seconds the camera server waits for a frame that arrived after the picture request (and after the previous
+        picture) before it gives up: the check is then NOT OK, "camera stream stalled" (camera.frame.max.wait.sec, 1.0;
+        the camera sends about 20 frames a second). Read at each picture."""
+        return cls._floatValue(cls.CAMERA_FRAME_MAX_WAIT_KEY, 1.0, minimum=0.1)
+
+    # time to stop a timed-out vision check worker (terminate, then kill: up to 2 x 3 s) and to take the 3 pictures
+    CAMERA_ANSWER_TIMEOUT_MARGIN_SECS: float = 8.0
+
+    @classmethod
+    def getMinimumPlcCameraAnswerTimeout(cls) -> float:
+        """The shortest camera answer timeout that still lets the camera server's own NOT OK (check timed out) arrive
+        first: <vendor>.vision.check.timeout.sec + CAMERA_ANSWER_TIMEOUT_MARGIN_SECS (12 + 8 = 20 s)."""
+        return cls.getVisionCheckTimeout() + cls.CAMERA_ANSWER_TIMEOUT_MARGIN_SECS
 
     @classmethod
     def getHeartbeatServerSilenceSecs(cls) -> float:
@@ -3121,15 +3150,8 @@ class CosThetaConfigurator():
 
     # ==================== Rotation Settings Tag Getters ====================
 
-    @classmethod
-    def getPcPlcNoOfRotation1CCWTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CCW_KEY,
-                                             default="PC_PLC_NoOfRotation1CCW")
-
-    @classmethod
-    def getPcPlcNoOfRotation1CWTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_OF_ROTATION1_CW_KEY,
-                                             default="PC_PLC_NoOfRotation1CW")
+    # getPcPlcNoOfRotation1CCWTagName / getPcPlcNoOfRotation1CWTagName: defined once, further down (they were
+    # defined twice; the later definition, which strips the value, was the one in use)
 
     @classmethod
     def getPcPlcNoOfRotation2CCWTagName(cls) -> str:

@@ -76,6 +76,9 @@ class RTSPCam():
         self.maxAllowedNoneFrameCountsInCamera = CosThetaConfigurator.getInstance().getMaxAllowedNoneFrameCountsInCamera()
 
         self.latestCamFrame: Union[None, np.ndarray] = None
+        # (frame, time.monotonic() when it arrived), set together so that a reader never pairs a frame with another
+        # frame's time; used by getFrameAfter() to refuse a frame from before a picture request (a stalled stream)
+        self.latestCamFrameAndTime: Tuple[Union[None, np.ndarray], float] = (None, 0.0)
 
         self.width = 0
         self.height = 0
@@ -584,8 +587,10 @@ class RTSPCam():
                             )
                             if frame is not None:
                                 objRef.latestCamFrame = frame
+                                objRef.latestCamFrameAndTime = (frame, time.monotonic())
                             else:
                                 objRef.latestCamFrame = None
+                                objRef.latestCamFrameAndTime = (None, 0.0)
                             if frameCount % 4000 == 0:
                                 logBoth('logConsiderAction', RTSPCam.logSource,
                                         f"In RTSPCam.{objRef.name}, got frame {frameCount}",
@@ -711,6 +716,23 @@ class RTSPCam():
             frameCopy = copy.deepcopy(self.latestCamFrame)
             return True, frameCopy
         return False, None
+
+    def getFrameAfter(self, afterTime: float, maxWaitSecs: float) -> Tuple[bool, Union[None, np.ndarray], float]:
+        """A frame that ARRIVED after afterTime (time.monotonic()), waiting at most maxWaitSecs for one:
+        (True, a copy of the frame, its arrival time), or (False, None, 0.0) if none came in time.
+        getLatestFrame() returns the last frame however old it is: while the stream stalls, the last frame is kept
+        until the read timeouts / the 15 s watchdog disconnect the camera, so a picture taken then showed the part
+        where it was before (an earlier station). Taking the pictures with this, each one after the request (and
+        after the previous picture) refuses such a frame: the check is then NOT OK ("camera stream stalled")."""
+        deadline = time.monotonic() + max(0.0, maxWaitSecs)
+        while True:
+            if self.camAvailable:
+                frame, arrived = self.latestCamFrameAndTime
+                if frame is not None and arrived > afterTime:
+                    return True, copy.deepcopy(frame), arrived
+            if time.monotonic() >= deadline:
+                return False, None, 0.0
+            time.sleep(0.005)
 
     def isConnected(self) -> bool:
         if self.connected:

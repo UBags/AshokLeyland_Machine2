@@ -162,7 +162,10 @@ def checkIPs():
 # printBoldBlue(f"MainProgram process is {os.getpid()}")
 # os.system(f"start /B start /wait cmd.exe @cmd /k python MainSubProgram.py {currentMode} {currentBatchNumber} {username} {rolename}")
 
-def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool = True):
+def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool = True, exitAfterwards : bool = True):
+    """Send the stop command, then end every server process. exitAfterwards: sys.exit() at the end (the callers in
+    the main thread). monitorStop passes False: it runs in a thread, where sys.exit() only ends the thread (SystemExit
+    is not an Exception, so its except did not catch it either) - and the database backup after it never ran."""
     global redisConnection
     if endingSplashScreenBeingShown:
         time.sleep(CosThetaConfigurator.getInstance().getEndScreenTime() + 2)
@@ -177,14 +180,15 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
                 # p.terminate()
         except Exception:
             noteSuppressed()
-        # Close Redis connections
-        try:
-            if redisConnection:
-                redisConnection.close()
-        except Exception:
-            noteSuppressed()
+    # Close the Redis connection (once, after every process was ended; it was closed inside the loop)
+    try:
+        if redisConnection:
+            redisConnection.close()
+    except Exception:
+        noteSuppressed()
     printBoldGreen("All processes shut down. Closing terminal window.")
-    sys.exit(1)
+    if exitAfterwards:
+        sys.exit(1)
 
 def monitorStop(redisConnectionForMonitoringStop: redis.client.Redis, currentProcesses: list, startingTime: float):
     global houLimit, mouLimit
@@ -204,7 +208,7 @@ def monitorStop(redisConnectionForMonitoringStop: redis.client.Redis, currentPro
                 #     except:
                 #         pass
                 # printBoldGreen("All processes shut down.")
-                stopProcesses(currentProcesses)
+                stopProcesses(currentProcesses, exitAfterwards=False)
                 break
         except Exception as e:
             printBoldRed(e)
@@ -239,7 +243,12 @@ def monitorStop(redisConnectionForMonitoringStop: redis.client.Redis, currentPro
         # printRedisQueueLengths(redis_connection=redisConnectionForMonitoringStop)
 
         time.sleep(10)
-    doBackup()
+    # Database backup at shutdown (it never ran before 2026-11-07: see stopProcesses)
+    try:
+        printBoldBlue("Backing up database...")
+        doBackup()
+    except Exception as e:
+        printBoldRed(f"Could not backup database at shutdown due to {e}")
     # try:
     #     updateAndEncryptHoU(False)
     # except:

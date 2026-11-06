@@ -184,5 +184,35 @@ check("H9 importing MainProgram (what a spawned server process does) leaves Redi
       r.get("dryrun:H9:marker") == b"kept", (probe.returncode, probe.stderr[-300:]))
 r.delete("dryrun:H9:marker")
 
+# ---------------------------------------------------------------- H10 database backup at shutdown (2026-11-07)
+print("\n=== H10 shutdown: stop command -> processes ended -> database backup ===", flush=True)
+probeCode = r'''
+import sys, threading, time, types
+try:
+    import tkinter                      # the popups need it; not used by the shutdown path tested here
+except ImportError:
+    stub = types.ModuleType("frontend.SimplePopups")
+    for name in ("showApplicationStartingScreen", "chooseMode", "showErrorMessage", "showMessage",
+                 "flashSimpleMessage", "login"):
+        setattr(stub, name, lambda *a, **k: None)
+    sys.modules["frontend.SimplePopups"] = stub
+import MainProgram as M
+calls = []
+M.getStopCommandFromQueue = lambda conn, block=1: ("t", True)
+M.sendStopCommand = lambda conn, aProducer="": calls.append("stop sent")
+M.doBackup = lambda *a, **k: calls.append("backup")
+M.CosThetaConfigurator.getEndScreenTime = classmethod(lambda cls: 0)
+_sleep = time.sleep
+M.time.sleep = lambda s: _sleep(min(s, 0.05))
+t = threading.Thread(target=M.monitorStop, args=(None, [], time.time()), daemon=True)
+t.start(); t.join(10)
+print("CALLS", calls, "ALIVE", t.is_alive())
+'''
+probe = subprocess.run([sys.executable, "-c", probeCode], cwd=str(ROOT), capture_output=True, text=True, timeout=120)
+line = [l for l in probe.stdout.splitlines() if l.startswith("CALLS")]
+check("H10 stop command in MainProgram's monitorStop thread: processes ended, then the database backed up",
+      bool(line) and "'stop sent'" in line[0] and "'backup'" in line[0] and "ALIVE False" in line[0],
+      line[0] if line else probe.stderr[-400:])
+
 print(f"\nRESULT {sum(results)}/{len(results)} checks passed", flush=True)
 os._exit(0 if all(results) else 1)

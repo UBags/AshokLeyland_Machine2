@@ -80,6 +80,12 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      I5: reset done while the link is down -> incomplete; completed as soon as the link is back.
      I6: a tag the PLC does not take (write ignored) -> the reset reports it (written and read back, 5 attempts).
 
+  J. (see run_servers_down) camera answer timeout, request ids, servers down.
+
+  K. Abort races (2026-11-07)
+     K1: an abort while Done=True is being written: the write lands, then the abort's reset sets Done False.
+     K2: PC_PLC_ConnectionStatus keeps toggling while an abort runs on the heartbeat status thread.
+
 COSTHETA_DRYRUN_SCENARIOS=G (or F,G ...) runs only those groups (A-E together).
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
@@ -202,7 +208,7 @@ VISION = [  # (trigger, Done, OK) in Machine 2 order, with the PLC-driven steps 
     ("NOBUNK", IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckDone, IOServer.PC_PLC_NoBunkCheckOK),
     ("TORQUE2", None, None, None),
     ("SPLITPIN", IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone, IOServer.PC_PLC_SplitPinAndWasherCheckOK),
-    ("CAP", IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone, IOServer.PC_PLP_CapCheckOK),
+    ("CAP", IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone, IOServer.PC_PLC_CapCheckOK),
     ("BUNK_CAPP", IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone, IOServer.PC_PLC_BunkCheckOK),
     ("CAP_PRESS", None, None, None),
     ("FREE_ROT", None, None, None),
@@ -336,7 +342,7 @@ def run_scenarios():
         "PLC_PC_ComponentPressDone",
         "PLC_PC_CheckNoBunk", "PC_PLC_NoBunkCheckOK", "PC_PLC_NoBunkCheckDone",
         "PLC_PC_CheckSplitPinAndWasher", "PC_PLC_SplitPinAndWasherCheckOK", "PC_PLC_SplitPinAndWasherCheckDone",
-        "PLC_PC_CheckCap", "PC_PLP_CapCheckOK", "PC_PLC_CapCheckDone",
+        "PLC_PC_CheckCap", "PC_PLC_CapCheckOK", "PC_PLC_CapCheckDone",
         "PLC_PC_CheckBunk", "PC_PLC_BunkCheckOK", "PC_PLC_BunkCheckDone",
         "PLC_PC_CapPressDone",
         "PLC_PC_Station3TorqueValueSet", "PLC_PC_Station3TorqueValue",
@@ -351,7 +357,7 @@ def run_scenarios():
                           "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW"}
     if not IOServer.PLC_PC_Station2RotationDuringTighteningDone:
         NOT_RESET_ON_ABORT.add("PLC_PC_Station2RotationDuringTighteningDone")      # not on this PLC (empty name)
-    all_tag_attrs = {a for a in dir(IOServer) if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP")}
+    all_tag_attrs = {a for a in dir(IOServer) if a[:6] in ("PLC_PC", "PC_PLC")}
     unclassified = all_tag_attrs - set(RESET_TAGS) - NOT_RESET_ON_ABORT
     check("C: every IOServer PLC tag is classified (reset on abort, or deliberately not)", unclassified == set(), str(sorted(unclassified)))
     with LOCK:
@@ -1144,6 +1150,68 @@ def run_servers_down():
     C.getPlcCameraAnswerTimeout = origTimeout
 
 
+def run_abort_races():
+    """K (2026-11-07). K1: an abort while a handshake write is on its way to the PLC: the write lands first and the
+    abort's reset then sets it back (before, the abort could reset the tags in between and the write landed after
+    it: Done=True left set for the next cycle). K2: the PC's connection-status toggle keeps toggling while an abort
+    runs (it used to be toggled by the thread that runs the heartbeat aborts)."""
+    print("\n=== K. Abort during a handshake write; connection-status toggle during an abort ===", flush=True)
+    KT, KD = IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone
+    # K1
+    TRACE.clear()
+    check("K1 at the QR code", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8),
+          io.machineState.getCurrentState().name)
+    QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
+    check("K1 waiting for the knuckle picture",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, 5))
+    inFlight = threading.Event()
+    original = io.write_bool
+    def slowDone(tag, value, debug=True):
+        if tag == KD and value is True and not inFlight.is_set():
+            inFlight.set()
+            time.sleep(1.5)                  # the write of Done=True is on its way (a slow PLC write)
+        return original(tag, value, debug=debug)
+    io.write_bool = slowDone
+    aborts0 = io.abortCount
+    with LOCK: TAGS[KT] = True               # 2HB press; the camera answers OK -> OK, Check False, Done True ...
+    check("K1 the knuckle OK handshake reached the Done=True write", inFlight.wait(8))
+    sendAbortFromFEServerToIOServer(r, reason="dry run K1")      # ... abort while Done=True is being written
+    check("K1 aborted, back at the QR code",
+          wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 6),
+          io.machineState.getCurrentState().name)
+    time.sleep(1.0)
+    del io.write_bool
+    with LOCK: TAGS[KT] = False
+    check("K1 Done of the aborted check is False after the abort (not left True for the next cycle)",
+          TAGS[KD] is False, f"{KD}={TAGS[KD]}")
+    # K2
+    toggleTag = IOServer.PC_PLC_ConnectionStatusTag
+    if toggleTag:
+        TRACE.clear()
+        check("K2 at the QR code", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8))
+        QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
+        originalReset = io.resetForNextCycle
+        def slowReset(*a, **k):
+            time.sleep(5.0)                  # a slow reset (flaky link, many retries)
+            return originalReset(*a, **k)
+        io.resetForNextCycle = slowReset
+        aborts0 = io.abortCount
+        HEARTBEAT["fe"] = False               # frontend down -> the status thread aborts the cycle
+        check("K2 the abort has started", wait_for(lambda: io.machineState.getCurrentState() == MS.READ_QR_CODE, 8))
+        mark = len(WRITES); time.sleep(4.5)
+        toggles = [v for t, v in WRITES[mark:] if t == toggleTag]
+        check("K2 connection status toggled while the abort ran (>= 2 writes in 4.5 s)", len(toggles) >= 2, f"{toggles}")
+        HEARTBEAT["fe"] = True
+        wait_for(lambda: io.abortCount > aborts0, 6)
+        del io.resetForNextCycle
+        check("K2 frontend back -> QR code read asked for",
+              wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8))
+    TRACE.clear()
+    QR_PLAN.append((ok, QR_DOSTPLUS_RHS)); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("K a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+
+
 # COSTHETA_DRYRUN_SCENARIOS=G (or e.g. "F,G"): run only these groups (A-E are one group); default: all
 import os as _os
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
@@ -1157,6 +1225,7 @@ try:
     if _wanted("H"): run_end_of_cycle()
     if _wanted("I"): run_plc_connection()
     if _wanted("J"): run_servers_down()
+    if _wanted("K"): run_abort_races()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

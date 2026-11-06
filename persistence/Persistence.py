@@ -5,6 +5,7 @@ from io import StringIO
 from datetime import datetime, date
 from typing import Union, List, Any, Optional
 
+from contextlib import closing
 import psycopg2
 from psycopg2 import Error
 from psycopg2 import sql
@@ -1185,8 +1186,10 @@ def checkIfQRCodeExists(qr_code: str, db_name: str) -> bool:
             return False
 
         # Establish connection to PostgreSQL database
-        with psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
-                              port="5432", database=db_name) as conn:
+        # connect_timeout: a PostgreSQL that does not answer must not hold up the QR code server's scan for ever.
+        # closing(): psycopg2's own "with connection" only ends the transaction, it does not close the connection
+        with closing(psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1",
+                                      port="5432", database=db_name, connect_timeout=5)) as conn, conn:
             with conn.cursor() as cursor:
                 # Execute query to check QR code existence
                 query = """

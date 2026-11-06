@@ -40,7 +40,8 @@
 | Read loop | `launchReadLoopThread` | `plc.read.interval` 0.2 s | Reads the tags of the current read state (`getCurrentTagsToBeRead`) and calls `process_current_read_state` |
 | Write loop | `launchWriteTagsLoopThread` | `plc.write.interval` 0.1 s | Write states: waits for the camera or QR answer (20 s timeout) and runs `perform_write_state_action` |
 | Connection | `launchConnectionMonitoringThread` | 1 s | `_connectionCheckStep`; reconnects; checks WatchTag |
-| PC heartbeat | `launchHeartbeatThread` | 2 s | Toggles `PC_PLC_ConnectionStatusTag`; sends `io2hb.q` |
+| PC heartbeat | `launchHeartbeatThread` | 2 s | Sends `io2hb.q` |
+| Connection status toggle | started by `launchThreadForUpdatingCombinedHeartbeat` | 2 s | Toggles `PC_PLC_ConnectionStatusTag` (own thread since CHANGES §84, so an abort on the status thread does not stop it) |
 | Server statuses | `launchThreadForUpdatingCombinedHeartbeat` | on message | Reads `hb2io.q`, then `_applyServerStatuses` |
 | Emergency | `launchEmergencyMonitoringThread` | 1 s | `PLC_PC_EmergencyAbort`, then `abortCycle` |
 | FE abort | `launchFrontendAbortListenerThread` | blocking read | `fe2io.q`, then `abortCycle` |
@@ -87,13 +88,13 @@ The trigger in each state is the tag read in that state; the write states write 
 
 **`perform_write_state_action(tags, result)`**
 
-Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_writeBoolUntilWritten`, and the sequence stops if the state changes because of an abort. The caller changes state only after it returns True.
+Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_writeBoolUntilWritten`, and the sequence stops if the state changes because of an abort. Each attempt checks the state and writes while holding `_abortLock`, which `abortCycle` holds for the whole abort, so a write of the old cycle cannot land after the abort's reset (CHANGES §84). The lock is released between attempts. The caller changes state only after it returns True.
 
 **Picture handling**
 
 - `_requestPicture(state)` creates the request id `<cycle>-<n>`, sets `camera:activeRequest` and sends `io2camera.q`.
 - `_dropCameraRequest()` clears the request.
-- `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down.
+- `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down. The timeout is at least `<vendor>.vision.check.timeout.sec` + 8 s (`getMinimumPlcCameraAnswerTimeout`); a smaller value is raised.
 
 **Trigger after a NOT OK**
 
@@ -143,14 +144,14 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 ```
 
 1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`.
-2. `TakePictures` grabs the frame (RTSP or ONVIF through `RTSPCam`, `ONVIFCam` or `PhotoCamera`).
-3. `ConverterScalerAndProcessor` normalises the image and sends it to the vision check.
+2. `TakePictures` takes three pictures with `RTSPCam.getFrameAfter`: each a frame that arrived after the request and after the previous picture, waiting at most `camera.frame.max.wait.sec` (1 s). None in time (stalled stream) or camera not connected: the answer carries `noPictureReason` (CHANGES §84).
+3. `ConverterScalerAndProcessor` normalises the image and sends it to the vision check. With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason.
 4. The answer goes to `camera2io.q` with the request id and to `camera2fe.q` with both images and the reason.
 
 **VisionCheckWorker** (`VisionCheckWorker.py`):
 
 - A child process that loads the models once (`ModelManager`, MobileSAM, segmenters) and runs one check per request.
-- If a check does not finish in 12 s, the parent kills the child and starts a new one. The check counts as NOT OK.
+- If a check does not finish in 12 s, the parent kills the child and starts a new one. The check counts as NOT OK. From the 3rd timeout in a row the reason says the checks are too slow on this PC (check the GPU); a check in time resets the count.
 - The worker warms up at start.
 
 **Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press). The thresholds are in `VisionConfig.py`.
@@ -282,7 +283,8 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `plc.sleeptime.between.ok.and.done` | 0.05 | Spec 5.1 |
 | `plc.sleeptime.between.done.and.reset_done` / `…re_read` | 0.4 / 0.3 | Spec 5.1 |
 | `plc.handshake.reset.delay.sec` | 0.4 | Spec 5.3 |
-| `plc.camera.answer.timeout.sec` | 20 | 2.4 |
+| `plc.camera.answer.timeout.sec` | 20 (at least the vision check timeout + 8) | 2.4 |
+| `camera.frame.max.wait.sec` | 1.0 | 3 |
 | `pc.plc.cycle.aborted.tagname` | (empty) | 2.4 |
 | `supervisor.restart.dead.processes` / `.check.interval.sec` / `.max.restarts.per.hour` | True / 2 / 10 | 1 |
 | `redis.health.check.interval.sec` | 60 | 6 |

@@ -399,7 +399,8 @@ class PLCIOServer:
 
     # ==================== Cap Tags (Step 12) ====================
     PLC_PC_CheckCap: str = CosThetaConfigurator.getInstance().getPlcPcCheckCapTagName()
-    PC_PLP_CapCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcCapCheckOKTagName()
+    PC_PLC_CapCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcCapCheckOKTagName()
+    PC_PLP_CapCheckOK: str = PC_PLC_CapCheckOK      # the earlier, misspelt name (kept as an alias for older scripts)
     PC_PLC_CapCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcCapCheckDoneTagName()
 
     # ==================== Bunk Tags (Step 13) ====================
@@ -1111,7 +1112,7 @@ class PLCIOServer:
 
         # Step 12: Cap
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
-            return [PLCIOServer.PC_PLP_CapCheckOK, PLCIOServer.PC_PLC_CapCheckDone, PLCIOServer.PLC_PC_CheckCap]
+            return [PLCIOServer.PC_PLC_CapCheckOK, PLCIOServer.PC_PLC_CapCheckDone, PLCIOServer.PLC_PC_CheckCap]
 
         # Step 13: Bunk for Cap Press - reuses CheckBunk
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS:
@@ -1186,7 +1187,7 @@ class PLCIOServer:
         """{attribute: tag name} for every PLC tag the IOServer reads or writes (empty names = not on this PLC, left
         out)."""
         return {a: getattr(cls, a) for a in vars(cls)
-                if a[:6] in ("PLC_PC", "PC_PLC", "PC_PLP") and isinstance(getattr(cls, a), str) and getattr(cls, a)}
+                if a[:6] in ("PLC_PC", "PC_PLC") and isinstance(getattr(cls, a), str) and getattr(cls, a)}
 
     def launchConnectionMonitoringThread(self):
         objRef = self
@@ -1272,8 +1273,8 @@ class PLCIOServer:
     def launchThreadForUpdatingCombinedHeartbeat(self):
         """The other servers' status, from the heartbeat server (one message every
         combinedheartbeat.connectionstatus.sleepinterval.sec with each server's ALIVE / DEAD), and the rules for a
-        server that is down (_applyServerStatuses). Also toggles PC_PLC_ConnectionStatus (the PC is alive), whatever
-        the other servers' status."""
+        server that is down (_applyServerStatuses). PC_PLC_ConnectionStatus (the PC is alive) is toggled by a thread
+        of its own (started here), whatever the other servers' status."""
         objRef = self
 
         def updateHeartbeat():
@@ -1292,9 +1293,6 @@ class PLCIOServer:
                                 objRef._audit("First status message from the heartbeat server: the rules for servers "
                                               "that are down apply from now on")
                     objRef._applyServerStatuses()
-                    statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
-                    objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
-                    PLCIOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
                 except Exception as e:
                     printBoldRed(f"Exception {e} encountered in heartbeat")
                     objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
@@ -1306,6 +1304,26 @@ class PLCIOServer:
         combinedHeartbeatThread = threading.Thread(name=f"Combined Heartbeat Update Thread", target=updateHeartbeat,
                                                    args=(), daemon=True)
         combinedHeartbeatThread.start()
+
+        def toggleConnectionStatus():
+            """PC_PLC_ConnectionStatus (the PC is alive) toggled every combined.connection.status.sleepinterval.sec
+            in a thread of its own. It used to be toggled by the status thread above, which also runs the aborts
+            for a server that is down (abortCycle: about 1-4 s), so the toggle stopped for that long - long enough
+            for a PLC that watches it to take the PC as dead."""
+            while not objRef.shutdown:
+                try:
+                    statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
+                    objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
+                    PLCIOServer.LAST_CONNECTION_STATUS_UPDATED = statusToBeSent
+                except Exception as e:
+                    printBoldRed(f"Exception {e} while toggling {PLCIOServer.PC_PLC_ConnectionStatusTag}")
+                try:
+                    time.sleep(CosThetaConfigurator.getInstance().getCombinedConnectionStatusUpdateInterval())
+                except Exception:
+                    noteSuppressed()
+
+        threading.Thread(name="PC Connection Status Toggle Thread", target=toggleConnectionStatus, args=(),
+                         daemon=True).start()
 
     # ---------------------------------------------------------------- other servers down: what the IOServer does
     def _notice(self, name: str, text: Optional[str], ttlSecs: float = 15.0) -> None:
@@ -1582,7 +1600,7 @@ class PLCIOServer:
 
     # ---------------------------------------------------------------- PLC handshakes
     #   Check-Done-OK (vision checks, QR code): one sequence in perform_write_state_action, written before the state
-    #       changes - OK, (0.05 s) Check False, Done True, (NOT OK 0.1 s / OK 0.4 s) Done False, then NOT OK: Check
+    #       changes - OK, (0.05 s) Check False, Done True, (NOT OK 0.3 s / OK 0.4 s) Done False, then NOT OK: Check
     #       False again / OK: OK False; the plc.sleeptime.between.* settings.
     #   Set-Value (torques): after the value was read, Set = False and Value = 0.0 after plc.handshake.reset.delay.sec
     #       (Station 2: also RotationDuringTighteningDone = False) - a job of the ONE scheduler thread.
@@ -1826,7 +1844,7 @@ class PLCIOServer:
                                 if objRef.perform_write_state_action(tags=tagsToBeWritten, result=settingsWritten,
                                                                      expectedState=stateBeforeWrite):
                                     # OK: OK, trigger False, Done, (0.4 s) Done False written; NOT OK: the same with
-                                    # OK False and 0.1 s, then CheckQRCode armed again for a re-scan
+                                    # OK False and 0.3 s, then CheckQRCode armed again for a re-scan
                                     printBold(f"Transition from state {objRef.machineState.getCurrentState().name}")
                                     if settingsWritten:
                                         objRef.machineState.incrementStateFrom(MachineState.WRITE_QR_CODE)
@@ -1909,7 +1927,7 @@ class PLCIOServer:
                                 objRef._cameraRequest = None
                                 if objRef.perform_write_state_action(tags=tagsToBeWritten, result=False,
                                                                      expectedState=stateBeforeWrite):
-                                    # OK = False, trigger False, Done True, (0.1 s) Done False written: only now back
+                                    # OK = False, trigger False, Done True, (0.3 s) Done False written: only now back
                                     # to the take-picture state, where trigger and Done are both False
                                     printBoldRed(
                                         f"Did not move ahead from state {objRef.machineState.getCurrentState().name}")
@@ -2181,15 +2199,20 @@ class PLCIOServer:
 
     def _writeBoolUntilWritten(self, tag: str, value: bool, stateAtStart: MachineState) -> bool:
         """Write a bool, retrying until it is written. Gives up only on shutdown or if the cycle was reset meanwhile
-        (emergency abort / heartbeat loss changed the state); returns False then."""
+        (emergency abort / heartbeat loss changed the state); returns False then.
+        Each attempt checks the state and writes while holding _abortLock (abortCycle holds it for the whole abort),
+        so a write of the old cycle can no longer land after an abort has reset the tags (e.g. Done=True left set
+        for the next cycle). The lock is released between attempts, so an abort is never held up by the retries
+        while the PLC is not reachable - at most by one write in progress."""
         attempts = 0
         while not self.shutdown:
-            if self.write_bool(tag, value):
-                return True
+            with self._abortLock:
+                if self.machineState.getCurrentState() != stateAtStart:
+                    printBoldRed(f"Cycle reset while writing {tag}; not written")
+                    return False
+                if self.write_bool(tag, value):
+                    return True
             attempts += 1
-            if self.machineState.getCurrentState() != stateAtStart:
-                printBoldRed(f"Cycle reset while writing {tag}; not written")
-                return False
             if attempts == 1 or attempts % 25 == 0:
                 self.logger.error(f"Could not write {tag}={value} (attempt {attempts}); retrying")
                 printBoldRed(f"Could not write {tag}={value} (attempt {attempts}); retrying")
@@ -2591,7 +2614,7 @@ class PLCIOServer:
             (PLCIOServer.PLC_PC_CheckNoBunk, bool), (PLCIOServer.PC_PLC_NoBunkCheckOK, bool), (PLCIOServer.PC_PLC_NoBunkCheckDone, bool),
             (PLCIOServer.PLC_PC_CheckSplitPinAndWasher, bool), (PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK, bool),
             (PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone, bool),
-            (PLCIOServer.PLC_PC_CheckCap, bool), (PLCIOServer.PC_PLP_CapCheckOK, bool), (PLCIOServer.PC_PLC_CapCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckCap, bool), (PLCIOServer.PC_PLC_CapCheckOK, bool), (PLCIOServer.PC_PLC_CapCheckDone, bool),
             (PLCIOServer.PLC_PC_CheckBunk, bool), (PLCIOServer.PC_PLC_BunkCheckOK, bool), (PLCIOServer.PC_PLC_BunkCheckDone, bool),
             (PLCIOServer.PLC_PC_CapPressDone, bool),
             (PLCIOServer.PLC_PC_Station3TorqueValueSet, bool), (PLCIOServer.PLC_PC_Station3TorqueValue, float),
@@ -2935,7 +2958,7 @@ class PLCIOServer:
 
         # Step 12: Cap
         tag_values[PLCIOServer.PLC_PC_CheckCap] = self.read_bool(PLCIOServer.PLC_PC_CheckCap, debug=False)
-        tag_values[PLCIOServer.PC_PLP_CapCheckOK] = self.read_bool(PLCIOServer.PC_PLP_CapCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_CapCheckOK] = self.read_bool(PLCIOServer.PC_PLC_CapCheckOK, debug=False)
         tag_values[PLCIOServer.PC_PLC_CapCheckDone] = self.read_bool(PLCIOServer.PC_PLC_CapCheckDone, debug=False)
 
         # Step 13: Bunk
