@@ -126,7 +126,7 @@ PLC latches OK on Done rising        hold 0.4 s (OK) or 0.3 s (NOT OK)  (5)
 
 Rules:
 
-1. Every write is a retried write (§2). If the cycle is aborted meanwhile, the sequence stops and nothing more is written for the old cycle.
+1. Every write is a retried write (§2). If the cycle is aborted meanwhile, the sequence stops and nothing more is written for the old cycle. The state check and the write are one step that an abort cannot come between: a write already on its way when an abort starts lands first, and the abort's reset then sets the tag back (CHANGES §84).
 2. **The PLC must read OK only on the rising edge of Done.** OK is valid from step (1) to step (7).
 3. After a NOT OK result, the PC goes back to the read state of the same check. **To ask for a retake, the PLC raises the Trigger again.** The PC acts on the Trigger as soon as it reads it True (the "read False first" rule was removed in CHANGES §80). **The PLC must therefore raise each Trigger once per two-hand-button press and let the PC's False stand.** A PLC that sets the Trigger True again by itself, or holds it, gets the picture retaken at once.
 4. QR code NOT OK means the cycle settings could not be written or the QR code was rejected. The PC re-arms CheckQRCode (step 8) so that the operator can scan again.

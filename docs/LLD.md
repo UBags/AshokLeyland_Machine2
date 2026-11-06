@@ -17,7 +17,7 @@
 3. Start P1 (the logging server).
 4. Start P2 camera, P3 QR, P4 IO, P6 FE, P7 HB and P5 DB, each through `startProcess(target, args)`. Every process first calls `setLogProcess(<name>)`, which sets the per-process log levels, crash capture and live configuration.
 5. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`).
-6. Wait for `stopcommandQ`, then send the stop and collect each `stoppedresponseQ`.
+6. Wait for `stopcommandQ`, then send the stop and collect each `stoppedresponseQ`. `monitorStop` then backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
 
 **ProcessSupervisor.** Every `supervisor.check.interval.sec` (2 s), `checkOnce()` restarts each registered process that has died. This is enabled by `supervisor.restart.dead.processes`. Restarts are limited to `supervisor.max.restarts.per.hour` (10) for each process; above that the process is left down and logged. Supervision stops once `isStopping()` is true.
 
@@ -294,10 +294,11 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 
 | Dry run | Covers |
 |---|---|
-| `DryRun_IOServer_Fault_Scenarios.py` | Handshakes, retakes, aborts, PLC loss, server-down rules (J1–J8, including redis), both vendors |
+| `DryRun_IOServer_Fault_Scenarios.py` | Handshakes, retakes, aborts, PLC loss, server-down rules (J1–J8, including redis), abort during a handshake write and the toggle during an abort (K1–K2), both vendors |
+| `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |
 | Frontend / DB / index and day-folder | FE workers; inserts; indexes; day folder |
-| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R5 |
+| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R5; database backup at shutdown (H10) |
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors |
 
