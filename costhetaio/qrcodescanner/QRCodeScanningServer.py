@@ -425,7 +425,7 @@ class QRCodeScanningServer:
             try:
                 self.abortReadRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 self.abortReadRedisConnected = True
-                SlaveFileLogger.getInstance().logDebug(QRCodeScanningServer.logSource, f'Abort Redis Connection established', Logger.SUCCESS)
+                SlaveFileLogger.getInstance().logDebug(QRCodeScanningServer.logSource, 'Abort Redis Connection established', Logger.SUCCESS)
             except Exception as e:
                 self.abortReadRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(QRCodeScanningServer.logSource, f'Could not get Abort Redis Connection: {e}', Logger.PROBLEM)
@@ -440,8 +440,8 @@ class QRCodeScanningServer:
             try:
                 self.heartbeatRedisConnection = Redis(self.hostname, self.port, retry_on_timeout=True)
                 self.heartbeatRedisConnected = True
-                SlaveConsoleLogger.getInstance().logDebug(QRCodeScanningServer.logSource, f'Heartbeat Redis Connection established', Logger.SUCCESS)
-                SlaveFileLogger.getInstance().logDebug(QRCodeScanningServer.logSource, f'Heartbeat Redis Connection established', Logger.SUCCESS)
+                SlaveConsoleLogger.getInstance().logDebug(QRCodeScanningServer.logSource, 'Heartbeat Redis Connection established', Logger.SUCCESS)
+                SlaveFileLogger.getInstance().logDebug(QRCodeScanningServer.logSource, 'Heartbeat Redis Connection established', Logger.SUCCESS)
             except Exception as e:
                 self.heartbeatRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(QRCodeScanningServer.logSource, f'Could not get Heartbeat Redis Connection: {e}', Logger.PROBLEM)

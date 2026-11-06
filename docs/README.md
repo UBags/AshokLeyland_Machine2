@@ -6,6 +6,7 @@
 | `LLD.md` | Low-level design: IOServer threads and state table, each server's internals, database schema, message fields, tests |
 | `PLC_Interface_Spec.md` | PC–PLC tags, addresses, handshakes and timings. Part A is the protocol as built (v1); Part B is the v2 proposal, with a sign-off table |
 | `machine2-sequence.md` | The 28 Machine 2 states against Machine 1's 29 (2026-10-30) |
+| `plant-pc-verification.md` | Checks to run on the plant PC before production: the vision worker inside the exe, check times against the timeout, process restart, frozen screen, real QR codes; with a results table |
 | `machine2-plant-pc-setup.md` | Plant PC set-up notes: Windows updates, restore points, start at logon, Redis on WSL, first start (2026-11-05) |
 | `architecture.md` | Baseline review of the Machine 1 code at commit `5633458` (2026-10-30), with findings R1–R17 |
 | `costhetaio_classes.mmd` / `.svg` / `.png` | Class diagram of `costhetaio` (commonplc, allenbradley, siemens) |

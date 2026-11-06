@@ -54,7 +54,7 @@ class CosThetaControlBar(QWidget):
         painter.end()
 
     def buildUi(self):
-        CosThetaControlBar.logger.debug(f"Building CosThetaControlBar UI")
+        CosThetaControlBar.logger.debug("Building CosThetaControlBar UI")
         self.hoelayout = QHBoxLayout()
         self.openBtn = CosThetaRoundButtonWithColorGradient("Hello")
         self.backBtn = CosThetaRoundButtonWithColorGradient()
@@ -70,4 +70,4 @@ class CosThetaControlBar(QWidget):
         self.hoelayout.addWidget(self.nextBtn)
         self.hoelayout.addStretch(1)
         self.setLayout(self.hoelayout)
-        CosThetaControlBar.logger.debug(f"Built CosThetaControlBar UI")
+        CosThetaControlBar.logger.debug("Built CosThetaControlBar UI")

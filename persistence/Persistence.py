@@ -6,6 +6,11 @@ from datetime import datetime, date
 from typing import Union, List, Any, Optional
 
 from contextlib import closing
+import os
+# Every PostgreSQL connection of this process gives up after 5 s if the server does not answer, instead of waiting
+# for ever (libpq reads PGCONNECT_TIMEOUT; an explicit connect_timeout= still wins). Before, a PostgreSQL that hung
+# held the caller for good: the QR code server's duplicate check, the IOServer's machine settings, the DB server.
+os.environ.setdefault("PGCONNECT_TIMEOUT", "5")
 import psycopg2
 from psycopg2 import Error
 from psycopg2 import sql

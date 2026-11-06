@@ -178,13 +178,13 @@ class MockPLC:
     def open(self) -> bool:
         """Open connection to MockPLC (mimics LogixDriver.open)."""
         self._connected = True
-        print(f"[MockPLC] Connection opened")
+        print("[MockPLC] Connection opened")
         return True
 
     def close(self) -> bool:
         """Close connection to MockPLC (mimics LogixDriver.close)."""
         self._connected = False
-        print(f"[MockPLC] Connection closed")
+        print("[MockPLC] Connection closed")
         return True
 
     def read(self, tag: str) -> MockTagResult:
@@ -242,7 +242,7 @@ class MockPLC:
     def reset_all_tags(self):
         """Reset all tags to default values."""
         self._initialize_tags()
-        print(f"[MockPLC] All tags reset to defaults")
+        print("[MockPLC] All tags reset to defaults")
 
     def print_tags(self):
         """Print all tag values (for debugging)."""

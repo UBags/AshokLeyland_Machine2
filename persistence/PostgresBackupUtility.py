@@ -703,7 +703,7 @@ def check_database_exists(config: Dict[str, str]) -> bool:
         elif 'authentication failed' in error_msg:
             printBoldYellow(f"WARNING: Authentication failed for user '{config['user']}'")
         elif 'timeout' in error_msg:
-            printBoldYellow(f"WARNING: Connection to PostgreSQL timed out")
+            printBoldYellow("WARNING: Connection to PostgreSQL timed out")
         else:
             printBoldYellow(f"WARNING: Cannot connect to PostgreSQL: {e}")
         return False
@@ -891,9 +891,9 @@ def backup_postgres_db(config: Dict[str, str], dest_file: str) -> bool:
             elif 'authentication failed' in error_text.lower():
                 printBoldYellow(f"Authentication failed for user '{config['user']}' - backup skipped")
             elif 'permission denied' in error_text.lower():
-                printBoldYellow(f"Permission denied - backup skipped")
+                printBoldYellow("Permission denied - backup skipped")
             elif 'could not connect' in error_text.lower():
-                printBoldYellow(f"Could not connect to database - backup skipped")
+                printBoldYellow("Could not connect to database - backup skipped")
             else:
                 printBoldRed(f"ERROR: Backup failed (code {process.returncode})")
                 printBoldRed(f"Details: {error_text}")
@@ -914,7 +914,7 @@ def backup_postgres_db(config: Dict[str, str], dest_file: str) -> bool:
         return True
 
     except FileNotFoundError:
-        printBoldYellow(f"pg_dump not found - ensure PostgreSQL client tools are installed")
+        printBoldYellow("pg_dump not found - ensure PostgreSQL client tools are installed")
         return False
 
     except Exception as e:

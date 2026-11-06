@@ -310,7 +310,6 @@ class MasterFileLogger(Thread):
             timeout: Sleep timeout when queue is empty
         """
         count: int = 0
-        flushAfter: int = 3
 
         lastStopCheck = 0.0
         while not (self.stopped and self._getMessageCount() == 0):

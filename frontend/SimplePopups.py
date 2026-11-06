@@ -798,7 +798,7 @@ def login(modal: bool = True):
 
         aWindowIsInProgress = True
 
-        window = sg.Window(f"Login Screen", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
+        window = sg.Window("Login Screen", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
                            finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=True)
         window['-password-'].set_focus()
         window['-password-'].bind("<Return>", "_Enter")
@@ -979,7 +979,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
     #             currentPassword = aRecord[2]
     #             break
     if len(validUsernames) == 0:
-        showErrorMessage(f"No users available in database for changing password", auto_close_duration=2)
+        showErrorMessage("No users available in database for changing password", auto_close_duration=2)
         aWindowIsInProgress = False
         return False, None, None
     password1: str = ''
@@ -999,7 +999,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
         ]
     elif currentRole == "Manager" or currentRole == "Supervisor":
         if len(validOperatorUsernames) == 0:
-            showErrorMessage(f"No operators available in database for changing password", auto_close_duration=2)
+            showErrorMessage("No operators available in database for changing password", auto_close_duration=2)
             aWindowIsInProgress = False
             return False, None, None
         layout = [
@@ -1026,7 +1026,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
     #                 [sg.Button("Submit"), sg.Button("Cancel")]
     #             ]
 
-    window = sg.Window(f"Change Password for users : ", layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window("Change Password for users : ", layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-newpassword2-'].bind("<Return>", "_Enter")
@@ -1133,7 +1133,7 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
         aWindowIsInProgress = False
         return False, None
 
-    window = sg.Window(f"Inactivate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
+    window = sg.Window("Inactivate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-username-'].bind("<Return>", "_Enter")
@@ -1184,7 +1184,7 @@ def activateUser(currentUser: str, currentRole: str, modal: bool = True):
     for aRecord in userData:
         validUsernames.append(aRecord[1])
     if len(validUsernames) == 0:
-        showErrorMessage(f"Currently there are no inactive users", auto_close_duration=2)
+        showErrorMessage("Currently there are no inactive users", auto_close_duration=2)
         aWindowIsInProgress = False
         return False, None
     submitted = False
@@ -1196,7 +1196,7 @@ def activateUser(currentUser: str, currentRole: str, modal: bool = True):
                   k='-username-')],
         [sg.Button("Submit"), sg.Button("Cancel")]
     ]
-    window = sg.Window(f"Activate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
+    window = sg.Window("Activate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-username-'].bind("<Return>", "_Enter")
@@ -1255,7 +1255,7 @@ def chooseMode(modal: bool = True):
     ]
 
     aWindowIsInProgress = True
-    window = sg.Window(f"Choose Mode as Test or Production. Cancel will close the application.", layout,
+    window = sg.Window("Choose Mode as Test or Production. Cancel will close the application.", layout,
                        return_keyboard_events=True, modal=True, keep_on_top=True, finalize=True, disable_minimize=True,
                        grab_anywhere=False, disable_close=True)
     window['-mode-'].set_focus()
@@ -1276,7 +1276,7 @@ def chooseMode(modal: bool = True):
                     progressBar(f"Initialising system in mode = {mode}...", theme="DarkBlue16")
                     break
                 else:
-                    showErrorMessage(f"Please choose a mode", auto_close_duration=2)
+                    showErrorMessage("Please choose a mode", auto_close_duration=2)
                     sg.theme('DarkTeal9')
     window.close()
     aWindowIsInProgress = False
@@ -1307,7 +1307,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
             if aRecord[3] == "Operator":
                 validOperatorUsernames.append(aRecord[1])
     if len(validUsernames) == 0:
-        showErrorMessage(f"No users available in database for changing role", auto_close_duration=2)
+        showErrorMessage("No users available in database for changing role", auto_close_duration=2)
         aWindowIsInProgress = False
         return False, None, None
     submitted = False
@@ -1325,7 +1325,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
         ]
     elif currentRole == "Manager" or currentRole == "Supervisor":
         if len(validOperatorUsernames) == 0:
-            showErrorMessage(f"No operators available in database for changing role", auto_close_duration=2)
+            showErrorMessage("No operators available in database for changing role", auto_close_duration=2)
             aWindowIsInProgress = False
             return False, None, None
         layout = [
@@ -1342,7 +1342,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
         aWindowIsInProgress = False
         return False, None, None
 
-    window = sg.Window(f"Change Role", layout, return_keyboard_events=True, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window("Change Role", layout, return_keyboard_events=True, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-role-'].bind("<Return>", "_Enter")
@@ -1409,7 +1409,7 @@ def createProductionReportByDateLimits():
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
     ]
 
-    window = sg.Window(f' Generate production report for a period', layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(' Generate production report for a period', layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=False)
     window['-fromdate-'].set_focus()
 
@@ -1491,7 +1491,7 @@ def createProductionReportByModelNameAndDateLimits():
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
     ]
 
-    window = sg.Window(f' Generate production report for a model for a period', layout, modal=True, keep_on_top=True,
+    window = sg.Window(' Generate production report for a model for a period', layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1572,7 +1572,7 @@ def createProductionReportByModelName():
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
     ]
 
-    window = sg.Window(f' Generate production report for a model', layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(' Generate production report for a model', layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1641,7 +1641,7 @@ def createProductionReportOfTodayByModelName():
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
     ]
 
-    window = sg.Window(f" Generate today's production report for a model", layout, modal=True, keep_on_top=True,
+    window = sg.Window(" Generate today's production report for a model", layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1704,7 +1704,7 @@ def createProductionReportOfToday():
         [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
     ]
 
-    window = sg.Window(f" Generate today's production report for ALL models", layout, modal=True, keep_on_top=True,
+    window = sg.Window(" Generate today's production report for ALL models", layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
 
     def clear_input(window):
@@ -1720,7 +1720,7 @@ def createProductionReportOfToday():
         if event == 'Clear':
             clear_input(window)
         if event == 'Submit':
-            confirmationStatement = f"Generate today's report for all models ?"
+            confirmationStatement = "Generate today's report for all models ?"
             confirmed: str = getConfirmation(confirmationStatement)
             if (confirmed.upper() == 'OK'):
                 try:

@@ -238,7 +238,7 @@ class UpdateTagsToDefaultProcessor(GenericQueueProcessor):
                     continue
 
                 success = False
-                print(f"About to call write_bool() or write_float()")
+                print("About to call write_bool() or write_float()")
                 if tagType == "bool":
                     success = self.ioServer.write_bool(tagName, bool(tagValue))
                 elif tagType == "float":
@@ -475,6 +475,13 @@ class PLCIOServer:
         self._awaitingTriggerSince: Dict[MachineState, Optional[float]] = {}
         self._awaitingTriggerResetLock = threading.Lock()
         self._abortLock = threading.RLock()  # one abort at a time (PLC emergency, heartbeat loss, frontend)
+        # the read and write loops, for the heartbeat (DEAD while one is not running or stuck: utils/WorkerHealth.py)
+        from utils.WorkerHealth import WorkerWatch
+        self.lastReadLoopAt: float = time.monotonic()
+        self.lastWriteLoopAt: float = time.monotonic()
+        self.workers = WorkerWatch("IOServer")
+        self.workers.add("read loop", lambda: getattr(self, "continuousReadLoop", None), lastTick=lambda: self.lastReadLoopAt)
+        self.workers.add("write loop", lambda: getattr(self, "continuousDoLoop", None), lastTick=lambda: self.lastWriteLoopAt)
         self.abortCount: int = 0
         self.lastAbortReason: str = ""
         self.cycleId: int = 0              # incremented at each accepted QR code (log context "[QR=... cycle=N]")
@@ -627,10 +634,10 @@ class PLCIOServer:
             except Exception:
                 self.clientRedisConnectedForReads = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                               f'Could not get Redis Connection for Reads',
+                                                               'Could not get Redis Connection for Reads',
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                            f'Could not get Redis Connection for Reads', Logger.PROBLEM)
+                                                            'Could not get Redis Connection for Reads', Logger.PROBLEM)
 
         if not self.clientRedisConnectedForWrites:
             try:
@@ -640,10 +647,10 @@ class PLCIOServer:
             except Exception:
                 self.clientRedisConnectedForWrites = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                               f'Could not get Redis Connection for Writes',
+                                                               'Could not get Redis Connection for Writes',
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                            f'Could not get Redis Connection for Writes',
+                                                            'Could not get Redis Connection for Writes',
                                                             Logger.PROBLEM)
 
     def connectToRedisForHeartbeatAndEmergencyMonitoring(self, forceRenew=False):
@@ -668,10 +675,10 @@ class PLCIOServer:
             except Exception:
                 self.heartbeatRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                               f'Could not get Heartbeat Redis Connection',
+                                                               'Could not get Heartbeat Redis Connection',
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                            f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
+                                                            'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.combinedHeartbeatRedisConnected:
             try:
@@ -686,10 +693,10 @@ class PLCIOServer:
             except Exception:
                 self.combinedHeartbeatRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                               f'Could not get Heartbeat Redis Connection',
+                                                               'Could not get Heartbeat Redis Connection',
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                            f'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
+                                                            'Could not get Heartbeat Redis Connection', Logger.PROBLEM)
 
         if not self.emergencyRedisConnected:
             try:
@@ -704,10 +711,10 @@ class PLCIOServer:
             except Exception:
                 self.emergencyRedisConnected = False
                 SlaveConsoleLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                               f'Could not get Emergency Redis Connection',
+                                                               'Could not get Emergency Redis Connection',
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(PLCIOServer.logSource,
-                                                            f'Could not get Emergency Redis Connection', Logger.PROBLEM)
+                                                            'Could not get Emergency Redis Connection', Logger.PROBLEM)
 
     def _initDatabaseConnectionPool(self):
         """Initialize a connection pool for database reads."""
@@ -1209,8 +1216,8 @@ class PLCIOServer:
                     except Exception:
                         if (objRef.connectionAttempts == 1) or (
                                 (objRef.connectionAttempts % PLCIOServer.LOG_CONNECTION_PROBLEM_EVERY_N_SECS) % 5) == 0:
-                            objRef.logger.fatal(f"PLC connection test failed")
-                            printBoldRed(f"PLC connection test failed. Reconnecting...")
+                            objRef.logger.fatal("PLC connection test failed")
+                            printBoldRed("PLC connection test failed. Reconnecting...")
                         tryToConnect = True
 
                 try:
@@ -1220,7 +1227,7 @@ class PLCIOServer:
                     message = f"Connection check: {e}"
                     printBoldRed(message); objRef.logger.error(f"{message}\n{traceback.format_exc()}")
 
-        self.connectionCheckThread = threading.Thread(name=f'IOServer Connection Keep Alive Thread',
+        self.connectionCheckThread = threading.Thread(name='IOServer Connection Keep Alive Thread',
                                                       target=connectionCheckingLoop,
                                                       args=(), daemon=True)
         self.connectionCheckThread.start()
@@ -1255,6 +1262,10 @@ class PLCIOServer:
                     if not objRef._plcConnected():
                         sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
                                                                    status=DEAD)
+                    elif objRef.workers.problemsLogged(log=lambda m: (printBoldRed(m), objRef.logger.error(m))):
+                        # the read or write loop died or is stuck: the IOServer is not answering the PLC
+                        sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
+                                                                   status=DEAD)
                     else:
                         sendHeartbeatFromIOServerToHeartbeatServer(redisConnection=objRef.heartbeatRedisConnection,
                                                                    status=ALIVE)
@@ -1266,7 +1277,7 @@ class PLCIOServer:
                 except Exception:
                     noteSuppressed()
 
-        self.heartbeatThread = threading.Thread(name=f"IO Heartbeat Thread", target=reportHeartbeat, args=(),
+        self.heartbeatThread = threading.Thread(name="IO Heartbeat Thread", target=reportHeartbeat, args=(),
                                                 daemon=True)
         self.heartbeatThread.start()
 
@@ -1301,7 +1312,7 @@ class PLCIOServer:
                 except Exception:
                     noteSuppressed()
 
-        combinedHeartbeatThread = threading.Thread(name=f"Combined Heartbeat Update Thread", target=updateHeartbeat,
+        combinedHeartbeatThread = threading.Thread(name="Combined Heartbeat Update Thread", target=updateHeartbeat,
                                                    args=(), daemon=True)
         combinedHeartbeatThread.start()
 
@@ -1457,7 +1468,7 @@ class PLCIOServer:
                         objRef.connectToRedisForHeartbeatAndEmergencyMonitoring(forceRenew=True)
                 if emergencyActivated:
                     printBoldRed(
-                        f"Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
+                        "Combined Heartbeat - Emergency Button pressed in Machine : sendEmergencyAbortFromIOServerToFEServer")
                     try:
                         objRef.abortCycle("emergency button pressed on the machine (PLC)",
                                           notifyQRCodeServer=True, notifyFrontend=True, clearQueues=True)
@@ -1469,7 +1480,7 @@ class PLCIOServer:
                 except Exception:
                     noteSuppressed()
 
-        emergencyMonitoringThread = threading.Thread(name=f"Emergency Monitoring Thread", target=monitorEmergency,
+        emergencyMonitoringThread = threading.Thread(name="Emergency Monitoring Thread", target=monitorEmergency,
                                                      args=(), daemon=True)
         emergencyMonitoringThread.start()
 
@@ -1710,7 +1721,7 @@ class PLCIOServer:
                 if not objRef.shutdown:
                     time.sleep(2)
 
-        self.monitorStopThread = threading.Thread(name=f'Monitor Stop Thread in IOServer - IOserver',
+        self.monitorStopThread = threading.Thread(name='Monitor Stop Thread in IOServer - IOserver',
                                                   target=lookForStop,
                                                   args=(), daemon=True)
         self.monitorStopThread.start()
@@ -1723,6 +1734,7 @@ class PLCIOServer:
             written_TagsToBeRead: int = 0
             writeCounter = 0
             while not objRef.shutdown:
+                objRef.lastReadLoopAt = time.monotonic()
                 try:
                     writeCounter += 1
                     valueRead: bool = False
@@ -1775,7 +1787,7 @@ class PLCIOServer:
 
                 time.sleep(objRef.read_interval)
 
-        self.continuousReadLoop = threading.Thread(name=f'Continuous Read Loop in IOServer',
+        self.continuousReadLoop = threading.Thread(name='Continuous Read Loop in IOServer',
                                                    target=readLoop,
                                                    args=(), daemon=True)
         self.continuousReadLoop.start()
@@ -1801,6 +1813,7 @@ class PLCIOServer:
             """Main do loop to take action wherever something required."""
             written_TagsToBeWritten: int = 0
             while not objRef.shutdown:
+                objRef.lastWriteLoopAt = time.monotonic()
                 stateOfTags = objRef.machineState.getCurrentState()
                 tagsToBeWritten = objRef.getCurrentTagsToBeWritten()
                 if objRef.machineState.getCurrentState() != stateOfTags:
@@ -1936,7 +1949,7 @@ class PLCIOServer:
                                     printBold(f"        ...to state {objRef.machineState.getCurrentState().name}")
                 time.sleep(objRef.write_loop_interval)
 
-        self.continuousDoLoop = threading.Thread(name=f'Continuous Do Loop in IOServer',
+        self.continuousDoLoop = threading.Thread(name='Continuous Do Loop in IOServer',
                                                  target=writeTagsLoop,
                                                  args=(), daemon=True)
         self.continuousDoLoop.start()
@@ -2143,7 +2156,9 @@ class PLCIOServer:
         plc.camera.answer.timeout.sec (or at once when the camera server is down): the check is then NOT OK. The
         frontend shows only results of the active request (setActiveCameraRequest)."""
         self._cameraRequestSeq += 1
-        requestId = f"{self.cycleId}-{self._cameraRequestSeq}"
+        # <pid>.<cycle>-<n>: the pid makes the ids of a restarted IOServer (cycle and n start from 0 again) differ from
+        # the old one's, so that a late camera answer to the old IOServer's request can never match a new request
+        requestId = f"{os.getpid()}.{self.cycleId}-{self._cameraRequestSeq}"
         setActiveCameraRequest(self.redisConnectionForReads, requestId)
         self._cameraRequest = {"id": requestId, "pictureState": pictureState,
                                "writeState": MachineState(int(pictureState) + 1), "sentAt": time.monotonic()}
@@ -2206,6 +2221,7 @@ class PLCIOServer:
         while the PLC is not reachable - at most by one write in progress."""
         attempts = 0
         while not self.shutdown:
+            self.lastWriteLoopAt = time.monotonic()
             with self._abortLock:
                 if self.machineState.getCurrentState() != stateAtStart:
                     printBoldRed(f"Cycle reset while writing {tag}; not written")
@@ -3044,17 +3060,17 @@ class PLCIOServer:
             self._closePLC()
         except Exception:
             noteSuppressed()
-        self.logger.info(f"IOServer shutdown")
-        printBoldRed(f"IOServer shutdown")
+        self.logger.info("IOServer shutdown")
+        printBoldRed("IOServer shutdown")
 
 
 # *********************************************************************
 
 def startIOServer(mode : str = "TEST"):
     io = PLCIOServer(mode = mode)
-    printBoldBlue(f"*****************")
+    printBoldBlue("*****************")
     printBlue(f"Started IO Server ({io.dataIOForReads.describe() if io.dataIOForReads else io.vendor})")
-    printBoldBlue(f"*****************")
+    printBoldBlue("*****************")
     io.heartbeatThread.join()
     io.monitorStopThread.join()
     sys.exit(0)

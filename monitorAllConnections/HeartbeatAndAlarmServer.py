@@ -5,6 +5,9 @@ import winsound
 from logutils.SlaveLoggers import *
 import time
 from BaseUtils import *
+# printBoldGreen is used by the Redis health check ("storing data again"); it came from no star import, so the
+# check thread died with NameError the first time Redis recovered (CHANGES 85)
+from utils.CosThetaPrintUtils import printBoldGreen, printBoldRed
 import sys
 
 from Configuration import *
@@ -40,7 +43,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
         self.redisConnectionQ = None
         self.clientRedisConnectedQ = False
         self.connectToRedis()
-        logBoth('logInfo', HeartbeatAndAlarmServer.logSource, f"Started Heartbeat and Alarm Server", Logger.GENERAL)
+        logBoth('logInfo', HeartbeatAndAlarmServer.logSource, "Started Heartbeat and Alarm Server", Logger.GENERAL)
 
         self.qrCodeServerConnectionStatus : bool = False
         self.cameraServerConnectionStatus: bool = False
@@ -61,9 +64,9 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
         self.launchRedisHealthCheckThread()
         self.launchConnectionAlarmMonitoringThread()
         self.launchThreadForBadComponentAlarm()
-        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"************", Logger.SUCCESS)
-        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"Started Connection and Alarm Monitoring Thread", Logger.SUCCESS)
-        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, f"************", Logger.SUCCESS)
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, "************", Logger.SUCCESS)
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, "Started Connection and Alarm Monitoring Thread", Logger.SUCCESS)
+        logBoth('logCritical', HeartbeatAndAlarmServer.logSource, "************", Logger.SUCCESS)
 
 
         self.gapBetweenConnectionProblemAlarms : float = CosThetaConfigurator.getInstance().getGapBetweenConnectionAlarms() # secs
@@ -287,7 +290,7 @@ class HeartbeatAndAlarmServer(GenericQueueProcessor):
                     time.sleep(1.0)
                 except Exception:
                     noteSuppressed()
-        monitorAlarmThread = threading.Thread(name=f"Alarm Monitoring Thread", target=sniffForAlarm, args=(), daemon = True)
+        monitorAlarmThread = threading.Thread(name="Alarm Monitoring Thread", target=sniffForAlarm, args=(), daemon = True)
         monitorAlarmThread.start()
 
     def preWorkLoop(self):

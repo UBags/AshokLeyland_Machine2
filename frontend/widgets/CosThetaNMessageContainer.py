@@ -36,7 +36,7 @@ class CosTheta_N_MessageContainer(QWidget):
         #         break
         if len(badData) != 0:
             raise Exception(
-                f"Unable to proceed. Please ensure that fonts are of type QFont and foregroundColors are of type QColor")
+                "Unable to proceed. Please ensure that fonts are of type QFont and foregroundColors are of type QColor")
         if initialisationState <= 0 or initialisationState > nMessages:
             raise Exception(
                 f"Unable to proceed. Initialisation state has to be {'1' if (nMessages == 1) else f'a number between 1 - {nMessages}'}")

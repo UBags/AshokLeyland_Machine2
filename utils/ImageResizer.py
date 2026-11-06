@@ -124,7 +124,7 @@ def resize_images(input_folder: str, target_width: int = 1280, target_height: in
 
     # Summary
     print("-" * 50)
-    print(f"Processing complete!")
+    print("Processing complete!")
     print(f"Successfully converted: {successful}")
     print(f"Failed: {failed}")
     print(f"Total: {len(image_files)}")

@@ -88,15 +88,15 @@ class DataPersistence():
         self.startPersistenceAndHeartbeatThreads()
         self.currentModelName : str | None = None
         SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
-                                              f"Started DB Server",
+                                              "Started DB Server",
                                               Logger.GENERAL)
         SlaveConsoleLogger.getInstance().logInfo(DataPersistence.logSource,
-                                                 f"Started DB Server",
+                                                 "Started DB Server",
                                                  Logger.GENERAL)
         # printBoldYellow(f"Reached 6 in DataPersistence")
-        printBoldBlue(f"*****************")
-        printBlue(f"Started DB Server")
-        printBoldBlue(f"*****************")
+        printBoldBlue("*****************")
+        printBlue("Started DB Server")
+        printBoldBlue("*****************")
         # printBoldYellow(f"Reached 7 in DataPersistence")
 
         # printAllVariables()
@@ -278,15 +278,16 @@ class DataPersistence():
 
     def doWork(self) -> None:
         SlaveFileLogger.getInstance().logTakeNote(DataPersistence.logSource,
-                                                  f"In DBServer, starting doWork",
+                                                  "In DBServer, starting doWork",
                                                   Logger.GENERAL)
         SlaveConsoleLogger.getInstance().logTakeNote(DataPersistence.logSource,
-                                                     f"In DBServer, starting doWork",
+                                                     "In DBServer, starting doWork",
                                                      Logger.SUCCESS)
         # printBoldYellow(f"Starting doWork() in DataPersistence")
         savedRecords : int = 0
         hadData : bool = False
         while not self.stopped:
+            self.lastWorkLoopAt = time.monotonic()
             # Pending records are processed back-to-back (FIFO); the loop only idles when fe2db.q is empty.
             if not hadData:
                 if self.stopRequested:
@@ -341,7 +342,7 @@ class DataPersistence():
                     capPictureFile = self.saveCapImage(capPicture)
                     bunkCapPressFile : str  = self.saveBunkAndNoBunkImage(capPressBunkPicture)
                     SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
-                                                          f"Finished savings images",
+                                                          "Finished savings images",
                                                           Logger.SUCCESS)
                     # tStamp = getYMDHMSmFormatFromTimeDotTime(timeOfMessage)[:-4]
                     tStamp = datetime.fromtimestamp(float(timeOfMessage)).strftime('%Y-%m-%d %H:%M:%S')
@@ -430,7 +431,7 @@ class DataPersistence():
                         else:
                             printBoldYellow(f"Record not inserted for QR code {qrCode}")
                             SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
-                                                                  f"Failed to insert record in database",
+                                                                  "Failed to insert record in database",
                                                                   Logger.ISSUE)
                             self.handleFailedInsert(messageId, qrCode, "insertData() returned False")
                         self.currentModelName = None
@@ -470,7 +471,7 @@ class DataPersistence():
                     self.stopRequested = True
             except Exception:
                 self.connectToRedis(True)
-        printBoldRed(f"In DBServer, stopping doWork")
+        printBoldRed("In DBServer, stopping doWork")
         print("DEBUG: Exiting doWork loop")
 
     def handleFailedInsert(self, messageId, qrCode: str, reason: str) -> None:
@@ -517,6 +518,8 @@ class DataPersistence():
         while not self.stopped:
             try:
                 connected = checkConnection(db_name=getDatabaseName())
+                if connected and self.workers.problemsLogged(log=lambda m: printBoldRed(m)):
+                    connected = False            # the thread that saves the records died or is stuck
                 if connected:
                     # printBoldGreen(f"Connected. Sending heartbeat with OK")
                     if self.heartbeatRedisConnected:
@@ -531,12 +534,12 @@ class DataPersistence():
                         self.connectToRedis(forceRenew=True)
             except Exception:
                 SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
-                                                            f"Could not send heartbeat from DBServer",
+                                                            "Could not send heartbeat from DBServer",
                                                             Logger.PROBLEM)
                 SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource,
-                                                               f"Could not send heartbeat from DBServer",
+                                                               "Could not send heartbeat from DBServer",
                                                                Logger.PROBLEM)
-                printBoldRed(f"Could not send heartbeat from DBServer")
+                printBoldRed("Could not send heartbeat from DBServer")
             try:
                 _, shallStop = getStopCommandFromQueue(self.heartbeatRedisConnection)
                 if shallStop and not self.stopRequested:
@@ -578,11 +581,17 @@ class DataPersistence():
                 printBoldRed(f"Could not make the image folders of the new day: {e}")      # tried again next minute
 
     def startPersistenceAndHeartbeatThreads(self) -> None:
+        # the record-saving thread, for the heartbeat (DEAD while it is not running or stuck: utils/WorkerHealth.py)
+        from utils.WorkerHealth import WorkerWatch
+        self.lastWorkLoopAt = time.monotonic()
+        self.workers = WorkerWatch("DB server")
+        self.workers.add("saving records (doWork)", lambda: getattr(self, "threadForDoingMainWork", None),
+                         lastTick=lambda: self.lastWorkLoopAt)
         self.dayWatchThread = threading.Thread(name='Image folder day change', target=self.watchForNewDay,
                                                args=(), daemon=True)
         self.dayWatchThread.start()
         self.threadForDoingMainWork = threading.Thread(
-            name=f'Thread for saving images and updating the database',
+            name='Thread for saving images and updating the database',
             target=self.doWork,
             args=(), daemon=True)
         self.heartbeatThread = threading.Thread(name=f'Heartbeat - {DataPersistence.logSource}',

@@ -52,11 +52,11 @@ tryAgain : bool = False
 try:
     redisConnection = Redis(hostname, port, retry_on_timeout=True)
     redisConnection.ping()  # Test connection
-    printBoldGreen(f"Connected successfully to Redis in MainProgram")
+    printBoldGreen("Connected successfully to Redis in MainProgram")
 except Exception as e:
     printBoldRed(f"Failed to connect to Redis in MainProgram : {e}")
     redisConnection = None
-    printBoldBlue(f"Waiting for a short while for other components to come up")
+    printBoldBlue("Waiting for a short while for other components to come up")
     tryAgain = True
     time.sleep(10)
 
@@ -65,11 +65,11 @@ if tryAgain:
         redisConnection = Redis(hostname, port, retry_on_timeout=True)
         redisConnection.ping()  # Test connection
         tryAgain = False
-        printBoldGreen(f"Connected successfully to Redis in MainProgram")
+        printBoldGreen("Connected successfully to Redis in MainProgram")
     except Exception as e:
         printBoldRed(f"Failed to connect to Redis in MainProgram : {e}")
         redisConnection = None
-        printBoldBlue(f"Waiting for a short while more for other components to come up")
+        printBoldBlue("Waiting for a short while more for other components to come up")
         tryAgain = True
         time.sleep(10)
 
@@ -78,11 +78,11 @@ if tryAgain:
         redisConnection = Redis(hostname, port, retry_on_timeout=True)
         redisConnection.ping()  # Test connection
         tryAgain = False
-        printBoldGreen(f"Connected successfully to Redis in MainProgram")
+        printBoldGreen("Connected successfully to Redis in MainProgram")
     except Exception as e:
         printBoldRed(f"Failed to connect to Redis in MainProgram : {e}")
         redisConnection = None
-        printBoldRed(f"Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
+        printBoldRed("Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
         sys.exit(1)
 
 # Redis is NOT flushed here, at module level (as in production). On Windows every server process is started with
@@ -318,10 +318,10 @@ def main():
 
     try:
         clearQueues(redisConnection)
-        printBoldGreen(f"Cleared up all queues")
+        printBoldGreen("Cleared up all queues")
     except Exception as e:
         printBoldRed(f"Couldn't clear queues because of {e}")
-        printBoldRed(f"Queues have to work properly for the application to work. Hence, exiting...")
+        printBoldRed("Queues have to work properly for the application to work. Hence, exiting...")
         sys.exit(0)
 
     # Start-up check of Redis beyond the PING above: it must also store data (write to a stream nothing else uses and
@@ -329,7 +329,7 @@ def main():
     redisHealthy, why = checkRedisHealth(redisConnection)
     if not redisHealthy:
         printBoldRed(f"Redis answers but does not store data ({why}).")
-        printBoldRed(f"Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
+        printBoldRed("Redis is an important component for the machine. Contact the manufacturer - CosTheta Technologies for a resolution")
         sys.exit(1)
     printBoldGreen("Redis check passed: data written and read back")
 

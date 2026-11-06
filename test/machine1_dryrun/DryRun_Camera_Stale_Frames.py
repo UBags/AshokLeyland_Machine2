@@ -192,6 +192,9 @@ if __name__ == "__main__":
     allok, _, _, reason = w.assess(MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, [img] * 6, 5)
     check("A3 a check in time resets the count", allok is True and reason is None and w.timeoutsInARow == 0,
           f"{allok} {reason} {w.timeoutsInARow}")
+    check("A3 ... its time in the worker and the transfer around it are recorded (logged per check)",
+          w.lastCheckSecs is not None and w.lastTransferSecs is not None and 0 <= w.lastTransferSecs < 1.0,
+          f"check {w.lastCheckSecs}, transfer {w.lastTransferSecs}")
     w.waitUntilReady(180)
     _, _, _, reason = w.assess(MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING, [img] * 6, 1.5)
     check("A4 ... the next timeout is the first of a new run", reason == "check timed out after 1.5 s", reason)

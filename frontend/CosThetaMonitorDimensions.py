@@ -391,7 +391,7 @@ def populateMonitorDimensions():
     try:
         getMonitorDimensions()
     except Exception:
-        print(f"No monitor found - exiting")
+        print("No monitor found - exiting")
         # printBoldSeparator()
         sys.exit(1)
 

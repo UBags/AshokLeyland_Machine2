@@ -86,6 +86,8 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      K1: an abort while Done=True is being written: the write lands, then the abort's reset sets Done False.
      K2: PC_PLC_ConnectionStatus keeps toggling while an abort runs on the heartbeat status thread.
 
+  L. IOServer heartbeat (io2hb.q) DEAD while the read or the write loop is stuck, ALIVE once it goes round (2026-11-07).
+
 COSTHETA_DRYRUN_SCENARIOS=G (or F,G ...) runs only those groups (A-E together).
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
@@ -1212,6 +1214,45 @@ def run_abort_races():
     check("K a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
 
 
+def run_loop_health():
+    """L (2026-11-07). The IOServer's heartbeat (io2hb.q) is DEAD while its read or write loop is stuck, and ALIVE again
+    once it goes round (utils/WorkerHealth.py); before, the heartbeat thread said ALIVE whatever the loops did."""
+    print("\n=== L. IOServer heartbeat follows the read / write loops ===", flush=True)
+    from Configuration import CosThetaConfigurator as C
+    origLimit = C.getWorkLoopMaxSilence
+    C.getWorkLoopMaxSilence = classmethod(lambda cls: 2.0)
+    def latest():
+        last = r.xrevrange(io2hbq, count=1)
+        return last[0][1].get(connectionStatusKeyString.encode(), b"").decode() if last else None
+    check("L0 at the QR code, heartbeat ALIVE", wait_for(lambda: latest() == ALIVE, 5), latest())
+    release = threading.Event()
+    original = io.getCurrentTagsToBeRead
+    def stuck():
+        release.wait(30)                                  # the read loop hangs (e.g. a driver call that never returns)
+        return original()
+    io.getCurrentTagsToBeRead = stuck
+    check("L1 read loop stuck > 2 s -> IOServer heartbeat DEAD", wait_for(lambda: latest() == DEAD, 6), latest())
+    release.set(); time.sleep(0.3)
+    del io.getCurrentTagsToBeRead
+    check("L1 read loop going round again -> ALIVE", wait_for(lambda: latest() == ALIVE, 5), latest())
+    release2 = threading.Event()
+    originalW = io.getCurrentTagsToBeWritten
+    def stuckW():
+        release2.wait(30)
+        return originalW()
+    io.getCurrentTagsToBeWritten = stuckW
+    check("L2 write loop stuck > 2 s -> DEAD", wait_for(lambda: latest() == DEAD, 6), latest())
+    release2.set(); time.sleep(0.3)
+    del io.getCurrentTagsToBeWritten
+    check("L2 write loop going round again -> ALIVE", wait_for(lambda: latest() == ALIVE, 5), latest())
+    C.getWorkLoopMaxSilence = origLimit
+    TRACE.clear()
+    check("L at the QR code", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8))
+    QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
+    run_steps()
+    check("L a full normal cycle completes afterwards", wrapped(), f"trace {TRACE}")
+
+
 # COSTHETA_DRYRUN_SCENARIOS=G (or e.g. "F,G"): run only these groups (A-E are one group); default: all
 import os as _os
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
@@ -1226,6 +1267,7 @@ try:
     if _wanted("I"): run_plc_connection()
     if _wanted("J"): run_servers_down()
     if _wanted("K"): run_abort_races()
+    if _wanted("L"): run_loop_health()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

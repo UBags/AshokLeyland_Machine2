@@ -31,7 +31,7 @@ def threadToKeepProgramFromShuttingDown():
     while True:
         try:
             time.sleep(10)
-            printBoldBlue(f"Services are alive")
+            printBoldBlue("Services are alive")
         except Exception:
             noteSuppressed()
 

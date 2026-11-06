@@ -212,7 +212,6 @@ class CosThetaOutcomeContainer(QWidget):
             backgroundcolor = QColor(225, 220, 245)
         elif (self.getResult().upper() == "NOT OK") or (self.getResult().upper() == "NOTOK"):
             backgroundcolor = QColor(255, 185, 185)
-            result = "Not OK"
         else:
             backgroundcolor = QColor(206, 206, 206)
         image = createImage(text, imageDimensions=(self.imageWidth, self.imageHeight),

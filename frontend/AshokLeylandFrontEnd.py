@@ -80,7 +80,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
+from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -92,7 +92,7 @@ from persistence.Persistence import (
 )
 
 # From utils.CosThetaPrintUtils
-from utils.CosThetaPrintUtils import (printBoldBlue, printBlue, printBoldRed, printYellow, printGreen, printRed, getCurrentTime)
+from utils.CosThetaPrintUtils import (printBoldBlue, printBlue, printBoldRed, printBoldGreen, printYellow, printGreen, printRed, getCurrentTime)
 
 from frontend.frontendutils.CosThetaImageUtils import (
     createImage,
@@ -268,9 +268,9 @@ class AshokLeylandFrontEnd(QMainWindow):
             self.largeImageWindow.hide()
             self.installEventFilter(self)  # Add event filter for key press events
             self.update()
-            printBoldBlue(f"*****************")
-            printBlue(f"Started FE Server")
-            printBoldBlue(f"*****************")
+            printBoldBlue("*****************")
+            printBlue("Started FE Server")
+            printBoldBlue("*****************")
             self.setFixedWidth(AshokLeylandFrontEnd.CURRENT_WIDTH)
             self.setFixedHeight(AshokLeylandFrontEnd.CURRENT_HEIGHT)
         except Exception as e:
@@ -401,31 +401,31 @@ class AshokLeylandFrontEnd(QMainWindow):
         # ********************************** START CONNECTION GROUP BOX *********************************
 
         self._statusFont = QFont('Courier', pointSize=int(20), weight=QFont.Weight.Bold)
-        self.cameraServerConnectionStatusContainer = ToggleMessageContainer(okText =f"Camera connected",
-                                                                            notokText = f"Camera not connected",
+        self.cameraServerConnectionStatusContainer = ToggleMessageContainer(okText ="Camera connected",
+                                                                            notokText = "Camera not connected",
                                                                             okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
                                                                             labelHeight = self.labelHeight, name='CAMERACONNECTION', forceUseOfFontSize=13)
-        self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText =f"I/O Module connected",
-                                                                        notokText = f"I/O Module not connected",
+        self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText ="I/O Module connected",
+                                                                        notokText = "I/O Module not connected",
                                                                         okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='IOCONNECTION',
                                                                         forceUseOfFontSize=13)
-        self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText =f"Database connected",
-                                                                        notokText = f"Database not connected",
+        self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText ="Database connected",
+                                                                        notokText = "Database not connected",
                                                                         okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='DBCONNECTION',
                                                                         forceUseOfFontSize=13)
-        self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText =f"QRCode Scanner connected",
-                                                                            notokText = f"QRCode Scanner not connected",
+        self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText ="QRCode Scanner connected",
+                                                                            notokText = "QRCode Scanner not connected",
                                                                             okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
@@ -631,7 +631,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         # Create actions for mode menu
         changePassword_act = QAction(' Change Own Password ', self)
         changePassword_act.setShortcut(' Ctrl+Alt+P ')
-        changePassword_act.triggered.connect(lambda : changePasswordForSelf(currentUser=self.username, currentRole=self.role))
+        changePassword_act.triggered.connect(lambda: self._runDialog(changePasswordForSelf, currentUser=self.username, currentRole=self.role))
 
         exit_act = QAction(' Exit ', self)
         exit_act.setShortcut(' Ctrl+Alt+E ')
@@ -639,43 +639,43 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         addnewuser_act = QAction(' Add New User ', self)
         addnewuser_act.setShortcut(' Ctrl+Alt+N ')
-        addnewuser_act.triggered.connect(lambda : createAccount(currentUser=self.username, currentRole=self.role))
+        addnewuser_act.triggered.connect(lambda: self._runDialog(createAccount, currentUser=self.username, currentRole=self.role))
 
         manageuserpasswords_act = QAction(' Manage Other Users Passwords ', self)
         manageuserpasswords_act.setShortcut(' Ctrl+Alt+M ')
-        manageuserpasswords_act.triggered.connect(lambda : changePassword(currentUser=self.username, currentRole=self.role))
+        manageuserpasswords_act.triggered.connect(lambda: self._runDialog(changePassword, currentUser=self.username, currentRole=self.role))
 
         changerole_act = QAction(' Change User Role ', self)
         changerole_act.setShortcut(' Ctrl+Alt+R ')
-        changerole_act.triggered.connect(lambda : changeRole(currentUser=self.username, currentRole=self.role))
+        changerole_act.triggered.connect(lambda: self._runDialog(changeRole, currentUser=self.username, currentRole=self.role))
 
         activateuser_act = QAction(' Activate an Inactive User ', self)
         activateuser_act.setShortcut(' Ctrl+Alt+C ')
-        activateuser_act.triggered.connect(lambda : activateUser(currentUser=self.username, currentRole=self.role))
+        activateuser_act.triggered.connect(lambda: self._runDialog(activateUser, currentUser=self.username, currentRole=self.role))
 
         inactivateuser_act = QAction(' Inactivate User ', self)
         inactivateuser_act.setShortcut(' Ctrl+Alt+I ')
-        inactivateuser_act.triggered.connect(lambda : inactivateUser(currentUser=self.username, currentRole=self.role))
+        inactivateuser_act.triggered.connect(lambda: self._runDialog(inactivateUser, currentUser=self.username, currentRole=self.role))
 
         createreportbymodelname_act = QAction(' Create Production Report By Model Name', self)
         createreportbymodelname_act.setShortcut(' Ctrl+Alt+S ')
-        createreportbymodelname_act.triggered.connect(lambda : createProductionReportByModelName())
+        createreportbymodelname_act.triggered.connect(lambda: self._runDialog(createProductionReportByModelName))
 
         createreportbymodelnameforperiod_act = QAction(' Create Production Report By Model Name For a Period', self)
         createreportbymodelnameforperiod_act.setShortcut(' Ctrl+Alt+F ')
-        createreportbymodelnameforperiod_act.triggered.connect(lambda : createProductionReportByModelNameAndDateLimits())
+        createreportbymodelnameforperiod_act.triggered.connect(lambda: self._runDialog(createProductionReportByModelNameAndDateLimits))
 
         createreportbymodelnamefortoday_act = QAction(' Create Production Report By Model Name For Today', self)
         createreportbymodelnamefortoday_act.setShortcut(' Ctrl+Alt+A ')
-        createreportbymodelnamefortoday_act.triggered.connect(lambda : createProductionReportOfTodayByModelName())
+        createreportbymodelnamefortoday_act.triggered.connect(lambda: self._runDialog(createProductionReportOfTodayByModelName))
 
         createreportforaperiodforallmodels_act = QAction(' Create Production Report for a Period for all Models', self)
         createreportforaperiodforallmodels_act.setShortcut(' Ctrl+Alt+D ')
-        createreportforaperiodforallmodels_act.triggered.connect(lambda : createProductionReportByDateLimits())
+        createreportforaperiodforallmodels_act.triggered.connect(lambda: self._runDialog(createProductionReportByDateLimits))
 
         createreportfortodayforallmodels_act = QAction(' Create Full Production Report for Today for all Models', self)
         createreportfortodayforallmodels_act.setShortcut(' Ctrl+Alt+D ')
-        createreportfortodayforallmodels_act.triggered.connect(lambda : createProductionReportOfToday())
+        createreportfortodayforallmodels_act.triggered.connect(lambda: self._runDialog(createProductionReportOfToday))
 
         info_act = QAction(' About ', self)
         info_act.setShortcut(' Ctrl+Alt+A ')
@@ -732,7 +732,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         # PLC in state 2 (stored in machine_settings; used when cycle.settings.source=database)
         machine_settings_act = QAction(' Machine Settings ', self)
         machine_settings_act.setShortcut(' Ctrl+Alt+U ')
-        machine_settings_act.triggered.connect(lambda: updateMachineSettingsDialog(currentUser=self.username, currentRole=self.role))
+        machine_settings_act.triggered.connect(lambda: self._runDialog(updateMachineSettingsDialog, currentUser=self.username, currentRole=self.role))
         machine_settings_menu = menu_bar.addMenu(' Machine Settings ')
         machine_settings_menu.addAction(machine_settings_act)
         if not canChangeMachineSettings(self.role):
@@ -943,7 +943,31 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     # ********************************************
 
+    lastGuiTickAt: float = time.monotonic()     # set every second by a timer of the GUI thread (heartbeat)
+    dialogsOpen: int = 0                        # FreeSimpleGUI dialogs open on the GUI thread (_runDialog)
+
+    def _runDialog(self, dialog, *args, **kwargs):
+        """Run a FreeSimpleGUI (tkinter) dialog of the menu. It runs its own event loop on the GUI thread, so the Qt
+        timers - the GUI tick of the heartbeat among them - stop while it is open: counted here, the heartbeat stays
+        ALIVE meanwhile (an administrator may take minutes in Machine Settings or a report; that is not a frozen
+        screen, and must not abort the cycle as a frontend that is down would)."""
+        AshokLeylandFrontEnd.dialogsOpen += 1
+        try:
+            return dialog(*args, **kwargs)
+        finally:
+            AshokLeylandFrontEnd.dialogsOpen -= 1
+            AshokLeylandFrontEnd.lastGuiTickAt = time.monotonic()
+
+    def _guiTick(self):
+        AshokLeylandFrontEnd.lastGuiTickAt = time.monotonic()
+
     def createWorkers(self):
+        # The heartbeat is sent from its own thread, so it went on while the GUI thread was frozen: it now says DEAD
+        # when the GUI thread has not run this timer for heartbeat.work.loop.max.silence.sec (utils/WorkerHealth.py)
+        AshokLeylandFrontEnd.lastGuiTickAt = time.monotonic()
+        self._guiTickTimer = QTimer(self)
+        self._guiTickTimer.timeout.connect(self._guiTick)
+        self._guiTickTimer.start(1000)
         self.createTimeDurationUpdateWorker()
         self.createGetQRCodeWorker()
         self.createGetPictureAndResultWorker()
@@ -1102,7 +1126,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         if not emergencyPressed:
             return
         AshokLeylandFrontEnd.emergencyButtonPressed = True
-        printYellow(f"About to call doFinalProcessing() from updateEmergencyAbortPressed()")
+        printYellow("About to call doFinalProcessing() from updateEmergencyAbortPressed()")
         self.doFinalProcessing()
 
     def eventFilter(self, obj, event):
@@ -1114,7 +1138,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         return super().eventFilter(obj, event)
 
     def manualAbort(self):
-        confirmed : str = getConfirmation(message="Aborting manually. Ensure you have pressed Emergency button on the machine.")
+        confirmed : str = self._runDialog(getConfirmation, message="Aborting manually. Ensure you have pressed Emergency button on the machine.")
         ok : bool = (confirmed.strip().upper() == "OK")
         if not ok:
             return
@@ -1129,7 +1153,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         sendAbortFromFEServerToIOServer(AshokLeylandFrontEnd.processUpdationRedisConnection,
                                         reason="manual abort (Ctrl+Alt+Z) in the frontend")
         AshokLeylandFrontEnd.emergencyButtonPressed = True
-        printYellow(f"About to call doFinalProcessing() from manualAbort()")
+        printYellow("About to call doFinalProcessing() from manualAbort()")
         self.doFinalProcessing()
 
 # ********************************************
@@ -1150,7 +1174,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         if (displayString is None) or (displayString == ""):
             self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_no_qr_code.format(
                 QColor(Qt.GlobalColor.black).name()))
-            self.qrCodeLabel.setText(f"QR CODE : ")
+            self.qrCodeLabel.setText("QR CODE : ")
         else:
             self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_qr_code.format(
                 QColor(Qt.GlobalColor.black).name()))
@@ -1410,7 +1434,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     def _handleComponentPressDone(self):
         if AshokLeylandFrontEnd.currentComponentPressDone == ok:
             self.resultsContainer.setComponentPressData(
-                value=f"Done", result=ok
+                value="Done", result=ok
             )
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
             self.requestPictureAndResult()
@@ -1448,7 +1472,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                 value=f"{AshokLeylandFrontEnd.currentRotationTorque1:.2f}", result=ok)
         else:
             self.setCurrentState(MachineState.READ_FREE_ROTATION_TORQUE_1)
-        printYellow(f"About to call doFinalProcessing() from normal path")
+        printYellow("About to call doFinalProcessing() from normal path")
         self.doFinalProcessing()
 
     def doFinalProcessing(self):
@@ -2005,7 +2029,18 @@ class HeartbeatSenderWorker(QObject):
         self.timer.stop()
 
     def send_heartbeat(self):
-        sendHeartbeatFromFEServerToHeartbeatServer(AshokLeylandFrontEnd.heartbeatRedisConnection, ALIVE)
+        from utils.WorkerHealth import maxLoopSilenceSecs
+        frozen = time.monotonic() - AshokLeylandFrontEnd.lastGuiTickAt
+        if frozen > maxLoopSilenceSecs() and AshokLeylandFrontEnd.dialogsOpen == 0:
+            if not getattr(self, "_reportedFrozen", False):
+                self._reportedFrozen = True
+                printBoldRed(f"Frontend: the GUI thread has not run for {frozen:.0f} s - heartbeat DEAD")
+            sendHeartbeatFromFEServerToHeartbeatServer(AshokLeylandFrontEnd.heartbeatRedisConnection, DEAD)
+        else:
+            if getattr(self, "_reportedFrozen", False):
+                self._reportedFrozen = False
+                printBoldGreen("Frontend: the GUI thread runs again")
+            sendHeartbeatFromFEServerToHeartbeatServer(AshokLeylandFrontEnd.heartbeatRedisConnection, ALIVE)
         _applyLiveInterval(self.timer, self._getIntervalMs())
 
     def __del__(self):

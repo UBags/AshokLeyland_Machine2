@@ -2214,3 +2214,74 @@ From the code review of 2026-11-07 (architecture items not included).
     during a 5 s abort). With the old code K1 and K2 fail.
   - `DryRun_Heartbeat_And_Startup.py` H10: the stop command in monitorStop ends the processes and then backs up the
     database. With the old code it fails (no backup).
+
+## 85. Robustness items of the review; second review pass: QR validation fix, request ids, DB connect timeout (2026-11-07)
+
+Architecture items not included (user).
+
+- **QR code validation: back to matching the start of the code (a bug of section 84, fixed first, `4816b13`).**
+  Real codes go on after the pattern ("...$1$SPDL ASSY-KNULH$SNPL-MAT$"); `re.fullmatch` rejected every one. The
+  samples checked in section 84 had been cut at the space. `re.match` again, on the stripped code; the escaped date
+  dots stay (the dates use dots). New `DryRun_QRCode_Validation.py`: every QR code written in the tests (7 distinct,
+  the real format) accepted, also with the scanner's line end; side and model read from each; empty / wrong / a date
+  with dashes / a code cut short refused. With `fullmatch` V1 fails.
+- **Heartbeats follow the work threads (review b1).** Each server's heartbeat was sent by a thread of its own and
+  said ALIVE as long as that thread ran, whatever the threads doing the work did. New `utils/WorkerHealth.py`
+  (`WorkerWatch`): a server registers its work threads; its heartbeat is DEAD while one is not running, or has not
+  gone round its loop for `heartbeat.work.loop.max.silence.sec` (new, 60 s; at least the camera answer timeout + 10 s,
+  so that a check that is timing out is never taken for a stuck camera server). A change is logged once.
+  - `GenericQueueProcessor`: `lastLoopAt`, set at each pass of the work loop (also while waiting for items).
+  - Camera server: MonitorGetPicQueue, TakePictures, ConverterScalerAndProcessor (`cameraWorkers`). IOServer: the read
+    and write loops (`lastReadLoopAt` / `lastWriteLoopAt`; a retried handshake write counts as going round). DB server:
+    `doWork`. QR code server: the three threads; waiting for a scan counts as going round. Frontend: a 1 s timer of
+    the GUI thread; the heartbeat thread sends DEAD when it has not run for 60 s.
+  - Frontend menu dialogs (FreeSimpleGUI: Machine Settings, reports, user accounts, the manual-abort confirmation) run
+    their own event loop on the GUI thread, which stops the Qt timers: `_runDialog` counts them open, and the heartbeat
+    stays ALIVE meanwhile (otherwise an administrator in Machine Settings for a minute would abort the running cycle).
+  - What a DEAD server then causes is unchanged (the server-down rules of section 81).
+- **Worker transfer cost measured (b2).** Sending the six pictures (three 1280 x 720 frames, each twice) to the vision
+  check worker and the result back: about 0.01 s here (worst 0.09 s). The worker now returns its own check time; each
+  check is logged as "<STATE>: check S s in the worker, transfer T s", a warning when T > 1 s, so the plant PC's logs
+  give both.
+- **Plant PC verification (b3):** `docs/plant-pc-verification.md` - the worker inside the exe, check times against the
+  timeout (from the log on the plant PC; with the new `PlantPC_Vision_Timing.py` where the source is), killing each
+  server and watching the supervisor restart it (what to expect per server), a frozen screen, real QR codes; results
+  table. `PlantPC_Vision_Timing.py` runs every stored test picture through its check with the real models in the
+  worker and prints median / largest time, transfer and margin per check (exit 1 above 80 % of the timeout); here
+  only exercised with a stand-in worker (no weights).
+- **Code clean-up (b4), production code outside camera/ and the vision utilities (the equivalence verifier):**
+  - 219 f-strings without placeholders made plain strings (ruff F541; same text).
+  - Dead assignments removed only where nothing depends on them: three `resp = redisConnection.xadd(...)` (the call
+    stays), `result = "Not OK"` in `CosThetaOutcomeContainer.setText`, `flushAfter` in CentralLoggers. Kept on purpose
+    (35): `timeOfMessage = newData[timeKeyString]` and the like (the lookup rejects a message without the field),
+    calls whose result is unused, `gfe = AshokLeylandFrontEnd(...)` (keeps the window alive). Found while doing it:
+    the same `result = "Not OK"` in three other methods of that class is NOT dead (it is passed on) - left.
+  - Star imports (2,661 names) not replaced: which names a module really takes from another is only safe to work out
+    together with splitting the large modules (architecture item 5).
+- **Second review pass, fixed:**
+  - **Heartbeat server: the Redis health check thread died at the first recovery** (section 83). It printed
+    "storing data again" with `printBoldGreen`, which no import of the module provides (ruff cannot see it through
+    the star imports): NameError, the thread ended, and a later Redis failure was never seen. Imported explicitly.
+    Found by checking every name the production modules take from star imports: each module imported, each such
+    name looked up in it (ruff F405 list, 2,661 uses). Two did not resolve: this one, and `Qt` in the unused
+    `frontend/widgets/CosThetaRoundButton.py` (imported now). Modules that cannot be imported at all were checked
+    for use: `processors/image/*`, `camera/CameraRecorderServer.py`, `PhotoCamera.py`, `VideoCamera.py` fail on
+    configuration getters that no longer exist, and nothing in the application imports them (legacy, left).
+    New heartbeat dry-run check R6 (the check keeps running after a recovery and sees a second failure); without the
+    import R6 fails.
+  - Camera request ids are `<pid>.<cycle>-<n>`: a restarted IOServer starts its cycle and request counters at 0
+    again, so a late camera answer to the old IOServer's request could have matched a new request.
+  - Every PostgreSQL connection gives up after 5 s if the server does not answer (`PGCONNECT_TIMEOUT`, set in
+    `Persistence.py`; libpq reads it; an explicit `connect_timeout` still wins). Before, a PostgreSQL that hung held
+    the caller for good (QR duplicate check, IOServer machine settings, DB server, reports). Checked against a socket
+    that accepts and never answers: gives up after the timeout.
+  - `VerifyIntegrity.py`: invalid escape sequence in a docstring (a SyntaxWarning now, an error in a later Python).
+- **Second review pass, looked at and left (not defects):** image file names (millisecond time stamps, one folder per
+  check; a PNG write takes longer than 1 ms); log and fault files opened without `with` (kept open on purpose);
+  `replaceChar=[...]` default (never changed); the frontend record built 0.75 s after the last result (no scan can
+  start a cycle in that time); `VerifyIntegrity.py` globals (licensing code, not called).
+- **Dry runs (both folders):** new `DryRun_Work_Thread_Health.py` (17 checks: WorkerWatch, GenericQueueProcessor
+  tick, camera / QR / DB heartbeats DEAD and back), `DryRun_QRCode_Validation.py` (9); fault scenarios L (IOServer
+  heartbeat DEAD while the read / write loop is stuck, ALIVE again, then a full cycle); frontend F11 (DEAD while the
+  GUI thread is frozen, ALIVE again, ALIVE while a menu dialog is open); `DryRun_Camera_Stale_Frames.py` A3 (check
+  and transfer times recorded).

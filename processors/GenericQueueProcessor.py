@@ -27,6 +27,7 @@ class GenericQueueProcessor(Thread, ABC):
         self.name : str = name
         self.consumer : Union[Thread, "GenericQueueProcessor", Any, None] = consumer
         self.timeout : int = timeout
+        self.lastLoopAt : float = time.monotonic()      # last pass round the work loop (utils/WorkerHealth.py)
         self.sleepTime : float = sleepTime
         self.blocking : bool = blocking
         self.monitorRedisQueueForStopping : bool = monitorRedisQueueForStopping
@@ -171,6 +172,7 @@ class GenericQueueProcessor(Thread, ABC):
     def doWork(self, blocking=True):
         self.preWorkLoop()
         while (not self.stopped) or (self.processingQueue.qsize() > 0):
+            self.lastLoopAt = time.monotonic()
             startOfProcessing = time.time()
             item = self.getItem(blocking)
             if item is not None:

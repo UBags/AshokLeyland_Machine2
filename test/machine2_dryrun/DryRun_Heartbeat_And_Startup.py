@@ -162,6 +162,17 @@ finally:
 check("R4 Redis storing again: the heartbeat server reports it healthy again",
       wait_for(lambda: hb.redisHealthy is True, 12) and
       wait_for(lambda: latest(RU.hb2ioq).get(RU.redisServerStatusKeyString) == RU.ALIVE, 5), latest(RU.hb2ioq))
+# R6 (2026-11-07): the check thread survives the recovery and sees the next failure too (before section 85 it died with
+# NameError on printBoldGreen right after reporting the recovery, so a second failure was never seen)
+checksAfterRecovery = hb.redisChecks
+check("R6 the Redis check keeps running after a recovery", wait_for(lambda: hb.redisChecks >= checksAfterRecovery + 2, 6),
+      f"{checksAfterRecovery} -> {hb.redisChecks}")
+r.config_set("maxmemory-policy", "noeviction"); r.config_set("maxmemory", "1")
+try:
+    check("R6 ... and a second failure is seen", wait_for(lambda: hb.redisHealthy is False, 6), hb.redisHealthReason)
+finally:
+    r.config_set("maxmemory", "0")
+check("R6 ... and the second recovery", wait_for(lambda: hb.redisHealthy is True, 12))
 src = (ROOT / "MainProgram.py").read_text(encoding="utf-8")
 check("R5 MainProgram checks Redis (write / read back) at start-up, after clearing it, before any server starts",
       "checkRedisHealth(redisConnection)" in src.split("def main()")[1].split("Process(target=startTheLoggingServer")[0])

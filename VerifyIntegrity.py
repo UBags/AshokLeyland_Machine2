@@ -48,7 +48,7 @@ class WindowsRegistry:
 
 
     Examples:
-        WindowsRegistry.set_value('HKCU/Software/Microsoft/Windows/CurrentVersion/Run', 'Program', r'"c:\Dir1\program.exe"')
+        WindowsRegistry.set_value('HKCU/Software/Microsoft/Windows/CurrentVersion/Run', 'Program', r'"c:\\Dir1\\program.exe"')
         WindowsRegistry.delete_value('HKEY_CURRENT_USER/Software/Microsoft/Windows/CurrentVersion/Run/Program')
     """
     # @staticmethod
@@ -272,10 +272,10 @@ def verifyExistenceAndTamperingOfAllFiles():
     encryptedHoUFileNameExists = os.path.isfile(encryptedHoUFileName)
     if not encryptedCertFileExists and not encryptedCurrentDateFileExists and not encryptedStartingDateFileExists and not encryptedLimitsFileNameExists and not encryptedHoUFileNameExists:
         SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                       f"None of the certificate files exist. Certificates needed to be created to start a clean installation.",
+                                                       "None of the certificate files exist. Certificates needed to be created to start a clean installation.",
                                                        Logger.ISSUE)
         SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                       f"None of the certificate files exist. Certificates needed to be created to start a clean installation.",
+                                                       "None of the certificate files exist. Certificates needed to be created to start a clean installation.",
                                                        Logger.ISSUE)
         return False
     if not (encryptedCertFileExists and encryptedCurrentDateFileExists and encryptedStartingDateFileExists and encryptedLimitsFileNameExists and encryptedHoUFileNameExists):
@@ -662,20 +662,20 @@ def decryptAndVerifyIntegrity():
             if (stringToBeChecked != str(data)) :
                 # NOTE : DO NOT EXIT THE PROGRAM IN THIS METHOD
                 SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                               f"Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
+                                                               "Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                            f"Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
+                                                            "Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
                                                             Logger.PROBLEM)
                 deleteAllFiles()
             return (stringToBeChecked == str(data))
         else:
             # NOTE : DO NOT EXIT THE PROGRAM IN THIS METHOD
             SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                           f"Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
+                                                           "Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
                                                            Logger.PROBLEM)
             SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                        f"Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
+                                                        "Invalid certificate. Integrity verification failed. Contact CosTheta Technologies to validate the certificate for further use",
                                                         Logger.PROBLEM)
             deleteAllFiles()
             return False
@@ -880,10 +880,10 @@ def decryptAndVerifyCurrentDateIntegrity():
                 exitProgram()
             else:
                 SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                               f"Date validity OK",
+                                                               "Date validity OK",
                                                                Logger.GENERAL)
                 SlaveFileLogger.getInstance().logInfo(logSource,
-                                                            f"Date validity OK",
+                                                            "Date validity OK",
                                                             Logger.GENERAL)
             return (currentUseTime >= previousUseTime)
     except Exception as e:
@@ -1012,10 +1012,10 @@ def decryptAndGetStartingDate():
         data = data.replace(commonStartingTimeString[::-1],"")
         startingTime = datetime.strptime(data, "%Y_%m_%d")
         SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                       f"Successfully got st d",
+                                                       "Successfully got st d",
                                                        Logger.PROBLEM)
         SlaveFileLogger.getInstance().logInfo(logSource,
-                                                    f"Successfully got st d",
+                                                    "Successfully got st d",
                                                     Logger.PROBLEM)
         # printBoldBlue(f"Got starting date as {startingTime = }")
         return True
@@ -1219,9 +1219,9 @@ def decryptMoUandHoULimits():
             try:
                 mouLimit = float(data[0])
                 houLimit = float(data[1])
-                SlaveConsoleLogger.getInstance().logInfo(logSource, f"Successfully found mouL, houL",
+                SlaveConsoleLogger.getInstance().logInfo(logSource, "Successfully found mouL, houL",
                                                          Logger.GENERAL)
-                SlaveFileLogger.getInstance().logInfo(logSource, f"Successfully found mouL, houL",
+                SlaveFileLogger.getInstance().logInfo(logSource, "Successfully found mouL, houL",
                                                       Logger.GENERAL)
             except Exception:
                 noteSuppressed()
@@ -1333,10 +1333,10 @@ def decryptHoU():
             try:
                 actualHou = float(data)
                 SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                               f"Successfully found HoU",
+                                                               "Successfully found HoU",
                                                                Logger.GENERAL)
                 SlaveFileLogger.getInstance().logInfo(logSource,
-                                                            f"Successfully found HoU",
+                                                            "Successfully found HoU",
                                                             Logger.GENERAL)
             except Exception as e:
                 SlaveConsoleLogger.getInstance().logTakeAction(logSource,
@@ -1366,36 +1366,36 @@ def checkUserAndPassword():
     # if pwd1 == "TreesArePastMastersAtProducingO2AndCO2":
     if pwd1 == "Certificate1":
         SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                       f"Certificate 1 OK",
+                                                       "Certificate 1 OK",
                                                        Logger.GENERAL)
         SlaveFileLogger.getInstance().logInfo(logSource,
-                                                    f"Certificate 1 OK",
+                                                    "Certificate 1 OK",
                                                     Logger.GENERAL)
     else:
         SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                       f"Certificate 1 Not OK. Program will exit shortly",
+                                                       "Certificate 1 Not OK. Program will exit shortly",
                                                        Logger.PROBLEM)
         SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                    f"Certificate 1 Not OK. Program will exit shortly",
+                                                    "Certificate 1 Not OK. Program will exit shortly",
                                                     Logger.PROBLEM)
         return False
     pwd2 = getJustPassword(textToShow="Enter Certificate Data 2")
     # if pwd2 == "AxialAndRadialCenteringIsADifficultTaskAndNotDoneEasily":
     if pwd2 == "Certificate2":
         SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                       f"Certificate 2 OK",
+                                                       "Certificate 2 OK",
                                                        Logger.GENERAL)
         SlaveFileLogger.getInstance().logInfo(logSource,
-                                                    f"Certificate 2 OK",
+                                                    "Certificate 2 OK",
                                                     Logger.GENERAL)
         encryptAndStoreCurrentDate()
         return True
     else:
         SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                       f"Certificate 2 Not OK. Program will exit shortly",
+                                                       "Certificate 2 Not OK. Program will exit shortly",
                                                        Logger.PROBLEM)
         SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                    f"Certificate 2 Not OK. Program will exit shortly",
+                                                    "Certificate 2 Not OK. Program will exit shortly",
                                                     Logger.PROBLEM)
         return False
     # return False
@@ -1450,10 +1450,10 @@ def verifyMonthsAndHoursOfOperation():
     houValidity = actualHou < houLimit
     if houValidity:
         SlaveConsoleLogger.getInstance().logInfo(logSource,
-                                                       f"HoU, MoU, and st d validity OK",
+                                                       "HoU, MoU, and st d validity OK",
                                                        Logger.GENERAL)
         SlaveFileLogger.getInstance().logInfo(logSource,
-                                                    f"HoU, MoU, and st d validity OK",
+                                                    "HoU, MoU, and st d validity OK",
                                                     Logger.GENERAL)
         return True
     else:
@@ -1514,20 +1514,20 @@ def verifyIntegrity(processPIDs : list = []):
         # print(validUser)
         if validUser:
             SlaveConsoleLogger.getInstance().logTakeNote(logSource,
-                                                           f"Certificate and Licence check OK.",
+                                                           "Certificate and Licence check OK.",
                                                            Logger.SUCCESS)
             SlaveFileLogger.getInstance().logTakeNote(logSource,
-                                                        f"Certificate and Licence check OK.",
+                                                        "Certificate and Licence check OK.",
                                                         Logger.SUCCESS)
             validDate = decryptAndVerifyCurrentDateIntegrity()
             if validDate:
                 periodValidity = verifyMonthsAndHoursOfOperation()
                 if not periodValidity:
                     SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                                   f"Period of operation expired. Invoking DAF. Exiting Program",
+                                                                   "Period of operation expired. Invoking DAF. Exiting Program",
                                                                    Logger.PROBLEM)
                     SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                                f"Period of operation expired. Invoking DAF. Exiting Program",
+                                                                "Period of operation expired. Invoking DAF. Exiting Program",
                                                                 Logger.PROBLEM)
                     deleteAllFiles()
                     stopProcesses(currentProcessPIDs)
@@ -1536,38 +1536,38 @@ def verifyIntegrity(processPIDs : list = []):
                 houValid = updateAndEncryptHoU()
                 if not houValid:
                     SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                                   f"Period of validity expired. Invoking DAF. Exiting Program",
+                                                                   "Period of validity expired. Invoking DAF. Exiting Program",
                                                                    Logger.PROBLEM)
                     SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                                f"Period of validity expired. Invoking DAF. Exiting Program",
+                                                                "Period of validity expired. Invoking DAF. Exiting Program",
                                                                 Logger.PROBLEM)
                     deleteAllFiles()
                     stopProcesses(currentProcessPIDs)
                     exitProgram()
                 # if not inProductionRun:
                 SlaveConsoleLogger.getInstance().logTakeNote(logSource,
-                                                               f"MoU / HoU check OK.",
+                                                               "MoU / HoU check OK.",
                                                                Logger.SUCCESS)
                 SlaveFileLogger.getInstance().logTakeNote(logSource,
-                                                            f"MoU / HoU check OK.",
+                                                            "MoU / HoU check OK.",
                                                             Logger.SUCCESS)
                 return True
             else:
                 SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                               f"Attempt to use system by changing dates on system. Invoking DAF. Exiting.",
+                                                               "Attempt to use system by changing dates on system. Invoking DAF. Exiting.",
                                                                Logger.PROBLEM)
                 SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                            f"Attempt to use system by changing dates on system. Invoking DAF. Exiting.",
+                                                            "Attempt to use system by changing dates on system. Invoking DAF. Exiting.",
                                                             Logger.PROBLEM)
                 deleteAllFiles()
                 stopProcesses(currentProcessPIDs)
                 exitProgram()
         else:
             SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                           f"Invalid user. Invoking DAF. Exiting.",
+                                                           "Invalid user. Invoking DAF. Exiting.",
                                                            Logger.PROBLEM)
             SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                        f"Invalid user. Invoking DAF. Exiting.",
+                                                        "Invalid user. Invoking DAF. Exiting.",
                                                         Logger.PROBLEM)
             deleteAllFiles()
             stopProcesses(currentProcessPIDs)
@@ -1581,10 +1581,10 @@ def verifyIntegrity(processPIDs : list = []):
             # logging.error(f"Program cannot be used. Invalid passwords.")
             # print(f"Program cannot be used. Invalid certificate credentials entered. Contact CosTheta Technologies.")
             SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                           f"Program cannot be used. Invalid certificate credentials entered. Contact CosTheta Technologies. Invoking DAF. Exiting Program.",
+                                                           "Program cannot be used. Invalid certificate credentials entered. Contact CosTheta Technologies. Invoking DAF. Exiting Program.",
                                                            Logger.PROBLEM)
             SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                        f"Program cannot be used. Invalid certificate credentials entered. Contact CosTheta Technologies. Invoking DAF. Exiting Program.",
+                                                        "Program cannot be used. Invalid certificate credentials entered. Contact CosTheta Technologies. Invoking DAF. Exiting Program.",
                                                         Logger.PROBLEM)
             deleteAllFiles()
             stopProcesses(currentProcessPIDs)
@@ -1595,10 +1595,10 @@ def verifyIntegrity(processPIDs : list = []):
         if not madeCertificate:
             # logging.error(f"Program cannot be used. A valid licence and certificate could not be made.")
             SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                           f"Program cannot be used. A valid licence and certificate could not be made. Invoking DAF. Exiting.",
+                                                           "Program cannot be used. A valid licence and certificate could not be made. Invoking DAF. Exiting.",
                                                            Logger.PROBLEM)
             SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                        f"Program cannot be used. A valid licence and certificate could not be made. Invoking DAF. Exiting.",
+                                                        "Program cannot be used. A valid licence and certificate could not be made. Invoking DAF. Exiting.",
                                                         Logger.PROBLEM)
             deleteAllFiles()
             stopProcesses(currentProcessPIDs)
@@ -1608,10 +1608,10 @@ def verifyIntegrity(processPIDs : list = []):
         encryptAndStoreMoUAndHoULimits()
         updateAndEncryptHoU(True)
         SlaveConsoleLogger.getInstance().logTakeAction(logSource,
-                                                       f"All credentials created.",
+                                                       "All credentials created.",
                                                        Logger.SUCCESS)
         SlaveFileLogger.getInstance().logTakeAction(logSource,
-                                                    f"All credentials created.",
+                                                    "All credentials created.",
                                                     Logger.SUCCESS)
         return True
         # if validUser:

@@ -186,7 +186,7 @@ stoppedResponseQ : str = CosThetaConfigurator.getInstance().getStoppedResponseQu
 # Empty Image
 
 blankWhiteImage = 255 * np.ones(shape=(720, 1280, 3), dtype=np.uint8)
-blankWhiteImage = cv2.putText(blankWhiteImage, f"Picture Not Received", (500, 300), cv2.FONT_HERSHEY_SIMPLEX,
+blankWhiteImage = cv2.putText(blankWhiteImage, "Picture Not Received", (500, 300), cv2.FONT_HERSHEY_SIMPLEX,
                         1, (255,0,0), 2, cv2.LINE_AA)
 
 ActionType = Literal[updateValueCommand, takePictureCommand, readQRCodeCommand, noActionCommand, moveAheadToNextComponent, ABORT, END_OF_CYCLE]
@@ -224,14 +224,14 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
     # print(f'Image shape is {anImage.shape} and anImage dtype is {anImage.dtype}')
     # printBoldBlue(f"Redis connection is of type : {type(redisConnectionLeftCameraPicture)}")
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot send image.")
+        printBoldRed("Redis connection is None. Cannot send image.")
         # raise Exception("Redis Connection is None")
         return False
     if anImage is None:
-        printBoldRed(f"Image is None. Cannot send image.")
+        printBoldRed("Image is None. Cannot send image.")
         return False
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot send image.")
+        printBoldRed("Queue Name is None. Cannot send image.")
         return False
     if trackTime:
         time1 : float = time.time()
@@ -253,7 +253,7 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
         resultKeyString: result if not handshake else HANDSHAKE
     }
     try:
-        resp = redisConnection.xadd(queueName, data)
+        redisConnection.xadd(queueName, data)
         if trackTime:
             time2 : float = time.time()
             timeTaken = round((time2 - time1) * 1000, 2)
@@ -270,14 +270,14 @@ def sendImageWithResult(redisConnection: redis.client.Redis, anImage: Union[np.n
 def sendData(redisConnection: redis.client.Redis, data: dict, queueName: str = commonStreamKey,
              aProducer: str = "Producer", trackTime: bool = False):
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot send data.")
+        printBoldRed("Redis connection is None. Cannot send data.")
         # raise Exception("Redis Connection is None")
         return False
     if data is None:
-        printBoldRed(f"Data is None. Cannot send data.")
+        printBoldRed("Data is None. Cannot send data.")
         return False
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot send data.")
+        printBoldRed("Queue Name is None. Cannot send data.")
         return False
     else:
         # printLight(f"Queue Name is {queueName}")
@@ -287,7 +287,7 @@ def sendData(redisConnection: redis.client.Redis, data: dict, queueName: str = c
     data[timeKeyString] = getCurrentTimeInMS()
     data[producerKeyString] = aProducer
     try:
-        resp = redisConnection.xadd(queueName, data)
+        redisConnection.xadd(queueName, data)
         if trackTime:
             time2 : float = time.time()
             timeTaken = round((time2 - time1) * 1000, 2)
@@ -320,11 +320,11 @@ def getImage(redisConnection: redis.client.Redis, queueName: str = commonStreamK
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, None, None
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot receive data.")
+        printBoldRed("Queue Name is None. Cannot receive data.")
         return None, None, None
     last_id = 0
     decodedImage = None
@@ -373,11 +373,11 @@ def getImageWithResult(redisConnection: redis.client.Redis, queueName: str = com
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, None, None, None
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot receive data.")
+        printBoldRed("Queue Name is None. Cannot receive data.")
         return None, None, None, None
     last_id = 0
     decodedImage = None
@@ -429,11 +429,11 @@ def getImageWithResult(redisConnection: redis.client.Redis, queueName: str = com
 # RETURNS timestamp, and data as a dictionary
 def getData(redisConnection: redis.client.Redis, queueName: str = commonStreamKey, trackTime: bool = False, block : int = sleep_ms):
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, None
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot receive data.")
+        printBoldRed("Queue Name is None. Cannot receive data.")
         return None, None
     last_id = 0
     # done: bool = False
@@ -472,7 +472,7 @@ def getStopCommandFromQueue(redisConnection: redis.client.Redis, block : int = 1
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, None
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'getStopCommand() invoked')}")
@@ -510,7 +510,7 @@ def getStoppedResponseFromQueue(redisConnection: redis.client.Redis, block : int
     # Note that there is no 'while not done' loop in this code. This ensures that this doesn't block in the calling program.
     # The calling program will need to implement a loop to call this functions
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, "", ""
     last_id = 0
@@ -547,10 +547,10 @@ def getStoppedResponseFromQueue(redisConnection: redis.client.Redis, block : int
 
 def getMessageCount(redisConnection: redis.client.Redis, queueName: str = commonStreamKey):
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot get count.")
+        printBoldRed("Redis connection is None. Cannot get count.")
         return -1
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot receive data.")
+        printBoldRed("Queue Name is None. Cannot receive data.")
         return -1
     try:
         numberOfEntries = redisConnection.xlen(queueName)
@@ -564,7 +564,7 @@ def getTakeNextPictureCommandFromCameraId(redisConnection: redis.client.Redis, c
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, False
     last_id = 0
@@ -599,7 +599,7 @@ def getRequestResultCommandFromIOServer(redisConnection: redis.client.Redis, req
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, False
     last_id = 0
@@ -637,7 +637,7 @@ def getTakeNextPictureCommandFromCameraQ(redisConnection: redis.client.Redis, ca
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return None, False
     last_id = 0
@@ -690,7 +690,7 @@ def sendRecordingExit(redisConnection: redis.client.Redis, cameraId: int = 1):
 
 def getRecordingCommand(redisConnection: redis.client.Redis, recordingQueueName: str, block : int = 2):
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         raise Exception("Redis Connection is None")
     last_id = 0
     newData = {}
@@ -716,7 +716,7 @@ def getDiscInterlockMessage(redisConnection: redis.client.Redis, block : int = 1
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot receive data.")
+        printBoldRed("Redis connection is None. Cannot receive data.")
         raise Exception("Redis Connection is None")
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'getStopCommand() invoked')}")
     last_id = 0
@@ -815,7 +815,7 @@ def readDataInIOServerFromCameraServer(redisConnection: redis.client.Redis, bloc
     # Messages are read oldest first; only the message read is deleted (a message queued behind it is kept).
     invalid = (MachineState.INVALID_STATE, False, None) if withRequestId else (MachineState.INVALID_STATE, False)
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInIOServerFromCameraServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInIOServerFromCameraServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInIOServerFromCameraServer()")
         return invalid
     last_id = 0
@@ -860,7 +860,7 @@ def readDataInIOServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     # Returns a tuple: (qrCodeIsOK: bool, qrCode: str)
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInIOServerFromCameraServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInIOServerFromCameraServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInIOServerFromQRCodeServer()")
         return False, ""
     last_id = 0
@@ -903,7 +903,7 @@ def readDataInIOServerFromFEServer(redisConnection: redis.client.Redis, block : 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInIOServerFromFEServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInIOServerFromFEServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInIOServerFromQRCodeServer()")
         return False
     last_id = 0
@@ -945,7 +945,7 @@ def readCombinedHeartbeatInIOServerFromHeartbeatServer(redisConnection: redis.cl
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readCombinedHeartbeatInIOServerFromHeartbeatServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readCombinedHeartbeatInIOServerFromHeartbeatServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
     last_id = 0
@@ -1290,7 +1290,7 @@ def readDataInFEServerFromQRCodeServer(redisConnection: redis.client.Redis, bloc
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInFEServerFromQRCodeServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInFEServerFromQRCodeServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInFEServerFromQRCodeServer()")
         return None, None, False
     last_id = 0
@@ -1349,7 +1349,7 @@ def readDataInFEServerFromCameraServer(redisConnection: redis.client.Redis, bloc
     currentMachineState = MachineState.INVALID_STATE
 
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInFEServerFromCameraServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInFEServerFromCameraServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return timeOfMessage, decodedOriginalImage, decodedProcessedImage, decodedResult, currentMachineState
 
@@ -1426,7 +1426,7 @@ def readHeartbeatsInFEServerFromHeartbeatServer(redisConnection: redis.client.Re
     # withReceived=True: a 5th value, True if a status message was read (False = nothing new; the 4 statuses are then
     # False only because nothing was received, not because a server is down).
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInFEServerFromHeartbeatServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInFEServerFromHeartbeatServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return (False, False, False, False, False) if withReceived else (False, False, False, False)
     last_id = 0
@@ -1483,7 +1483,7 @@ def readDataInFEServerFromIOServer(redisConnection: redis.client.Redis, block : 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInFEServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInFEServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
         return _withRotation(withRotationDone, (MachineState.INVALID_STATE, MachineState.INVALID_STATE, None, None, notok), None)
 
@@ -1538,7 +1538,7 @@ def readEmergencyAbortInFEServerFromIOServer(redisConnection: redis.client.Redis
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readEmergencyAbortInCameraServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readEmergencyAbortInCameraServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
         return False
     last_id = 0
@@ -1609,7 +1609,7 @@ def readDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis, bloc
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInQRCodeServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInQRCodeServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInQRCodeServerFromIOServer()")
         return None, False
     last_id = 0
@@ -1653,7 +1653,7 @@ def readAbortDataInQRCodeServerFromIOServer(redisConnection: redis.client.Redis,
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readAbortDataInQRCodeServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readAbortDataInQRCodeServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInQRCodeServerFromIOServer()")
         return False
     last_id = 0
@@ -1755,7 +1755,7 @@ def readDataInCameraServerFromIOServer(redisConnection: redis.client.Redis, bloc
         return (*result, _lastCameraRequestId.get("value"))
     _lastCameraRequestId["value"] = None
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInCameraServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInCameraServerFromIOServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
         return None, None, False
     last_id = 0
@@ -1808,7 +1808,7 @@ def readComponentQRCodeInCameraServerFromQRCodeServer(redisConnection: redis.cli
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInCameraServerFromFEServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInCameraServerFromFEServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
         return None, False
     last_id = 0
@@ -1890,7 +1890,7 @@ def readDataInHeartbeatServerFromIOServer(redisConnection: redis.client.Redis, b
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInHeartbeatServerFromIOServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInHeartbeatServerFromIOServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
     last_id = 0
@@ -1924,7 +1924,7 @@ def readDataInHeartbeatServerFromQRCodeServer(redisConnection: redis.client.Redi
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInHeartbeatServerFromQRCodeServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInHeartbeatServerFromQRCodeServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInHeartbeatServerFromQRCodeServer()")
     last_id = 0
@@ -1958,7 +1958,7 @@ def readDataInHeartbeatServerFromFEServer(redisConnection: redis.client.Redis, b
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInHeartbeatServerFromFEServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInHeartbeatServerFromFEServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInHeartbeatServerFromFEServer()")
     last_id = 0
@@ -1992,7 +1992,7 @@ def readDataInHeartbeatServerFromDatabaseServer(redisConnection: redis.client.Re
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInHeartbeatServerFromDatabaseServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInHeartbeatServerFromDatabaseServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInHeartbeatServerFromDatabaseServer()")
     last_id = 0
@@ -2026,7 +2026,7 @@ def readDataInHeartbeatServerFromCameraServer(redisConnection: redis.client.Redi
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInHeartbeatServerFromCameraServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInHeartbeatServerFromCameraServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInHeartbeatServerFromCameraServer()")
     last_id = 0
@@ -2060,7 +2060,7 @@ def readAlarmInHeartbeatServer(redisConnection: redis.client.Redis, block : int 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readAlarmInHeartbeatServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readAlarmInHeartbeatServer(). Cannot receive data.")
         return False
         # raise Exception("Redis Connection is None in readDataInCameraServerFromIOServer()")
     last_id = 0
@@ -2211,7 +2211,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     aProducer = None
 
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None in readDataInDatabaseServerFromFEServer(). Cannot receive data.")
+        printBoldRed("Redis connection is None in readDataInDatabaseServerFromFEServer(). Cannot receive data.")
         # raise Exception("Redis Connection is None")
         _result = (genuineDataReceived, timeOfMessage, qrCode,
                     knucklePicture, knuckleCheckResult, knuckleCheckDatetime,
@@ -2263,7 +2263,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 if printStatements:
                     print(knucklePicture.shape)
             except Exception:
-                printBoldRed(f"Couldn't get knucklePicture")
+                printBoldRed("Couldn't get knucklePicture")
                 knucklePicture = None
 
             try:
@@ -2275,7 +2275,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 knuckleCheckDatetime = str(newData[knuckleDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get knuckleCheckDatetime")
+                printBoldRed("Couldn't get knuckleCheckDatetime")
                 knuckleCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2283,7 +2283,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 if printStatements:
                     print(hubAndBottomBearingPicture.shape)
             except Exception:
-                printBoldRed(f"Couldn't get hubAndBottomBearingPicture")
+                printBoldRed("Couldn't get hubAndBottomBearingPicture")
                 hubAndBottomBearingPicture = None
 
             try:
@@ -2295,7 +2295,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 hubAndBottomBearingCheckDatetime = str(newData[hubAndBottomBearingDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get hubAndBottomBearingCheckDatetime")
+                printBoldRed("Couldn't get hubAndBottomBearingCheckDatetime")
                 hubAndBottomBearingCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2303,7 +2303,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 if printStatements:
                     print(topBearingPicture.shape)
             except Exception:
-                printBoldRed(f"Couldn't get topBearingPicture")
+                printBoldRed("Couldn't get topBearingPicture")
                 topBearingPicture = None
 
             try:
@@ -2315,7 +2315,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 topBearingCheckDatetime = str(newData[topBearingDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get topBearingCheckDatetime")
+                printBoldRed("Couldn't get topBearingCheckDatetime")
                 topBearingCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2323,7 +2323,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 if printStatements:
                     print(nutAndPlateWasherPicture.shape)
             except Exception:
-                printBoldRed(f"Couldn't get nutAndPlateWasherPicture")
+                printBoldRed("Couldn't get nutAndPlateWasherPicture")
                 nutAndPlateWasherPicture = None
 
             try:
@@ -2335,7 +2335,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 nutAndPlateWasherCheckDatetime = str(newData[nutAndPlateWasherDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get nutAndPlateWasherCheckDatetime")
+                printBoldRed("Couldn't get nutAndPlateWasherCheckDatetime")
                 nutAndPlateWasherCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2351,7 +2351,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 tighteningTorque1Datetime = str(newData[tighteningTorque1DatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get tighteningTorque1CheckDatetime")
+                printBoldRed("Couldn't get tighteningTorque1CheckDatetime")
                 tighteningTorque1Datetime = '1970-01-01 00:00:00'
 
             try:
@@ -2370,7 +2370,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 componentPressBunkCheckDatetime = str(newData[componentPressBunkCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get componentPressBunkCheckDatetime")
+                printBoldRed("Couldn't get componentPressBunkCheckDatetime")
                 componentPressBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2381,7 +2381,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 componentPressDoneDatetime = str(newData[componentPressDoneDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get componentPressDatetime")
+                printBoldRed("Couldn't get componentPressDatetime")
                 componentPressDoneDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2400,7 +2400,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 noBunkCheckDatetime = str(newData[noBunkCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get noBunkCheckDatetime")
+                printBoldRed("Couldn't get noBunkCheckDatetime")
                 noBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2416,7 +2416,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 tighteningTorque2Datetime = str(newData[tighteningTorque2DatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get tighteningTorque2Datetime")
+                printBoldRed("Couldn't get tighteningTorque2Datetime")
                 tighteningTorque2Datetime = '1970-01-01 00:00:00'
 
             try:
@@ -2435,7 +2435,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 splitPinAndWasherCheckDatetime = str(newData[splitPinAndWasherCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get splitPinAndWasherCheckDatetime")
+                printBoldRed("Couldn't get splitPinAndWasherCheckDatetime")
                 splitPinAndWasherCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2454,7 +2454,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 capCheckDatetime = str(newData[capCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get capCheckDatetime")
+                printBoldRed("Couldn't get capCheckDatetime")
                 capCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2473,7 +2473,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 capPressBunkCheckDatetime = str(newData[capPressBunkCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get capPressBunkCheckDatetime")
+                printBoldRed("Couldn't get capPressBunkCheckDatetime")
                 capPressBunkCheckDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2484,7 +2484,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 capPressDoneDatetime = str(newData[capPressDoneDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get capPressDoneDatetime")
+                printBoldRed("Couldn't get capPressDoneDatetime")
                 capPressDoneDatetime = '1970-01-01 00:00:00'
 
             try:
@@ -2500,7 +2500,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             try:
                 freeRotationTorque1Datetime = str(newData[freeRotationTorque1DatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed(f"Couldn't get freeRotationTorque1Datetime")
+                printBoldRed("Couldn't get freeRotationTorque1Datetime")
                 freeRotationTorque1Datetime = '1970-01-01 00:00:00'
 
             try:
@@ -2614,13 +2614,13 @@ def sendImage(redisConnection: redis.client.Redis, anImage: Union[np.ndarray, No
     # print(f'Image shape is {anImage.shape} and anImage dtype is {anImage.dtype}')
     # printBoldBlue(f"Redis connection is of type : {type(redisConnectionLeftCameraPicture)}")
     if redisConnection is None:
-        printBoldRed(f"Redis connection is None. Cannot send image.")
+        printBoldRed("Redis connection is None. Cannot send image.")
         raise Exception("Redis Connection is None")
     if anImage is None:
-        printBoldRed(f"Image is None. Cannot send image.")
+        printBoldRed("Image is None. Cannot send image.")
         return False
     if queueName is None:
-        printBoldRed(f"Queue Name is None. Cannot send image.")
+        printBoldRed("Queue Name is None. Cannot send image.")
         return False
     if trackTime:
         time1 : float = time.time()
@@ -2642,7 +2642,7 @@ def sendImage(redisConnection: redis.client.Redis, anImage: Union[np.ndarray, No
         originalImageKeyString: imageAsMessage
     }
     try:
-        resp = redisConnection.xadd(queueName, data)
+        redisConnection.xadd(queueName, data)
         if trackTime:
             time2 : float = time.time()
             timeTaken = round((time2 - time1) * 1000, 2)

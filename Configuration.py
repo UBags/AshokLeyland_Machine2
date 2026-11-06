@@ -308,7 +308,7 @@ class CosThetaConfigurator():
                 print(CosThetaColors.CBOLD, end="")
                 print(f"Application mode is {appMode}, file logging level is {fileLoggingLevel}, "
                       f"console logging level is {consoleLoggingLevel}")
-                print(f"This is an incompatible combination.", end="")
+                print("This is an incompatible combination.", end="")
                 print(CosThetaColors.CEND, end="")
                 CosThetaConfigurator.integrityIsOk = False
                 print(CosThetaColors.CRED, end="")
@@ -710,11 +710,11 @@ class CosThetaConfigurator():
 
     @classmethod
     def getImagesOKFolder(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.IMAGES_OK_FOLDER_KEY, default=f"ok/")
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.IMAGES_OK_FOLDER_KEY, default="ok/")
 
     @classmethod
     def getImagesNotOKFolder(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.IMAGES_NOTOK_FOLDER_KEY, default=f"notok/")
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.IMAGES_NOTOK_FOLDER_KEY, default="notok/")
 
     # ***********************************
 
@@ -1260,7 +1260,7 @@ class CosThetaConfigurator():
     @classmethod
     def getAllConnectionsOutputAddress(cls) -> int:
         try:
-            value = int(CosThetaConfigurator.getValue(f"ALL_CONNECTIONS_OUTPUT_ADDRESS_KEY", default="7"))
+            value = int(CosThetaConfigurator.getValue("ALL_CONNECTIONS_OUTPUT_ADDRESS_KEY", default="7"))
         except Exception:
             value = 7
         return value
@@ -1268,7 +1268,7 @@ class CosThetaConfigurator():
     @classmethod
     def getFalseCounterActivationLimit(cls) -> int:
         try:
-            value = int(CosThetaConfigurator.getValue(f"FALSE_COUNTER_ACTIVATION_LIMIT_KEY", default="2"))
+            value = int(CosThetaConfigurator.getValue("FALSE_COUNTER_ACTIVATION_LIMIT_KEY", default="2"))
         except Exception:
             value = 2
         return value
@@ -1377,15 +1377,15 @@ class CosThetaConfigurator():
 
     @classmethod
     def getDatabaseHeartbeatQueue(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.DATABASE_HEARTBEAT_QUEUE_KEY, default=f"db.hb")
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.DATABASE_HEARTBEAT_QUEUE_KEY, default="db.hb")
 
     @classmethod
     def getIOHeartbeatQueue(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.IO_HEARTBEAT_QUEUE_KEY, default=f"io.hb")
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.IO_HEARTBEAT_QUEUE_KEY, default="io.hb")
 
     @classmethod
     def getQRCodeHeartbeatQueue(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.QRCODE_HEARTBEAT_QUEUE_KEY, default=f"qrcode.hb")
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.QRCODE_HEARTBEAT_QUEUE_KEY, default="qrcode.hb")
 
     # ***********************************
 
@@ -3046,6 +3046,16 @@ class CosThetaConfigurator():
                   f"{cls.CAMERA_ANSWER_TIMEOUT_MARGIN_SECS:g} s; {minimum:g} s is used", flush=True)
         return minimum
 
+    WORK_LOOP_MAX_SILENCE_KEY = "heartbeat.work.loop.max.silence.sec"
+
+    @classmethod
+    def getWorkLoopMaxSilence(cls) -> float:
+        """A server's heartbeat is DEAD while one of its work threads has not been round its loop for this many seconds
+        (heartbeat.work.loop.max.silence.sec, 60; utils/WorkerHealth.py). At least the camera answer timeout + 10 s,
+        so that a vision check that is timing out is never taken for a stuck camera server."""
+        return max(cls._floatValue(cls.WORK_LOOP_MAX_SILENCE_KEY, 60.0, minimum=5.0),
+                   cls.getMinimumPlcCameraAnswerTimeout() + 10.0)
+
     CAMERA_FRAME_MAX_WAIT_KEY = "camera.frame.max.wait.sec"
 
     @classmethod
@@ -3288,8 +3298,8 @@ class CosThetaConfigurator():
     def getTargetWidthAndHeight(cls, currentMachineState: int) -> Tuple[int, int]:
         attr_name_width = f"MACHINE_STATE_{currentMachineState}_TARGET_WIDTH_KEY"
         attr_name_height = f"MACHINE_STATE_{currentMachineState}_TARGET_HEIGHT_KEY"
-        targetWidth: int = int(CosThetaConfigurator.getValue(getattr(cls, attr_name_width), default=f"1080"))
-        targetHeight: int = int(CosThetaConfigurator.getValue(getattr(cls, attr_name_height), default=f"720"))
+        targetWidth: int = int(CosThetaConfigurator.getValue(getattr(cls, attr_name_width), default="1080"))
+        targetHeight: int = int(CosThetaConfigurator.getValue(getattr(cls, attr_name_height), default="720"))
         return targetWidth, targetHeight
 
     # *********************************** max seconds to wait for camera feedback *********************************

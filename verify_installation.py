@@ -38,7 +38,7 @@ try:
     import torch
 
     if torch.cuda.is_available():
-        print(f"✓ CUDA available")
+        print("✓ CUDA available")
         print(f"  CUDA Version: {torch.version.cuda}")
         print(f"  GPU Count: {torch.cuda.device_count()}")
         print(f"  GPU 0: {torch.cuda.get_device_name(0)}")

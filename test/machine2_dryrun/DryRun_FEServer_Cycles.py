@@ -418,6 +418,26 @@ def driver():
               state() != MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, state().name)
         sendEmergencyAbortFromIOServerToFEServer(r)
         check("F10 cycle aborted to finish", wait_for(lambda: state() == MS.READ_QR_CODE, 10))
+        # ---------------- F11 (2026-11-07) ----------------
+        print("\n=== F11. Heartbeat DEAD while the GUI thread is frozen ===", flush=True)
+        from Configuration import CosThetaConfigurator as _C
+        _origLimit = _C.getWorkLoopMaxSilence
+        _C.getWorkLoopMaxSilence = classmethod(lambda cls: 2.0)
+        def _hb():
+            last = r.xrevrange(fe2hbq, count=1)
+            return last[0][1].get(connectionStatusKeyString.encode(), b"").decode() if last else None
+        check("F11 GUI thread running: heartbeat ALIVE", wait_for(lambda: _hb() == ALIVE, 5), _hb())
+        _gui.call.emit(lambda: time.sleep(5))                 # the GUI thread is busy for 5 s (frozen screen)
+        check("F11 GUI thread frozen > 2 s: heartbeat DEAD (sent by the heartbeat thread)",
+              wait_for(lambda: _hb() == DEAD, 5), _hb())
+        check("F11 GUI thread running again: ALIVE", wait_for(lambda: _hb() == ALIVE, 6), _hb())
+        _gui.call.emit(lambda: fe._runDialog(time.sleep, 5))  # a menu dialog (FreeSimpleGUI) open for 5 s
+        time.sleep(3.5)
+        check("F11 a menu dialog open on the GUI thread (Machine Settings, reports): heartbeat stays ALIVE",
+              not wait_for(lambda: _hb() == DEAD, 1.5), _hb())
+        check("F11 ... and the dialog count is back to 0 once it closes",
+              wait_for(lambda: FE.dialogsOpen == 0, 4), FE.dialogsOpen)
+        _C.getWorkLoopMaxSilence = _origLimit
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:

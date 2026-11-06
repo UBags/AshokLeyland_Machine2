@@ -114,6 +114,7 @@ QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ t
 | DB server down | Heartbeat | Finish the cycle; hold the next one, with a notice |
 | Frontend or heartbeat server down | Heartbeat / combined heartbeat | Abort and hold |
 | A process dies | ProcessSupervisor | Restart it (rate limited). A restarted IOServer aborts the frontend and camera |
+| A work thread dies or is stuck (camera assessment, DB inserts, IOServer loops, frontend GUI, QR reader) | That server's heartbeat: DEAD after `heartbeat.work.loop.max.silence.sec` (60 s) | As for that server down |
 | Redis not storing | Heartbeat server, every 60 s (10 s while failing); MainProgram at start | Siren and console message; hold the next cycle; refuse to start |
 | Settings write fails | Read-back | The earlier settings stay in force; the side is still required |
 

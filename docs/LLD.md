@@ -40,7 +40,7 @@
 | Read loop | `launchReadLoopThread` | `plc.read.interval` 0.2 s | Reads the tags of the current read state (`getCurrentTagsToBeRead`) and calls `process_current_read_state` |
 | Write loop | `launchWriteTagsLoopThread` | `plc.write.interval` 0.1 s | Write states: waits for the camera or QR answer (20 s timeout) and runs `perform_write_state_action` |
 | Connection | `launchConnectionMonitoringThread` | 1 s | `_connectionCheckStep`; reconnects; checks WatchTag |
-| PC heartbeat | `launchHeartbeatThread` | 2 s | Sends `io2hb.q` |
+| PC heartbeat | `launchHeartbeatThread` | 0.5 s | Sends `io2hb.q`: DEAD while the PLC is not connected, or the read or write loop is not running or has not gone round for `heartbeat.work.loop.max.silence.sec` (60 s) |
 | Connection status toggle | started by `launchThreadForUpdatingCombinedHeartbeat` | 2 s | Toggles `PC_PLC_ConnectionStatusTag` (own thread since CHANGES §84, so an abort on the status thread does not stop it) |
 | Server statuses | `launchThreadForUpdatingCombinedHeartbeat` | on message | Reads `hb2io.q`, then `_applyServerStatuses` |
 | Emergency | `launchEmergencyMonitoringThread` | 1 s | `PLC_PC_EmergencyAbort`, then `abortCycle` |
@@ -92,7 +92,7 @@ Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_
 
 **Picture handling**
 
-- `_requestPicture(state)` creates the request id `<cycle>-<n>`, sets `camera:activeRequest` and sends `io2camera.q`.
+- `_requestPicture(state)` creates the request id `<pid>.<cycle>-<n>` (the IOServer's pid, so a restarted IOServer's ids never match the old one's), sets `camera:activeRequest` and sends `io2camera.q`.
 - `_dropCameraRequest()` clears the request.
 - `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down. The timeout is at least `<vendor>.vision.check.timeout.sec` + 8 s (`getMinimumPlcCameraAnswerTimeout`); a smaller value is raised.
 
@@ -154,6 +154,8 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 - If a check does not finish in 12 s, the parent kills the child and starts a new one. The check counts as NOT OK. From the 3rd timeout in a row the reason says the checks are too slow on this PC (check the GPU); a check in time resets the count.
 - The worker warms up at start.
 
+**Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
+
 **Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press). The thresholds are in `VisionConfig.py`.
 
 ## 4. QR code server (`costhetaio/qrcodescanner/QRCodeScanningServer.py`)
@@ -182,7 +184,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `EmergencyStatusMonitoringWorker` | `emergency.q` | Abort display |
 | `ConnectionStatusUpdateWorker` | timer; the slot reads `hb2fe.q` without blocking | Connection lamps; Redis notice (`lastReportedRedisStatus`) |
 | `FrontendNoticeWorker` | `feNotice:*` plus local notices | Notices at the top right |
-| `HeartbeatSenderWorker` | — | `fe2hb.q` |
+| `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
 | `TimeDurationUpdateWorker` | — | Cycle timer |
 
 At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. Abort sends `fe2io.q` with `{action: Abort, data: reason}`. Machine settings are edited by the Administrator or Supervisor, with the limits of §8.
@@ -220,7 +222,9 @@ At the end of the cycle (state 28), the FE builds the record, adding `cycleSetti
 **Other threads**
 
 - `watchForNewDay` (every 1 min) creates the next day's image folder.
-- `sendHeartbeat` sends `db2hb.q`.
+- `sendHeartbeat` sends `db2hb.q`: DEAD while PostgreSQL is not reachable or `doWork` is not running or stuck (60 s).
+
+Every PostgreSQL connection gives up after 5 s if the server does not answer (`PGCONNECT_TIMEOUT`, set in `Persistence.py`).
 
 ## 8. Data model (PostgreSQL, schema `al_hub_and_disc_assembly_schema`)
 

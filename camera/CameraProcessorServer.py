@@ -45,6 +45,11 @@ NO_PICTURE_REASON : str = "noPictureReason"     # set by TakePictures when it ha
 # GLOBAL VARIABLES
 logSource = getFullyQualifiedName(__file__)
 
+# The camera server's work threads (MonitorGetPicQueue, TakePictures, ConverterScalerAndProcessor), registered by
+# CameraServer(): the heartbeat is DEAD while one of them is not running or not going round its loop (WorkerHealth)
+from utils.WorkerHealth import WorkerWatch
+cameraWorkers = WorkerWatch("Camera server")
+
 # *******************************Start of the main Threaded Classes*********************************
 
 # *******************************MonitorGetPicQueue start*******************************************
@@ -396,6 +401,10 @@ class TakePictures(GenericQueueProcessor):
                     if objRef.camera is None:
                         sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=DEAD)
                     elif not objRef.camera.connected:
+                        sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=DEAD)
+                    elif cameraWorkers.problemsLogged(
+                            log=lambda m: logBoth('logCritical', TakePictures.logSource, m, Logger.PROBLEM)):
+                        # a work thread died or is stuck: the camera server cannot answer pictures
                         sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=DEAD)
                     else:
                         sendHeartbeatFromCameraServerToHeartbeatServer(redisConnection=objRef.redisConnectionForHeartbeat, status=ALIVE)
@@ -1508,6 +1517,9 @@ def CameraServer(mode : str = "Test"):
         # takePictures = TakePictures(name="TakePictures", cameraId=camId, consumer=converterScalerAndProcessor)
         takePictures = TakePictures(name="TakePictures", consumer=converterScalerAndProcessor)
         monitorGetPic = MonitorGetPicQueue(name="MonitorGetPicQueue", consumer=takePictures)
+        cameraWorkers.add("picture requests (MonitorGetPicQueue)", monitorGetPic)
+        cameraWorkers.add("taking pictures (TakePictures)", takePictures)
+        cameraWorkers.add("assessment (ConverterScalerAndProcessor)", converterScalerAndProcessor)
         converterScalerAndProcessor.start()
         logBoth('logInfo', logSource, f"Started thread ConverterScalerAndProcessor", Logger.SUCCESS)
         takePictures.start()

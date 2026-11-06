@@ -83,15 +83,17 @@ def _workerMain(conn) -> None:
         cps.ImageProcessor.restoreState(snapshot)
         sentPictures = dict(cps.ImageProcessor.currentPictures)
         allok, processed, original, error = False, None, None, None
+        checkStart = time.monotonic()
         try:
             allok, processed, original = cps.assessPictures(state, images)
         except Exception as e:
             error = str(e) or type(e).__name__
+        checkSecs = time.monotonic() - checkStart
         changes = {name: getattr(cps.ImageProcessor, name) for name in cps.ImageProcessor._STATE_ATTRIBUTES}
         changes["currentPictures"] = {key: picture for key, picture in cps.ImageProcessor.currentPictures.items()
                                       if picture is not sentPictures.get(key)}
         try:
-            conn.send(("result", jobId, bool(allok), processed, original, changes, error))
+            conn.send(("result", jobId, bool(allok), processed, original, changes, error, checkSecs))
         except (EOFError, OSError, BrokenPipeError):
             return
 
@@ -135,6 +137,8 @@ class VisionCheckWorker:
         self.timeouts: int = 0
         self.timeoutsInARow: int = 0       # reset by a check that gives its verdict in time
         self.lastStopReason: str = ""
+        self.lastCheckSecs = None              # the last check's time in the worker, and the transfer around it
+        self.lastTransferSecs = None
 
     # ------------------------------------------------------------------------------------------------ process
     def start(self) -> None:
@@ -204,6 +208,21 @@ class VisionCheckWorker:
     def pid(self) -> Optional[int]:
         return self._process.pid if self._process is not None else None
 
+    TRANSFER_WARNING_SECS = 1.0          # pictures to the worker and the result back taking longer than this: warned
+
+    def _logTimes(self, state, totalSecs: float, checkSecs) -> None:
+        """Each check's time in the worker and the time to send the pictures there and the result back (the rest of
+        the round trip), so that the plant PC's logs show both (CHANGES 85). Measured here: about 0.01 s for the
+        three 1280 x 720 pictures (sent as six, the same three twice: pickled once each)."""
+        self.lastCheckSecs, self.lastTransferSecs = checkSecs, (totalSecs - checkSecs) if checkSecs is not None else None
+        name = getattr(state, 'name', state)
+        if checkSecs is None:
+            return
+        transfer = totalSecs - checkSecs
+        level = 'logWarning' if transfer > VisionCheckWorker.TRANSFER_WARNING_SECS else 'logInfo'
+        _log(level, f"{name}: check {checkSecs:.2f} s in the worker, transfer {transfer:.2f} s"
+                    + (" - slow transfer to the worker process" if level == 'logWarning' else ""))
+
     # ------------------------------------------------------------------------------------------------ checks
     def assess(self, state, images: list, timeout: float) -> Tuple[bool, Any, Any, Optional[str]]:
         """(allok, processed image, original image, reason): reason None when the check gave the verdict."""
@@ -224,7 +243,8 @@ class VisionCheckWorker:
             except (EOFError, OSError, BrokenPipeError, AttributeError) as e:
                 self._restart(f"could not send the check ({e})")
                 return False, fallback, fallback, "vision check worker stopped; restarting"
-            deadline = time.monotonic() + timeout
+            sentAt = time.monotonic()
+            deadline = sentAt + timeout
             while True:
                 remaining = deadline - time.monotonic()
                 try:
@@ -248,8 +268,9 @@ class VisionCheckWorker:
                     return False, fallback, fallback, "vision check worker stopped during the check; restarting"
                 if message and message[0] == "result" and message[1] == jobId:
                     break
-            _, _, allok, processed, original, changes, error = message
+            _, _, allok, processed, original, changes, error = message[:7]
             self.timeoutsInARow = 0
+            self._logTimes(state, time.monotonic() - sentAt, message[7] if len(message) > 7 else None)
         ImageProcessor.applyStateChanges(changes)
         if error:
             _log('logCritical', f"{getattr(state, 'name', state)}: the check raised {error}")
