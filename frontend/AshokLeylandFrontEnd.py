@@ -61,7 +61,7 @@ from frontend.CosThetaStylesheets import (
     modeLabelStylesheet,
     modeLabelStylesheet_with_no_qr_code,
     modeLabelStylesheet_with_qr_code,
-    okLabelStylesheet,
+    okLabelStylesheet, connectionOkLabelStylesheet,
     notokLabelStylesheet, outcomeLabelStylesheet, companyNameStylesheet,
 )
 from frontend.widgets.CosThetaInitialSplashScreen import CosThetaInitialSplashScreen
@@ -243,6 +243,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.port = CosThetaConfigurator.getInstance().getRedisPort()
         self.timeStarted = datetime.now()
         self.currentComponentStartTime = datetime.now()
+        # set when the cycle ends (free-rotation torque, or an abort): the processing time then stays on screen,
+        # frozen, until the next QR code is scanned (it showed 0 again at once)
+        self.currentComponentEndTime = None
+        self.componentTimeShown = False         # a cycle has started since the frontend started
         self.timeStartedAsString = datetime.now().strftime("%H:%M:%S")
 
         try:
@@ -409,14 +413,14 @@ class AshokLeylandFrontEnd(QMainWindow):
         self._statusFont = QFont('Courier', pointSize=int(20), weight=QFont.Weight.Bold)
         self.cameraServerConnectionStatusContainer = ToggleMessageContainer(okText ="Camera connected",
                                                                             notokText = "Camera not connected",
-                                                                            okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
+                                                                            okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
                                                                             labelHeight = self.labelHeight, name='CAMERACONNECTION', forceUseOfFontSize=26)
         self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText ="I/O Module connected",
                                                                         notokText = "I/O Module not connected",
-                                                                        okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
+                                                                        okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
@@ -424,7 +428,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                         forceUseOfFontSize=26)
         self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText ="Database connected",
                                                                         notokText = "Database not connected",
-                                                                        okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
+                                                                        okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
@@ -432,7 +436,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                         forceUseOfFontSize=26)
         self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText ="QRCode Scanner connected",
                                                                             notokText = "QRCode Scanner not connected",
-                                                                            okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
+                                                                            okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
@@ -1052,9 +1056,16 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.timeDurationUpdateWorker.moveToThread(self.timeDurationUpdateThread)
         self.timeDurationUpdateThread.start()
 
+    def componentProcessingTimeText(self) -> str:
+        """Processing time of the current component: counting from the QR code scan; frozen at the end of the cycle
+        (free-rotation torque or abort) until the next scan; 0 before the first scan."""
+        if not self.componentTimeShown:
+            return "0"
+        end = self.currentComponentEndTime or datetime.now()
+        return (':'.join(str(end - self.currentComponentStartTime).split(':')[:3])).split('.')[0]
+
     @Slot()
     def updateTimeDurationStatus(self):
-        currentComponentProcessingStarted : bool = (AshokLeylandFrontEnd.currentQRCode is not None) and (AshokLeylandFrontEnd.currentQRCode != "")
         # Fetch production counts safely — a DB hiccup must never crash the status update loop
         try:
             _db = getDatabaseName()
@@ -1078,7 +1089,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             _countWeek,
             _countMonth,
             f'{self.username} - {self.role}',
-            (':'.join(str(datetime.now() - self.currentComponentStartTime).split(':')[:3])).split('.')[0] if currentComponentProcessingStarted else "0",
+            self.componentProcessingTimeText(),
             _countToday,
         )
         self.dateTimeStatus.updateStatus(currentDatetimeText)
@@ -1237,6 +1248,8 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.requestPictureAndResult()
         self.resultsContainer.setInstruction(self.machineState.getCurrentInstruction())
         self.currentComponentStartTime = datetime.now()
+        self.currentComponentEndTime = None
+        self.componentTimeShown = True
 
     # ********************************************
 
@@ -1527,6 +1540,8 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def doFinalProcessing(self, delayMsec: int = 750):
         printYellow("Entered doFinalProcessing()")
+        if self.currentComponentEndTime is None:
+            self.currentComponentEndTime = datetime.now()       # the processing time stops here (shown till next scan)
 
         checks = [
             AshokLeylandFrontEnd.currentKnuckleCheckResult == ok,

@@ -281,7 +281,7 @@ check("9 getMachineSettings returns the 5 settings as floats", set(P.MACHINE_SET
       and all(isinstance(before[k], float) for k in P.MACHINE_SETTINGS_KEYS), str(before))
 BAD = [dict(rotation_rpm=19), dict(rotation_rpm=41), dict(rotation_rpm=30.5),
        dict(tightening_torque1_setpoint=0), dict(tightening_torque1_setpoint=20), dict(tightening_torque2_setpoint=12.345),
-       dict(no_of_rotation1_ccw=0), dict(no_of_rotation1_ccw=3), dict(no_of_rotation1_cw=1.5)]
+       dict(no_of_rotation1_ccw=0), dict(no_of_rotation1_ccw=5), dict(no_of_rotation1_cw=1.5)]
 rejected = []
 for change in BAD:
     candidate = dict(P.DEFAULT_MACHINE_SETTINGS); candidate.update(change)
@@ -290,7 +290,7 @@ for change in BAD:
 check(f"9 {len(BAD)} out-of-range settings rejected by validateMachineSettings / insertNewMachineSettings", all(rejected), str(rejected))
 check("9 nothing stored by the rejected attempts", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
 db_rejects = []
-for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("no_of_rotation1_cw", 3)):
+for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("no_of_rotation1_cw", 5)):
     vals = dict(P.DEFAULT_MACHINE_SETTINGS); vals[col] = value
     try:
         cur.execute(f"insert into {SCHEMA}.machine_settings (rotation_rpm, tightening_torque1_setpoint, "
@@ -300,17 +300,34 @@ for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("
         db_rejects.append(False)
     except psycopg2.errors.CheckViolation:
         db_rejects.append(True)
-check("9 database CHECK constraints reject RPM 45, torque 20, count 3", all(db_rejects), str(db_rejects))
+check("9 database CHECK constraints reject RPM 45, torque 20, count 5", all(db_rejects), str(db_rejects))
 NEW = dict(rotation_rpm=25.0, tightening_torque1_setpoint=15.25, tightening_torque2_setpoint=16.5,
            no_of_rotation1_ccw=2.0, no_of_rotation1_cw=2.0)
 check("9 valid change saved", P.insertNewMachineSettings(DB, updated_by="dryrun-db", **NEW))
 now = P.getMachineSettings(DB)
 check("9 the change is the settings in force, with updated_by", {k: now[k] for k in NEW} == NEW and now["updated_by"] == "dryrun-db", str(now))
-history = P.getMachineSettingsHistory(DB, 2)
-check("9 history newest first: the change, then the previous settings",
-      len(history) == 2 and history[0]["setting_id"] == now["setting_id"] and history[1]["setting_id"] == before["setting_id"])
+MODELS = P.settingsModelNames()
+check("9 models from qrcode.partmapping.N: DOST, DOSTPLUS", MODELS == ["DOST", "DOSTPLUS"], str(MODELS))
+perModel = {mdl: P.getMachineSettings(DB, model_name=mdl) for mdl in MODELS}
+check("9 a change saved without a model applies to every model",
+      all({k: perModel[mdl][k] for k in NEW} == NEW and perModel[mdl]["model_name"] == mdl for mdl in MODELS), str(perModel))
+DOST_ONLY = dict(rotation_rpm=35.0, tightening_torque1_setpoint=12.5, tightening_torque2_setpoint=18.0,
+                 no_of_rotation1_ccw=3.0, no_of_rotation1_cw=4.0)
+check("9 per model: DOST saved with rotation counts 3 / 4 (1 - 4 allowed)",
+      P.insertNewMachineSettings(DB, updated_by="dryrun-db", model_name="DOST", **DOST_ONLY))
+d, dp = P.getMachineSettings(DB, model_name="DOST"), P.getMachineSettings(DB, model_name="DOSTPLUS")
+check("9 per model: DOST has its new settings, DOSTPLUS keeps its own",
+      {k: d[k] for k in DOST_ONLY} == DOST_ONLY and {k: dp[k] for k in NEW} == NEW, f"{d} / {dp}")
+history = P.getMachineSettingsHistory(DB, 2, model_name="DOST")
+check("9 history of a model newest first: its latest change, then the one before",
+      len(history) == 2 and history[0]["setting_id"] == d["setting_id"]
+      and history[1]["setting_id"] == perModel["DOST"]["setting_id"], str(history))
 cur.execute(f"delete from {SCHEMA}.machine_settings where updated_by = 'dryrun-db'")
 check("9 clean-up: settings in force back to what they were", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
+cur.execute(f"select count(*) from {SCHEMA}.machine_settings where model_name is null")
+legacy = cur.fetchone()[0]
+check("9 every model has settings after the clean-up (copied / defaults when the database is set up)",
+      all(P.getMachineSettings(DB, model_name=mdl) for mdl in MODELS), str(legacy))
 c.close()
 
 failed = [n for n, ok_ in RESULTS if not ok_]

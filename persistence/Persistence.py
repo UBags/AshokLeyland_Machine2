@@ -557,7 +557,9 @@ ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUM
 -- Machine 2 settings, edited in the frontend (Machine Settings menu, Administrator / Supervisor) and written by the
 -- IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row; the latest row is in force.
 -- Limits (also checked by the frontend): rotation RPM 20-40, tightening torque setpoints > 0 and < 20 Nm,
--- rotation counts 1 or 2. All REAL, as the PLC takes them.
+-- rotation counts 1 to 4. All REAL, as the PLC takes them. Per model (model_name; the models of
+-- qrcode.partmapping.N): the latest row of a model is in force for it. Rows without a model are from before
+-- 2026-11-08 (one set for all models); they are copied to every model that has none.
 -- A machine_settings table from Machine 1 (rotation counts 1/2 CW/CCW, RotationUnitRPM) is replaced.
 DO $$
 BEGIN
@@ -573,12 +575,21 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.machine_settings
     rotation_rpm real NOT NULL CHECK (rotation_rpm BETWEEN 20 AND 40),
     tightening_torque1_setpoint real NOT NULL CHECK (tightening_torque1_setpoint > 0 AND tightening_torque1_setpoint < 20),
     tightening_torque2_setpoint real NOT NULL CHECK (tightening_torque2_setpoint > 0 AND tightening_torque2_setpoint < 20),
-    no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw IN (1, 2)),
-    no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw IN (1, 2)),
+    no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4),
+    no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw BETWEEN 1 AND 4),
+    model_name character varying(50) COLLATE pg_catalog."default",
     updated_by character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'system',
     updated_on_date timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT machine_settings_pkey PRIMARY KEY (setting_id)
 );
+
+-- 2026-11-08: settings per model; rotation counts 1 to 4 (were 1 or 2). For databases made before.
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS model_name character varying(50);
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_no_of_rotation1_ccw_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_no_of_rotation1_cw_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotation1_ccw_check CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4);
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotation1_cw_check CHECK (no_of_rotation1_cw BETWEEN 1 AND 4);
+CREATE INDEX IF NOT EXISTS idx_machine_settings_model ON al_hub_and_disc_assembly_schema.machine_settings (model_name, setting_id);
 '''
 
 
@@ -2638,8 +2649,8 @@ MACHINE_SETTINGS_LIMITS = {
     "rotation_rpm": (20.0, 40.0, True, True, 0),
     "tightening_torque1_setpoint": (0.0, 20.0, False, False, 2),
     "tightening_torque2_setpoint": (0.0, 20.0, False, False, 2),
-    "no_of_rotation1_ccw": (1.0, 2.0, True, True, 0),
-    "no_of_rotation1_cw": (1.0, 2.0, True, True, 0),
+    "no_of_rotation1_ccw": (1.0, 4.0, True, True, 0),
+    "no_of_rotation1_cw": (1.0, 4.0, True, True, 0),
 }
 MACHINE_SETTINGS_KEYS = tuple(MACHINE_SETTINGS_LIMITS)
 DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 15.0,
@@ -2648,7 +2659,7 @@ DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint":
 
 def validateMachineSettings(settings: dict) -> List[str]:
     """Returns a list of problems (empty = valid). Rotation RPM and the rotation counts must be whole numbers; the
-    counts must be 1 or 2; the torque setpoints must have at most 2 decimals."""
+    counts must be 1 to 4; the torque setpoints must have at most 2 decimals."""
     problems = []
     for key, (lo, hi, lo_incl, hi_incl, decimals) in MACHINE_SETTINGS_LIMITS.items():
         if key not in settings or settings[key] is None:
@@ -2673,25 +2684,50 @@ def _settingsConnection(db_name: str):
     return aConnection
 
 
+def settingsModelNames() -> List[str]:
+    """The models that have machine settings: the models of qrcode.partmapping.N (e.g. ["DOST", "DOSTPLUS"])."""
+    try:
+        from Configuration import CosThetaConfigurator
+        return CosThetaConfigurator.getModelNames()
+    except Exception:
+        noteSuppressed()
+        return []
+
+
 def insertDefaultMachineSettings(db_name: str) -> bool:
-    """Insert the default settings (RPM 30, torque setpoints 15.0 / 19.0, rotation counts 1 / 1) if the table is
-    empty. Called from setDatabaseName()."""
+    """Give every model (settingsModelNames) a settings row if it has none: a copy of the latest row without a model
+    (the one set for all models used before 2026-11-08), else the defaults (RPM 30, torque setpoints 15.0 / 19.0,
+    rotation counts 1 / 1). Called from setDatabaseName()."""
     global schema_name
     aConnection = None
     try:
         aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-        aCursor.execute(f"SELECT COUNT(*) FROM {schema_name}.machine_settings;")
-        if aCursor.fetchone()[0] == 0:
-            d = DEFAULT_MACHINE_SETTINGS
-            aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
-                                    (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                     no_of_rotation1_ccw, no_of_rotation1_cw, updated_by)
-                                VALUES (%s, %s, %s, %s, %s, %s);""",
-                            (d["rotation_rpm"], d["tightening_torque1_setpoint"], d["tightening_torque2_setpoint"],
-                             d["no_of_rotation1_ccw"], d["no_of_rotation1_cw"], "system (default)"))
-            if reportMajorDatabaseActions:
-                printBoldGreen(f"Inserted default machine settings in {schema_name}")
+        aCursor.execute(f"SELECT rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, "
+                        f"no_of_rotation1_ccw, no_of_rotation1_cw FROM {schema_name}.machine_settings "
+                        f"WHERE model_name IS NULL ORDER BY setting_id DESC LIMIT 1;")
+        legacy = aCursor.fetchone()
+        if legacy is not None:
+            values = dict(zip(MACHINE_SETTINGS_KEYS, (float(v) for v in legacy)))
+            for k in ("no_of_rotation1_ccw", "no_of_rotation1_cw"):        # stored before the 1 - 4 range: keep in range
+                values[k] = min(4.0, max(1.0, values[k]))
+            source = "system (copied from the settings for all models)"
+        else:
+            values, source = dict(DEFAULT_MACHINE_SETTINGS), "system (default)"
+        models = settingsModelNames() or [None]
+        for model in models:
+            if model is None:
+                aCursor.execute(f"SELECT COUNT(*) FROM {schema_name}.machine_settings;")
+            else:
+                aCursor.execute(f"SELECT COUNT(*) FROM {schema_name}.machine_settings WHERE model_name = %s;", (model,))
+            if aCursor.fetchone()[0] == 0:
+                aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
+                                        (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
+                                         no_of_rotation1_ccw, no_of_rotation1_cw, model_name, updated_by)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s);""",
+                                tuple(values[k] for k in MACHINE_SETTINGS_KEYS) + (model, source))
+                if reportMajorDatabaseActions:
+                    printBoldGreen(f"Machine settings for {model or 'all models'} in {schema_name}: {source}")
         aCursor.close()
         aConnection.close()
         return True
@@ -2706,29 +2742,40 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
 
 
 _SETTINGS_COLUMNS = "setting_id, rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, " \
-                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date"
+                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date, model_name"
 
 
 def _settingsRowToDict(row) -> dict:
-    keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date")
+    keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date", "model_name")
     d = dict(zip(keys, row))
     for k in MACHINE_SETTINGS_KEYS:
         d[k] = float(d[k])
     return d
 
 
-def getMachineSettings(db_name: str) -> dict:
-    """The settings in force (latest row) as a dict with keys rotation_rpm, tightening_torque1_setpoint,
-    tightening_torque2_setpoint, no_of_rotation1_ccw, no_of_rotation1_cw (floats), setting_id, updated_by,
-    updated_on_date. Empty dict on error / no row."""
+def getMachineSettings(db_name: str, model_name: Optional[str] = None) -> dict:
+    """The settings in force for model_name (its latest row; if it has none, the latest row without a model) as a
+    dict with keys rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotation1_ccw,
+    no_of_rotation1_cw (floats), setting_id, updated_by, updated_on_date, model_name. model_name None: the latest row
+    of any model. Empty dict on error / no row."""
     global schema_name
     aConnection = None
     try:
         aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-        aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
-                        f"ORDER BY setting_id DESC LIMIT 1;")
-        row = aCursor.fetchone()
+        row = None
+        if model_name:
+            aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings WHERE model_name = %s "
+                            f"ORDER BY setting_id DESC LIMIT 1;", (str(model_name).strip().upper(),))
+            row = aCursor.fetchone()
+            if row is None:
+                aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
+                                f"WHERE model_name IS NULL ORDER BY setting_id DESC LIMIT 1;")
+                row = aCursor.fetchone()
+        else:
+            aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
+                            f"ORDER BY setting_id DESC LIMIT 1;")
+            row = aCursor.fetchone()
         aCursor.close()
         aConnection.close()
         return _settingsRowToDict(row) if row else {}
@@ -2744,9 +2791,10 @@ def getMachineSettings(db_name: str) -> dict:
 
 def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torque1_setpoint: float,
                              tightening_torque2_setpoint: float, no_of_rotation1_ccw: float,
-                             no_of_rotation1_cw: float, updated_by: str = "unknown") -> bool:
-    """Save a new settings row (it is then in force from the next component). Validated first; returns False and
-    prints the problems if any value is out of range."""
+                             no_of_rotation1_cw: float, updated_by: str = "unknown",
+                             model_name: Optional[str] = None) -> bool:
+    """Save new settings for model_name (in force for it from its next component); model_name None: for every model
+    (settingsModelNames). Validated first; returns False and prints the problems if any value is out of range."""
     global schema_name
     values = {"rotation_rpm": rotation_rpm, "tightening_torque1_setpoint": tightening_torque1_setpoint,
               "tightening_torque2_setpoint": tightening_torque2_setpoint, "no_of_rotation1_ccw": no_of_rotation1_ccw,
@@ -2755,19 +2803,22 @@ def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torqu
     if problems:
         printBoldRed(f"Machine settings not saved: {'; '.join(problems)}")
         return False
+    models = [str(model_name).strip().upper()] if model_name else (settingsModelNames() or [None])
     aConnection = None
     try:
         aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-        aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
-                                (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                 no_of_rotation1_ccw, no_of_rotation1_cw, updated_by)
-                            VALUES (%s, %s, %s, %s, %s, %s);""",
-                        tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS) + (str(updated_by)[:100],))
+        for model in models:
+            aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
+                                    (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
+                                     no_of_rotation1_ccw, no_of_rotation1_cw, model_name, updated_by)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);""",
+                            tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS) + (model, str(updated_by)[:100]))
         aCursor.close()
         aConnection.close()
         if reportMajorDatabaseActions:
-            printBoldGreen(f"Saved new machine settings ({updated_by}): {values}")
+            printBoldGreen(f"Saved new machine settings for {', '.join(m or 'all models' for m in models)} "
+                           f"({updated_by}): {values}")
         return True
     except Exception as error:
         printBoldRed(f"Error saving machine settings: {error}")
@@ -2779,15 +2830,20 @@ def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torqu
         return False
 
 
-def getMachineSettingsHistory(db_name: str, limit: int = 10) -> list:
-    """The latest `limit` settings rows, newest first (same dict layout as getMachineSettings)."""
+def getMachineSettingsHistory(db_name: str, limit: int = 10, model_name: Optional[str] = None) -> list:
+    """The latest `limit` settings rows (of model_name, if given), newest first (same dict layout as
+    getMachineSettings)."""
     global schema_name
     aConnection = None
     try:
         aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-        aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
-                        f"ORDER BY setting_id DESC LIMIT %s;", (limit,))
+        if model_name:
+            aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings WHERE model_name = %s "
+                            f"ORDER BY setting_id DESC LIMIT %s;", (str(model_name).strip().upper(), limit))
+        else:
+            aCursor.execute(f"SELECT {_SETTINGS_COLUMNS} FROM {schema_name}.machine_settings "
+                            f"ORDER BY setting_id DESC LIMIT %s;", (limit,))
         rows = aCursor.fetchall()
         aCursor.close()
         aConnection.close()

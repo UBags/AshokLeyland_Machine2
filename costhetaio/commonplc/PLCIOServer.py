@@ -745,8 +745,8 @@ class PLCIOServer:
         (an empty tag name means the PLC does not have that setting).
           LH_RH_Selection             INT   1 = LHS, 2 = RHS              (from the QR code)
           ModelSelection              INT   1 = DOST, 2 = DOSTPLUS        (from the QR code; only if its tag is set)
-        cycle.settings.source = database (both PLCs): the settings in force in machine_settings (frontend: Machine
-        Settings), all REAL:
+        cycle.settings.source = database (both PLCs): the settings in force in machine_settings for the QR code's model
+        (frontend: Machine Settings, per model), all REAL:
           TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
         cycle.settings.source = properties (the earlier Allen-Bradley set-up, not used now):
           TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
@@ -790,7 +790,7 @@ class PLCIOServer:
             if config.getCycleSettingsSource() == "database":
                 settings = None
                 try:
-                    settings = getMachineSettings(getDatabaseName())
+                    settings = getMachineSettings(getDatabaseName(), model_name=model)      # this model's settings
                 except Exception as e:
                     problems.append(f"machine settings could not be read from the database ({e})")
                 missing = [k for k in used if settings.get(k) is None] if settings else list(used)

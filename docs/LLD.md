@@ -81,7 +81,7 @@ The trigger in each state is the tag read in that state; the write states write 
 
 **`writeCycleSettingsToPLC(qr)`**
 
-1. Reads the latest `machine_settings` row and the side from the QR code.
+1. Reads the side and model from the QR code, and that model's latest `machine_settings` row.
 2. Writes each value with `_writeVerified`, then `_settingReadBack`.
 3. Stores `cycleSettings:<QR>` for the FE and DB.
 4. Returns False only if the side could not be written.
@@ -246,13 +246,16 @@ Indexes: `idx_qr_code`, `idx_model_name`, `idx_created_on`, plus the primary key
 
 ### `machine_settings`
 
-Append-only; the latest `setting_id` is in force.
+Append-only, per model: the latest `setting_id` of a model (`model_name`; the models of `qrcode.partmapping.N`) is
+in force for it. Rows without a model (before 2026-11-08) are copied to every model that has none when the database
+is set up; a model with no row falls back to the latest such row.
 
 | Column | Check |
 |---|---|
 | `rotation_rpm` | 20–40 |
 | `tightening_torque1_setpoint`, `tightening_torque2_setpoint` | > 0 and < 20 |
-| `no_of_rotation1_ccw`, `no_of_rotation1_cw` | 1 or 2 |
+| `no_of_rotation1_ccw`, `no_of_rotation1_cw` | 1 to 4 |
+| `model_name` | the model (NULL: the one set for all models used before 2026-11-08) |
 | `updated_by`, `updated_on_date` | — |
 
 ### `users` and `roles`

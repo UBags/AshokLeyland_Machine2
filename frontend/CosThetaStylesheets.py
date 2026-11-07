@@ -46,10 +46,18 @@ notokLabelStylesheet_mirrored = "border-style: outset; border-width: 3px; border
                       "stop: 0.7 #AA5555, stop: 0.80 #FF8888, stop: 0.85 #AA5555, stop: 1.0 #AA1111); " \
                       "color: {}"
 
+# "Result Awaited": much darker than before (#555588 / #8888AA / #AAAAFF), 2026-11-08
 noResultLabelStylesheet = "border-style: outset; border-width: 3px; border-radius: 5px; " \
                       "border-color: beige; font: bold; min-width: 10em; padding: 2px; " \
-                      "background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #555588, " \
-                      "stop: 0.15 #8888AA, stop: 0.20 #AAAAFF, stop: 0.3 #8888AA, stop: 1.0 #555588); " \
+                      "background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #15153A, " \
+                      "stop: 0.15 #26265A, stop: 0.20 #3A3A78, stop: 0.3 #26265A, stop: 1.0 #15153A); " \
+                      "color: {}"
+
+# Connection status tiles, connected: a much darker green than okLabelStylesheet (which stays for the OK results)
+connectionOkLabelStylesheet = "border-style: outset; border-width: 3px; border-radius: 5px; " \
+                      "border-color: beige; font: bold; min-width: 10em; padding: 2px; " \
+                      "background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #064006, " \
+                      "stop: 0.15 #0B640B, stop: 0.20 #117A11, stop: 0.3 #0B640B, stop: 1.0 #064006); " \
                       "color: {}"
 
 noResultLabelStylesheet_mirrored = "border-style: outset; border-width: 3px; border-radius: 5px; " \

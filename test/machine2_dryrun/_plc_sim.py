@@ -67,12 +67,13 @@ def setting_tags(IOServer):
     return tuple(getattr(IOServer, a) for a in SETTING_ATTRS if getattr(IOServer, a, ""))
 
 
-def use_machine_settings(mode="Test", **values):
-    """Create the mode's database if needed and put these settings in force (defaults for any not given)."""
+def use_machine_settings(mode="Test", model_name=None, **values):
+    """Create the mode's database if needed and put these settings in force (defaults for any not given) for
+    model_name, or for every model (None)."""
     from persistence import Persistence as P
     P.setDatabaseName(mode, createDB=True)
     settings = dict(P.DEFAULT_MACHINE_SETTINGS); settings.update(values)
-    assert P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", **settings), settings
+    assert P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", model_name=model_name, **settings), settings
     return settings
 
 

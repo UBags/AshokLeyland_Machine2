@@ -135,7 +135,7 @@ QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ t
 
 - **PostgreSQL**, schema `al_hub_and_disc_assembly_schema`, with tables:
   - `hub_and_disc_assembly_data`: one row per component.
-  - `machine_settings`: append-only; the latest row is in force.
+  - `machine_settings`: append-only, per model; a model's latest row is in force for it.
   - `users` and `roles`.
 - **Images** are stored in day folders under the images root. The DB server creates the folder each day.
 - **Logs** go under `logs/`, with each process's level set in `logutils/LogSettings.py`.

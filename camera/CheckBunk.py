@@ -10,7 +10,7 @@ CHANGES FROM V1:
 5. Enhanced early termination: stops on definitive mismatch (e.g., 4-hole when expected 2)
 
 PIPELINE:
-1. Parse QR code → determine expected count (DOST=4, DOSTPLUS=2)
+1. Parse QR code → determine expected count (<MODEL>.NoOfHolesInBung: DOST=4, DOSTPLUS=2)
 2. Preprocess ALL 4 gammas (7.75, 6.5, 4.0, 2.0, 1.0)
 3. Batch process in single torch context with early termination
 4. Apply cascade geometric validation on each gamma
@@ -26,6 +26,7 @@ from BaseUtils import *
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
+from Configuration import CosThetaConfigurator
 from concurrent.futures import ThreadPoolExecutor
 
 # Import the v2 Bunk segmentation engine
@@ -109,7 +110,7 @@ class CheckBunk:
         Check bunk by detecting holes using MobileSAMv2 with LAZY EVALUATION.
 
         NEW Processing Pipeline (OPTIMIZED):
-        1. Determine expected count from QR code (DOST=4, DOSTPLUS=2)
+        1. Determine expected count from QR code (<MODEL>.NoOfHolesInBung: DOST=4, DOSTPLUS=2)
         2. Get optimized gamma sequence (gamma 2.0 first for both)
         3. LAZY EVALUATION: Process ONE gamma at a time
         4. PARALLEL PREPROCESSING: Preprocess gamma N+1 while GPU processes gamma N
@@ -173,13 +174,12 @@ class CheckBunk:
             if PRINT_QR_PARSING:
                 logBoth('logDebug', _src, f"[CheckBunk] Model: {model}, LHS/RHS: {lhs_rhs}, Tonnage: {tonnage}", MessageType.GENERAL)
 
-            if model == "DOST":
-                expected_count = 4
-            elif model == "DOSTPLUS":
-                expected_count = 2
-            else:
+            # holes per model from <MODEL>.NoOfHolesInBung (was DOST = 4, DOSTPLUS = 2 in the code); the count chooses
+            # the hole-pattern routine in BunkSegmenter (2: pair of holes, 4: square)
+            expected_count = CosThetaConfigurator.getNoOfHolesInBung(model)
+            if expected_count not in (2, 4):
                 if PRINT_QR_PARSING:
-                    logBoth('logError', _src, f"[CheckBunk] Unknown model: {model}", MessageType.ISSUE)
+                    logBoth('logError', _src, f"[CheckBunk] Unknown model or no {model}.NoOfHolesInBung (2 or 4): {model}", MessageType.ISSUE)
                 return _maybe_crop(anImage), False, None
 
             if PRINT_QR_PARSING:

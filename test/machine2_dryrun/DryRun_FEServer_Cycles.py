@@ -299,12 +299,19 @@ def driver():
         check_full_record("F4c emergency during the 2 s torque display", rec, QR1)
         check("F4c ... abort screen shown instead of success",
               wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) and "showSuccess" not in SCREENS, str(SCREENS))
+        t1 = fe.componentProcessingTimeText(); time.sleep(2.2); t2 = fe.componentProcessingTimeText()
+        check("F4d processing time stops at the end of the cycle and stays on screen (not 0) until the next scan",
+              t1 == t2 and t1 != "0" and fe.currentComponentEndTime is not None, f"{t1} -> {t2}")
 
         # ---------------- F5 ----------------
         print("\n=== F5. Final free-rotation torque NOT OK ===", flush=True)
         SCREENS.clear(); SENT_ORIGINALS.clear()
         assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
         scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        check("F4d ... the next scan restarts it from 0 and it counts again",
+              wait_for(lambda: fe.currentComponentEndTime is None, 5)
+              and fe.componentProcessingTimeText() in ("0:00:00", "0:00:01"),
+              fe.componentProcessingTimeText())
         run_steps(final_result=notok)
         rec = take_record()
         check("F5 record sent with free-rotation result NOT OK and overall NOT OK",
@@ -336,8 +343,8 @@ def driver():
               tightening_torque1_setpoint=18.5, tightening_torque2_setpoint=19.99, no_of_rotation1_ccw=2.0,
               no_of_rotation1_cw=1.0), str((good, errors)))
         _, errors = SP.parseMachineSettingsInputs(dict(rotation_rpm="30.5", tightening_torque1_setpoint="20",
-                    tightening_torque2_setpoint="1.234", no_of_rotation1_ccw="3", no_of_rotation1_cw="x"))
-        check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 3, not a number)",
+                    tightening_torque2_setpoint="1.234", no_of_rotation1_ccw="5", no_of_rotation1_cw="x"))
+        check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 5 (1 - 4 allowed), not a number)",
               len(errors) == 5, str(errors))
         # ---------------- F7 ----------------
         print("\n=== F7. GUI thread never blocked by Redis reads ===", flush=True)

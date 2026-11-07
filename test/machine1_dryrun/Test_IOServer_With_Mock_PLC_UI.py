@@ -429,7 +429,7 @@ class TestIOServerGUI:
         info += f"  Source of the setpoints: {source}\n"
         if source == "database":
             from persistence.Persistence import getMachineSettings, getDatabaseName
-            configured = getMachineSettings(getDatabaseName())
+            configured = getMachineSettings(getDatabaseName(), model_name=self.model_var.get())   # the selected model's
             values = {"PC_PLC_TighteningTorque1Setpoint": configured.get("tightening_torque1_setpoint"),
                       "PC_PLC_TighteningTorque2Setpoint": configured.get("tightening_torque2_setpoint"),
                       "PC_PLC_RotationRPM": configured.get("rotation_rpm"),

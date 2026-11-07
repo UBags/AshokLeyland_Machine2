@@ -1764,9 +1764,10 @@ def writeReportToFile(csv_data: str, reportType: str):
 
 
 # ****************************************** Start - Machine Settings *************************************
-# Settings written to the PLC at the start of each cycle (state 2, Siemens): rotation RPM, tightening torque setpoints
-# 1 and 2, number of rotations 1 CCW and 1 CW. Stored in machine_settings (a new row per change, with who changed it);
-# the IOServer reads the latest row at the start of each component, so a change applies from the next component.
+# Settings written to the PLC at the start of each cycle (state 2): rotation RPM, tightening torque setpoints 1 and 2,
+# number of rotations 1 CCW and 1 CW - per model (the models of qrcode.partmapping.N). Stored in machine_settings (a new
+# row per change, with the model and who changed it); the IOServer reads the latest row of the QR code's model at the
+# start of each component, so a change applies from that model's next component.
 
 MACHINE_SETTINGS_ROLES = ("administrator", "supervisor")
 MACHINE_SETTINGS_FIELDS = (
@@ -1774,8 +1775,8 @@ MACHINE_SETTINGS_FIELDS = (
     ("rotation_rpm", "Rotation RPM (20 - 40)", "int"),
     ("tightening_torque1_setpoint", "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)", "torque"),
     ("tightening_torque2_setpoint", "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)", "torque"),
-    ("no_of_rotation1_ccw", "No. of Rotations 1 CCW (1 or 2)", "count"),
-    ("no_of_rotation1_cw", "No. of Rotations 1 CW (1 or 2)", "count"),
+    ("no_of_rotation1_ccw", "No. of Rotations 1 CCW (1 - 4)", "count"),
+    ("no_of_rotation1_cw", "No. of Rotations 1 CW (1 - 4)", "count"),
 )
 
 
@@ -1813,8 +1814,10 @@ def parseMachineSettingsInputs(values: dict):
 
 
 def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool = True):
-    """Machine Settings dialog (Administrator and Supervisor only). Shows the settings in force; Save stores a new row
-    in machine_settings with updated_by = currentUser. Returns True if new settings were saved."""
+    """Machine Settings dialog (Administrator and Supervisor only). First line: the model (the models of
+    qrcode.partmapping.N); the settings in force for that model are shown, and shown again when another model is
+    chosen. Save stores a new row for the chosen model in machine_settings with updated_by = currentUser. Returns True
+    if new settings were saved."""
     global aWindowIsInProgress
     if aWindowIsInProgress:
         return False
@@ -1825,29 +1828,39 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
     saved = False
     try:
         db_name = getDatabaseName()
-        current = getMachineSettings(db_name) or dict(DEFAULT_MACHINE_SETTINGS)
+        models = settingsModelNames()
+        if not models:
+            showErrorMessage("No models found in qrcode.partmapping.N of the properties file")
+            return False
+        model = models[0]
+        current = getMachineSettings(db_name, model_name=model) or dict(DEFAULT_MACHINE_SETTINGS)
 
         def shown(key, kind):
             v = float(current.get(key, DEFAULT_MACHINE_SETTINGS[key]))
             return f"{v:.2f}" if kind == "torque" else str(int(round(v)))
 
+        def infoText():
+            changed = current.get("updated_on_date")
+            return (f"In force for {model} since {changed:%d-%m-%Y %H:%M} (set by {current.get('updated_by', '-')})"
+                    if changed else f"Default settings for {model}")
+
         sg.theme('DarkBlue15')
-        rows = []
+        rows = [[sg.Text("Model", size=(44, 1), font=16),
+                 sg.Combo(models, default_value=model, readonly=True, size=(12, 1), font=16, enable_events=True,
+                          k="model_name")]]
         for key, label, kind in MACHINE_SETTINGS_FIELDS:
             if kind == "int":
                 field = sg.Spin([str(i) for i in range(20, 41)], initial_value=shown(key, kind), size=(8, 1), font=16, k=key)
             elif kind == "count":
-                field = sg.Combo(["1", "2"], default_value=shown(key, kind), readonly=True, size=(8, 1), font=16, k=key)
+                field = sg.Combo([str(i) for i in range(1, 5)], default_value=shown(key, kind), readonly=True,
+                                 size=(8, 1), font=16, k=key)
             else:
                 field = sg.Input(shown(key, kind), size=(10, 1), font=16, k=key)
             rows.append([sg.Text(label, size=(44, 1), font=16), field])
-        changed = current.get("updated_on_date")
-        info = (f"In force since {changed:%d-%m-%Y %H:%M} (set by {current.get('updated_by', '-')})"
-                if changed else "Default settings")
         layout = ([[sg.Text("Machine Settings", font=("Helvetica", 16, "bold"))],
-                   [sg.Text(info, font=12)],
+                   [sg.Text(infoText(), font=12, size=(70, 1), k="info")],
                    [sg.HorizontalSeparator()]] + rows +
-                  [[sg.Text("New settings apply from the next component.", font=12)],
+                  [[sg.Text("New settings apply from the next component of the chosen model.", font=12)],
                    [sg.Button("Save"), sg.Button("Reset"), sg.Button("Cancel")]])
         window = sg.Window("Machine Settings", layout, modal=modal, keep_on_top=True, finalize=True,
                            disable_minimize=True, grab_anywhere=False)
@@ -1855,7 +1868,11 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
             event, values = window.read()
             if event in (sg.WIN_CLOSED, "Cancel"):
                 break
-            if event == "Reset":
+            if event in ("model_name", "Reset"):
+                if event == "model_name":
+                    model = values["model_name"]
+                    current = getMachineSettings(db_name, model_name=model) or dict(DEFAULT_MACHINE_SETTINGS)
+                    window["info"].update(infoText())
                 for key, _, kind in MACHINE_SETTINGS_FIELDS:
                     window[key].update(shown(key, kind))
                 continue
@@ -1864,9 +1881,9 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                 if errors:
                     showErrorMessage("\n".join(errors), auto_close_duration=5)
                     continue
-                if insertNewMachineSettings(db_name, updated_by=currentUser, **settings):
+                if insertNewMachineSettings(db_name, updated_by=currentUser, model_name=model, **settings):
                     saved = True
-                    showMessage("Machine settings saved.\nThey apply from the next component.")
+                    showMessage(f"Machine settings for {model} saved.\nThey apply from the next {model} component.")
                     break
                 showErrorMessage("Could not save the machine settings")
         window.close()

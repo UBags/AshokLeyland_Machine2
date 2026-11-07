@@ -82,6 +82,12 @@ class CosThetaOutcomeContainer(QFrame):
         # Set size policies for expansion
         for label in [self.title_label, self.image_label, self.result_label]:
             label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # The picture / value label must never size the tile: a QLabel holding a pixmap asks for at least the
+        # pixmap's size plus its border and padding, so a picture scaled to the label's size made the picture row
+        # grow and squeezed the title and result rows (more with every picture). Ignored: the rows keep the 1 : 5 : 1
+        # stretch, whatever the label holds.
+        self.image_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.image_label.setMinimumSize(1, 1)
 
         grid_layout = QGridLayout()
         grid_layout.setContentsMargins(0, 0, 0, 0)
@@ -193,7 +199,8 @@ class CosThetaOutcomeContainer(QFrame):
     def setImage(self, image : QImage | QPixmap | ndarray | str):
         # printPlain("Before setPixmap() - 7")
         pix = getPixmapImage(image)
-        pix = resize_pixmap(pix, self.image_label.width(), self.image_label.height())
+        area = self.image_label.contentsRect()          # inside the stylesheet's border and padding
+        pix = resize_pixmap(pix, max(1, area.width()), max(1, area.height()))
         self.image_label.setPixmap(pix)
         self.currentPixmap = pix
         self.update()
@@ -323,8 +330,8 @@ class CosThetaOutcomeContainer(QFrame):
         # else:
         #     backgroundcolor = QColor(206, 206, 206)
         if ndarrayimage is not None:
-            width = self.image_label.width()
-            height = self.image_label.height()
+            area = self.image_label.contentsRect()
+            width, height = max(1, area.width()), max(1, area.height())
             qPixmap = convertNDArrayToPixmap(ndarrayimage)
             pixmap = qPixmap.scaled(width, height, aspectMode = Qt.AspectRatioMode.IgnoreAspectRatio, mode = Qt.TransformationMode.SmoothTransformation)
             self.setImageAndResult(pixmap, result)

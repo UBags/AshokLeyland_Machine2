@@ -2397,3 +2397,35 @@ Architecture items not included (user).
   loss, FE -> DB pipeline; columns added to the existing test database and stored (True / reason; False / NULL);
   screenshot at 1920 x 1080.
 
+## 91. Darker tiles; processing time kept; machine settings per model, rotation counts 1 - 4; bung holes per model; tiles no longer squeezed (2026-11-08)
+
+- **Colours:** connected status tiles in a much darker green (`connectionOkLabelStylesheet`; the OK result labels keep
+  `okLabelStylesheet`); "Result Awaited" much darker (`noResultLabelStylesheet`). OK / Not OK unchanged.
+- **Processing time (bottom left):** counts from the QR code scan, stops when the cycle ends (free-rotation torque, or
+  an abort) and stays on screen until the next scan, which restarts it from 0. Before, it fell to 0 at once.
+- **Machine settings per model:** `machine_settings.model_name`; the models are taken from `qrcode.partmapping.N`
+  (`getModelNames()`: DOST, DOSTPLUS; the properties are `qrcode.partmapping.*`, not `qrcode.mapping.*`). When the
+  database is set up, every model without settings gets a copy of the earlier settings for all models (else the
+  defaults). The IOServer writes the settings of the QR code's model (`getMachineSettings(db, model_name=)`). Machine
+  Settings dialog: first line a Model dropdown; the values shown follow the model chosen; Save stores them for that
+  model only. `insertNewMachineSettings(..., model_name=None)` saves for every model (as before, one set).
+- **Rotation counts 1 CCW / 1 CW:** dropdowns 1 - 4 (were 1 / 2); limits and the database CHECK constraints 1 - 4
+  (existing databases: constraints replaced at start).
+- **Bung holes per model:** `DOST.NoOfHolesInBung=4`, `DOSTPLUS.NoOfHolesInBung=2` (all three properties files;
+  `getNoOfHolesInBung(model)`); CheckBunk and CheckNoCapBunk take the count from there (were hard-coded DOST 4,
+  DOSTPLUS 2). The count chooses BunkSegmenter's routine (2: pair of holes at the configured distance, 4: square). A
+  model without the property: the bung check is NOT OK. The values are the existing ones: the request said DOST 2,
+  DOSTPLUS 4, but the code, the stored test pictures (DOST bung: 4 holes in a square; DOSTPLUS: 2) and the vision
+  constants all say DOST 4, DOSTPLUS 2 - to be confirmed on the machine; swapping is a properties change.
+- **Tiles squeezed by a picture:** a picture was scaled to the picture label's size, and a QLabel holding a pixmap asks
+  the layout for the pixmap size plus its border and padding, so the picture row grew with each picture (224 -> 242 px
+  measured) and squeezed the title and result rows. The picture label's size policy is now Ignored (the rows keep
+  1 : 5 : 1) and pictures are scaled to its contents rectangle. After repeated pictures: no row changes; all 14 tiles
+  the same title / result heights.
+- Checked: FE 98/98 both folders (F4d time frozen, restarted by the scan; F6 count 5 refused); DB 54/54 both folders
+  (per model, copy, counts 3 / 4, history per model); fault scenarios D 65/65 Siemens, 64/64 Allen-Bradley, both
+  folders (D6: each model's cycle writes its own settings); the Machine Settings dialog driven (model switch, 1 - 4,
+  save for one model); bung routing (DOST 4, DOSTPLUS 2, missing property NOT OK, swapped property swaps the routine;
+  segmenter stubbed - no model weights here); Mock 15/15, Real 12/12, endpoints 43/43, PLCDataIO 38/38, indexes 8/8,
+  vision verifier ALL EQUIVALENT; screenshot 1920 x 1080.
+

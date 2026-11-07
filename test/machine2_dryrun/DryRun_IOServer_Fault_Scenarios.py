@@ -465,6 +465,23 @@ def run_scenarios():
         check("D: the new settings are published for that component's record", ok_, detail)
         run_steps()
         check("D: that cycle completed", wrapped())
+        # D6 (2026-11-08): settings per model: each model's cycle gets its own settings
+        use_machine_settings("Test", model_name="DOST", rotation_rpm=22, tightening_torque1_setpoint=11.5,
+                             tightening_torque2_setpoint=12.75, no_of_rotation1_ccw=3, no_of_rotation1_cw=4)
+        use_machine_settings("Test", model_name="DOSTPLUS", rotation_rpm=38, tightening_torque1_setpoint=16.25,
+                             tightening_torque2_setpoint=17.5, no_of_rotation1_ccw=2, no_of_rotation1_cw=1)
+        for code, side, want in ((QR_DOST_LHS, 1, (11.5, 12.75, 22.0, 3.0, 4.0)),
+                                 (QR_DOSTPLUS_RHS, 2, (16.25, 17.5, 38.0, 2.0, 1.0))):
+            TRACE.clear(); mark = len(WRITES)
+            plc_start_cycle(code); SCAN.set(); finish_qr_handshake()
+            got = dict(writes_of(SETTING_TAGS, mark))
+            expected = {IOServer.PC_PLC_LH_RH_Selection: side, IOServer.PC_PLC_TighteningTorque1Setpoint: want[0],
+                        IOServer.PC_PLC_TighteningTorque2Setpoint: want[1], IOServer.PC_PLC_RotationRPM: want[2],
+                        IOServer.PC_PLC_NoOfRotation1CCW: want[3], IOServer.PC_PLC_NoOfRotation1CW: want[4]}
+            check(f"D6 per model: {'DOST' if side == 1 else 'DOSTPLUS'} cycle writes that model's settings {want}",
+                  got == expected, str(got))
+            run_steps()
+            check("D6 cycle completed", wrapped())
         use_machine_settings("Test")          # back to the defaults
 
     # =====================================================================================================

@@ -2519,6 +2519,33 @@ class CosThetaConfigurator():
                 pass
         return partMappings
 
+    @classmethod
+    def getModelNames(cls) -> list[str]:
+        """The models made on this machine, in the order they first appear in qrcode.partmapping.1, 2, ...
+        (<part number>$<code>.<MODEL>.<SIDE>$<tonnage>), each once, e.g. ["DOST", "DOSTPLUS"]."""
+        names = []
+        for value in cls.getQRCodePartMappingPatterns().values():        # "<MODEL> - <SIDE> - <tonnage>"
+            model = value.split(" - ")[0].strip().upper()
+            if model and model not in names:
+                names.append(model)
+        return names
+
+    NO_OF_HOLES_IN_BUNG_KEY_SUFFIX = "NoOfHolesInBung"
+
+    @classmethod
+    def getNoOfHolesInBung(cls, model: str) -> Optional[int]:
+        """Holes in the bung of this model (<MODEL>.NoOfHolesInBung, e.g. DOST.NoOfHolesInBung); it chooses the bung
+        checks' hole-pattern routine (2: a pair of holes at the configured distance, 4: a square). None if the model
+        has no such property (the bung check is then NOT OK: unknown model)."""
+        if not model:
+            return None
+        try:
+            v = CosThetaConfigurator.getValue(key=f"{str(model).strip().upper()}.{cls.NO_OF_HOLES_IN_BUNG_KEY_SUFFIX}",
+                                              default="")
+            return int(str(v).strip()) if str(v).strip() else None
+        except Exception:
+            return None
+
     # ***********************************QR Code COM Port *********************************
 
     READ_QR_CODE_QUEUE_KEY = "read.qrcodeQ"
