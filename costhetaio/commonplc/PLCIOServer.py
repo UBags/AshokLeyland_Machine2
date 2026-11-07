@@ -479,9 +479,15 @@ class PLCIOServer:
         from utils.WorkerHealth import WorkerWatch
         self.lastReadLoopAt: float = time.monotonic()
         self.lastWriteLoopAt: float = time.monotonic()
+        self.lastEmergencyLoopAt: float = time.monotonic()
+        self.lastToggleLoopAt: float = time.monotonic()
         self.workers = WorkerWatch("IOServer")
         self.workers.add("read loop", lambda: getattr(self, "continuousReadLoop", None), lastTick=lambda: self.lastReadLoopAt)
         self.workers.add("write loop", lambda: getattr(self, "continuousDoLoop", None), lastTick=lambda: self.lastWriteLoopAt)
+        self.workers.add("emergency monitoring", lambda: getattr(self, "emergencyMonitoringThread", None),
+                         lastTick=lambda: self.lastEmergencyLoopAt)
+        self.workers.add("connection-status toggle", lambda: getattr(self, "connectionStatusToggleThread", None),
+                         lastTick=lambda: self.lastToggleLoopAt)
         self.abortCount: int = 0
         self.lastAbortReason: str = ""
         self.cycleId: int = 0              # incremented at each accepted QR code (log context "[QR=... cycle=N]")
@@ -1322,6 +1328,7 @@ class PLCIOServer:
             for a server that is down (abortCycle: about 1-4 s), so the toggle stopped for that long - long enough
             for a PLC that watches it to take the PC as dead."""
             while not objRef.shutdown:
+                objRef.lastToggleLoopAt = time.monotonic()
                 try:
                     statusToBeSent = not PLCIOServer.LAST_CONNECTION_STATUS_UPDATED
                     objRef.write_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, statusToBeSent, debug=False)
@@ -1333,8 +1340,9 @@ class PLCIOServer:
                 except Exception:
                     noteSuppressed()
 
-        threading.Thread(name="PC Connection Status Toggle Thread", target=toggleConnectionStatus, args=(),
-                         daemon=True).start()
+        self.connectionStatusToggleThread = threading.Thread(name="PC Connection Status Toggle Thread",
+                                                             target=toggleConnectionStatus, args=(), daemon=True)
+        self.connectionStatusToggleThread.start()
 
     # ---------------------------------------------------------------- other servers down: what the IOServer does
     def _notice(self, name: str, text: Optional[str], ttlSecs: float = 15.0) -> None:
@@ -1459,6 +1467,7 @@ class PLCIOServer:
 
         def monitorEmergency():
             while not objRef.shutdown:
+                objRef.lastEmergencyLoopAt = time.monotonic()
                 emergencyActivated: bool = False
                 if objRef._readsReady():
                     try:
@@ -1480,9 +1489,9 @@ class PLCIOServer:
                 except Exception:
                     noteSuppressed()
 
-        emergencyMonitoringThread = threading.Thread(name="Emergency Monitoring Thread", target=monitorEmergency,
+        self.emergencyMonitoringThread = threading.Thread(name="Emergency Monitoring Thread", target=monitorEmergency,
                                                      args=(), daemon=True)
-        emergencyMonitoringThread.start()
+        self.emergencyMonitoringThread.start()
 
     def abortCycle(self, reason: str, notifyQRCodeServer: bool = True, notifyFrontend: bool = True,
                    clearQueues: bool = True, pcAbort: bool = False) -> None:

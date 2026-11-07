@@ -3,9 +3,18 @@ Test_IOServer_With_Real_PLC_UI - drives a REAL IOServer (costhetaio/commonplc/PL
 to the REAL PLC: this Tk window plays the QR-code server and the camera server, and shows PLC tag values.
 
 Run from the project root, alongside the IOServer (which must already be running and connected to the PLC):
-    Terminal 1: start the IOServer as usual (e.g. via MainProgram.py, or costhetaio.commonplc.PLCIOServer.startIOServer())
+    Terminal 1: python test/machine2_dryrun/Run_IOServer_Alone.py           (the IOServer on its own, with logging)
     Terminal 2: python test/machine2_dryrun/Test_IOServer_With_Real_PLC_UI.py
                 (or)  python -m test.machine2_dryrun.Test_IOServer_With_Real_PLC_UI
+Run the IOServer ON ITS OWN, not through MainProgram.py: MainProgram also starts the camera server and the heartbeat
+server, which answer the pictures themselves (with the camera unplugged: "camera server down", every picture NOT OK
+at once), so this window's OK / Not OK would not be the answer the IOServer takes.
+OK / Not OK are sent only while the IOServer is waiting for that step's result (its WRITE state, read over Redis):
+pressed before the PLC has asked for the picture, the answer is not sent (it would wait in the queue and be taken the
+moment the PLC asks). The IOServer waits plc.camera.answer.timeout.sec (20 s) after the PLC's request; after that it
+has answered the PLC NOT OK itself and is back at the step's picture state (the window says so).
+This window sends no heartbeat-server messages (before 2026-11-07 it did): the IOServer then applies no server-down
+rules, as when it is commissioned on its own; with them, closing this window held all cycles ("heartbeat server down").
 NOTE: on start-up this script FLUSHES the Redis database (as before), and "Clear Redis" flushes it again.
 "Reset to Step 0" aborts the cycle in the IOServer as well (the abort message the frontend's manual abort sends, on
 fe2io.q): the IOServer resets its handshake tags and goes back to the QR code; this window waits until it is there.
@@ -169,7 +178,6 @@ class IOServerTestApp:
         self.cycle_complete = False   # set when a "Run Full Cycle" has seen IOServer wrap back to state 1
 
         self._build_ui()
-        self._start_heartbeat()
         self._update_button_states()
 
     def _build_ui(self):
@@ -560,19 +568,30 @@ step for easy reading.
                         if widgets['notok']:
                             widgets['notok'].config(state='disabled')
 
-    def _start_heartbeat(self):
-        """Send heartbeat to keep IOServer happy."""
+    # No heartbeat sender (see the module docstring): the IOServer takes "combined ALIVE" messages for a heartbeat
+    # server since CHANGES 81, and aborts / holds cycles when they stop.
 
-        def heartbeat():
-            while True:
-                try:
-                    sendCombinedHeartbeatFromHeartbeatServerToIOServer(testRedisConnection, ALIVE)
-                except:
-                    pass
-                time.sleep(1)
-
-        thread = threading.Thread(target=heartbeat, daemon=True)
-        thread.start()
+    def _ioserver_waiting_for(self, step_idx) -> bool:
+        """True if the IOServer is in this step's WRITE state (waiting for the QR / camera answer); else says why not.
+        Runs in a worker thread (a Redis round trip)."""
+        expected = self.write_state_map[step_idx]
+        state = self._get_ioserver_current_state()
+        if state == expected:
+            return True
+        step_name, description = self.steps[step_idx][0], self.steps[step_idx][1]
+        read_state = self.vision_state_map.get(step_idx)
+        if state == read_state:
+            why = (f"the IOServer is at {state.name}: the PLC has not asked for the picture yet, or the IOServer already "
+                   f"answered the PLC NOT OK itself (no answer within plc.camera.answer.timeout.sec, "
+                   f"{CosThetaConfigurator.getPlcCameraAnswerTimeout():g} s) - wait for the PLC's request")
+        elif state == MachineState.INVALID_STATE:
+            why = "the IOServer did not answer the state request (is it running?)"
+        else:
+            why = f"the IOServer is at {state.name}, not waiting for this result"
+        self.root.after(0, lambda: self.step_widgets[step_idx]['status'].config(text="Not sent - see status",
+                                                                                foreground="red"))
+        self._update_status(f"{step_name}: {description} - not sent: {why}")
+        return False
 
     def _get_ioserver_current_state(self) -> MachineState:
         """Request current machine state from IOServer via Redis."""
@@ -749,11 +768,18 @@ step for easy reading.
             self._update_status("Use 'Send LHS QRCode' or 'Send RHS QRCode' buttons for QR code")
             return
 
-        # Camera vision check
-        state = self.vision_state_map.get(step_idx)
-        if state:
+        def checkThenSend():
+            if not self._ioserver_waiting_for(step_idx):
+                return
             sendDataFromCameraServerToIOServer(testRedisConnection, result=ok,
-                                               currentMachineState=state)
+                                               currentMachineState=self.vision_state_map.get(step_idx))
+            self.root.after(0, lambda: self._after_ok_sent(step_idx))
+
+        threading.Thread(target=checkThenSend, daemon=True).start()
+
+    def _after_ok_sent(self, step_idx):
+        step_name, description, _, step_type, _ = self.steps[step_idx]
+        widgets = self.step_widgets[step_idx]
         widgets['status'].config(text="OK sent → Moving to next step", foreground="green")
         self._update_status(f"{step_name}: {description} - OK sent")
 
@@ -791,13 +817,17 @@ step for easy reading.
             self._update_status("Use 'Send LHS QRCode' or 'Send RHS QRCode' buttons for QR code")
             return
 
-        # Camera vision check
-        state = self.vision_state_map.get(step_idx)
-        if state:
+        def checkThenSend():
+            if not self._ioserver_waiting_for(step_idx):
+                return
             sendDataFromCameraServerToIOServer(testRedisConnection, result=notok,
-                                               currentMachineState=state)
-        widgets['status'].config(text="NotOK sent → Staying at this step", foreground="red")
-        self._update_status(f"{step_name}: {description} - NotOK sent (will retry)")
+                                               currentMachineState=self.vision_state_map.get(step_idx))
+            self.root.after(0, lambda: widgets['status'].config(text="NotOK sent → Staying at this step",
+                                                                foreground="red"))
+            self._update_status(f"{step_name}: {description} - NotOK sent; the PLC asks for the picture again "
+                                f"(two-hand buttons)")
+
+        threading.Thread(target=checkThenSend, daemon=True).start()
 
     def _send_next_ok(self):
         """Send OK for the next vision step in sequence."""

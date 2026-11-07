@@ -17,6 +17,15 @@ What it does:
    machine_settings (frontend: Machine Settings).
 4. "Auto Cycle (All OK)" drives one complete cycle (15 process steps, states 1 -> 28 -> 1) and reports the state
    trace IOServer actually walked and the state-2 settings it wrote.
+5. Camera answer timeout: after "Trigger" the IOServer waits plc.camera.answer.timeout.sec (20 s) for the camera's
+   answer, then answers the PLC NOT OK itself (CHANGES 81). Pressing OK / Not OK by hand can take longer: the
+   "Camera answer timeout" box (this window's IOServer runs in this process) sets it for this session; the step
+   shows when the IOServer has answered NOT OK on its own.
+6. No heartbeat server: the IOServer then applies no server-down rules, as when it is commissioned on its own
+   (before 2026-11-07 the window sent "combined ALIVE" messages; the IOServer now takes those for a heartbeat server,
+   and holds cycles when they stop).
+7. "Reset All" resets the MockPLC tags and aborts the cycle in the IOServer with its own abort (abortCycle: delayed
+   resets cancelled, camera request dropped, per-cycle tags reset, CheckQRCode armed), as an emergency abort does.
 
 Machine 2 process steps (15) and IOServer states (28):
     Step 0  QR Code                    states 1-2    (QR server)
@@ -175,6 +184,20 @@ class TestIOServerGUI:
             "torque_frt": tk.DoubleVar(value=2.4),
         }
         self.model_var = tk.StringVar(value="DOSTPLUS")
+        # The IOServer's camera answer timeout for this session (the IOServer runs in this process)
+        # (read by the IOServer's write loop: a plain float, kept up to date from the Tk variable on the GUI thread -
+        # a Tk variable must not be read from another thread)
+        self._camera_timeout = float(CosThetaConfigurator.getPlcCameraAnswerTimeout())
+        self.camera_timeout_var = tk.DoubleVar(value=self._camera_timeout)
+        def _onTimeoutChanged(*_):
+            try:
+                self._camera_timeout = max(1.0, float(self.camera_timeout_var.get()))
+            except Exception:
+                pass                              # half-typed value: keep the last good one
+        self.camera_timeout_var.trace_add("write", _onTimeoutChanged)
+        _gui = self
+        CosThetaConfigurator.getPlcCameraAnswerTimeout = classmethod(lambda cls: _gui._camera_timeout)
+        self._triggered_at = {}             # step index -> time.monotonic() when the IOServer reached its WRITE state
 
         self.step_widgets = {}
         self.step_by_idx = {s[0]: s for s in STEPS}
@@ -189,7 +212,6 @@ class TestIOServerGUI:
 
         self._build_ui()
         self._start_state_tracer()
-        self._start_heartbeat()
         self._schedule_monitor()
 
     # ------------------------------------------------------------------ helpers
@@ -298,6 +320,11 @@ class TestIOServerGUI:
         ttk.Label(model_frame, text="Model for QR code:").pack(side=tk.LEFT)
         ttk.Combobox(model_frame, textvariable=self.model_var, values=["DOST", "DOSTPLUS"], width=10,
                      state="readonly").pack(side=tk.LEFT, padx=4)
+        ttk.Label(model_frame, text="   Camera answer timeout (s):").pack(side=tk.LEFT)
+        ttk.Spinbox(model_frame, from_=1, to=3600, increment=10, textvariable=self.camera_timeout_var,
+                    width=6).pack(side=tk.LEFT, padx=4)
+        ttk.Label(model_frame, text="(after Trigger, OK / Not OK must come within this, else the IOServer answers "
+                                    "NOT OK itself)", foreground="gray").pack(side=tk.LEFT)
 
         # Steps
         steps_frame = ttk.LabelFrame(parent, text="Process Steps", padding="5")
@@ -473,6 +500,7 @@ class TestIOServerGUI:
         # Vision: IOServer sends the take-picture command and moves READ -> WRITE
         reached = self._wait_for_state([last])
         if reached:
+            self._triggered_at[step_idx] = time.monotonic()
             self._set_step_status(step_idx, f"Triggered: {tag}=True → now OK / Not OK", "orange")
             self._set_status(f"Step {step_idx}: Triggered - IOServer in {last.name}")
         else:
@@ -487,9 +515,18 @@ class TestIOServerGUI:
             return False
 
         if not self._wait_for_state([last]):
-            self._set_step_status(step_idx, "IOServer not in WRITE state - press Trigger first", "red")
-            self._set_status(f"Step {step_idx}: IOServer is in {self._state().name}, expected {last.name}")
+            since = self._triggered_at.pop(step_idx, None)
+            timeout = CosThetaConfigurator.getPlcCameraAnswerTimeout()
+            if since is not None and time.monotonic() - since >= timeout and self._state() == first:
+                self._set_step_status(step_idx, f"Too late: the IOServer answered NOT OK itself after {timeout:g} s"
+                                                f" - press Trigger again", "red")
+                self._set_status(f"Step {step_idx}: no camera answer within {timeout:g} s (camera answer timeout), so "
+                                 f"the IOServer reported NOT OK to the PLC and went back to {first.name}")
+            else:
+                self._set_step_status(step_idx, "IOServer not in WRITE state - press Trigger first", "red")
+                self._set_status(f"Step {step_idx}: IOServer is in {self._state().name}, expected {last.name}")
             return False
+        self._triggered_at.pop(step_idx, None)
 
         # Act as the PLC: drop the trigger (IOServer does not read it in the WRITE state), so that on NotOK
         # IOServer's return to the READ state does not immediately re-trigger
@@ -560,10 +597,11 @@ class TestIOServerGUI:
     def _reset(self):
         self.plc.reset_all_tags()
         self.redis.flushdb()
-        # Bring the real IOServer back to the start of a cycle (as it does on an emergency abort)
-        self.io.machineState.setCurrentState(MS.READ_QR_CODE)
-        self.io._resetOpTimestamps()
-        self.io.currentQRCode = ""
+        self._triggered_at.clear()
+        # Bring the real IOServer back to the start of a cycle with its own abort (as on an emergency abort): it
+        # cancels the delayed resets, drops the camera request, resets the per-cycle tags and arms CheckQRCode
+        self.io.abortCycle("Reset All in the test window", notifyQRCodeServer=False, notifyFrontend=False,
+                           clearQueues=True)
 
         for idx, widgets in self.step_widgets.items():
             widgets['status'].config(text="Waiting...", foreground="gray")
@@ -720,16 +758,9 @@ class TestIOServerGUI:
             print(f"Monitor error: {e}")
         self.root.after(500, self._schedule_monitor)
 
-    def _start_heartbeat(self):
-        def hb():
-            while True:
-                try:
-                    sendCombinedHeartbeatFromHeartbeatServerToIOServer(self.redis, ALIVE)
-                except:
-                    pass
-                time.sleep(1)
-
-        threading.Thread(target=hb, daemon=True).start()
+    # No heartbeat sender: an IOServer without a heartbeat server applies no server-down rules (commissioning).
+    # The "combined ALIVE" messages this window used to send now make the IOServer take them for a heartbeat server
+    # (CHANGES 81) - and hold the cycles when they stop.
 
 
 # =============================================================================

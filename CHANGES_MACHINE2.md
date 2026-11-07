@@ -2288,3 +2288,27 @@ Architecture items not included (user).
   heartbeat DEAD while the read / write loop is stuck, ALIVE again, then a full cycle); frontend F11 (DEAD while the
   GUI thread is frozen, ALIVE again, ALIVE while a menu dialog is open); `DryRun_Camera_Stale_Frames.py` A3 (check
   and transfer times recorded).
+
+## 86. IOServer: emergency and toggle threads watched; the two IOServer test windows corrected (2026-11-07)
+
+- **IOServer heartbeat DEAD when the emergency monitoring or connection-status toggle thread dies or is stuck**, as
+  for the read and write loops (section 85): both threads are stored (`emergencyMonitoringThread`,
+  `connectionStatusToggleThread`), each loop records `lastEmergencyLoopAt` / `lastToggleLoopAt` at the top of every
+  round, and both are in the IOServer's `WorkerWatch` (stuck after `heartbeat.work.loop.max.silence.sec`). Before, a
+  dead emergency thread meant the PC never saw the PLC's emergency abort; a dead toggle thread, the PLC saw the PC
+  connection drop while the IOServer went on reporting ALIVE. The supervisor still restarts only exited processes; a
+  DEAD heartbeat is shown and logged. Fault scenarios L3 / L4 (emergency read / toggle write blocked: DEAD, then
+  ALIVE when it goes round again); L 11/11, Siemens and Allen-Bradley, both folders.
+- **`Test_IOServer_With_Mock_PLC_UI.py`**: no longer sends "combined ALIVE" heartbeat-server messages (since section
+  81 the IOServer takes them for a heartbeat server, and aborted / held cycles when the window closed); new box
+  "Camera answer timeout (s)" (the IOServer's `plc.camera.answer.timeout.sec` for this run, read thread-safely); OK /
+  NOT OK pressed after the IOServer already answered NOT OK itself says "Too late ... press Trigger again" instead of
+  "press Trigger first"; Reset All now aborts the IOServer's cycle (`abortCycle`, queues cleared) instead of forcing
+  its state.
+- **`Test_IOServer_With_Real_PLC_UI.py`**: no heartbeat sender (same reason); OK / NOT OK are sent only while the
+  IOServer is in that step's WRITE state (read over Redis, in a worker thread), else not sent and the reason shown (PLC
+  has not asked yet, or the camera answer timeout passed; before, an early answer waited in the queue and was taken
+  for the next request). The docstring says to run the IOServer on its own: MainProgram also starts the camera and
+  heartbeat servers, which answer the pictures themselves. New `Run_IOServer_Alone.py` (logging server + IOServer).
+- Window dry runs: Mock 15/15 (new U11 camera answer timeout), Real 9/9 (new R4b early OK not sent, R4c no
+  heartbeat), Siemens and Allen-Bradley, both folders. Work-thread health 17/17, heartbeat 26/26, two full cycles OK.

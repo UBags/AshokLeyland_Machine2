@@ -50,6 +50,14 @@ def scenario():
         ok2 = app._do_trigger(1) and app._do_vision_result(1, True)
         check("U7 knuckle retry OK -> on to the hub", ok2 and
               app._wait_for_state([MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING]), app._state().name)
+        # camera answer timeout (box set to 2 s): the IOServer answers NOT OK itself; the window says "Too late"
+        app._camera_timeout = 2.0
+        trig = app._do_trigger(2); time.sleep(3.0)
+        sent = app._do_vision_result(2, True)
+        st = app.step_widgets[2]['status'].cget("text")
+        check("U11 camera answer timeout box (2 s): no answer -> IOServer back at the hub picture, window says 'Too late'",
+              trig and not sent and st.startswith("Too late"), f"{trig} {sent} {st!r} {app._state().name}")
+        app._camera_timeout = float(app.camera_timeout_var.get())
         # Reset All mid-cycle, then a full auto cycle
         app._reset(); time.sleep(1.5)
         check("U8 Reset All -> IOServer back at the QR code", app._state() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), app._state().name)

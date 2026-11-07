@@ -1245,6 +1245,20 @@ def run_loop_health():
     release2.set(); time.sleep(0.3)
     del io.getCurrentTagsToBeWritten
     check("L2 write loop going round again -> ALIVE", wait_for(lambda: latest() == ALIVE, 5), latest())
+    # L3 / L4: the emergency monitoring thread and the connection-status toggle thread (2026-11-07)
+    for label, attr, tagName in (("L3 emergency monitoring", "read_bool", IOServer.PLC_PC_EmergencyAbort),
+                                 ("L4 connection-status toggle", "write_bool", IOServer.PC_PLC_ConnectionStatusTag)):
+        hold = threading.Event()
+        orig = getattr(io, attr)
+        def blocking(tag, *a, _orig=orig, _tag=tagName, _hold=hold, **k):
+            if tag == _tag:
+                _hold.wait(30)                    # this thread's PLC call hangs
+            return _orig(tag, *a, **k)
+        setattr(io, attr, blocking)
+        check(f"{label} stuck > 2 s -> DEAD", wait_for(lambda: latest() == DEAD, 8), latest())
+        hold.set(); time.sleep(0.3)
+        delattr(io, attr)
+        check(f"{label} going round again -> ALIVE", wait_for(lambda: latest() == ALIVE, 6), latest())
     C.getWorkLoopMaxSilence = origLimit
     TRACE.clear()
     check("L at the QR code", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8))

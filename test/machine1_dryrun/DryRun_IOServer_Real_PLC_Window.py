@@ -2,7 +2,7 @@
 
 The real window (Tk) against the real IOServer (PLCIOServer) on the simulated PLC of _plc_sim.py, in this process (the
 window itself only talks to the IOServer over Redis, as with the real PLC): state read over Redis, "Get Tag Values" (every
-tag in the dump), "Send LHS QRCode", a PLC trigger then "OK" for the knuckle (OK before Done), "Reset to Step 0" (abort to
+tag in the dump), "Send LHS QRCode", "OK" before the PLC asks (not sent), a PLC trigger then "OK" for the knuckle (OK before Done), "Reset to Step 0" (abort to
 the IOServer, back at the QR code). Needs Redis, PostgreSQL and a display (on Linux without one: xvfb-run). Vendor:
 COSTHETA_PLC_VENDOR, else plc.vendor.
 
@@ -48,6 +48,13 @@ def scenario():
         check("R4 'Send LHS QRCode' -> IOServer past the QR code, side 1 written",
               until(lambda: io.machineState.getCurrentState() not in (MS.READ_QR_CODE, MS.WRITE_QR_CODE))
               and TAGS[IOServer.PC_PLC_LH_RH_Selection] == 1, io.machineState.getCurrentState().name)
+        mark = len(WRITES)
+        root.after(0, lambda: app._send_ok(1))                        # pressed before the PLC asked for the picture
+        check("R4b 'OK' before the PLC's request -> not sent, the window says why, nothing written",
+              until(lambda: "not sent:" in app.status_text.get("1.0", "end"), 6)
+              and not any(t == IOServer.PC_PLC_KnuckleCheckOK for t, _ in WRITES[mark:]),
+              app.status_text.get("1.0", "end")[-200:])
+        check("R4c the window sends no heartbeat-server messages", not hasattr(app, "_start_heartbeat"))
         TAGS[IOServer.PLC_PC_CheckKnuckle] = True                       # the PLC asks for the knuckle picture
         check("R5 PLC trigger -> IOServer waits for the knuckle result",
               until(lambda: io.machineState.getCurrentState() == MS.WRITE_RESULT_OF_CHECKING_KNUCKLE),
