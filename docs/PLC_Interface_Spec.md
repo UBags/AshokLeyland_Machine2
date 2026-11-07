@@ -100,7 +100,8 @@ All of these tags are in DB500. The split pin check is on hold until production 
 | `plc.sleeptime.between.ok.and.done` | 0.05 | Gap between writing OK and writing Done |
 | `plc.sleeptime.between.done.and.reset_done` | 0.4 | Time Done is held True after an OK result |
 | `plc.sleeptime.between.done.and.re_read` | 0.3 | Time Done is held True after a NOT OK result |
-| `plc.handshake.reset.delay.sec` | 0.4 | Delay before the PC resets a Set or Done tag it has read |
+| `plc.handshake.torquevalues.reset.delay.sec` | 2.0 | Delay before the PC resets a torque Set / Value it has read |
+| `plc.handshake.componentpress.reset.delay.sec` | 1.5 | Delay before the PC resets a press Done it has read |
 | `plc.camera.answer.timeout.sec` | 20 | No camera answer in this time means NOT OK. At least the vision check timeout + 8 s; a smaller value is raised |
 | Vision worker deadline | 12 | A check still running at 12 s is killed and counts as NOT OK |
 
@@ -142,7 +143,7 @@ Before step (1) of the QR handshake, the PC:
 
 1. The PLC sets `…ValueSet` (or `…PressDone`) to 1. For the value states the value must already be in the value tag.
 2. The PC reads the value, sends it to the frontend, and moves to the next state.
-3. After `plc.handshake.reset.delay.sec` (0.4 s) the PC writes `…ValueSet` (or `…PressDone`) := 0. **This is a PC write to a PLC_PC tag.**
+3. After `plc.handshake.torquevalues.reset.delay.sec` (2.0 s; presses: `plc.handshake.componentpress.reset.delay.sec`, 1.5 s) the PC writes `…ValueSet` (or `…PressDone`) := 0. **This is a PC write to a PLC_PC tag.**
 4. The PLC must not set the same tag to 1 again for the next event until it has seen it go to 0.
 
 Note: states 11 and 18 both use `Station2TorqueValueSet`. The reset in step 3 is what stops torque 1 from triggering state 18 straight away.

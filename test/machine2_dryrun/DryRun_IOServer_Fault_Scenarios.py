@@ -54,9 +54,9 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
         Check=False again; only then back to the picture state (Check and Done both False there). The PLC raises the trigger once per 2HB
         press: no picture without a press; the next press takes exactly one more picture.
      G3 NOT OK, 2HB pressed again 0.35 s after Done: acted on, the cycle moves on (field issue 1).
-     G4 Set-Value (torque 1): Set=False, Value=0.0 (and RotationDuringTighteningDone=False) plc.handshake.reset.delay.sec
+     G4 Set-Value (torque 1): Set=False, Value=0.0 (and RotationDuringTighteningDone=False) plc.handshake.torquevalues.reset.delay.sec
         after the read.
-     G5 Done (component press): Done=False plc.handshake.reset.delay.sec after the read.
+     G5 Done (component press): Done=False plc.handshake.componentpress.reset.delay.sec after the read.
      G6 a camera answer for another picture state is ignored; the answer for this check then moves the cycle on.
      G7 one scheduler thread for the delayed resets.
 
@@ -186,7 +186,7 @@ def plc_check(trigger, done):
 
 def plc_value(setTag, valTag, value):
     with LOCK: TAGS[valTag] = value; TAGS[setTag] = True
-    time.sleep(2.5)       # IOServer resets these plc.handshake.reset.delay.sec after reading them (rule (c))
+    time.sleep(3.0)       # IOServer resets these plc.handshake.torquevalues.reset.delay.sec (2 s) after reading them
 
 def plc_pulse(tag):
     with LOCK: TAGS[tag] = True
@@ -673,6 +673,7 @@ def run_vision_result_reset():
     from Configuration import CosThetaConfigurator
     C = CosThetaConfigurator.getInstance()
     delay = C.getPlcHandshakeResetDelay()
+    tDelay, pDelay = C.getPlcTorqueValuesResetDelay(), C.getPlcComponentPressResetDelay()
     holdOk, holdNotOk = C.getPlcSleepTimeBetweenDoneAndResetDone(), C.getPlcSleepTimeBetweenDoneAndReRead()
     lo, hi = delay - 0.15, delay + 0.8                      # tolerance on "after the delay" (torque / press resets)
     print(f"\n=== G. Result handshake (Done held {holdOk} s OK / {holdNotOk} s NOT OK); resets after {delay} s ===", flush=True)
@@ -777,10 +778,10 @@ def run_vision_result_reset():
     assert wait_for(lambda: io.machineState.getCurrentState().value > MSP.READ_TIGHTENING_TORQUE_1.value, 5), "torque 1 not read"
     tRead = time.time()
     resets = [(ST, False), (SV, 0.0)] + ([(RD, False)] if RD else [])
-    took = timed_writes(resets, mark, 3)
+    took = timed_writes(resets, mark, tDelay + 3)
     elapsed = time.time() - tRead
-    check(f"G4 (c) torque 1 read -> Set=False, Value=0.0{', RotationDone=False' if RD else ''} about {delay} s later "
-          f"({elapsed:.2f} s)", took is not None and lo <= elapsed <= hi, str(writes_of([t for t, _ in resets], mark)))
+    check(f"G4 (c) torque 1 read -> Set=False, Value=0.0{', RotationDone=False' if RD else ''} about {tDelay} s later "
+          f"({elapsed:.2f} s)", took is not None and tDelay - 0.15 <= elapsed <= tDelay + 0.8, str(writes_of([t for t, _ in resets], mark)))
 
     # bunk for component press (plain), then G5 (d): component press Done
     plc_check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
@@ -790,10 +791,10 @@ def run_vision_result_reset():
     with LOCK: TAGS[CPD] = True                              # the PLC keeps it True; the PC resets it
     assert wait_for(lambda: io.machineState.getCurrentState() != MSP.READ_COMPONENT_PRESS_DONE, 5), "press Done not read"
     tRead = time.time()
-    took = timed_writes([(CPD, False)], mark, 3)
+    took = timed_writes([(CPD, False)], mark, pDelay + 3)
     elapsed = time.time() - tRead
-    check(f"G5 (d) component press Done read -> Done=False about {delay} s later ({elapsed:.2f} s)",
-          took is not None and lo <= elapsed <= hi and TAGS[CPD] is False, str(writes_of((CPD,), mark)))
+    check(f"G5 (d) component press Done read -> Done=False about {pDelay} s later ({elapsed:.2f} s)",
+          took is not None and pDelay - 0.15 <= elapsed <= pDelay + 0.8 and TAGS[CPD] is False, str(writes_of((CPD,), mark)))
 
     # G6: a camera answer for another picture state is not this check's result
     NB = MSP.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK

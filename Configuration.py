@@ -2733,6 +2733,8 @@ class CosThetaConfigurator():
     PLC_SLEEPTIME_BETWEEN_DONE_AND_RESET_DONE_KEY = "plc.sleeptime.between.done.and.reset_done"
     PLC_VISION_RESULT_RESET_DELAY_KEY = "plc.vision.result.reset.delay.sec"
     PLC_HANDSHAKE_RESET_DELAY_KEY = "plc.handshake.reset.delay.sec"
+    PLC_TORQUE_VALUES_RESET_DELAY_KEY = "plc.handshake.torquevalues.reset.delay.sec"
+    PLC_COMPONENT_PRESS_RESET_DELAY_KEY = "plc.handshake.componentpress.reset.delay.sec"
 
     # ==================== Check QR Methods (Step 1) ====================
     @classmethod
@@ -2977,6 +2979,27 @@ class CosThetaConfigurator():
                                                                 default="0.4")))
         except Exception:
             return 0.4
+
+    @classmethod
+    def getPlcTorqueValuesResetDelay(cls) -> float:
+        """Seconds after the PC has read a torque value (Station 2 torque 1 and 2, Station 3 free-rotation torque)
+        before it resets Set False, Value 0.0 (Station 2: also RotationDuringTighteningDone False)
+        (plc.handshake.torquevalues.reset.delay.sec, 2.0). Read at each use."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_TORQUE_VALUES_RESET_DELAY_KEY,
+                                                                default="2.0")))
+        except Exception:
+            return 2.0
+
+    @classmethod
+    def getPlcComponentPressResetDelay(cls) -> float:
+        """Seconds after the PC has read a press Done (component press, cap press) before it resets Done False
+        (plc.handshake.componentpress.reset.delay.sec, 1.5). Read at each use."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_COMPONENT_PRESS_RESET_DELAY_KEY,
+                                                                default="1.5")))
+        except Exception:
+            return 1.5
 
     @classmethod
     def getPlcVisionResultResetDelay(cls) -> float:

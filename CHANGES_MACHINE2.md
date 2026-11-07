@@ -2342,3 +2342,14 @@ Architecture items not included (user).
     and a flush took its log lines on their way to the logging server. Only the window's own queues are cleared.
   - Real window dry run 12/12, Siemens and Allen-Bradley, both folders.
 
+## 88. Own reset delays for the torque values and the presses (2026-11-07)
+
+- New `plc.handshake.torquevalues.reset.delay.sec=2.0`: Station 2 torque 1 and 2 (Set False, Value 0.0,
+  RotationDuringTighteningDone False) and Station 3 free-rotation torque (Set False, Value 0.0) are reset 2.0 s after
+  the PC has read them (was 0.4 s, `plc.handshake.reset.delay.sec`).
+- New `plc.handshake.componentpress.reset.delay.sec=1.5`: component press Done and cap press Done reset 1.5 s after
+  the read (was 0.4 s).
+- Both PLCs (all three properties files); only these resets changed. `plc.handshake.reset.delay.sec` (0.4) stays
+  for the other delayed resets. Getters `getPlcTorqueValuesResetDelay()` / `getPlcComponentPressResetDelay()`, read at
+  each use. Fault scenarios G 16/16 (G4 2.00 s, G5 1.50 s) and two full cycles, Siemens and Allen-Bradley.
+

@@ -2030,7 +2030,8 @@ class PLCIOServer:
                         if successfullySent:                        # rule (d)
                             self.scheduleTagReset(PLCIOServer.PLC_PC_ComponentPressDone,
                                                   [(PLCIOServer.PLC_PC_ComponentPressDone, False)],
-                                                  "after the component press Done was read")
+                                                  "after the component press Done was read",
+                                                  delay=CosThetaConfigurator.getInstance().getPlcComponentPressResetDelay())
 
                     # Step 9: No Bunk
                     elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
@@ -2066,7 +2067,7 @@ class PLCIOServer:
                         if successfullySent:                        # rule (d)
                             self.scheduleTagReset(PLCIOServer.PLC_PC_CapPressDone,
                                                   [(PLCIOServer.PLC_PC_CapPressDone, False)],
-                                                  "after the cap press Done was read")
+                                                  "after the cap press Done was read", delay=CosThetaConfigurator.getInstance().getPlcComponentPressResetDelay())
 
                     # Step 15: Free Rotation Torque 1 Done — END of T9
                     elif currentState == MachineState.READ_FREE_ROTATION_TORQUE_1_DONE:
@@ -2136,7 +2137,7 @@ class PLCIOServer:
                             self.scheduleTagReset(PLCIOServer.PLC_PC_Station3TorqueValueSet,          # rule (c)
                                                   [(PLCIOServer.PLC_PC_Station3TorqueValueSet, False),
                                                    (PLCIOServer.PLC_PC_Station3TorqueValue, 0.0)],
-                                                  "after the free rotation torque was read")
+                                                  "after the free rotation torque was read", delay=CosThetaConfigurator.getInstance().getPlcTorqueValuesResetDelay())
                             printBold(f"Transition from state {self.machineState.getCurrentState().name}")
                             self.machineState.incrementStateFrom(currentState)
                             printBold(f"        ...to state {self.machineState.getCurrentState().name}")
@@ -2219,7 +2220,7 @@ class PLCIOServer:
                               [(PLCIOServer.PLC_PC_Station2TorqueValueSet, False),
                                (PLCIOServer.PLC_PC_Station2TorqueValue, 0.0),
                                (PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, False)],
-                              f"after the torque of {readState.name} was read")
+                              f"after the torque of {readState.name} was read", delay=CosThetaConfigurator.getInstance().getPlcTorqueValuesResetDelay())
 
     def _writeBoolUntilWritten(self, tag: str, value: bool, stateAtStart: MachineState) -> bool:
         """Write a bool, retrying until it is written. Gives up only on shutdown or if the cycle was reset meanwhile

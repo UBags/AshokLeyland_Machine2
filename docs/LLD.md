@@ -106,7 +106,7 @@ If no PLC-raised tag is known to be True, the PC compares `PC_PLC_LH_RH_Selectio
 
 **Delayed resets**
 
-- `scheduleTagReset` and `_scheduleStation2TorqueReset` reset tags `plc.handshake.reset.delay.sec` after they are read.
+- `scheduleTagReset` and `_scheduleStation2TorqueReset` reset tags after they are read: torque values after `plc.handshake.torquevalues.reset.delay.sec` (2.0 s), press Done after `plc.handshake.componentpress.reset.delay.sec` (1.5 s).
 - `completePendingResultReset` runs a pending reset at once, before the next handshake of the same check.
 - `cancelVisionResultReset` cancels one.
 
@@ -286,7 +286,9 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `plc.read.interval` / `plc.write.interval` | 0.2 / 0.1 | 2.2 |
 | `plc.sleeptime.between.ok.and.done` | 0.05 | Spec 5.1 |
 | `plc.sleeptime.between.done.and.reset_done` / `…re_read` | 0.4 / 0.3 | Spec 5.1 |
-| `plc.handshake.reset.delay.sec` | 0.4 | Spec 5.3 |
+| `plc.handshake.reset.delay.sec` | 0.4 | Default for delayed resets |
+| `plc.handshake.torquevalues.reset.delay.sec` | 2.0 | Spec 5.3: torque Set / Value |
+| `plc.handshake.componentpress.reset.delay.sec` | 1.5 | Spec 5.3: press Done |
 | `plc.camera.answer.timeout.sec` | 20 (at least the vision check timeout + 8) | 2.4 |
 | `camera.frame.max.wait.sec` | 1.0 | 3 |
 | `pc.plc.cycle.aborted.tagname` | (empty) | 2.4 |
