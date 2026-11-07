@@ -214,6 +214,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     finalResult: str = notok
 
     emergencyButtonPressed : bool = False
+    finalDisplayPending : bool = False      # completed cycle: free-rotation torque on screen, record not yet sent
 
     # Variables for determining how much time to show large version of ok and notok images
     TIME_TO_SHOW_OK_IMAGE_MSEC : int = int(CosThetaConfigurator.getInstance().getTimeToDisplayOkImages() * 1000)
@@ -407,7 +408,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
-                                                                            labelHeight = self.labelHeight, name='CAMERACONNECTION', forceUseOfFontSize=13)
+                                                                            labelHeight = self.labelHeight, name='CAMERACONNECTION', forceUseOfFontSize=26)
         self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText ="I/O Module connected",
                                                                         notokText = "I/O Module not connected",
                                                                         okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
@@ -415,7 +416,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='IOCONNECTION',
-                                                                        forceUseOfFontSize=13)
+                                                                        forceUseOfFontSize=26)
         self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText ="Database connected",
                                                                         notokText = "Database not connected",
                                                                         okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
@@ -423,7 +424,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='DBCONNECTION',
-                                                                        forceUseOfFontSize=13)
+                                                                        forceUseOfFontSize=26)
         self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText ="QRCode Scanner connected",
                                                                             notokText = "QRCode Scanner not connected",
                                                                             okStyleSheet = okLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
@@ -431,7 +432,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
                                                                             labelHeight = self.labelHeight, name='QRCODE',
-                                                                            forceUseOfFontSize=13)
+                                                                            forceUseOfFontSize=26)
 
         connectionStatusesGroupBox = QGroupBox("CONNECTION STATUS OF DEVICES")
         connectionStatusLayout = QHBoxLayout()
@@ -1125,6 +1126,11 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                     block=None)
         if not emergencyPressed:
             return
+        if AshokLeylandFrontEnd.finalDisplayPending:
+            # the cycle had already completed (free-rotation torque on screen, record not yet sent): the IOServer was
+            # back at the QR code. Not an abort of this component - it is not shown or recorded as one.
+            printYellow("Emergency abort after the cycle had completed: the completed component is recorded as it is")
+            return
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         printYellow("About to call doFinalProcessing() from updateEmergencyAbortPressed()")
         self.doFinalProcessing()
@@ -1138,6 +1144,8 @@ class AshokLeylandFrontEnd(QMainWindow):
         return super().eventFilter(obj, event)
 
     def manualAbort(self):
+        if AshokLeylandFrontEnd.finalDisplayPending:
+            return          # the cycle has completed; its record is about to be sent (see updateEmergencyAbortPressed)
         confirmed : str = self._runDialog(getConfirmation, message="Aborting manually. Ensure you have pressed Emergency button on the machine.")
         ok : bool = (confirmed.strip().upper() == "OK")
         if not ok:
@@ -1473,9 +1481,11 @@ class AshokLeylandFrontEnd(QMainWindow):
         else:
             self.setCurrentState(MachineState.READ_FREE_ROTATION_TORQUE_1)
         printYellow("About to call doFinalProcessing() from normal path")
-        self.doFinalProcessing()
+        # the free-rotation torque stays on screen this long before "Component Successfully Done"
+        AshokLeylandFrontEnd.finalDisplayPending = True
+        self.doFinalProcessing(delayMsec=int(CosThetaConfigurator.getInstance().getFrontEndFreeRotationTorqueDisplaySecs() * 1000))
 
-    def doFinalProcessing(self):
+    def doFinalProcessing(self, delayMsec: int = 750):
         printYellow("Entered doFinalProcessing()")
 
         checks = [
@@ -1498,7 +1508,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         theFinalResult = all(checks)
         AshokLeylandFrontEnd.finalResult = ok if theFinalResult else notok
         # The delay of 2000 ms ensures that it accounts for the travel time from station 4 back to station 1
-        QTimer.singleShot(750, self.setInProcessDefaultDisplay)
+        QTimer.singleShot(max(0, delayMsec), self.setInProcessDefaultDisplay)
 
     def okNotokResult(self, value):
         if value is None:
@@ -1519,6 +1529,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     @Slot()
     def setInProcessDefaultDisplay(self):
         printYellow(f"Entered setInProcessDefaultDisplay(), with {AshokLeylandFrontEnd.emergencyButtonPressed = }")
+        AshokLeylandFrontEnd.finalDisplayPending = False
 
         if self.getCurrentState() == MachineState.READ_QR_CODE:
             AshokLeylandFrontEnd.emergencyButtonPressed = False

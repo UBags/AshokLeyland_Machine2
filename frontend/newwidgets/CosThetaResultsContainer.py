@@ -19,7 +19,7 @@ class CosThetaResultsContainer(QFrame):
     monitorWidth = getMonitorWidth()
     monitorHeight = getMonitorHeight()
 
-    topLabelFontSizeInOutcomeContainers : int = 12
+    topLabelFontSizeInOutcomeContainers : int = 24      # tile titles (black bar); was 12
 
     def __init__(self, longestInstruction : str = "  Assemble WASHER and SPLIT PIN. Mark Washer in YELLOW and Split Pin in BLUE. PRESS BOTH BUTTONS to take picture and evaluate  "):
         super().__init__()

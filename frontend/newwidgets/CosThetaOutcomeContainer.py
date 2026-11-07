@@ -114,6 +114,12 @@ class CosThetaOutcomeContainer(QFrame):
         if forceBottomLabelFontSizeTo > 0:
             self.resultFont.setPointSize(forceBottomLabelFontSizeTo)
             self.result_label.setFont(self.resultFont)
+        else:
+            # "Result Awaited" / OK / Not OK: twice the size of the font it used to take (the application's default)
+            doubled = QFont(self.result_label.font())
+            doubled.setBold(True)
+            doubled.setPointSize(2 * max(1, doubled.pointSize()))
+            self.result_label.setFont(doubled)
 
         self.update()
         # self.adjustSize()
@@ -127,6 +133,12 @@ class CosThetaOutcomeContainer(QFrame):
     #     # print(f"Image type = {type(defaultImage)}")
     #     self.setDefaultImage(defaultImage)
     #     self.setDefault()
+
+    def resizeEvent(self, event):
+        """Tile title (black bar) at its configured size, smaller only where the title would not fit the tile."""
+        super().resizeEvent(event)
+        if self.forceTopLabelFontSizeTo > 0:
+            fitLabelFontToWidth(self.title_label, (self.title_label.text(),), self.forceTopLabelFontSizeTo)
 
     def getImageLabelWidth(self):
         return self.image_label.width()

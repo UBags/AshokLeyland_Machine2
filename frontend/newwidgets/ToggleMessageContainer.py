@@ -21,7 +21,7 @@ class ToggleMessageContainer(QWidget):
         # self.setMinimumWidth(self._minimumWidth)
         self.setObjectName(f"ToggleMessageContainer_{name}")
 
-        labelFont = font
+        labelFont = QFont(font)         # own copy: the four status tiles were given one shared QFont
         okTextLen = len(okText)
         notokTextLen = len(notokText)
         if okTextLen > notokTextLen:
@@ -72,6 +72,13 @@ class ToggleMessageContainer(QWidget):
         message_h_box_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # message_h_box_layout.insertWidget(-1, container_frame)
         message_h_box_layout.addWidget(self._container_label, 1)
+
+    def resizeEvent(self, event):
+        """The configured size (forceUseOfFontSize), smaller only if "...not connected" would not fit the tile; both
+        texts are fitted, so the size does not change when the status changes."""
+        super().resizeEvent(event)
+        from frontend.frontendutils.CosThetaLabelUtils import fitLabelFontToWidth
+        fitLabelFontToWidth(self._container_label, (self._okText, self._notokText), self.fontSize)
 
     def updateStatus(self, currentStatus : bool):
         self._status = currentStatus

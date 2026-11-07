@@ -723,6 +723,7 @@ class CosThetaConfigurator():
     GENERAL_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'general.connectionstatus.sleepinterval.sec'
     COMBINED_HEARTBEAT_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = "combinedheartbeat.connectionstatus.sleepinterval.sec"
     FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.emergency.status.sleepinterval.sec'
+    FRONTEND_FREE_ROTATION_TORQUE_DISPLAY_KEY = 'frontend.free.rotation.torque.display.sec'
     OLD_FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.connectionstatus.sleepinterval.sec'
     FRONTEND_HEARTBEAT_SLEEP_INTERVAL_KEY = 'frontend.status.sleepinterval.sec'
     CAMERA_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'camera.connectionstatus.sleepinterval.sec'
@@ -760,6 +761,16 @@ class CosThetaConfigurator():
                 CosThetaConfigurator.getValue(
                     key=CosThetaConfigurator.COMBINED_HEARTBEAT_CONNECTION_STATUS_SLEEP_INTERVAL_KEY,
                     default="2.0"))
+        except Exception:
+            return 2.0
+
+    @classmethod
+    def getFrontEndFreeRotationTorqueDisplaySecs(cls) -> float:
+        """Seconds the free-rotation torque (last tile) is shown before "Component Successfully Done" / "Not
+        Successfully Done" (frontend.free.rotation.torque.display.sec, 2.0). Read at each use."""
+        try:
+            return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.FRONTEND_FREE_ROTATION_TORQUE_DISPLAY_KEY,
+                                                                default="2.0")))
         except Exception:
             return 2.0
 

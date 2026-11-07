@@ -2353,3 +2353,24 @@ Architecture items not included (user).
   for the other delayed resets. Getters `getPlcTorqueValuesResetDelay()` / `getPlcComponentPressResetDelay()`, read at
   each use. Fault scenarios G 16/16 (G4 2.00 s, G5 1.50 s) and two full cycles, Siemens and Allen-Bradley.
 
+## 89. Frontend: larger fonts on the status and result tiles; free-rotation torque shown 2 s (2026-11-07)
+
+- Connection status tiles (4): 13 -> 26 pt. Tile titles (black bar, 14 tiles): 12 -> 24 pt. "Result Awaited" / OK /
+  Not OK: twice the application's default size (it had no font of its own). At double size, 3 of the 4 "... not
+  connected" texts and 9 of the 14 titles did not fit their tile on a 1920 x 1080 screen (cut off on both sides), so
+  each of these labels is shown at the double size, or the largest size at which its text fits (recomputed when the
+  tile is resized; `fitLabelFontToWidth` in CosThetaLabelUtils). A status tile fits both its texts, so its size does
+  not change with the status. The four status tiles no longer share one QFont object.
+- New `frontend.free.rotation.torque.display.sec=2.0` (all three properties files): after the last tile gets the
+  free-rotation torque, it stays on screen this long before "Component Successfully Done" / "Not Successfully Done"
+  and the record (was 0.75 s). Aborts keep 0.75 s. An emergency abort (or Ctrl+Alt+Z) arriving in those 2 s, when the
+  cycle has already completed and the IOServer is back at the QR code, no longer turns the completed component into
+  an "aborted" screen; it is recorded as completed.
+- Checked: screenshots at 1920 x 1080 before / after; FE dry run 80/80, both folders (the 2.0 s measured in its log).
+- Cross-checked, no change needed: the IOServer's emergency thread reads PLC_PC_EmergencyAbort every 1 s; on True,
+  abortCycle: ABORT to the QR code server (scan stopped), the camera / QR queues cleared, the emergency message to the
+  frontend, PLC_PC_EmergencyAbort reset, state READ_QR_CODE, the handshake tags reset and CheckQRCode armed. The
+  frontend's emergency worker (started at start-up) checks every `frontend.emergency.status.sleepinterval.sec` (1 s):
+  "Component Processing Aborted" screen, the record sent to the DB server with the results so far and the overall
+  result Not OK, then back to awaiting the QR code. The record has no field saying it was an abort.
+
