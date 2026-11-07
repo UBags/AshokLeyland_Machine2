@@ -2323,3 +2323,22 @@ Architecture items not included (user).
     taken but not acted on: another IOServer on the same Redis), instead of printing the MockPLC's untouched default
     settings (all 0) as "State-2 cycle settings".
 
+## 87. Large picture window keeps the picture's aspect ratio; Real-PLC test window fixes (2026-11-07)
+
+- **Frontend, large picture window (green / red background):** the picture was stretched to fill the box
+  (`resize_pixmap`, IgnoreAspectRatio). Now scaled with its aspect ratio kept: as large as fits, touching one pair of
+  opposite sides, the green / red (or white) background filling the rest. Checked: 900 x 300 -> 925 x 308 in a
+  925 x 505 box (touches the sides), 300 x 900 -> 168 x 505 (touches top and bottom), 400 x 400 -> 505 x 505. The 14
+  result tiles are unchanged. FE dry run 80/80, both folders.
+- **`Test_IOServer_With_Real_PLC_UI.py`:**
+  - One tag-dump request at a time (lock). The state checks, Get Tag Values, the signal monitor, Run Full Cycle and
+    the abort confirmation each deleted `receiveTags` and waited on it, so two at once took or deleted each other's
+    reply: "IOServer did not answer" / "Timeout". New check R3b (six requests at once); without the lock 3 of 6 fail.
+  - Send LHS / RHS QRCode and Reject QR are sent only while the IOServer is in WRITE_QR_CODE (the PLC has asked:
+    CheckQRCode), else not sent and the reason shown; the window moves to step 1 only when the IOServer has accepted
+    the code (knuckle picture state); a QR NOT OK to the PLC (side not written, cycle on hold) or no reaction in 10 s
+    is shown. Before, it moved to step 1 at once, whatever the IOServer did. Checks R3c, R4a.
+  - No `flushdb()` at start or on "Clear Redis": the IOServer is already running (Redis is cleared when it starts)
+    and a flush took its log lines on their way to the logging server. Only the window's own queues are cleared.
+  - Real window dry run 12/12, Siemens and Allen-Bradley, both folders.
+

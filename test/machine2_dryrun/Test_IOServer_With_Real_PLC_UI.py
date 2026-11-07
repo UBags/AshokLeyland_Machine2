@@ -176,6 +176,10 @@ class IOServerTestApp:
         # Model used for the QR code buttons (side is chosen by the button)
         self.model_var = tk.StringVar(value="DOSTPLUS")
         self.cycle_complete = False   # set when a "Run Full Cycle" has seen IOServer wrap back to state 1
+        # One request on publishTags / receiveTags at a time: every caller (state checks, Get Tag Values, the signal
+        # monitor, Run Full Cycle, the abort confirmation) deletes the reply queue and waits on it, so two at once
+        # took or deleted each other's reply ("IOServer did not answer").
+        self._tags_lock = threading.Lock()
 
         self._build_ui()
         self._update_button_states()
@@ -425,12 +429,7 @@ step for easy reading.
 
         def fetch_tags():
             try:
-                # Send request (drop any late reply to an earlier request first)
-                testRedisConnection.delete(RECEIVE_TAGS_QUEUE)
-                testRedisConnection.lpush(PUBLISH_TAGS_QUEUE, "getTagValues")
-
-                # Wait for response with timeout
-                response = testRedisConnection.brpop(RECEIVE_TAGS_QUEUE, timeout=5)
+                response = self._request_tag_dump(timeout=5)
 
                 if response:
                     _, data = response
@@ -579,8 +578,11 @@ step for easy reading.
         if state == expected:
             return True
         step_name, description = self.steps[step_idx][0], self.steps[step_idx][1]
-        read_state = self.vision_state_map.get(step_idx)
-        if state == read_state:
+        read_state = self.vision_state_map.get(step_idx, MS.READ_QR_CODE if step_idx == 0 else None)
+        if step_idx == 0 and state == MS.READ_QR_CODE:
+            why = ("the IOServer is at READ_QR_CODE: the PLC has not asked for a QR code yet (CheckQRCode), or new "
+                   "cycles are on hold - see the IOServer console")
+        elif state == read_state:
             why = (f"the IOServer is at {state.name}: the PLC has not asked for the picture yet, or the IOServer already "
                    f"answered the PLC NOT OK itself (no answer within plc.camera.answer.timeout.sec, "
                    f"{CosThetaConfigurator.getPlcCameraAnswerTimeout():g} s) - wait for the PLC's request")
@@ -593,15 +595,17 @@ step for easy reading.
         self._update_status(f"{step_name}: {description} - not sent: {why}")
         return False
 
+    def _request_tag_dump(self, timeout: int):
+        """The IOServer's tag dump (publishTags -> receiveTags), one request at a time; None on timeout."""
+        with self._tags_lock:
+            testRedisConnection.delete(RECEIVE_TAGS_QUEUE)      # a late reply to an earlier request
+            testRedisConnection.lpush(PUBLISH_TAGS_QUEUE, "getTagValues")
+            return testRedisConnection.brpop(RECEIVE_TAGS_QUEUE, timeout=timeout)
+
     def _get_ioserver_current_state(self) -> MachineState:
         """Request current machine state from IOServer via Redis."""
         try:
-            # Send request (drop any late reply to an earlier request first)
-            testRedisConnection.delete(RECEIVE_TAGS_QUEUE)
-            testRedisConnection.lpush(PUBLISH_TAGS_QUEUE, "getTagValues")
-
-            # Wait for response with timeout
-            response = testRedisConnection.brpop(RECEIVE_TAGS_QUEUE, timeout=3)
+            response = self._request_tag_dump(timeout=3)
 
             if response:
                 _, data = response
@@ -706,53 +710,62 @@ step for easy reading.
                 f"Ready for {ns[0]}: {ns[1]}"))
 
     def _send_qr_code(self, qr_type: str):
-        """Send QR code to IOServer mimicking QRCodeServer."""
-        widgets = self.step_widgets[0]
-
-        # Select the QR code for the chosen model and side
+        """Send the QR code as the QR code server does - only while the IOServer waits for it (WRITE_QR_CODE, after
+        the PLC's CheckQRCode) - and move to step 1 only once the IOServer has accepted it (knuckle picture state).
+        The IOServer answers the PLC NOT OK and goes back to READ_QR_CODE if the side cannot be written."""
         model = self.model_var.get()
         qr_code = QR_CODES[(model, qr_type)]
         self.cycle_complete = False
 
-        # Send to IOServer
-        sendDataFromQRCodeServerToIOServer(testRedisConnection, qrCodeStatus=ok, qrCode=qr_code)
+        def checkThenSend():
+            if not self._ioserver_waiting_for(0):
+                return
+            sendDataFromQRCodeServerToIOServer(testRedisConnection, qrCodeStatus=ok, qrCode=qr_code)
+            self._update_status(f"Step 0: QR Code - Sent {model} {qr_type} QR code: {qr_code[:50]}...")
+            self.root.after(0, lambda: self.step_widgets[0]['status'].config(
+                text=f"Sent {model} {qr_type} QR code → IOServer processing...", foreground="orange"))
+            deadline = time.time() + 10
+            state = MS.WRITE_QR_CODE
+            while time.time() < deadline:
+                state = self._get_ioserver_current_state()
+                if state not in (MS.WRITE_QR_CODE, MS.INVALID_STATE):
+                    break
+                time.sleep(0.3)
+            if state == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE or \
+                    MachineState.getMachineStateAsInt(state) > MachineState.getMachineStateAsInt(MS.WRITE_QR_CODE):
+                self.root.after(0, lambda: self.step_widgets[0]['status'].config(
+                    text=f"{model} {qr_type} QR code accepted by the IOServer", foreground="green"))
+                self.root.after(0, self._after_qr_accepted)
+            elif state == MS.READ_QR_CODE:
+                self.root.after(0, lambda: self.step_widgets[0]['status'].config(
+                    text="QR code NOT OK to the PLC (see the IOServer console)", foreground="red"))
+                self._update_status("Step 0: the IOServer answered the PLC QR code NOT OK (cycle settings / side not "
+                                    "written, or a new cycle on hold) - see its console; scan again when the PLC asks")
+            else:
+                self.root.after(0, lambda: self.step_widgets[0]['status'].config(
+                    text="IOServer did not take the QR code - see status", foreground="red"))
+                self._update_status(f"Step 0: the IOServer is still at {state.name} 10 s after the QR code: is another "
+                                    f"IOServer (MainProgram.py) using the same Redis, or is it holding new cycles? "
+                                    f"See its console")
 
-        # Update status
-        widgets['status'].config(text=f"Sent {model} {qr_type} QR code → IOServer processing...", foreground="green")
-        self._update_status(f"Step 0: QR Code - Sent {model} {qr_type} QR code: {qr_code[:50]}...")
+        threading.Thread(target=checkThenSend, daemon=True).start()
 
-        # Move to next step
-        next_step_idx = 1
-
-        # Check if next step(s) are signal steps
-        if next_step_idx < len(self.steps) and self.steps[next_step_idx][3] == "signal":
-            # Start background thread to monitor signal steps
-            self.current_step = next_step_idx
-            self._update_button_states()  # Disable all buttons while waiting
-
-            monitor_thread = threading.Thread(
-                target=self._monitor_signal_steps,
-                args=(next_step_idx,),
-                daemon=True
-            )
-            monitor_thread.start()
-        else:
-            # Next step is a vision step, just advance
-            self.current_step = next_step_idx
-            self._update_button_states()
+    def _after_qr_accepted(self):
+        self.current_step = 1           # step 1 (knuckle) is a vision step
+        self._update_button_states()
 
     def _reject_qr_code(self):
-        """Send QR code rejection to IOServer mimicking QRCodeServer failure."""
-        widgets = self.step_widgets[0]
+        """Send a QR code rejection (as the QR code server does for a bad code), only while the IOServer waits for
+        the QR code; it stays in WRITE_QR_CODE for the next scan."""
+        def checkThenSend():
+            if not self._ioserver_waiting_for(0):
+                return
+            sendDataFromQRCodeServerToIOServer(testRedisConnection, qrCodeStatus=notok, qrCode="")
+            self.root.after(0, lambda: self.step_widgets[0]['status'].config(
+                text="QR code rejected → IOServer waits for another scan", foreground="red"))
+            self._update_status("Step 0: QR Code - Rejection sent, IOServer stays at this step")
 
-        # Send rejection to IOServer
-        sendDataFromQRCodeServerToIOServer(testRedisConnection, qrCodeStatus=notok, qrCode="")
-
-        # Update status
-        widgets['status'].config(text="QR code rejected → IOServer will retry", foreground="red")
-        self._update_status("Step 0: QR Code - Rejection sent, IOServer will stay at this step")
-
-        # Don't advance step - stay at step 0
+        threading.Thread(target=checkThenSend, daemon=True).start()
 
     def _send_ok(self, step_idx):
         """Send OK response for a vision step."""
@@ -851,7 +864,7 @@ step for easy reading.
     def _clear_redis(self):
         self.stop_signal_monitor = True  # Stop any active monitoring
         time.sleep(0.2)  # Give monitor thread time to stop
-        testRedisConnection.flushdb()
+        clear_test_queues()
         self._reset_to_start()
         self._show_initial_tag_message()
         self.tag_status_label.config(text="")
@@ -968,9 +981,15 @@ step for easy reading.
 # MAIN
 # =============================================================================
 
+def clear_test_queues():
+    """The queues this window writes to and reads from. Not flushdb: the IOServer is already running (Redis is
+    cleared when it starts, Run_IOServer_Alone.py), and a flush took its log lines on their way to the logging server
+    and its other Redis keys."""
+    testRedisConnection.delete(qrcode2ioq, camera2ioq, PUBLISH_TAGS_QUEUE, RECEIVE_TAGS_QUEUE)
+
+
 def main():
-    # Clear Redis on startup
-    testRedisConnection.flushdb()
+    clear_test_queues()
 
     print("=" * 60)
     print("IOServer Test Script - Real PLC Mode (Machine 2, 28 states)")

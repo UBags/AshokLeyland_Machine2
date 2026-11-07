@@ -22,6 +22,7 @@ spec = importlib.util.spec_from_file_location("ui", str(win)); ui = importlib.ut
 import tkinter as tk
 MS = ui.MachineState
 root = tk.Tk(); app = ui.IOServerTestApp(root)
+app.redis_qr_len = lambda: ui.testRedisConnection.xlen(ui.qrcode2ioq)
 res = []
 def check(n, ok, d=""): res.append((n, bool(ok))); print(("PASS " if ok else "FAIL ") + n + (f"  [{d}]" if d and not ok else ""), flush=True)
 def until(f, t=10):
@@ -43,11 +44,27 @@ def scenario():
         missing = [n for n in IOServer.tagNamesUsed().values() if shown(n) + ":" not in dump]
         check("R3 the dump shows every tag the IOServer uses, none '(not in IOServer tag dump)'",
               dump and not missing and "not in IOServer tag dump" not in dump, f"missing {missing[:5]}")
+        got = []
+        ts = [threading.Thread(target=lambda: got.append(app._get_ioserver_current_state())) for _ in range(6)]
+        [t.start() for t in ts]; [t.join(20) for t in ts]
+        check("R3b six state requests at once: every one answered (one tag-dump request at a time)",
+              len(got) == 6 and MS.INVALID_STATE not in got, [g.name for g in got])
         app.model_var.set("DOSTPLUS")
+        TAGS[IOServer.PLC_PC_CheckQRCode] = False                       # the PLC has not asked for a QR code yet
+        time.sleep(0.5); io.machineState.setCurrentState(MS.READ_QR_CODE)
+        root.after(0, lambda: app._send_qr_code("LHS"))
+        check("R3c 'Send LHS QRCode' before the PLC's CheckQRCode -> not sent, the window says why, stays at step 0",
+              until(lambda: "PLC has not asked for a QR code" in app.status_text.get("1.0", "end"), 8)
+              and app.current_step == 0 and app.redis_qr_len() == 0, app.status_text.get("1.0", "end")[-200:])
+        TAGS[IOServer.PLC_PC_CheckQRCode] = True                        # the PLC asks
+        until(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8)
         root.after(0, lambda: app._send_qr_code("LHS"))
         check("R4 'Send LHS QRCode' -> IOServer past the QR code, side 1 written",
               until(lambda: io.machineState.getCurrentState() not in (MS.READ_QR_CODE, MS.WRITE_QR_CODE))
               and TAGS[IOServer.PC_PLC_LH_RH_Selection] == 1, io.machineState.getCurrentState().name)
+        check("R4a the window moves to step 1 once the IOServer accepted the QR code",
+              until(lambda: app.current_step == 1 and "accepted" in app.step_widgets[0]['status'].cget("text"), 10),
+              f"{app.current_step} {app.step_widgets[0]['status'].cget('text')}")
         mark = len(WRITES)
         root.after(0, lambda: app._send_ok(1))                        # pressed before the PLC asked for the picture
         check("R4b 'OK' before the PLC's request -> not sent, the window says why, nothing written",

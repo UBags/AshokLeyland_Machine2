@@ -2093,7 +2093,9 @@ class LargeImageWindow(QWidget):
             self.label.setStyleSheet("background-color: red;border: 0px;border-radius: 5px;QLabel { margin: auto; }")
         else:
             self.label.setStyleSheet("background-color: white;border: 0px;border-radius: 5px;QLabel { margin: auto; }")
-        pixMapImage = resize_pixmap(pixmap=pixMapImage, width=self.width-35, height=self.height-35)
+        # Scaled with its aspect ratio kept: as large as fits, touching one pair of opposite sides; the label's
+        # green / red (white) background shows in the rest of the box. (It was stretched to fill the box.)
+        pixMapImage = resize_pixmap(pixmap=pixMapImage, width=self.width-35, height=self.height-35, keepAspectRatio=True)
         self.label.setPixmap(pixMapImage)
 
     def showSuccess(self):
