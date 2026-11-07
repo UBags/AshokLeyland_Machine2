@@ -72,6 +72,7 @@ from frontend.SimplePopups import (
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
     getConfirmation, updateMachineSettingsDialog, canChangeMachineSettings)
+from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
@@ -215,6 +216,8 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     emergencyButtonPressed : bool = False
     finalDisplayPending : bool = False      # completed cycle: free-rotation torque on screen, record not yet sent
+    abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
+    emergencyAfterCompletion : bool = False # emergency while the completed cycle's torque was on screen
 
     # Variables for determining how much time to show large version of ok and notok images
     TIME_TO_SHOW_OK_IMAGE_MSEC : int = int(CosThetaConfigurator.getInstance().getTimeToDisplayOkImages() * 1000)
@@ -257,6 +260,8 @@ class AshokLeylandFrontEnd(QMainWindow):
             self.calculateAndSetIdealFontForQRCodeLabel()
             self.calculateAndSetIdealFontForDateTimeLabel()
             self.calculateAndSetIdealFontForCreatorLabel()
+            self.calculateAndSetIdealFontForConnectionStatus()
+            self.resultsContainer.calculateAndSetIdealFontsForTitlesAndResults()
             self.setInitialInstruction()
             self.setQRCodeContainerDisplay(displayString="")
             self.createWorkers()
@@ -609,6 +614,17 @@ class AshokLeylandFrontEnd(QMainWindow):
         fontSize = int(reductionFactor * currentFontPointSize)
         currentDateTimeFont.setPointSize(fontSize)
         self.dateTimeStatus.setFont(currentDateTimeFont)
+
+    def calculateAndSetIdealFontForConnectionStatus(self):
+        """One fixed size for the 4 connection status tiles: the largest at which the longest message,
+        "QRCode Scanner not connected", fits its tile. Call after the window has been shown."""
+        tiles = [self.cameraServerConnectionStatusContainer, self.qrCodeServerConnectionStatusContainer,
+                 self.ioServerConnectionStatusContainer, self.dbServerConnectionStatusContainer]
+        longest = max(((t, text) for t in tiles for text in (t._okText, t._notokText)), key=lambda x: len(x[1]))
+        size = largestFittingPointSize(longest[0].label(), longest[1])
+        for t in tiles:
+            t.setFixedPointSize(size)
+        return size
 
     def calculateAndSetIdealFontForCreatorLabel(self):
         currentCreatorFont = self.creatorStatus.font()
@@ -1127,13 +1143,33 @@ class AshokLeylandFrontEnd(QMainWindow):
         if not emergencyPressed:
             return
         if AshokLeylandFrontEnd.finalDisplayPending:
-            # the cycle had already completed (free-rotation torque on screen, record not yet sent): the IOServer was
-            # back at the QR code. Not an abort of this component - it is not shown or recorded as one.
-            printYellow("Emergency abort after the cycle had completed: the completed component is recorded as it is")
+            # the cycle had already completed (free-rotation torque on screen, record not yet sent) and the IOServer
+            # is back at the QR code: the completed component is recorded as completed, and the emergency abort is
+            # shown instead of "Component Successfully Done" (no abort record: nothing was in process)
+            printYellow("Emergency abort after the cycle had completed: shown; the completed component is recorded as it is")
+            AshokLeylandFrontEnd.emergencyAfterCompletion = True
+            return
+        if self.getCurrentState() == MachineState.READ_QR_CODE:
+            # waiting for the QR code: nothing in process. Shown, so the operator sees the button was acted on; no
+            # record (the IOServer has reset the PLC handshake and is waiting for the QR code again).
+            printYellow("Emergency abort while waiting for the QR code: shown, no record")
+            self.showAbortWhileWaitingForQRCode()
             return
         AshokLeylandFrontEnd.emergencyButtonPressed = True
+        AshokLeylandFrontEnd.abortReason = "emergency button pressed on the machine"
         printYellow("About to call doFinalProcessing() from updateEmergencyAbortPressed()")
         self.doFinalProcessing()
+
+    def showAbortWhileWaitingForQRCode(self):
+        """Emergency / manual abort while waiting for the QR code: the "Component Processing Aborted" screen (until the
+        next QR code is scanned, as after any cycle); no record, the QR code read stays requested."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.largeImageWindow.showEmergencyAbort()
+        self.setQRCodeContainerDisplay(displayString="")
+        self.requestQRCode()
+        self.resultsContainer.setInstruction(self.machineState.getCurrentInstruction())
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Type.KeyPress and isinstance(event, QKeyEvent):
@@ -1160,7 +1196,11 @@ class AshokLeylandFrontEnd(QMainWindow):
         # IOServer stayed in the middle of the aborted cycle (waiting for a camera result that never comes).
         sendAbortFromFEServerToIOServer(AshokLeylandFrontEnd.processUpdationRedisConnection,
                                         reason="manual abort (Ctrl+Alt+Z) in the frontend")
+        if self.getCurrentState() == MachineState.READ_QR_CODE:
+            self.showAbortWhileWaitingForQRCode()       # nothing in process: shown, no record
+            return
         AshokLeylandFrontEnd.emergencyButtonPressed = True
+        AshokLeylandFrontEnd.abortReason = "manual abort (Ctrl+Alt+Z) in the frontend"
         printYellow("About to call doFinalProcessing() from manualAbort()")
         self.doFinalProcessing()
 
@@ -1533,13 +1573,16 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         if self.getCurrentState() == MachineState.READ_QR_CODE:
             AshokLeylandFrontEnd.emergencyButtonPressed = False
+            AshokLeylandFrontEnd.abortReason = ""
             return
 
         self.show()
         self.raise_()
         self.activateWindow()
 
-        if AshokLeylandFrontEnd.emergencyButtonPressed:
+        aborted, abortReason = AshokLeylandFrontEnd.emergencyButtonPressed, AshokLeylandFrontEnd.abortReason
+        AshokLeylandFrontEnd.abortReason = ""
+        if AshokLeylandFrontEnd.emergencyButtonPressed or AshokLeylandFrontEnd.emergencyAfterCompletion:
             self.largeImageWindow.showEmergencyAbort()
         elif AshokLeylandFrontEnd.finalResult == ok:          # finalResult is the string ok / notok; both are truthy
             self.largeImageWindow.showSuccess()
@@ -1594,8 +1637,11 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              freeRotationTorque1Datetime=AshokLeylandFrontEnd.currentRotationTorque1Datetime,
                                              overallResult=ok if AshokLeylandFrontEnd.finalResult == ok else notok,
                                              tighteningTorque1RotationDone=AshokLeylandFrontEnd.currentTighteningTorque1RotationDone,
-                                             tighteningTorque2RotationDone=AshokLeylandFrontEnd.currentTighteningTorque2RotationDone
+                                             tighteningTorque2RotationDone=AshokLeylandFrontEnd.currentTighteningTorque2RotationDone,
+                                             aborted=aborted,
+                                             abortReason=abortReason or "aborted"
                                              )
+        AshokLeylandFrontEnd.emergencyAfterCompletion = False
         self.resetAllDataPoints()
         self.setCurrentState(MachineState.READ_QR_CODE)
         self.resultsContainer.setInProcessDefaultDisplay()

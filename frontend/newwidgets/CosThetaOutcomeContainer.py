@@ -134,11 +134,17 @@ class CosThetaOutcomeContainer(QFrame):
     #     self.setDefaultImage(defaultImage)
     #     self.setDefault()
 
-    def resizeEvent(self, event):
-        """Tile title (black bar) at its configured size, smaller only where the title would not fit the tile."""
-        super().resizeEvent(event)
-        if self.forceTopLabelFontSizeTo > 0:
-            fitLabelFontToWidth(self.title_label, (self.title_label.text(),), self.forceTopLabelFontSizeTo)
+    def setTitlePointSize(self, pointSize: int):
+        """Fixed size of the title (black bar); set once after the first render, the same for all 14 tiles."""
+        font = QFont(self.title_label.font())
+        font.setPointSize(pointSize)
+        self.title_label.setFont(font)
+
+    def setResultPointSize(self, pointSize: int):
+        """Fixed size of "Result Awaited" / OK / Not OK; set once after the first render, the same for all 14 tiles."""
+        font = QFont(self.result_label.font())
+        font.setPointSize(pointSize)
+        self.result_label.setFont(font)
 
     def getImageLabelWidth(self):
         return self.image_label.width()

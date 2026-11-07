@@ -110,6 +110,8 @@ freeRotationTorque1DatetimeKeyString : str = "rotationTorque1Datetime"
 overallResultKeyString : str = "overallResult"
 tighteningTorque1RotationDoneKeyString : str = "torque1RotationDone"
 tighteningTorque2RotationDoneKeyString : str = "torque2RotationDone"
+abortedKeyString : str = "aborted"                  # cycle record: aborted ("1" / "0")
+abortReasonKeyString : str = "abortReason"          # cycle record: why it was aborted
 rotationDoneKeyString : str = "rotationDone"           # io2fe: with a Station 2 torque value
 # io2camera -> camera2io / camera2fe: the IOServer's id for one picture request, echoed in the answers, so that an
 # answer that comes too late (after the IOServer stopped waiting for it) is not taken for a later request's result
@@ -1097,7 +1099,8 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
                                          overallResult : ResultType,
                                          aProducer : str = "FEServer",
                                          tighteningTorque1RotationDone : Optional[bool] = None,
-                                         tighteningTorque2RotationDone : Optional[bool] = None):
+                                         tighteningTorque2RotationDone : Optional[bool] = None,
+                                         aborted : bool = False, abortReason : str = ""):
 
     # print("Reached here - 1")
     if (qrCode is None) or (qrCode == ""):
@@ -1240,6 +1243,8 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
         overallResultKeyString : overallResult,
         tighteningTorque1RotationDoneKeyString : encodeOptionalBool(tighteningTorque1RotationDone),
         tighteningTorque2RotationDoneKeyString : encodeOptionalBool(tighteningTorque2RotationDone),
+        abortedKeyString : "1" if aborted else "0",
+        abortReasonKeyString : str(abortReason or "") if aborted else "",
     }
     # print(f"size of data is {sys.getsizeof(data)}")
     # print(f"{data = }")
@@ -2149,7 +2154,7 @@ def readAllHeartbeatsInHeartbeatServer(redisConnection: redis.client.Redis, bloc
 
 def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False,
                                          deleteAfterRead : bool = True, returnMessageId : bool = False,
-                                         returnRotationDone : bool = False):
+                                         returnRotationDone : bool = False, returnAbort : bool = False):
     # Reads the OLDEST pending cycle record on fe2db.q (FIFO). The queue is never trimmed here, so records that arrive
     # while the DB server is busy are kept, not discarded.
     #   deleteAfterRead=False + returnMessageId=True: the caller deletes the record with
@@ -2157,6 +2162,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     #   With returnMessageId=True the message id (or None) is appended as the last element of the returned tuple.
     #   With returnRotationDone=True, tighteningTorque1RotationDone and tighteningTorque2RotationDone (True / False /
     #   None) are appended after overallResult (before the message id).
+    #   With returnAbort=True, aborted (bool) and abortReason (str) are appended after those (before the message id).
 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
@@ -2207,6 +2213,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     overallResult: str = notok
     tighteningTorque1RotationDone = None
     tighteningTorque2RotationDone = None
+    aborted = False
+    abortReason = ""
     timeOfMessage = None
     aProducer = None
 
@@ -2231,6 +2239,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     overallResult)
         if returnRotationDone:
             _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
+        if returnAbort:
+            _result = _result + (aborted, abortReason)
         return (_result + (messageId,)) if returnMessageId else _result
 
     last_id = 0
@@ -2510,6 +2520,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
 
             tighteningTorque1RotationDone = decodeOptionalBool(newData.get(tighteningTorque1RotationDoneKeyString))
             tighteningTorque2RotationDone = decodeOptionalBool(newData.get(tighteningTorque2RotationDoneKeyString))
+            aborted = newData.get(abortedKeyString, b"0").decode("utf-8") == "1"     # absent (older sender): not aborted
+            abortReason = newData.get(abortReasonKeyString, b"").decode("utf-8")
 
             if deleteAfterRead:
                 redisConnection.xdel(fe2dbq, last_id)
@@ -2535,6 +2547,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     overallResult)
         if returnRotationDone:
             _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
+        if returnAbort:
+            _result = _result + (aborted, abortReason)
         return (_result + (messageId,)) if returnMessageId else _result
 
     _result = (genuineDataReceived, timeOfMessage, qrCode,
@@ -2555,6 +2569,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             overallResult)
     if returnRotationDone:
         _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
+    if returnAbort:
+        _result = _result + (aborted, abortReason)
     return (_result + (messageId,)) if returnMessageId else _result
 
 

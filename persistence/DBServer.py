@@ -319,9 +319,10 @@ class DataPersistence():
                             capPressDone, capPressDoneDatetime,
                             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                             overallResult, tighteningTorque1RotationDone, tighteningTorque2RotationDone,
+                            aborted, abortReason,
                             messageId) = readDataInDatabaseServerFromFEServer(
                                 redisConnection=self.redisConnection, deleteAfterRead=False, returnMessageId=True,
-                                returnRotationDone=True)
+                                returnRotationDone=True, returnAbort=True)
                 except Exception as e:
                     printBoldYellow(f"Encountered exception {e} in readDataInDatabaseServerFromFEServer()")
 
@@ -419,7 +420,8 @@ class DataPersistence():
                             setting_no_of_rotation1_ccw = cycleSettings.get("no_of_rotation1_ccw"),
                             setting_no_of_rotation1_cw = cycleSettings.get("no_of_rotation1_cw"),
                             nut_tightening_torque_1_rotation_done = tighteningTorque1RotationDone,
-                            nut_tightening_torque_2_rotation_done = tighteningTorque2RotationDone)
+                            nut_tightening_torque_2_rotation_done = tighteningTorque2RotationDone,
+                            aborted = aborted, abort_reason = abortReason)
                         if success:
                             acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
                             self.failedAttempts.pop(messageId, None)

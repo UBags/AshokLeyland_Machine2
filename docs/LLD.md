@@ -181,7 +181,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `GetQRCodeWorker` | `qrcode2fe.q` | QR panel; starts the cycle record |
 | `GetPictureAndResultWorker` | `camera2fe.q` | Image and result of the step. Ignores answers whose request id is not current |
 | `GetTorqueReadingPlusCapPressAndResultWorker` | `io2frontend.q` | Torques, press events, move-to step |
-| `EmergencyStatusMonitoringWorker` | `emergency.q` | Abort display |
+| `EmergencyStatusMonitoringWorker` | `emergency.q` | Abort display; abort record (`aborted`, `abort_reason`) if a cycle was in process; at the QR code: display only |
 | `ConnectionStatusUpdateWorker` | timer; the slot reads `hb2fe.q` without blocking | Connection lamps; Redis notice (`lastReportedRedisStatus`) |
 | `FrontendNoticeWorker` | `feNotice:*` plus local notices | Notices at the top right |
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
@@ -237,6 +237,7 @@ One row per component. Primary key `record_id`, a sequence.
 | Identity | `qr_code`, `model_name`, `lhs_rhs`, `model_tonnage`, `component_assembly_start_datetime` |
 | Each vision check | `check_<name>_imagefile`, `check_<name>_result` (default 'Not Checked'), `check_<name>_datetime`, for knuckle, hub_and_bottom_bearing, top_bearing, nut_and_platewasher, bunk_for_component_press, no_bunk, splitpin_and_washer, cap and bunk_cap_press |
 | Torques | `nut_tightening_torque_1/2`, `free_rotation_torque_1` (float, default −1), each with `_result` and `_datetime`; `nut_tightening_torque_1/2_rotation_done` (bool) |
+| Abort | `aborted` (bool, default false), `abort_reason` (varchar 255): emergency button on the machine or manual abort (Ctrl+Alt+Z); no record for an abort while waiting for the QR code |
 | Presses | `component_press_done`, `cap_press_done`, each with `_datetime` |
 | Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` |
 | Overall | `ok_notok_result`, `username` (FK to `users`), `remarks`, `created_on` |

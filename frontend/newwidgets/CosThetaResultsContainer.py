@@ -140,6 +140,28 @@ class CosThetaResultsContainer(QFrame):
         currentInstructionFont.setPointSize(fontSize)
         self.instructionLabel.setFont(currentInstructionFont)
 
+    def outcomeContainers(self) -> list:
+        return [self.knuckle_check_container, self.hub_and_bottom_bearing_check_container, self.top_bearing_check_container,
+                self.nut_and_plate_washer_check_container, self.tightening_torque1_check_container,
+                self.bunk_for_component_press_check_container, self.component_press_check_container,
+                self.no_bunk_after_component_press_check_container, self.tightening_torque2_check_container,
+                self.splitpin_and_washer_check_container, self.cap_check_container, self.bunk_check_container,
+                self.cap_press_result_container, self.free_rotation_torque_container]
+
+    # Call after self.show() and QApplication.processEvents() (the tiles have their real size)
+    def calculateAndSetIdealFontsForTitlesAndResults(self):
+        """One fixed size for all 14 titles: the largest at which the longest title, "Free Rotation Torque", fits its
+        tile; one fixed size for all 14 result labels: the largest at which "Result Awaited" fits."""
+        tiles = self.outcomeContainers()
+        longestTitle = max((t.title_label.text() for t in tiles), key=len)
+        titleTile = next(t for t in tiles if t.title_label.text() == longestTitle)
+        titleSize = largestFittingPointSize(titleTile.title_label, longestTitle)
+        resultSize = largestFittingPointSize(tiles[0].result_label, tiles[0].default_status)   # "Result Awaited"
+        for t in tiles:
+            t.setTitlePointSize(titleSize)
+            t.setResultPointSize(resultSize)
+        return titleSize, resultSize
+
     def setKnuckleCheckData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.knuckle_check_container.setTextAndResult(f"{value}", result)

@@ -2374,3 +2374,26 @@ Architecture items not included (user).
   "Component Processing Aborted" screen, the record sent to the DB server with the results so far and the overall
   result Not OK, then back to awaiting the QR code. The record has no field saying it was an abort.
 
+## 90. Abort recorded in the database; one font size per tile group; emergency abort shown at the QR code (2026-11-07)
+
+- **Abort columns:** `aborted boolean NOT NULL DEFAULT false` and `abort_reason varchar(255)` in
+  hub_and_disc_assembly_data (CREATE TABLE, and `ADD COLUMN IF NOT EXISTS` for existing databases: added on the next
+  start). The frontend sends them with the record (`abortedKeyString` / `abortReasonKeyString` on fe2db.q; a record
+  without them reads as not aborted); reasons "emergency button pressed on the machine" and "manual abort
+  (Ctrl+Alt+Z) in the frontend". The report header and the three report SELECTs include them (58 columns, aligned).
+- **Fonts, one fixed size per group, worked out once after the first render** (replaces section 89's per-label
+  fitting): the 4 connection tiles take the largest size at which "QRCode Scanner not connected" fits its tile; the
+  14 tile titles the largest at which "Free Rotation Torque" fits; the 14 result labels the largest at which
+  "Result Awaited" fits (1920 x 1080: 20 / 16 / 22 pt). `largestFittingPointSize` (width and height),
+  `calculateAndSetIdealFontForConnectionStatus`, `calculateAndSetIdealFontsForTitlesAndResults`, called with the other
+  after-render font calculations.
+- **Emergency abort while waiting for the QR code:** the IOServer sends the emergency message in every state (its
+  abortCycle always notifies the frontend). The frontend ignored it at the QR code; it now shows "Component Processing
+  Aborted" (until the next scan) and makes no record. Same for Ctrl+Alt+Z there. During the 2 s free-rotation torque
+  display of a completed cycle: the abort screen is shown instead of "Component Successfully Done", and the
+  completed component is recorded as completed (not aborted). In process: as before, plus `aborted` / reason.
+- Checked: FE dry run 96/96 both folders (new F4 aborted + reason, F4b at the QR code: screen, no record, F4c during
+  the torque display, F8 manual abort reason; every full record "not aborted"); DB 49/49, endpoints 43/43, no record
+  loss, FE -> DB pipeline; columns added to the existing test database and stored (True / reason; False / NULL);
+  screenshot at 1920 x 1080.
+

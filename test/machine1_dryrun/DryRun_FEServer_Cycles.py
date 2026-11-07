@@ -166,7 +166,7 @@ def run_steps(upto=None, skip=0, notok_once=(), wrong_state_at=None, final_resul
 def take_record(timeout=8):
     t0 = time.time()
     while time.time() - t0 < timeout:
-        rec = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True)
+        rec = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True, returnAbort=True)
         if rec[0]: return rec
     return None
 
@@ -194,6 +194,7 @@ def check_full_record(tag, rec, code):
     same = [st.name for st, i in PIC_IDX.items() if rec[i] is not None and np.array_equal(rec[i], SENT_ORIGINALS.get(st))]
     check(f"{tag} the 9 original pictures pixel-identical to what the camera sent", len(same) == 9, f"{len(same)}/9")
     check(f"{tag} overall result OK", rec[OVERALL_IDX] == ok, rec[OVERALL_IDX])
+    check(f"{tag} not marked aborted", rec[-2] is False and rec[-1] == "", str(rec[-2:]))
     check(f"{tag} rotation done with torque 1 / torque 2 in the record (True / False)",
           (rec[ROTATION_IDX[0]], rec[ROTATION_IDX[1]]) == (True, False), str(rec[44:46]))
 
@@ -273,12 +274,31 @@ def driver():
             pics = [st.name for st, i in PIC_IDX.items() if rec[i] is not None]
             check("F4 pictures only for the knuckle and hub", pics == [PICTURE_STEPS[0].name, PICTURE_STEPS[1].name], str(pics))
             check("F4 overall NOT OK", rec[OVERALL_IDX] == notok, rec[OVERALL_IDX])
+            check("F4 record marked aborted, reason: the emergency button", rec[-2] is True and "emergency" in rec[-1],
+                  str(rec[-2:]))
         check("F4 emergency-abort screen shown", wait_for(lambda: "showEmergencyAbort" in SCREENS, 5), str(SCREENS))
         check("F4 back to READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE), state().name)
         TILES.clear(); SENT_ORIGINALS.clear()
         scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
         run_steps()
         check_full_record("F4 next cycle", take_record(), QR1)
+        # F4b: emergency while waiting for the QR code: shown, no record
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        SCREENS.clear(); time.sleep(0.5)
+        sendEmergencyAbortFromIOServerToFEServer(r)
+        check("F4b emergency while waiting for the QR code: abort screen shown",
+              wait_for(lambda: "showEmergencyAbort" in SCREENS, 5), str(SCREENS))
+        check("F4b ... no record sent, still waiting for the QR code",
+              take_record(timeout=3) is None and state() == MS.READ_QR_CODE, state().name)
+        # F4c: emergency while the completed cycle's free-rotation torque is on screen: shown, record as completed
+        TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear()
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps()
+        sendEmergencyAbortFromIOServerToFEServer(r)
+        rec = take_record()
+        check_full_record("F4c emergency during the 2 s torque display", rec, QR1)
+        check("F4c ... abort screen shown instead of success",
+              wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) and "showSuccess" not in SCREENS, str(SCREENS))
 
         # ---------------- F5 ----------------
         print("\n=== F5. Final free-rotation torque NOT OK ===", flush=True)
@@ -367,8 +387,9 @@ def driver():
               sent and any(m.get("action") == ABORT for m in msgs), str(msgs))
         check("F8 ... which the IOServer reads as an abort (readAbortInIOServerFromFEServer)",
               readAbortInIOServerFromFEServer(r, block=100)[0])
-        check("F8 the frontend shows the abort screen and sends the abort record", wait_for(lambda: "showEmergencyAbort" in SCREENS, 5)
-              and take_record(timeout=5) is not None, str(SCREENS))
+        rec = take_record(timeout=5) if wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) else None
+        check("F8 the frontend shows the abort screen and sends the abort record, marked aborted (manual abort)",
+              rec is not None and rec[-2] is True and "manual" in rec[-1], f"{SCREENS} {rec[-2:] if rec else None}")
         check("F8 the frontend is back at READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE, 10), state().name)
         _feModule.getConfirmation = _savedConfirm
 

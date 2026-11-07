@@ -52,22 +52,19 @@ def createResultLabel(result = "No Result", width = (1366  - 100) / 4, labelHeig
     return result_label
 
 
-def fitLabelFontToWidth(label, texts, maxPointSize: int, minPointSize: int = 8, margin: int = 16) -> None:
-    """Set the label's font to maxPointSize, or the largest smaller size at which every one of texts fits the label's
-    width (less margin for the stylesheet's border and padding). The font is copied, so a QFont shared with other
-    labels is not changed. Call again when the label is resized."""
+def largestFittingPointSize(label, text: str, hMargin: int = 16, vMargin: int = 8,
+                            minPointSize: int = 6, maxPointSize: int = 200) -> int:
+    """The largest point size (label's font face and weight) at which text fits the label as it is laid out now:
+    its width less hMargin and its height less vMargin (the stylesheet's border and padding). Call after the window
+    has been shown and the layout has run (the label has its real size)."""
     from PySide6.QtGui import QFont, QFontMetrics
-    available = label.width() - margin
     font = QFont(label.font())
-    size = maxPointSize
-    if available > 0:
-        while size > minPointSize:
-            font.setPointSize(size)
-            metrics = QFontMetrics(font)
-            if all(metrics.horizontalAdvance(str(t)) <= available for t in texts):
-                break
-            size -= 1
-    font.setPointSize(size)
-    if label.font().pointSize() != size:
-        label.setFont(font)
-
+    width, height = label.width() - hMargin, label.height() - vMargin
+    size = minPointSize
+    for candidate in range(minPointSize, maxPointSize + 1):
+        font.setPointSize(candidate)
+        metrics = QFontMetrics(font)
+        if metrics.horizontalAdvance(text) > width or metrics.height() > height:
+            break
+        size = candidate
+    return size
