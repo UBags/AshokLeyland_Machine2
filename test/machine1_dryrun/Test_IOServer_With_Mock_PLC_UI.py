@@ -569,6 +569,16 @@ class TestIOServerGUI:
             return True
 
         moved = self._wait_while_state(MS.WRITE_QR_CODE)
+        if not moved:
+            left = self.redis.xlen(qrcode2ioq)
+            why = ("the QR code is still on qrcode2io.q: the IOServer is not reading it - see its console "
+                   "(\"held: ...\")" if left else
+                   "the QR code was taken off qrcode2io.q but this IOServer did not act on it: another IOServer "
+                   "(Run_IOServer_Alone.py, MainProgram.py) on the same Redis may have read it")
+            self._set_step_status(0, "QR code not taken by the IOServer - see status", "red")
+            self._set_status(f"Step 0: IOServer still in WRITE_QR_CODE after {WAIT_FOR_STATE_TIMEOUT} s; {why}")
+            print(f"[Test] QR code not taken: {why}")
+            return False
         s = self._read_cycle_settings()
         settings = ", ".join(f"{_tag(a)}={s[a]}" + (f" ({_decode_setting(a, s[a])})" if _decode_setting(a, s[a]) else "")
                              for a in CYCLE_SETTING_ATTRS)
@@ -780,6 +790,12 @@ if __name__ == "__main__":
 
     try:
         # Start the REAL IOServer with MockPLC
+        from redis import Redis as _Redis
+        _cfg = CosThetaConfigurator.getInstance()
+        # Redis cleared first, as MainProgram does: messages left by an earlier run (a heartbeat-server status, a QR code,
+        # "ioserver:started") would otherwise be taken by this IOServer - a stale heartbeat status made it hold every
+        # cycle 8 s later ("heartbeat server down").
+        clearQueues(_Redis(_cfg.getRedisHost(), _cfg.getRedisPort()))
         io = PLCIOServer(mockInstance=True)
 
         print()

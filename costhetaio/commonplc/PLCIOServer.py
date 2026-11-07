@@ -2334,9 +2334,6 @@ class PLCIOServer:
         self.launchWriteTagsLoopThread()
         printLight("Started do loop thread in IOServer")
 
-        self.launchHeartbeatThread()
-        printLight("Started heartbeat thread in IOServer")
-
         self.launchEmergencyMonitoringThread()
         printLight("Started emergency monitoring thread in IOServer")
 
@@ -2351,6 +2348,11 @@ class PLCIOServer:
 
         self.launchTagRequestListenerThread()
         printLight("Started tag request listener thread in IOServer")
+
+        # Last: the heartbeat checks every work thread above (WorkerWatch); started before them it reported DEAD
+        # ("thread not running") for the emergency monitoring and toggle threads at every start.
+        self.launchHeartbeatThread()
+        printLight("Started heartbeat thread in IOServer")
 
         # Start UpdateTagsToDefaultProcessor
         self.updateTagsProcessor = UpdateTagsToDefaultProcessor(ioServerInstance=self)

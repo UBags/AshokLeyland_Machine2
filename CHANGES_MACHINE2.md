@@ -2312,3 +2312,14 @@ Architecture items not included (user).
   heartbeat servers, which answer the pictures themselves. New `Run_IOServer_Alone.py` (logging server + IOServer).
 - Window dry runs: Mock 15/15 (new U11 camera answer timeout), Real 9/9 (new R4b early OK not sent, R4c no
   heartbeat), Siemens and Allen-Bradley, both folders. Work-thread health 17/17, heartbeat 26/26, two full cycles OK.
+- **Follow-up (same day, from the first run on the laptop):**
+  - The IOServer's heartbeat thread now starts last. Started before the emergency and toggle threads, it logged
+    "heartbeat DEAD: emergency monitoring: thread not running; connection-status toggle: thread not running" at every
+    start (a false DEAD for one heartbeat; introduced by the first item of this section).
+  - `Test_IOServer_With_Mock_PLC_UI.py` and `Run_IOServer_Alone.py` clear Redis before the IOServer starts, as
+    MainProgram does. A heartbeat-server status left in Redis by an earlier MainProgram run made the IOServer take a
+    heartbeat server as present, then down 8 s later, and hold every cycle: "Send LHS QRCode" did nothing.
+  - Mock window: when the IOServer does not take the QR code, it says so (still on qrcode2io.q: not being read;
+    taken but not acted on: another IOServer on the same Redis), instead of printing the MockPLC's untouched default
+    settings (all 0) as "State-2 cycle settings".
+

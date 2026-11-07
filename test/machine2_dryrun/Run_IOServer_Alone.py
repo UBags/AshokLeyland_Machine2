@@ -21,6 +21,14 @@ def _loggingServer():                    # top level: Windows starts processes w
 
 if __name__ == "__main__":
     multiprocessing.freeze_support()
+    from Configuration import CosThetaConfigurator
+    from utils.RedisUtils import clearQueues
+    from redis import Redis as _Redis
+    _cfg = CosThetaConfigurator.getInstance()
+    # Redis cleared first, as MainProgram does: messages left by an earlier run (a heartbeat-server status, a QR code,
+    # "ioserver:started") would otherwise be taken by this IOServer - a stale heartbeat status made it hold every
+    # cycle 8 s later ("heartbeat server down").
+    clearQueues(_Redis(_cfg.getRedisHost(), _cfg.getRedisPort()))
     loggers = multiprocessing.Process(target=_loggingServer, name="Logging Server", daemon=True)
     loggers.start()
     from logutils.LogSettings import setLogProcess
