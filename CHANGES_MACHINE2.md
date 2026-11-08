@@ -2429,3 +2429,22 @@ Architecture items not included (user).
   segmenter stubbed - no model weights here); Mock 15/15, Real 12/12, endpoints 43/43, PLCDataIO 38/38, indexes 8/8,
   vision verifier ALL EQUIVALENT; screenshot 1920 x 1080.
 
+## 92. Web service and MI dashboard: aborted cycles (2026-11-08)
+
+- **Filters (EndpointsDB, shared by both):** `aborts` = include (default: every record, as before) / only / exclude /
+  emergency (only aborts with the machine's emergency button) / manual (only manual aborts, Ctrl+Alt+Z); aliases
+  all, with, none, no, without, no_aborts, aborted, completed. `result` = all (default) / ok / notok. Together, e.g.
+  aborts exclude + result notok = completed cycles that failed a check (rejects). Unknown values: HTTP 400 naming the
+  choices. The exported records already carry `aborted` and `abort_reason` (section 90).
+- **Web service:** every records method (API and page names) takes `aborts` / `result` in the body (also
+  abort_filter / abortFilter, result_filter / resultFilter). Query page: "Aborted cycles" and "Result" selectors that
+  apply to every query; the downloaded file name carries the filters when not the defaults. API reference and
+  examples updated.
+- **MI dashboard:** "Aborted cycles" selector (the same five choices) applied to every chart and count; the
+  per-day / per-week counts are now OK / NOT OK / ABORTED (an aborted cycle was counted as NOT OK); the summary shows
+  ABORTED; new tab "Aborted Cycles": per day, by reason (emergency button, manual). `/data?aborts=`.
+- Endpoints dry run 77/77, both folders (was 43): seeded aborted records (emergency and manual); 13 filter
+  combinations by dates against SQL (default, include, only, exclude, emergency, manual, ok, notok, exclude + notok,
+  exclude + ok, only + ok = none, two aliases); every records method with aborts exclude; the page route; bad filter
+  values 400; the dashboard's three series, summary, Aborted Cycles tab and its filter against SQL.
+

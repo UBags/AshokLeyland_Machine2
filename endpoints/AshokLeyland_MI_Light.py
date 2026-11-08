@@ -8,14 +8,18 @@ saves such a record with remarks "DUPLICATE"). Model filter (all models or one),
 database; the page refreshes itself every minute. Port 8050 (the next free port if 8050 is taken), all interfaces.
 
 GET /                 the page
-GET /data?db=&model=&day_period=&week_period=&torque1_period=&torque2_period=&rotation_period=&reworked_period=
-                      the figures (Plotly JSON), today's / this week's / this month's counts and the database's models
+GET /data?db=&model=&aborts=&day_period=&week_period=&torque1_period=&torque2_period=&rotation_period=
+         &reworked_period=&aborted_period=
+                      the figures (Plotly JSON), today's / this week's / this month's counts and the database's models.
+                      aborts: include (default) / only / exclude / emergency / manual (EndpointsDB.ABORT_FILTERS),
+                      applied to every chart and count.
 GET /assets/...       bootstrap (endpoints/assets) and plotly.js (from the installed plotly package): the page needs no
                       internet access.
 
 Values not measured are stored as negative numbers (-1.0); they are left out of the torque charts. A record counts as
-OK when ok_notok_result is the configured OK value. Days and weeks are by created_on (the end of the cycle); weeks
-start on Monday. Started by OtherServices.py (startMIServer).
+OK when ok_notok_result is the configured OK value; an aborted cycle (aborted = true: emergency button on the machine
+or manual abort in the frontend) is counted as ABORTED, not as NOT OK, in the counts. Days and weeks are by created_on
+(the end of the cycle); weeks start on Monday. Started by OtherServices.py (startMIServer).
 """
 import json
 import os
@@ -37,10 +41,10 @@ from endpoints import EndpointsDB as DB
 DEFAULT_PORT = 8050
 ALL_MODELS = "ALL MODELS"
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-GREEN, RED, BLUE, ORANGE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00"
+GREEN, RED, BLUE, ORANGE, GREY, PURPLE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00", "#616161", "#6a1b9a"
 COLUMNS = ["created_on", "model_name", "ok_notok_result", "nut_tightening_torque_1", "nut_tightening_torque_2",
            "free_rotation_torque_1", "setting_tightening_torque1_setpoint", "setting_tightening_torque2_setpoint",
-           "remarks"]
+           "remarks", "aborted", "abort_reason"]
 TORQUES = {  # key -> (column, title, setpoint column)
     "torque1": ("nut_tightening_torque_1", "Nut Tightening Torque 1", "setting_tightening_torque1_setpoint"),
     "torque2": ("nut_tightening_torque_2", "Nut Tightening Torque 2", "setting_tightening_torque2_setpoint"),
@@ -78,8 +82,25 @@ def loadFrame(database: str, now: datetime) -> pd.DataFrame:
     frame["created_on"] = pd.to_datetime(frame["created_on"])
     for column in COLUMNS[3:8]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
-    frame["ok"] = frame["ok_notok_result"].fillna("") == DB.OK_VALUE
+    frame["aborted"] = frame["aborted"].fillna(False).astype(bool)
+    frame["ok"] = (frame["ok_notok_result"].fillna("") == DB.OK_VALUE) & ~frame["aborted"]
     frame["reworked"] = frame["remarks"].fillna("").str.contains("DUPLICATE", case=False)
+    reason = frame["abort_reason"].fillna("").str.lower()
+    frame["abortKind"] = ""
+    frame.loc[frame["aborted"], "abortKind"] = "other"
+    frame.loc[frame["aborted"] & reason.str.startswith("emergency"), "abortKind"] = "emergency"
+    frame.loc[frame["aborted"] & reason.str.startswith("manual"), "abortKind"] = "manual"
+    return frame
+
+
+def abortFiltered(frame: pd.DataFrame, aborts: str) -> pd.DataFrame:
+    """The records the abort filter keeps (EndpointsDB.ABORT_FILTERS; resolved name)."""
+    if aborts == "only":
+        return frame[frame["aborted"]]
+    if aborts == "exclude":
+        return frame[~frame["aborted"]]
+    if aborts in ("emergency", "manual"):
+        return frame[frame["abortKind"] == aborts]
     return frame
 
 
@@ -96,18 +117,25 @@ def _layout(fig: go.Figure, title: str, xTitle: str, yTitle: str, empty: bool) -
     return json.loads(pio.to_json(fig))
 
 
+def _outcome(part: pd.DataFrame) -> pd.Series:
+    """OK / NOT OK / ABORTED per record (an aborted cycle is ABORTED, not NOT OK)."""
+    return pd.Series(["ABORTED" if a else ("OK" if o else "NOT OK") for a, o in zip(part["aborted"], part["ok"])],
+                     index=part.index)
+
+
 def countsFigure(part: pd.DataFrame, by: str, title: str) -> dict:
-    """Stacked OK / NOT OK counts per day (by="day") or per week starting Monday (by="week")."""
+    """Stacked OK / NOT OK / ABORTED counts per day (by="day") or per week starting Monday (by="week"). The three
+    series are always there (in this order), zero where there is none."""
     fig = go.Figure()
     if not part.empty:
         key = part["created_on"].dt.normalize()
         if by == "week":
             key = key - pd.to_timedelta(key.dt.weekday, unit="D")
-        counts = part.groupby([key, "ok"]).size().unstack(fill_value=0)
+        counts = part.groupby([key, _outcome(part)]).size().unstack(fill_value=0)
         labels = [d.strftime("%Y-%m-%d") for d in counts.index]
-        fig.add_bar(x=labels, y=counts.get(True, pd.Series(0, counts.index)).tolist(), name="OK", marker_color=GREEN)
-        fig.add_bar(x=labels, y=counts.get(False, pd.Series(0, counts.index)).tolist(), name="NOT OK",
-                    marker_color=RED)
+        for name, colour in (("OK", GREEN), ("NOT OK", RED), ("ABORTED", GREY)):
+            fig.add_bar(x=labels, y=counts.get(name, pd.Series(0, counts.index)).tolist(), name=name,
+                        marker_color=colour)
         fig.update_xaxes(type="category")
     return _layout(fig, title, "Week starting" if by == "week" else "Date", "Components", part.empty)
 
@@ -145,13 +173,30 @@ def reworkedFigure(part: pd.DataFrame, title: str) -> dict:
     return _layout(fig, title, "Date", "Re-assembled components", reworked.empty)
 
 
+def abortedFigure(part: pd.DataFrame, title: str) -> dict:
+    """Aborted cycles per day, stacked by reason: emergency button on the machine, manual abort in the frontend."""
+    aborted = part[part["aborted"]]
+    fig = go.Figure()
+    if not aborted.empty:
+        counts = aborted.groupby([aborted["created_on"].dt.normalize(), "abortKind"]).size().unstack(fill_value=0)
+        labels = [d.strftime("%Y-%m-%d") for d in counts.index]
+        for kind, name, colour in (("emergency", "Emergency button", RED), ("manual", "Manual (frontend)", PURPLE),
+                                   ("other", "Other", GREY)):
+            if kind in counts:
+                fig.add_bar(x=labels, y=counts[kind].tolist(), name=name, marker_color=colour)
+        fig.update_xaxes(type="category")
+    return _layout(fig, title, "Date", "Aborted cycles", aborted.empty)
+
+
 def summary(frame: pd.DataFrame, model: str, now: datetime) -> dict:
     out = {}
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     for label, start in (("today", today), ("week", today - timedelta(days=today.weekday())),
                          ("month", today.replace(day=1))):
         part = select(frame, model, start)
-        out[label] = {"total": int(len(part)), "ok": int(part["ok"].sum()), "notok": int((~part["ok"]).sum())}
+        aborted = int(part["aborted"].sum())
+        out[label] = {"total": int(len(part)), "ok": int(part["ok"].sum()),
+                      "notok": int(len(part) - part["ok"].sum() - aborted), "aborted": aborted}
     return out
 
 
@@ -159,12 +204,16 @@ def dashboardData(query: dict) -> dict:
     get = lambda name, default: query.get(name, [default])[0] or default
     database = DB.resolveDatabase(get("db", "production"))
     model = get("model", ALL_MODELS)
+    aborts = DB.resolveAbortFilter(get("aborts", "include"))
     periods = {name: get(name, default) for name, default in (
         ("day_period", "7_days"), ("week_period", "12_weeks"), ("torque1_period", "30_days"),
-        ("torque2_period", "30_days"), ("rotation_period", "30_days"), ("reworked_period", "30_days"))}
+        ("torque2_period", "30_days"), ("rotation_period", "30_days"), ("reworked_period", "30_days"),
+        ("aborted_period", "30_days"))}
     now = datetime.now()
-    frame = loadFrame(database, now)
-    suffix = "All Models" if model == ALL_MODELS else model
+    frame = abortFiltered(loadFrame(database, now), aborts)
+    suffix = ("All Models" if model == ALL_MODELS else model) + \
+             ({"only": ", aborted only", "exclude": ", no aborts", "emergency": ", emergency aborts",
+               "manual": ", manual aborts"}.get(aborts, ""))
     label = lambda name, table: table.get(periods[name], periods[name])
     data = {
         "models": DB.fetchModelNames(database),
@@ -176,6 +225,10 @@ def dashboardData(query: dict) -> dict:
         "reworked_components": reworkedFigure(select(frame, model, periodStart(periods["reworked_period"], now)),
                                               f"Re-assembled Components per Day "
                                               f"({label('reworked_period', SHORT_PERIODS)} - {suffix})"),
+        "aborted_components": abortedFigure(select(frame, model, periodStart(periods["aborted_period"], now)),
+                                            f"Aborted Cycles per Day ({label('aborted_period', SHORT_PERIODS)} - "
+                                            f"{suffix})"),
+        "aborts": aborts,
     }
     for key in TORQUES:
         name = f"{key}_period"
@@ -203,9 +256,10 @@ def _tab(key: str, title: str, periods: dict, description: str, active: bool = F
 
 TABS = [  # (key in /data, tab label, period table, description, query parameter)
     ("components_day", "Components per Day", DAY_PERIODS,
-     "Components assembled per day, split into OK and NOT OK (final result of the cycle).", "day_period"),
+     "Components per day, split into OK, NOT OK (completed, a check failed) and ABORTED (emergency button on the "
+     "machine or manual abort).", "day_period"),
     ("components_week", "Components per Week", WEEK_PERIODS,
-     "Components assembled per week (weeks start on Monday), OK and NOT OK.", "week_period"),
+     "Components per week (weeks start on Monday): OK, NOT OK and ABORTED.", "week_period"),
     ("torque1", "Nut Tightening Torque 1", SHORT_PERIODS,
      "Spread of the first nut tightening torque; dashed line: the torque 1 setpoint used.", "torque1_period"),
     ("torque2", "Nut Tightening Torque 2", SHORT_PERIODS,
@@ -214,6 +268,9 @@ TABS = [  # (key in /data, tab label, period table, description, query parameter
      "Spread of the free rotation torque measured at the end of the cycle.", "rotation_period"),
     ("reworked_components", "Re-assembled", SHORT_PERIODS,
      "Components whose QR code was scanned again (saved with remarks DUPLICATE), per day.", "reworked_period"),
+    ("aborted_components", "Aborted Cycles", SHORT_PERIODS,
+     "Cycles aborted per day, by reason: the emergency button on the machine, or a manual abort in the frontend "
+     "(Ctrl+Alt+Z). An abort while waiting for the QR code makes no record and is not counted.", "aborted_period"),
 ]
 
 
@@ -223,6 +280,7 @@ def page(models) -> str:
                    f'href="#{k}" role="tab">{label}</a></li>' for i, (k, label, *_) in enumerate(TABS))
     panes = "".join(_tab(k, label, periods, text, i == 0) for i, (k, label, periods, text, _) in enumerate(TABS))
     params = json.dumps({k: p for k, *_, p in TABS})
+    abortOptions = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in DB.ABORT_FILTERS.items())
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hub and Disc Assembly Dashboard</title>
@@ -242,6 +300,8 @@ def page(models) -> str:
     <h1 class="text-primary mb-0 me-auto" style="font-weight: 700;">Hub and Disc Assembly Dashboard</h1>
     <div><label class="form-label fw-semibold mb-0" for="model">Model</label>
       <select id="model" class="form-select" style="min-width: 220px;">{modelOptions}</select></div>
+    <div><label class="form-label fw-semibold mb-0" for="aborts">Aborted cycles</label>
+      <select id="aborts" class="form-select" style="min-width: 260px;">{abortOptions}</select></div>
     <div><label class="form-label fw-semibold mb-0" for="db">Database</label>
       <select id="db" class="form-select"><option value="production">Production</option><option value="test">Test</option></select></div>
   </div>
@@ -273,12 +333,13 @@ function draw(data) {{
   }}
   for (const p of ['today', 'week', 'month']) {{
     const s = data.summary[p];
-    document.getElementById('s-' + p).innerHTML = `${{s.total}} <span class="fs-6 text-success">OK ${{s.ok}}</span> <span class="fs-6 text-danger">NOT OK ${{s.notok}}</span>`;
+    document.getElementById('s-' + p).innerHTML = `${{s.total}} <span class="fs-6 text-success">OK ${{s.ok}}</span> <span class="fs-6 text-danger">NOT OK ${{s.notok}}</span> <span class="fs-6 text-secondary">ABORTED ${{s.aborted}}</span>`;
   }}
 }}
 let last = null;
 function refresh() {{
-  const q = new URLSearchParams({{db: document.getElementById('db').value, model: document.getElementById('model').value}});
+  const q = new URLSearchParams({{db: document.getElementById('db').value, model: document.getElementById('model').value,
+                                  aborts: document.getElementById('aborts').value}});
   for (const [key, name] of Object.entries(PARAMS)) q.set(name, document.getElementById(key + '-period').value);
   fetch('/data?' + q.toString())
     .then(r => r.json().then(j => {{ if (!r.ok) throw new Error(j.error || r.statusText); return j; }}))

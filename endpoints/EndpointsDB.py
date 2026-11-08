@@ -10,6 +10,8 @@ Databases: "production" (ashok_leyland_production, the default) or "test" (ashok
 names are accepted too. Anything else is refused.
 Dates: a record belongs to the day of its created_on (the end of its cycle). Date limits are whole days and both are
 included: start_date 2026-11-01, end_date 2026-11-02 = from 2026-11-01 00:00:00 up to, not including, 2026-11-03.
+Aborted cycles (columns aborted, abort_reason; 2026-11-07): every query takes an abort filter (ABORT_FILTERS) and a
+result filter (RESULT_FILTERS); the defaults return every record, as before.
 """
 import csv
 from datetime import date, datetime, timedelta
@@ -31,6 +33,62 @@ CONNECTION = dict(user="postgres", password="postgres", host="127.0.0.1", port="
 
 class RequestError(ValueError):
     """A request the caller has to correct (unknown database, missing model name, bad date)."""
+
+
+# Abort filter: which records, by the aborted / abort_reason columns. Accepted aliases in ABORT_ALIASES.
+ABORT_FILTERS: Dict[str, str] = {
+    "include": "every record, aborted cycles included (default)",
+    "only": "only aborted cycles",
+    "exclude": "no aborted cycles (completed cycles only)",
+    "emergency": "only cycles aborted with the emergency button on the machine",
+    "manual": "only cycles aborted manually in the frontend (Ctrl+Alt+Z)",
+}
+ABORT_ALIASES: Dict[str, str] = {"all": "include", "with": "include", "with_aborts": "include", "yes": "include",
+                                 "only_aborts": "only", "aborted": "only",
+                                 "none": "exclude", "no": "exclude", "without": "exclude", "no_aborts": "exclude",
+                                 "completed": "exclude"}
+# Result filter: by ok_notok_result (an aborted cycle is NOT OK).
+RESULT_FILTERS: Dict[str, str] = {"all": "OK and NOT OK (default)", "ok": "only OK", "notok": "only NOT OK"}
+RESULT_ALIASES: Dict[str, str] = {"not_ok": "notok", "not ok": "notok", "nok": "notok", "any": "all"}
+
+
+def resolveAbortFilter(value: Optional[str]) -> str:
+    if value is None or str(value).strip() == "":
+        return "include"
+    key = str(value).strip().lower()
+    key = ABORT_ALIASES.get(key, key)
+    if key not in ABORT_FILTERS:
+        raise RequestError(f"Unknown aborts filter '{value}'. Use one of: {', '.join(ABORT_FILTERS)}")
+    return key
+
+
+def resolveResultFilter(value: Optional[str]) -> str:
+    if value is None or str(value).strip() == "":
+        return "all"
+    key = str(value).strip().lower()
+    key = RESULT_ALIASES.get(key, key)
+    if key not in RESULT_FILTERS:
+        raise RequestError(f"Unknown result filter '{value}'. Use one of: {', '.join(RESULT_FILTERS)}")
+    return key
+
+
+def filterConditions(aborts: str = "include", result: str = "all") -> Tuple[List[sql.Composable], list]:
+    """SQL conditions (and their parameters) for the abort and result filters (resolved names)."""
+    conditions, params = [], []
+    if aborts == "only":
+        conditions.append(sql.SQL("aborted"))
+    elif aborts == "exclude":
+        conditions.append(sql.SQL("NOT aborted"))
+    elif aborts in ("emergency", "manual"):
+        conditions.append(sql.SQL("aborted AND abort_reason ILIKE %s"))
+        params.append(f"{aborts}%")       # "emergency button pressed on the machine", "manual abort (Ctrl+Alt+Z) ..."
+    if result == "ok":
+        conditions.append(sql.SQL("ok_notok_result = %s"))
+        params.append(OK_VALUE)
+    elif result == "notok":
+        conditions.append(sql.SQL("ok_notok_result <> %s"))
+        params.append(OK_VALUE)
+    return conditions, params
 
 
 def resolveDatabase(name: Optional[str]) -> str:
@@ -79,9 +137,11 @@ def _table() -> sql.Composed:
 
 
 def fetchRecords(database: str, modelName: Optional[str] = None,
-                 start: Optional[datetime] = None, endExclusive: Optional[datetime] = None) -> List[tuple]:
-    """Records in COLUMNS order, oldest first. modelName matches whole names, ignoring case."""
-    conditions, params = [], []
+                 start: Optional[datetime] = None, endExclusive: Optional[datetime] = None,
+                 aborts: Optional[str] = None, result: Optional[str] = None) -> List[tuple]:
+    """Records in COLUMNS order, oldest first. modelName matches whole names, ignoring case. aborts: ABORT_FILTERS
+    (default include = all records); result: RESULT_FILTERS (default all)."""
+    conditions, params = filterConditions(resolveAbortFilter(aborts), resolveResultFilter(result))
     if modelName is not None:
         if not str(modelName).strip():
             raise RequestError("model name must not be empty")

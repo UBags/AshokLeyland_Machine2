@@ -19,6 +19,8 @@ function show(text, count) {
 
 function query(method, format, params) {
     params.db_name = document.getElementById('dbName').value;
+    params.aborts = document.getElementById('aborts').value;     // include / only / exclude / emergency / manual
+    params.result = document.getElementById('result').value;     // all / ok / notok
     fetch(`api/${method}/${format}/`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(params)
     })
@@ -36,15 +38,20 @@ function query(method, format, params) {
             if (rows.length === 0) { show('No records found for the selected criteria', 0); return; }
             const pretty = JSON.stringify(rows, null, 2);
             show(pretty, rows.length);
-            download(pretty, `${method}_${stamp}.json`, 'application/json');
+            download(pretty, `${method}${suffix(params)}_${stamp}.json`, 'application/json');
         } else {
             const count = Math.max(text.trim().split('\n').length - 1, 0);
             if (count === 0) { show('No records found for the selected criteria', 0); return; }
             show(text, count);
-            download(text, `${method}_${stamp}.csv`, 'text/csv');
+            download(text, `${method}${suffix(params)}_${stamp}.csv`, 'text/csv');
         }
     })
     .catch(error => show(`Error: ${error}`, 0));
+}
+
+function suffix(params) {   // the filters in the file name, when not the defaults
+    return (params.aborts && params.aborts !== 'include' ? `_aborts-${params.aborts}` : '') +
+           (params.result && params.result !== 'all' ? `_result-${params.result}` : '');
 }
 
 function dates(startId, endId) {

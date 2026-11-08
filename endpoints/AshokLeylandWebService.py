@@ -19,6 +19,12 @@ POST /api/<method>/<csv|json>/  the API; the body is JSON (empty {} where nothin
   The page itself uses the same queries under the names by_model_name, by_model_name_and_date, today_by_model,
   by_date_limits and all_today (they accept modelName / startDate / endDate). Every body may add
   "db_name": "production" (default) or "test". Dates are whole days, both included, by the record's created_on.
+  Aborted cycles: every records body may add
+    "aborts": "include" (default: every record) | "only" (only aborted cycles) | "exclude" (no aborted cycles) |
+              "emergency" (only aborts with the machine's emergency button) | "manual" (only manual aborts, Ctrl+Alt+Z)
+    "result": "all" (default) | "ok" | "notok"
+  e.g. {"aborts": "exclude", "result": "notok"} = the completed cycles that failed a check (rejects, not aborts).
+  The records carry the columns aborted (true / false) and abort_reason.
   Model names match whole names, ignoring case.
   json -> {"data": [ {column: value, ...}, ... ]}   (get_unique_model_names: {"model_names": [...]})
   csv  -> text/csv, the column names in the first row
@@ -66,6 +72,12 @@ def _first(body: dict, *names):
     return None
 
 
+def _filters(body: dict) -> dict:
+    """The abort and result filters of a records body (checked here, so a bad value is a 400 before any query)."""
+    return {"aborts": DB.resolveAbortFilter(_first(body, "aborts", "abort_filter", "abortFilter")),
+            "result": DB.resolveResultFilter(_first(body, "result", "result_filter", "resultFilter"))}
+
+
 def _modelName(body: dict) -> str:
     name = _first(body, "model_name", "modelName")
     if name is None:
@@ -74,29 +86,29 @@ def _modelName(body: dict) -> str:
 
 
 def _byModel(body):
-    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), modelName=_modelName(body))
+    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), modelName=_modelName(body), **_filters(body))
 
 
 def _byModelAndDates(body):
     start, end = DB.dayLimits(_first(body, "start_date", "startDate"), _first(body, "end_date", "endDate"))
     return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), modelName=_modelName(body), start=start,
-                           endExclusive=end)
+                           endExclusive=end, **_filters(body))
 
 
 def _todayByModel(body):
     start, end = DB.dayLimits(None, None)
     return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), modelName=_modelName(body), start=start,
-                           endExclusive=end)
+                           endExclusive=end, **_filters(body))
 
 
 def _byDates(body):
     start, end = DB.dayLimits(_first(body, "start_date", "startDate"), _first(body, "end_date", "endDate"))
-    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), start=start, endExclusive=end)
+    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), start=start, endExclusive=end, **_filters(body))
 
 
 def _allToday(body):
     start, end = DB.dayLimits(None, None)
-    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), start=start, endExclusive=end)
+    return DB.fetchRecords(DB.resolveDatabase(body.get("db_name")), start=start, endExclusive=end, **_filters(body))
 
 
 RECORD_METHODS: Dict[str, Callable[[dict], list]] = {
@@ -170,7 +182,8 @@ def index():
         modelNames, databaseNote = [], f"Database not reachable: {e}"
     base = request.host_url.rstrip("/")
     return render_template_string(PAGE, model_names=modelNames, base=base, api=API_REFERENCE,
-                                  columns=DB.COLUMNS, note=databaseNote)
+                                  columns=DB.COLUMNS, note=databaseNote, abort_filters=DB.ABORT_FILTERS,
+                                  result_filters=DB.RESULT_FILTERS)
 
 
 # ------------------------------------------------------------------------------------------------ page
@@ -182,6 +195,13 @@ API_REFERENCE = [
     ("getDataOfTodayByModelNumber", "get_data_of_today_by_model_number", '{"model_name": "DOST"}'),
     ("getDataByDateLimits", "get_data_by_date_limits", '{"start_date": "2026-11-01", "end_date": "2026-11-02"}'),
     ("getAllDataOfToday", "get_all_data_of_today", "{}"),
+    ("... only aborted cycles", "get_data_by_date_limits",
+     '{"start_date": "2026-11-01", "end_date": "2026-11-07", "aborts": "only"}'),
+    ("... no aborted cycles", "get_data_by_model_name",
+     '{"model_name": "DOST", "aborts": "exclude"}'),
+    ("... emergency-button aborts", "get_all_data_of_today", '{"aborts": "emergency"}'),
+    ("... completed but NOT OK (rejects)", "get_data_by_date_limits",
+     '{"start_date": "2026-11-01", "end_date": "2026-11-07", "aborts": "exclude", "result": "notok"}'),
 ]
 
 PAGE = """<!DOCTYPE html>
@@ -217,7 +237,12 @@ PAGE = """<!DOCTYPE html>
 <div class="section">
   <label>Database:</label>
   <select id="dbName"><option value="production">Production</option><option value="test">Test</option></select>
-  <span class="small">Dates are whole days (both included), by the time the record was saved.</span>
+  <label>Aborted cycles:</label>
+  <select id="aborts">{% for k, v in abort_filters.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+  <label>Result:</label>
+  <select id="result">{% for k, v in result_filters.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+  <span class="small">Dates are whole days (both included), by the time the record was saved. The two filters apply to
+  every query below.</span>
 </div>
 
 <div class="section">
@@ -263,6 +288,11 @@ PAGE = """<!DOCTYPE html>
   <p>POST, body JSON. Add <code>"db_name": "test"</code> to any body to read the test database. Dates YYYY-MM-DD, both
   included. JSON answers <code>{"data": [...]}</code> (<code>{"model_names": [...]}</code>); CSV answers the column names
   in the first row. Errors: HTTP 400 (request to correct) or 500 (database), <code>{"error": "..."}</code>.</p>
+  <p>Aborted cycles: add <code>"aborts"</code> to any records body:
+  {% for k, v in abort_filters.items() %}<code>"{{ k }}"</code> {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}.
+  And <code>"result"</code>: {% for k, v in result_filters.items() %}<code>"{{ k }}"</code> {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}.
+  Both together, e.g. <code>{"aborts": "exclude", "result": "notok"}</code>: completed cycles that failed a check.
+  Every record has the columns <code>aborted</code> and <code>abort_reason</code>.</p>
   {% for fmt, cls in (("json", "json"), ("csv", "csv")) %}
   <h3>{{ fmt|upper }} responses</h3>
   <table>

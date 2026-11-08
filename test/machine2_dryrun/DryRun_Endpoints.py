@@ -74,17 +74,22 @@ def seed():
                               timedelta(minutes=20 * k + 1)
                     created = min(created, now - timedelta(seconds=10 * (k + 1)))
                     ok = random.random() > 0.15
+                    # an aborted cycle is NOT OK; emergency button or manual abort (2026-11-08)
+                    aborted = (not ok) and random.random() < 0.5
+                    reason = (random.choice(("emergency button pressed on the machine",
+                                             "manual abort (Ctrl+Alt+Z) in the frontend")) if aborted else None)
                     n += 1
                     cursor.execute(
                         f"INSERT INTO {TABLE} (qr_code, model_name, lhs_rhs, model_tonnage, nut_tightening_torque_1, "
                         f"nut_tightening_torque_2, free_rotation_torque_1, setting_tightening_torque1_setpoint, "
-                        f"setting_tightening_torque2_setpoint, ok_notok_result, username, remarks, created_on) "
-                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s)",
+                        f"setting_tightening_torque2_setpoint, ok_notok_result, username, remarks, created_on, "
+                        f"aborted, abort_reason) "
+                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s, %s, %s)",
                         (f"{TAG}{n:05d}", random.choice(MODELS),
                          round(random.gauss(15.2, 0.25), 2) if random.random() > 0.08 else -1.0,
                          round(random.gauss(19.1, 0.3), 2), round(random.gauss(2.4, 0.15), 2),
                          15.0 if day > 40 else 15.5, DB.OK_VALUE if ok else "NotOK",
-                         "DUPLICATE" if random.random() < 0.08 else "", created))
+                         "DUPLICATE" if random.random() < 0.08 else "", created, aborted, reason))
         c.commit()
     finally:
         c.close()
@@ -184,6 +189,57 @@ def webServiceChecks(B):
     check("page script calls the service it came from (no localhost)", r.ok and "localhost" not in r.text)
 
 
+def abortFilterChecks(B):
+    print("\n=== Aborted cycles: filters on the web service ===", flush=True)
+    d1, d2 = (date.today() - timedelta(days=60)).isoformat(), date.today().isoformat()
+    s, e = datetime.combine(date.today() - timedelta(days=60), datetime.min.time()), \
+        datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+    base = "created_on >= %s AND created_on < %s"
+    cases = [  # (aborts, result, SQL condition, label)
+        (None, None, "true", "default = every record"),
+        ("include", None, "true", "include"),
+        ("only", None, "aborted", "only aborts"),
+        ("exclude", None, "NOT aborted", "no aborts"),
+        ("emergency", None, "aborted AND abort_reason ILIKE 'emergency%%'", "only emergency-button aborts"),
+        ("manual", None, "aborted AND abort_reason ILIKE 'manual%%'", "only manual aborts"),
+        (None, "ok", "ok_notok_result = 'OK'", "result OK"),
+        (None, "notok", "ok_notok_result <> 'OK'", "result NOT OK (aborts included)"),
+        ("exclude", "notok", "NOT aborted AND ok_notok_result <> 'OK'", "completed NOT OK (rejects)"),
+        ("exclude", "ok", "NOT aborted AND ok_notok_result = 'OK'", "completed OK"),
+        ("only", "ok", "aborted AND ok_notok_result = 'OK'", "aborted and OK (none)"),
+        ("no_aborts", None, "NOT aborted", "alias no_aborts"),
+        ("ALL", None, "true", "alias ALL (case ignored)"),
+    ]
+    for aborts, result, cond, label in cases:
+        body = {"db_name": "test", "start_date": d1, "end_date": d2}
+        if aborts is not None: body["aborts"] = aborts
+        if result is not None: body["result"] = result
+        r = requests.post(B + "/api/get_data_by_date_limits/json/", json=body)
+        got = [x for x in r.json().get("data", []) if x["qr_code"].startswith(TAG)] if r.ok else []
+        n = sqlCount(f"{base} AND {cond}", (s, e))
+        check(f"by dates, {label}: {len(got)} = SQL {n}", r.ok and len(got) == n, r.text[:150])
+    r = requests.post(B + "/api/get_data_by_date_limits/json/", json={"db_name": "test", "start_date": d1, "end_date": d2, "aborts": "only"})
+    rows = [x for x in r.json()["data"] if x["qr_code"].startswith(TAG)]
+    check("aborted records carry aborted = true and their reason", rows and all(x["aborted"] is True and x["abort_reason"] for x in rows))
+    for method, extra in (("get_data_by_model_name", {"model_name": MODELS[0]}),
+                          ("get_data_by_model_name_and_date_limits", {"model_name": MODELS[0], "start_date": d1, "end_date": d2}),
+                          ("get_data_of_today_by_model_number", {"model_name": MODELS[0]}),
+                          ("get_all_data_of_today", {})):
+        r = requests.post(B + f"/api/{method}/csv/", json={"db_name": "test", "aborts": "exclude", **extra})
+        lines = [l for l in r.text.splitlines()[1:] if l.startswith(TAG)]
+        idx = DB.COLUMNS.index("aborted")
+        check(f"{method} csv, aborts exclude: no aborted record", r.ok and all(l.split(",")[idx] == "False" for l in lines),
+              r.text[:120])
+    r = requests.post(B + "/api/by_date_limits/json/", json={"db_name": "test", "startDate": d1, "endDate": d2, "aborts": "only", "result": "notok"})
+    check("page route (by_date_limits) takes the filters too",
+          r.ok and len([x for x in r.json()["data"] if x["qr_code"].startswith(TAG)]) == sqlCount(f"{base} AND aborted", (s, e)))
+    for body, label in (({"aborts": "sometimes"}, "unknown aborts filter"), ({"result": "maybe"}, "unknown result filter")):
+        r = requests.post(B + "/api/get_all_data_of_today/json/", json={"db_name": "test", **body})
+        check(f"{label} -> HTTP 400 naming the choices", r.status_code == 400 and "Use one of" in r.json().get("error", ""), r.text[:120])
+    r = requests.get(B + "/")
+    check("query page has the Aborted cycles and Result selectors", r.ok and 'id="aborts"' in r.text and 'id="result"' in r.text)
+
+
 def dashboardChecks(B):
     print("\n=== MI dashboard ===", flush=True)
     now = datetime.now()
@@ -200,11 +256,32 @@ def dashboardChecks(B):
                                            (model, today.replace(day=1), DB.OK_VALUE)), s)
         day = d["components_day"]["data"]
         start = today - timedelta(days=29)
-        check(f"[{model}] per day, 30 days: OK and NOT OK = SQL",
-              sum(day[0]["y"]) == sqlCount("model_name = %s AND created_on >= %s AND ok_notok_result = %s",
+        check(f"[{model}] per day, 30 days: OK, NOT OK (completed) and ABORTED = SQL",
+              [x["name"] for x in day] == ["OK", "NOT OK", "ABORTED"] and
+              sum(day[0]["y"]) == sqlCount("model_name = %s AND created_on >= %s AND ok_notok_result = %s AND NOT aborted",
                                            (model, start, DB.OK_VALUE)) and
-              sum(day[1]["y"]) == sqlCount("model_name = %s AND created_on >= %s AND ok_notok_result <> %s",
-                                           (model, start, DB.OK_VALUE)))
+              sum(day[1]["y"]) == sqlCount("model_name = %s AND created_on >= %s AND ok_notok_result <> %s AND NOT aborted",
+                                           (model, start, DB.OK_VALUE)) and
+              sum(day[2]["y"]) == sqlCount("model_name = %s AND created_on >= %s AND aborted", (model, start)),
+              [(x["name"], sum(x["y"])) for x in day])
+        check(f"[{model}] summary this month: OK + NOT OK + ABORTED = total, aborted = SQL",
+              s["month"]["ok"] + s["month"]["notok"] + s["month"]["aborted"] == s["month"]["total"] and
+              s["month"]["aborted"] == sqlCount("model_name = %s AND created_on >= %s AND aborted",
+                                                (model, today.replace(day=1))), s["month"])
+        ab = d["aborted_components"]["data"]
+        check(f"[{model}] Aborted Cycles tab, 30 days: emergency / manual per day = SQL",
+              sum(sum(x["y"]) for x in ab if x["name"] == "Emergency button") ==
+              sqlCount("model_name = %s AND created_on >= %s AND aborted AND abort_reason ILIKE %s", (model, start, "emergency%")) and
+              sum(sum(x["y"]) for x in ab if x["name"] == "Manual (frontend)") ==
+              sqlCount("model_name = %s AND created_on >= %s AND aborted AND abort_reason ILIKE %s", (model, start, "manual%")),
+              [(x["name"], sum(x["y"])) for x in ab])
+        for aborts, cond in (("only", "aborted"), ("exclude", "NOT aborted"),
+                             ("emergency", "aborted AND abort_reason ILIKE 'emergency%%'")):
+            r2 = requests.get(B + "/data", params={"db": "test", "model": model, "day_period": "30_days", "aborts": aborts})
+            d2 = r2.json()
+            total = sum(sum(x["y"]) for x in d2["components_day"]["data"])
+            check(f"[{model}] dashboard aborts={aborts}: 30-day total = SQL",
+                  r2.ok and total == sqlCount(f"model_name = %s AND created_on >= %s AND {cond}", (model, start)), total)
         week = d["components_week"]["data"][0]["x"]
         check(f"[{model}] weeks start on Monday", all(datetime.strptime(x, "%Y-%m-%d").weekday() == 0 for x in week))
         t1 = d["torque1"]
@@ -223,6 +300,9 @@ def dashboardChecks(B):
     check("model without records: charts say 'no data'", r.ok and "no data" in r.json()["torque2"]["layout"]["title"]["text"])
     check("unknown database -> HTTP 400", requests.get(B + "/data", params={"db": "postgres"}).status_code == 400)
     check("unknown period -> HTTP 400", requests.get(B + "/data", params={"db": "test", "day_period": "x"}).status_code == 400)
+    check("unknown aborts filter -> HTTP 400", requests.get(B + "/data", params={"db": "test", "aborts": "x"}).status_code == 400)
+    check("dashboard page has the Aborted cycles selector and tab",
+          'id="aborts"' in requests.get(B + "/").text and "Aborted Cycles" in requests.get(B + "/").text)
     r = requests.get(B + "/")
     check("page needs nothing from the internet", r.ok and "cdn" not in r.text.lower())
     for asset in ("plotly.min.js", "bootstrap.min.css", "bootstrap.bundle.min.js"):
@@ -236,6 +316,7 @@ if __name__ == "__main__":
         ws, mi = startServices()
         time.sleep(0.5)
         webServiceChecks(ws)
+        abortFilterChecks(ws)
         dashboardChecks(mi)
     except Exception as e:
         check("no exception", False, repr(e))
