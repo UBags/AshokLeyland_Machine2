@@ -71,7 +71,7 @@ from frontend.SimplePopups import (
     changePasswordForSelf, createAccount, changePassword, changeRole, activateUser, inactivateUser,
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
-    getConfirmation, updateMachineSettingsDialog, canChangeMachineSettings)
+    getConfirmation, getJustPassword, showErrorMessage, updateMachineSettingsDialog, canChangeMachineSettings)
 from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
@@ -81,7 +81,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
+from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, sendFrontendAbortRequestFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -217,6 +217,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     emergencyButtonPressed : bool = False
     finalDisplayPending : bool = False      # completed cycle: free-rotation torque on screen, record not yet sent
     abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
+    FE_ABORT_PASSWORD : str = "admin123"    # the frontend's abort (Ctrl+Alt+Z): fixed password (user, 2026-11-08)
     emergencyAfterCompletion : bool = False # emergency while the completed cycle's torque was on screen
 
     # Variables for determining how much time to show large version of ok and notok images
@@ -1193,23 +1194,22 @@ class AshokLeylandFrontEnd(QMainWindow):
     def manualAbort(self):
         if AshokLeylandFrontEnd.finalDisplayPending:
             return          # the cycle has completed; its record is about to be sent (see updateEmergencyAbortPressed)
-        confirmed : str = self._runDialog(getConfirmation, message="Aborting manually. Ensure you have pressed Emergency button on the machine.")
-        ok : bool = (confirmed.strip().upper() == "OK")
-        if not ok:
+        # The frontend's own abort (2026-11-08): for when the machine's cycle was aborted and the frontend did not follow.
+        # Password-protected (FE_ABORT_PASSWORD). It stays in the frontend: no message to the QR code or camera server,
+        # no queues cleared. The IOServer is only asked to set PC_PLC_CycleAborted on the PLC; it aborts its own cycle
+        # only if that write succeeds (no address yet: it logs and carries on).
+        entered = self._runDialog(getJustPassword, textToShow="Frontend abort (this screen only).\nEnter the password:")
+        if not entered:
+            return                                          # cancelled
+        if entered != AshokLeylandFrontEnd.FE_ABORT_PASSWORD:
+            printYellow("Frontend abort: wrong password, nothing done")
+            self._runDialog(showErrorMessage, "Wrong password - nothing aborted", auto_close_duration=3)
             return
-        sendAbortFromIOServerToQRCodeServer(AshokLeylandFrontEnd.processUpdationRedisConnection)
-        try:
-            QThread.msleep(200)
-        except Exception:
-            noteSuppressed()
-        clearKeyCommunicationQueuesOnAbort()
-        # Tell the IOServer: it resets its PLC handshake and goes back to reading the QR code. Without this the
-        # IOServer stayed in the middle of the aborted cycle (waiting for a camera result that never comes).
-        sendAbortFromFEServerToIOServer(AshokLeylandFrontEnd.processUpdationRedisConnection,
-                                        reason="manual abort (Ctrl+Alt+Z) in the frontend")
         if self.getCurrentState() == MachineState.READ_QR_CODE:
-            self.showAbortWhileWaitingForQRCode()       # nothing in process: shown, no record
+            self.showAbortWhileWaitingForQRCode()       # nothing in process: shown, no record, nothing sent
             return
+        sendFrontendAbortRequestFromFEServerToIOServer(AshokLeylandFrontEnd.processUpdationRedisConnection,
+                                                       reason="manual abort (Ctrl+Alt+Z) in the frontend")
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         AshokLeylandFrontEnd.abortReason = "manual abort (Ctrl+Alt+Z) in the frontend"
         printYellow("About to call doFinalProcessing() from manualAbort()")

@@ -1257,27 +1257,50 @@ def sendAbortFromFEServerToIOServer(redisConnection : redis.client.Redis, reason
     return sendData(redisConnection=redisConnection, data={actionKeyString: ABORT, genericdataKeyString: reason},
                     queueName=fe2ioq, aProducer=f"{aProducer}")
 
-def readAbortInIOServerFromFEServer(redisConnection: redis.client.Redis, block : int = 500):
+FRONTEND_ABORT_REQUEST : str = "FrontendAbortRequest"   # fe2io.q action: the frontend's password-protected abort
+
+
+def sendFrontendAbortRequestFromFEServerToIOServer(redisConnection : redis.client.Redis,
+                                                   reason : str = "manual abort (Ctrl+Alt+Z) in the frontend",
+                                                   aProducer : str = "FEServer"):
+    """Frontend -> IOServer, the frontend's own (password-protected) abort (2026-11-08): the IOServer tries to set
+    PC_PLC_CycleAborted True on the PLC (3 attempts); only if that succeeds does it abort its cycle and reset the PLC
+    handshake. Without the tag's address, or if the write fails, it logs and does nothing else (the abort stays in the
+    frontend)."""
+    return sendData(redisConnection=redisConnection,
+                    data={actionKeyString: FRONTEND_ABORT_REQUEST, genericdataKeyString: reason},
+                    queueName=fe2ioq, aProducer=f"{aProducer}")
+
+
+def readAbortInIOServerFromFEServer(redisConnection: redis.client.Redis, block : int = 500, withKind : bool = False):
     """IOServer: (True, reason) if the frontend has asked for the cycle to be aborted, else (False, "").
+    withKind=True: (kind, reason), kind "abort" (ABORT: abort at once, as test tools send), "request"
+    (FRONTEND_ABORT_REQUEST: the frontend's own abort, see sendFrontendAbortRequestFromFEServerToIOServer) or None.
     Reads and removes EVERY message waiting in the frontend -> IOServer queue (an abort must never be lost behind
     another message); waits up to `block` ms when the queue is empty."""
+    nothing = (None, "") if withKind else (False, "")
     if redisConnection is None:
-        return False, ""
+        return nothing
     try:
         resp = redisConnection.xread({fe2ioq: 0}, count=100, block=block)
         if not resp:
-            return False, ""
+            return nothing
         _, messages = resp[0]
-        abort, reason = False, ""
+        kind, reason = None, ""
         for entryId, data in messages:
             decoded = {k.decode("utf-8"): v.decode("utf-8", "replace") for k, v in data.items()}
-            if decoded.get(actionKeyString) == ABORT:
-                abort, reason = True, decoded.get(genericdataKeyString, "")
+            action = decoded.get(actionKeyString)
+            if action == ABORT:
+                kind, reason = "abort", decoded.get(genericdataKeyString, "")
+            elif action == FRONTEND_ABORT_REQUEST and kind != "abort":
+                kind, reason = "request", decoded.get(genericdataKeyString, "")
             redisConnection.xdel(fe2ioq, entryId)
-        return abort, reason
+        if withKind:
+            return kind, reason
+        return kind == "abort", (reason if kind == "abort" else "")
     except Exception as e:
         printBoldRed(f"readAbortInIOServerFromFEServer(): {e}")
-        return False, ""
+        return nothing
 
 def sendDataFromFEServerToIOServer(redisConnection : redis.client.Redis, connectionStatus : ResultType, aProducer : str = "FEServer", handshake : bool = False):
     if not handshake:

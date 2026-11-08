@@ -438,6 +438,10 @@ class PLCIOServer:
     # Optional: True when the PC aborts a cycle itself (frontend abort, frontend / heartbeat server down, PLC restart),
     # False when the next QR code is accepted. Empty = not on this PLC (not written).
     PC_PLC_CycleAborted: str = CosThetaConfigurator.getInstance().getPcPlcCycleAbortedTagName()
+    # Tags the PLC programme may not have yet: named in the properties, but the IOServer starts without their address
+    # (Siemens: IOServerProperties.yaml) and writes them only where they exist; a write that cannot be made is logged.
+    OPTIONAL_TAG_ATTRS = ("PC_PLC_CycleAborted",)
+    FRONTEND_ABORT_WRITE_ATTEMPTS: int = 3      # the frontend's abort: PC_PLC_CycleAborted = True, then abort
 
     # ==================== Configuration Values ====================
     PLC_IP: str = CosThetaConfigurator.getInstance().getPlcIP()
@@ -524,7 +528,10 @@ class PLCIOServer:
 
         # The PLC: one PLCDataIO for reads, one for writes (None while not connected). Each has its own lock.
         self.vendor: str = plcVendor()
-        plcDataIOClass(self.vendor).checkTagConfiguration(PLCIOServer.tagNamesUsed())   # e.g. Siemens addresses
+        # e.g. Siemens addresses; the optional tags (OPTIONAL_TAG_ATTRS) may have none
+        plcDataIOClass(self.vendor).checkTagConfiguration(PLCIOServer.requiredTagNames())
+        self._tagsMissingOnPlc: set = set()             # Allen-Bradley: tags the PLC does not know (first connection)
+        self._optionalTagNoticeGiven: set = set()
         self.dataIOForReads: Optional[PLCDataIO] = None
         self.dataIOForWrites: Optional[PLCDataIO] = None
         self._tagsCheckedOnPlc: bool = False
@@ -1190,10 +1197,81 @@ class PLCIOServer:
         except Exception:
             noteSuppressed()
             return
-        if missing:
-            message = f"Tags not found on the PLC ({self.dataIOForReads.describe()}): {', '.join(missing)}"
+        self._tagsMissingOnPlc = set(missing or ())
+        optional = {getattr(PLCIOServer, a) for a in PLCIOServer.OPTIONAL_TAG_ATTRS}
+        required = [t for t in (missing or ()) if t not in optional]
+        if required:
+            message = f"Tags not found on the PLC ({self.dataIOForReads.describe()}): {', '.join(required)}"
             printBoldRed(message)
             self.logger.error(message)
+        for tag in (missing or ()):
+            if tag in optional:
+                self._optionalTagNotice(tag, "not on the PLC")
+
+    def _optionalTagNotice(self, tag: str, why: str) -> None:
+        """Log once that an optional tag cannot be written (no address / not on the PLC)."""
+        if tag in self._optionalTagNoticeGiven:
+            return
+        self._optionalTagNoticeGiven.add(tag)
+        message = f"Optional tag {tag}: {why}; it is not written (writes skipped, logged)"
+        printBoldYellow(message)
+        self.logger.warning(message)
+
+    def _optionalTagWritable(self, tag: str) -> bool:
+        """False if an optional tag is not named, or the PLC has no address for it (Siemens: none in
+        IOServerProperties.yaml; Allen-Bradley: not in the controller's tag list). Unknown -> True (the write is then
+        tried and a failure logged)."""
+        if not tag:
+            return False
+        dio = self.dataIOForWrites
+        # only a PLCDataIO whose tags have addresses of their own (Siemens) answers addressFor; the base class answers
+        # None for every tag (Allen-Bradley, mock: the name is the address)
+        if dio is not None and type(dio).addressFor is not PLCDataIO.addressFor:
+            try:
+                if dio.addressFor(tag) is None:
+                    self._optionalTagNotice(tag, "no address in costhetaio/siemens/IOServerProperties.yaml")
+                    return False
+            except Exception:
+                noteSuppressed()
+        if tag in self._tagsMissingOnPlc:
+            return False
+        return True
+
+    def handleFrontendAbortRequest(self, reason: str) -> bool:
+        """The frontend's own abort (password-protected, 2026-11-08): try to set PC_PLC_CycleAborted True on the PLC
+        (FRONTEND_ABORT_WRITE_ATTEMPTS attempts, each written and read back). Only if that succeeds is the cycle aborted
+        (handshake tags reset, QR code server told, camera / QR queues cleared). Not named, no address, PLC not
+        connected or the write fails: logged, nothing else done - the IOServer, the camera server and the machine
+        carry on. Returns True if the cycle was aborted."""
+        tag = PLCIOServer.PC_PLC_CycleAborted
+        prefix = f"Frontend abort ({reason or 'no reason given'})"
+        why = None
+        if not tag:
+            why = "no tag name (pc.plc.cycle.aborted.tagname is empty)"
+        elif not self._optionalTagWritable(tag):
+            why = f"no address for {tag} on this PLC"
+        elif not self._plcConnected():
+            why = "the PLC is not connected"
+        elif not self._writeVerified(tag, True, attempts=PLCIOServer.FRONTEND_ABORT_WRITE_ATTEMPTS):
+            why = f"{tag} = True could not be written ({PLCIOServer.FRONTEND_ABORT_WRITE_ATTEMPTS} attempts)"
+        if why:
+            message = f"{prefix}: {why}; the IOServer carries on with its cycle (the abort stays in the frontend)"
+            printBoldYellow(message)
+            self.logger.warning(message)
+            self._audit(message)
+            return False
+        message = f"{prefix}: {tag} = True written; aborting the cycle"
+        printBoldRed(message)
+        self.logger.error(message)
+        self._audit(message)
+        self.abortCycle(f"abort from the frontend ({reason or 'no reason given'})",
+                        notifyQRCodeServer=True, notifyFrontend=False, clearQueues=True, pcAbort=True)
+        return True
+
+    @classmethod
+    def requiredTagNames(cls) -> Dict[str, str]:
+        """tagNamesUsed() without the optional tags (OPTIONAL_TAG_ATTRS)."""
+        return {a: n for a, n in cls.tagNamesUsed().items() if a not in cls.OPTIONAL_TAG_ATTRS}
 
     @classmethod
     def tagNamesUsed(cls) -> Dict[str, str]:
@@ -1538,7 +1616,7 @@ class PLCIOServer:
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
             self._dropCameraRequest()
             self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
-            if pcAbort and PLCIOServer.PC_PLC_CycleAborted:
+            if pcAbort and self._optionalTagWritable(PLCIOServer.PC_PLC_CycleAborted):
                 with self._asPrivileged():
                     if not self._writeVerified(PLCIOServer.PC_PLC_CycleAborted, True):
                         self.logger.error(f"Could not set {PLCIOServer.PC_PLC_CycleAborted} = True")
@@ -1690,8 +1768,9 @@ class PLCIOServer:
         self.completePendingResultReset(tags)
 
     def launchFrontendAbortListenerThread(self):
-        """Frontend -> IOServer: an abort sent by the frontend (manual abort, sendAbortFromFEServerToIOServer) resets
-        the cycle to READ_QR_CODE, exactly like the emergency button on the machine."""
+        """Frontend -> IOServer. ABORT (sendAbortFromFEServerToIOServer, test tools): resets the cycle to READ_QR_CODE,
+        like the emergency button on the machine. FRONTEND_ABORT_REQUEST (the frontend's password-protected abort):
+        handleFrontendAbortRequest - the cycle is aborted only if PC_PLC_CycleAborted = True could be written."""
         objRef = self
 
         def listen():
@@ -1700,11 +1779,13 @@ class PLCIOServer:
                 try:
                     if connection is None:
                         connection = Redis(objRef.redisHostname, objRef.redisPort, retry_on_timeout=True)
-                    abort, reason = readAbortInIOServerFromFEServer(connection, block=500)
-                    if abort:
+                    kind, reason = readAbortInIOServerFromFEServer(connection, block=500, withKind=True)
+                    if kind == "abort":                 # ABORT (test tools): abort at once
                         objRef.abortCycle(f"abort from the frontend ({reason or 'no reason given'})",
                                           notifyQRCodeServer=True, notifyFrontend=False, clearQueues=True,
                                           pcAbort=True)
+                    elif kind == "request":             # the frontend's own abort: only if the PLC flag is written
+                        objRef.handleFrontendAbortRequest(reason)
                 except Exception as e:
                     printBoldRed(f"Exception {e} in the frontend abort listener")
                     connection = None
@@ -1857,7 +1938,7 @@ class PLCIOServer:
                                 publishCycleContext(objRef.redisConnectionForWrites, qrCode, objRef.cycleId)
                                 objRef._audit(f"CYCLE {objRef.cycleId} START: QR code accepted by the QR server: {qrCode}")
                                 printBoldGreen(f"Received QR Code: {qrCode}")
-                                if PLCIOServer.PC_PLC_CycleAborted:      # a new cycle: the PC abort flag is cleared
+                                if objRef._optionalTagWritable(PLCIOServer.PC_PLC_CycleAborted):  # new cycle: flag cleared
                                     objRef.write_bool(PLCIOServer.PC_PLC_CycleAborted, False, debug=False)
                                 # 1. Populate the cycle settings (side, model, setpoints) FIRST ...
                                 settingsWritten = objRef.writeCycleSettingsToPLC(qrCode)
@@ -3020,6 +3101,10 @@ class PLCIOServer:
             if tag:                      # empty name = not on this PLC
                 tag_values[tag] = reader(tag, debug=False)
         tag_values[PLCIOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, debug=False)
+        if PLCIOServer.PC_PLC_CycleAborted:      # optional: None where the PLC has no address for it
+            tag_values[PLCIOServer.PC_PLC_CycleAborted] = (
+                self.read_bool(PLCIOServer.PC_PLC_CycleAborted, debug=False)
+                if self._optionalTagWritable(PLCIOServer.PC_PLC_CycleAborted) else None)
 
         # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)
         tag_values["_currentMachineState"] = self.machineState.getCurrentState().name

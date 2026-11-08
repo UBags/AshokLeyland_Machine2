@@ -44,7 +44,7 @@
 | Connection status toggle | started by `launchThreadForUpdatingCombinedHeartbeat` | 2 s | Toggles `PC_PLC_ConnectionStatusTag` (own thread since CHANGES §84, so an abort on the status thread does not stop it) |
 | Server statuses | `launchThreadForUpdatingCombinedHeartbeat` | on message | Reads `hb2io.q`, then `_applyServerStatuses` |
 | Emergency | `launchEmergencyMonitoringThread` | 1 s | `PLC_PC_EmergencyAbort`, then `abortCycle` |
-| FE abort | `launchFrontendAbortListenerThread` | blocking read | `fe2io.q`, then `abortCycle` |
+| FE abort | `launchFrontendAbortListenerThread` | blocking read | `fe2io.q`: `Abort` -> `abortCycle`; `FrontendAbortRequest` -> `handleFrontendAbortRequest` (writes `PC_PLC_CycleAborted` = True, 3 attempts; aborts only if written, else logs) |
 | Stop | `launchMonitorStopCommandThread` | blocking read | Orderly stop |
 | Tag defaults | `UpdateTagsToDefaultProcessor` | queue | Default writes requested from other threads |
 | Delayed jobs | `DelayedJobScheduler` | timers | Resets 0.4 s after a read (Set/Done tags) and the end of handshakes |
@@ -187,7 +187,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
 | `TimeDurationUpdateWorker` | — | Cycle timer |
 
-At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. Abort sends `fe2io.q` with `{action: Abort, data: reason}`. Machine settings are edited by the Administrator or Supervisor, with the limits of §8.
+At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. The frontend abort (Ctrl+Alt+Z, password `admin123`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8.
 
 ## 6. Heartbeat and alarm server (`monitorAllConnections/HeartbeatAndAlarmServer.py`)
 
@@ -275,7 +275,7 @@ Every message also carries `timestamp` and `producer`.
 | `camera2io.q` | `result`, `currentMachineState`, `requestId` |
 | `camera2fe.q` | `originalImage`, `processedImage`, `result`, `currentMachineState`, `requestId`, `reason` |
 | `io2frontend.q` | `currentMachineState`, `moveToState`, `action`, `value`, `result`, `rotationDone` |
-| `fe2io.q` | `action` = Abort, `data` = reason |
+| `fe2io.q` | `action` = FrontendAbortRequest (frontend) or Abort (test tools), `data` = reason |
 | `hb2io.q` | Per-server status: `camera`, `qrcode`, `db`, `frontend`, `heartbeat`, `redis` |
 | `hb2fe.q` | Per-server lamps, plus `redisstatus` |
 

@@ -2448,3 +2448,36 @@ Architecture items not included (user).
   exclude + ok, only + ok = none, two aliases); every records method with aborts exclude; the page route; bad filter
   values 400; the dashboard's three series, summary, Aborted Cycles tab and its filter against SQL.
 
+## 93. Frontend abort (Ctrl+Alt+Z): password-protected, frontend only; PC_PLC_CycleAborted named, optional (2026-11-08)
+
+- **Use (user):** only for when the machine's cycle has been aborted and the frontend did not follow. It must not
+  affect the other processes (IOServer, camera server) or the machine, so no emergency response.
+- **Frontend:** Ctrl+Alt+Z asks for a password (fixed: `admin123`, `FE_ABORT_PASSWORD`) instead of the earlier
+  confirmation. Wrong: "Wrong password - nothing aborted", nothing done; cancelled: nothing done. Right: the abort
+  screen, the record with aborted / reason "manual abort (Ctrl+Alt+Z) in the frontend", back to the QR code - as
+  before; but no ABORT to the QR code server and no queues cleared any more, and instead of an abort the IOServer gets
+  a request (`FrontendAbortRequest` on fe2io.q). At the QR code (nothing in process): the abort screen only, nothing
+  sent, no record.
+- **IOServer (`handleFrontendAbortRequest`):** tries `PC_PLC_CycleAborted` = True (written and read back, 3 attempts).
+  Only if that succeeds: the cycle is aborted (handshake tags reset, QR code server told, queues cleared; the flag goes
+  False at the next accepted QR code, as before). No tag name, no address / tag on the PLC, PLC not connected, or the
+  write fails: one log line (console, file, audit), nothing else - the cycle goes on. `Abort` on fe2io.q (test tools:
+  the Real-PLC window's Reset to Step 0) still aborts at once.
+- **The tag is named, without an address:** `pc.plc.cycle.aborted.tagname=PC_PLC_CycleAborted` in all three properties
+  files (with a comment saying why it must stay); no address in IOServerProperties.yaml. It is an optional tag
+  (`OPTIONAL_TAG_ATTRS`): the Siemens start-up address check (`requiredTagNames`) leaves it out - otherwise the
+  IOServer would refuse to start; where the PLC has no address (Siemens) or no such tag (Allen-Bradley, from the
+  controller's tag list at the first connection) it is not written at all (logged once), so the per-cycle "flag False"
+  write and the other PC aborts (frontend / heartbeat server down, PLC restart) produce no error. In the tag dump it is
+  shown as None until it exists.
+- **Allen-Bradley (asked):** yes. pycomm3 writes by name; a controller without the tag answers an error, which
+  write_bool turns into False (3 attempts, then logged); and the controller's tag list read at the first connection
+  marks it as missing, so it is skipped from then on. When the PLC programmer adds a BOOL PC_PLC_CycleAborted, it is
+  used with no change here (Siemens: add its address to IOServerProperties.yaml).
+- Checked: new fault scenarios M (Siemens 6/6, Allen-Bradley 12/12, both folders: no address / no tag on the PLC, no
+  tag name, write fails after exactly 3 attempts -> no abort, no QR code server message, cycle completes; tag present
+  -> flag True, cycle aborted, QR code server told, flag False at the next QR code); FE 102/102 both folders (F8 wrong
+  password / cancel: nothing; admin123: only the request, nothing to the QR code or camera server, abort record; at
+  the QR code: screen only); full fault scenarios Siemens 186/186, Allen-Bradley 193/193; Mock 15/15, Real 12/12
+  both PLCs.
+

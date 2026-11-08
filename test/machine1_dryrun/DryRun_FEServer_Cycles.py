@@ -379,26 +379,49 @@ def driver():
               f"{time.monotonic() - t0:.2f} s, {SCREENS}")
 
         # ---------------- F8 ----------------
-        print("\n=== F8. Manual abort in the frontend (Ctrl+Alt+Z) is sent to the IOServer ===", flush=True)
+        print("\n=== F8. Frontend abort (Ctrl+Alt+Z): password, frontend only, PLC-flag request to the IOServer ===", flush=True)
         import frontend.AshokLeylandFrontEnd as _feModule
+        from utils.RedisUtils import FRONTEND_ABORT_REQUEST
+        _savedPassword = _feModule.getJustPassword
+        _savedError = _feModule.showErrorMessage
+        _errors = []
+        _feModule.showErrorMessage = lambda *a, **k: _errors.append(a)
         assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
         scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
         run_steps(upto=1)
+        for label, entered in (("wrong password", "admin"), ("cancelled", "")):
+            r.delete(fe2ioq); SCREENS.clear(); _errors.clear(); st0 = state(); qr0 = r.xlen(io2qrcodeabortq)
+            _feModule.getJustPassword = lambda *a, _e=entered, **k: _e
+            _gui.call.emit(fe.manualAbort)
+            time.sleep(1.5)
+            check(f"F8 {label}: nothing aborted, nothing sent, frontend stays on its step"
+                  + (", 'Wrong password' shown" if entered else ""),
+                  r.xlen(fe2ioq) == 0 and "showEmergencyAbort" not in SCREENS and state() == st0
+                  and r.xlen(io2qrcodeabortq) == qr0 and take_record(timeout=1) is None and (bool(_errors) == bool(entered)),
+                  f"{state().name} {SCREENS} {_errors}")
         r.delete(fe2ioq); SCREENS.clear()
-        _savedConfirm = _feModule.getConfirmation
-        _feModule.getConfirmation = lambda *a, **k: "OK"          # the operator confirms the abort
+        qr0, cam0 = r.xlen(io2qrcodeabortq), r.xlen(io2cameraq)
+        _feModule.getJustPassword = lambda *a, **k: "admin123"
         _gui.call.emit(fe.manualAbort)
         sent = wait_for(lambda: r.xlen(fe2ioq) > 0, 5)
         msgs = [{k.decode(): v.decode() for k, v in m[1].items()} for m in r.xrange(fe2ioq)]
-        check("F8 manual abort -> ABORT message on the frontend -> IOServer queue (fe2io.q)",
-              sent and any(m.get("action") == ABORT for m in msgs), str(msgs))
-        check("F8 ... which the IOServer reads as an abort (readAbortInIOServerFromFEServer)",
-              readAbortInIOServerFromFEServer(r, block=100)[0])
+        check("F8 password admin123 -> only the PLC-flag request to the IOServer (FrontendAbortRequest on fe2io.q), no ABORT",
+              sent and [x.get("action") for x in msgs] == [FRONTEND_ABORT_REQUEST], str(msgs))
+        check("F8 ... which the IOServer reads as a request, not an abort",
+              readAbortInIOServerFromFEServer(r, block=100, withKind=True)[0] == "request")
+        check("F8 nothing sent to the QR code server or the camera server",
+              r.xlen(io2qrcodeabortq) == qr0 and r.xlen(io2cameraq) == cam0)
         rec = take_record(timeout=5) if wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) else None
         check("F8 the frontend shows the abort screen and sends the abort record, marked aborted (manual abort)",
               rec is not None and rec[-2] is True and "manual" in rec[-1], f"{SCREENS} {rec[-2:] if rec else None}")
         check("F8 the frontend is back at READ_QR_CODE", wait_for(lambda: state() == MS.READ_QR_CODE, 10), state().name)
-        _feModule.getConfirmation = _savedConfirm
+        r.delete(fe2ioq); SCREENS.clear()
+        _gui.call.emit(fe.manualAbort)
+        check("F8 at the QR code (nothing in process): abort screen, nothing sent, no record",
+              wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) and r.xlen(fe2ioq) == 0 and take_record(timeout=2) is None,
+              f"{SCREENS} {r.xlen(fe2ioq)}")
+        _feModule.getJustPassword = _savedPassword
+        _feModule.showErrorMessage = _savedError
 
         # ---------------- F9 (2026-11-06) ----------------
         print("\n=== F9. Notices from the IOServer: shown top right, flashing; removed when gone ===", flush=True)

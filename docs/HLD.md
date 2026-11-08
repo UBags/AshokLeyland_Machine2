@@ -66,7 +66,7 @@ Each queue has one producer and one consumer.
 | `io2camera.q` | IO → camera | Take picture for state N, with request id |
 | `camera2io.q`, `camera2fe.q` | Camera → IO / FE | Result (and images, to FE), with request id |
 | `io2frontend.q` | IO → FE | State, move-to state, torque values, results |
-| `fe2io.q` | FE → IO | Abort with reason |
+| `fe2io.q` | FE → IO | Frontend abort request (password-protected Ctrl+Alt+Z): the IOServer aborts only if it can set `PC_PLC_CycleAborted`; `Abort` (test tools): abort at once |
 | `fe2db.q` | FE → DB | Completed component record |
 | `*2hb.q`, `alarm.q` | All → heartbeat server | Heartbeats; alarms |
 | `hb2fe.q`, `hb2io.q` | Heartbeat server → FE / IO | Per-server status, including redis |

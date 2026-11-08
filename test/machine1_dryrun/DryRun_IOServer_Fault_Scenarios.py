@@ -1116,6 +1116,7 @@ def run_servers_down():
     HEARTBEAT["db"] = True
     check("J5 database back -> WRITE_QR_CODE again", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
 
+    _cycleAbortedTag = IOServer.PC_PLC_CycleAborted
     if VENDOR == "allenbradley":          # the simulated Allen-Bradley takes any tag name; the Siemens one needs an address
         IOServer.PC_PLC_CycleAborted = "PC_PLC_CycleAborted"
     # J6: frontend down part-way -> abort (the frontend not told: it is down), next cycle held until it is back
@@ -1166,7 +1167,7 @@ def run_servers_down():
           and not wait_for(lambda: io.machineState.getCurrentState() != MS.READ_QR_CODE, 2), io.newCycleHoldReason())
     HEARTBEAT["redis"] = True
     check("J8 Redis storing again -> QR read asked for", wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 6))
-    IOServer.PC_PLC_CycleAborted = ""
+    IOServer.PC_PLC_CycleAborted = _cycleAbortedTag
     C.getPlcCameraAnswerTimeout = origTimeout
 
 
@@ -1287,6 +1288,70 @@ def run_loop_health():
 
 # COSTHETA_DRYRUN_SCENARIOS=G (or e.g. "F,G"): run only these groups (A-E are one group); default: all
 import os as _os
+def run_frontend_abort_request():
+    """M (2026-11-08). The frontend's own, password-protected abort (FRONTEND_ABORT_REQUEST on fe2io.q): the IOServer
+    tries PC_PLC_CycleAborted = True (3 attempts); only if written does it abort its cycle. No tag name, no address on
+    the PLC, or the write fails: logged, the cycle goes on untouched (no abort, no QR code server message)."""
+    print("\n=== M. Frontend abort request: PLC flag written -> abort; else logged, cycle untouched ===", flush=True)
+    from utils.RedisUtils import sendFrontendAbortRequestFromFEServerToIOServer
+    tag = "PC_PLC_CycleAborted"
+    check("M properties name the tag (pc.plc.cycle.aborted.tagname)", IOServer.PC_PLC_CycleAborted == tag,
+          IOServer.PC_PLC_CycleAborted)
+    check("M the IOServer started although the PLC has no address / tag for it (optional tag)",
+          tag not in IOServer.requiredTagNames().values())
+
+    def untouched(label, prepare, restore):
+        TRACE.clear()
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        run_steps(last="HUB")
+        assert wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, 5)
+        prepare()
+        aborts0, qr0, state0 = io.abortCount, r.xlen(io2qrcodeabortq), io.machineState.getCurrentState()
+        sendFrontendAbortRequestFromFEServerToIOServer(r, reason=f"dry run {label}")
+        time.sleep(2.5)
+        check(f"{label}: no abort, state unchanged, no message to the QR code server",
+              io.abortCount == aborts0 and io.machineState.getCurrentState() == state0 and r.xlen(io2qrcodeabortq) == qr0,
+              (io.abortCount - aborts0, io.machineState.getCurrentState().name))
+        restore()
+        run_steps(first="TOP")
+        check(f"{label}: the cycle completes as if nothing happened", wrapped(), f"trace {TRACE}")
+
+    # M1: the PLC has no address / tag for it (Siemens: none in IOServerProperties.yaml; Allen-Bradley: not on the PLC)
+    if VENDOR == "allenbradley":           # the simulated controller takes any name: play a controller without the tag
+        untouched("M1 no tag on the PLC", lambda: io._tagsMissingOnPlc.add(tag), lambda: io._tagsMissingOnPlc.discard(tag))
+    else:
+        untouched("M1 no address in IOServerProperties.yaml", lambda: None, lambda: None)
+    # M2: no tag name in the properties
+    untouched("M2 no tag name", lambda: setattr(IOServer, "PC_PLC_CycleAborted", ""),
+              lambda: setattr(IOServer, "PC_PLC_CycleAborted", tag))
+    if VENDOR == "allenbradley":
+        # M3: the write fails 3 times -> logged, untouched
+        attempts = []
+        orig = io.write_bool
+        def failing(t, v, *a, **k):
+            if t == tag:
+                attempts.append(v); return False
+            return orig(t, v, *a, **k)
+        untouched("M3 write fails", lambda: setattr(io, "write_bool", failing), lambda: delattr(io, "write_bool"))
+        check("M3 ... after exactly 3 attempts", len(attempts) == 3, attempts)
+        # M4: the PLC has the tag and takes the write -> the cycle is aborted
+        TRACE.clear()
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        run_steps(last="HUB")
+        assert wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, 5)
+        aborts0, qr0 = io.abortCount, r.xlen(io2qrcodeabortq)
+        sendFrontendAbortRequestFromFEServerToIOServer(r, reason="dry run M4")
+        check("M4 tag on the PLC: PC_PLC_CycleAborted = True, cycle aborted, QR code server told, back at the QR code",
+              wait_for(lambda: io.abortCount > aborts0 and io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 6)
+              and TAGS[tag] is True and r.xlen(io2qrcodeabortq) > qr0 and "dry run M4" in io.lastAbortReason,
+              (io.lastAbortReason, TAGS.get(tag)))
+        TRACE.clear()
+        QR_PLAN.append((ok, QR_DOST_LHS)); SCAN.set(); finish_qr_handshake()
+        check("M4 ... and False again once the next QR code is accepted", TAGS[tag] is False)
+        run_steps()
+        check("M4 the next cycle completes", wrapped())
+
+
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
 def _wanted(*letters):
     return not _ONLY or bool(_ONLY & set(letters))
@@ -1300,6 +1365,7 @@ try:
     if _wanted("J"): run_servers_down()
     if _wanted("K"): run_abort_races()
     if _wanted("L"): run_loop_health()
+    if _wanted("M"): run_frontend_abort_request()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 
