@@ -55,6 +55,23 @@ The settings come from the latest row of `machine_settings`.
 - If a write fails, the settings written in the earlier cycle stay in force. The cycle goes ahead, but the side must still be written.
 - Torque OK or NOT OK is judged by the PLC against these setpoints. The PC only records the values.
 
+**Bypass of the component press and second tightening (per model, 2026-11-13).**
+
+| Tag | Siemens address | Type | Meaning |
+|---|---|---|---|
+| `PC_PLC_Skip_Second_Tightening` | **none yet** (PLC programmer to assign) | bool | True = this component skips the bung check, component press, bung removal check and second tightening (states 13–19); False = full cycle |
+
+- Written in state 2, after the side and with the other settings, then read back; before QR OK / Done. Written every
+  cycle (True or False), so the PLC never keeps the previous component's value.
+- The value is the model's Machine Setting "Bypass Component Press and Second Tightening" (frontend, password-protected).
+- The Torque 2 setpoint is still written when bypassed.
+- **The PLC branches on it:** with True, after the first tightening torque value (state 12) the next PLC request is
+  `CheckSplitPinAndWasher` (state 20); it must not raise CheckNoCapBunk, ComponentPressDone, CheckNoBunk or the second
+  Station2TorqueValueSet.
+- Until the PLC has the tag (Siemens: no address in IOServerProperties.yaml; Allen-Bradley: not in the controller's tag
+  list), the PC writes nothing and runs the full cycle, whatever the setting (logged, shown on the frontend).
+- Once the tag exists: if it cannot be written (3 attempts, read back), the QR code is answered NOT OK.
+
 ### 3.3 Check handshakes (trigger / OK / Done)
 
 | State (read → write) | Trigger `PLC_PC_*` | OK `PC_PLC_*` | Done `PC_PLC_*` |
@@ -137,7 +154,8 @@ Rules:
 Before step (1) of the QR handshake, the PC:
 
 1. Writes side, torque setpoints, RPM and rotation counts (§3.2), each read back.
-2. Writes QR OK = True if the side was written, otherwise NOT OK.
+2. Writes `PC_PLC_Skip_Second_Tightening` (§3.2) if the PLC has it, read back.
+3. Writes QR OK = True if the side (and the skip tag, where it exists) was written, otherwise NOT OK.
 
 ### 5.3 Value and event states (11/12, 15, 18/19, 26, 27/28)
 

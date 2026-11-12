@@ -3068,6 +3068,7 @@ class CosThetaConfigurator():
     PLC_CAMERA_ANSWER_TIMEOUT_KEY = "plc.camera.answer.timeout.sec"
     HEARTBEAT_SERVER_SILENCE_KEY = "ioserver.heartbeat.server.silence.sec"
     PC_PLC_CYCLE_ABORTED_KEY = "pc.plc.cycle.aborted.tagname"
+    PC_PLC_SKIP_SECOND_TIGHTENING_KEY = "pc.plc.skip.second.tightening.tagname"
     VISION_CHECK_TIMEOUT_KEY = "check.timeout.sec"                      # per machine: <vendor>.vision.check.timeout.sec
     VISION_CHECK_IN_WORKER_PROCESS_KEY = "check.in.worker.process"      # per machine
     SUPERVISOR_RESTART_KEY = "supervisor.restart.dead.processes"
@@ -3140,6 +3141,13 @@ class CosThetaConfigurator():
         """Seconds without a status message from the heartbeat server after which the IOServer takes it as down
         (ioserver.heartbeat.server.silence.sec, 8; the heartbeat server sends one every 2 s). Read at each use."""
         return cls._floatValue(cls.HEARTBEAT_SERVER_SILENCE_KEY, 8.0, minimum=1.0)
+
+    @classmethod
+    def getPcPlcSkipSecondTighteningTagName(cls) -> str:
+        """Bool the PC writes in state 2: True = this component skips the bung, component press, bung removal and the
+        second tightening (the model's Machine Setting "Bypass Component Press and Second Tightening"); the PLC
+        branches on it (pc.plc.skip.second.tightening.tagname). Empty, or no address / not on the PLC = full run."""
+        return str(CosThetaConfigurator.getValue(cls.PC_PLC_SKIP_SECOND_TIGHTENING_KEY, default="") or "").strip()
 
     @classmethod
     def getPcPlcCycleAbortedTagName(cls) -> str:

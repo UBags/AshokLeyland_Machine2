@@ -2,7 +2,7 @@
 
 The real window (Tk) with the real IOServer on MockPLC (mockInstance=True): auto cycle DOSTPLUS LHS / RHS and DOST LHS
 (states 1 -> 28 -> wrap, side written in state 2), a rejected QR then an accepted one, knuckle NOT OK then a retry,
-Reset All mid-cycle then a full auto cycle, the tag monitor. Needs Redis, PostgreSQL and a display (on Linux without one:
+Reset All mid-cycle then a full auto cycle, the tag monitor, the bypass of states 13-19 (DOST setting). Needs Redis, PostgreSQL and a display (on Linux without one:
 xvfb-run). Vendor: COSTHETA_PLC_VENDOR, else plc.vendor.
 
     python test/<this folder>/DryRun_IOServer_Mock_PLC_Window.py
@@ -66,6 +66,21 @@ def scenario():
         txt = app._format_tags()
         check("U10 tag monitor lists the vendor's tags (CheckQRCode, settings)",
               io.PLC_PC_CheckQRCode in txt and io.PC_PLC_LH_RH_Selection in txt)
+        # bypass of the component press and second tightening (Machine Setting of DOST): states 13-19 skipped
+        P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", model_name="DOST",
+                                   **dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=True))
+        try:
+            app.model_var.set("DOST"); app._run_auto_cycle("LHS")
+            r = app.last_auto_result
+            check("U12 DOST with the bypass: PC_PLC_Skip_Second_Tightening = True, states 13-19 skipped, cycle wrapped",
+                  r["passed"] and io.dataIOForReads is not None and not (set(range(13, 20)) & set(r["trace"])),
+                  f"{r['error']} {r['trace']}")
+            app.model_var.set("DOSTPLUS"); app._run_auto_cycle("LHS")
+            r = app.last_auto_result
+            check("U13 DOSTPLUS (no bypass) next: full run", r["passed"] and set(range(13, 20)) <= set(r["trace"]),
+                  f"{r['error']} {r['trace']}")
+        finally:
+            P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", model_name="DOST", **P.DEFAULT_MACHINE_SETTINGS)
     except Exception as e:
         import traceback; traceback.print_exc(); check("scenario raised", False, str(e))
     finally:

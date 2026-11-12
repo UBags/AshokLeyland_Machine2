@@ -643,12 +643,19 @@ class TestIOServerGUI:
             self._trace_last = current
         settings = {}
         error = None
+        skipped = set()             # states 13-19 when the IOServer wrote PC_PLC_Skip_Second_Tightening = True
         try:
             for idx, label, kind, trig, first, last, _tags in STEPS:
+                if first.value in skipped:
+                    self._set_status(f"Auto: Step {idx}: {label} - bypassed (Machine Setting of the model)")
+                    continue
                 self._set_status(f"Auto: Step {idx}: {label}")
                 if kind == QR:
                     good = self._do_qr(side, True)
                     settings = self._read_cycle_settings()
+                    if self.plc.get_tag("PC_PLC_Skip_Second_Tightening") is True:     # the PLC's branch
+                        skipped = set(range(MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS.value,
+                                            MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER.value))
                 else:
                     if not self._wait_for_state([first]):
                         raise RuntimeError(f"IOServer did not reach {first.name} (in {self._state().name})")
@@ -683,7 +690,7 @@ class TestIOServerGUI:
         # the QR check itself at the end of the previous cycle; after the wrap it may already be at 2 again.
         last_value = ALL_STATES[-1].value
         walked = trace[:trace.index(last_value) + 2] if last_value in trace else trace
-        expected = list(range(trace[0], last_value + 1)) if trace else []
+        expected = [s_ for s_ in range(trace[0], last_value + 1) if s_ not in skipped] if trace else []
         passed = (error is None and len(walked) == len(expected) + 1 and walked[:-1] == expected
                   and trace[0] in (MS.READ_QR_CODE.value, MS.WRITE_QR_CODE.value)
                   and walked[-1] in (MS.READ_QR_CODE.value, MS.WRITE_QR_CODE.value))

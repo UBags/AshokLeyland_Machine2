@@ -12,6 +12,8 @@ Dates: a record belongs to the day of its created_on (the end of its cycle). Dat
 included: start_date 2026-11-01, end_date 2026-11-02 = from 2026-11-01 00:00:00 up to, not including, 2026-11-03.
 Aborted cycles (columns aborted, abort_reason; 2026-11-07): every query takes an abort filter (ABORT_FILTERS) and a
 result filter (RESULT_FILTERS); the defaults return every record, as before.
+Bypassed steps (column bypassed_press_and_tightening2; 2026-11-13): a bypass filter (BYPASS_FILTERS), default every
+record. A bypassed record has 'Bypassed' in the 4 skipped results, no datetimes there and nut_tightening_torque_2 -1.0.
 """
 import csv
 from datetime import date, datetime, timedelta
@@ -47,6 +49,14 @@ ABORT_ALIASES: Dict[str, str] = {"all": "include", "with": "include", "with_abor
                                  "only_aborts": "only", "aborted": "only",
                                  "none": "exclude", "no": "exclude", "without": "exclude", "no_aborts": "exclude",
                                  "completed": "exclude"}
+# Bypass filter: by bypassed_press_and_tightening2 (Machine Setting "Bypass Component Press and Second Tightening")
+BYPASS_FILTERS: Dict[str, str] = {
+    "include": "every record, bypassed cycles included (default)",
+    "only": "only cycles with the component press and second tightening bypassed",
+    "exclude": "no bypassed cycles (full cycles only)",
+}
+BYPASS_ALIASES: Dict[str, str] = {"all": "include", "yes": "include", "with": "include", "bypassed": "only",
+                                  "no": "exclude", "none": "exclude", "without": "exclude", "full": "exclude"}
 # Result filter: by ok_notok_result (an aborted cycle is NOT OK).
 RESULT_FILTERS: Dict[str, str] = {"all": "OK and NOT OK (default)", "ok": "only OK", "notok": "only NOT OK"}
 RESULT_ALIASES: Dict[str, str] = {"not_ok": "notok", "not ok": "notok", "nok": "notok", "any": "all"}
@@ -62,6 +72,16 @@ def resolveAbortFilter(value: Optional[str]) -> str:
     return key
 
 
+def resolveBypassFilter(value: Optional[str]) -> str:
+    if value is None or str(value).strip() == "":
+        return "include"
+    key = str(value).strip().lower()
+    key = BYPASS_ALIASES.get(key, key)
+    if key not in BYPASS_FILTERS:
+        raise RequestError(f"Unknown bypassed filter '{value}'. Use one of: {', '.join(BYPASS_FILTERS)}")
+    return key
+
+
 def resolveResultFilter(value: Optional[str]) -> str:
     if value is None or str(value).strip() == "":
         return "all"
@@ -72,9 +92,14 @@ def resolveResultFilter(value: Optional[str]) -> str:
     return key
 
 
-def filterConditions(aborts: str = "include", result: str = "all") -> Tuple[List[sql.Composable], list]:
-    """SQL conditions (and their parameters) for the abort and result filters (resolved names)."""
+def filterConditions(aborts: str = "include", result: str = "all",
+                     bypassed: str = "include") -> Tuple[List[sql.Composable], list]:
+    """SQL conditions (and their parameters) for the abort, result and bypass filters (resolved names)."""
     conditions, params = [], []
+    if bypassed == "only":
+        conditions.append(sql.SQL("bypassed_press_and_tightening2"))
+    elif bypassed == "exclude":
+        conditions.append(sql.SQL("NOT bypassed_press_and_tightening2"))
     if aborts == "only":
         conditions.append(sql.SQL("aborted"))
     elif aborts == "exclude":
@@ -138,10 +163,12 @@ def _table() -> sql.Composed:
 
 def fetchRecords(database: str, modelName: Optional[str] = None,
                  start: Optional[datetime] = None, endExclusive: Optional[datetime] = None,
-                 aborts: Optional[str] = None, result: Optional[str] = None) -> List[tuple]:
+                 aborts: Optional[str] = None, result: Optional[str] = None,
+                 bypassed: Optional[str] = None) -> List[tuple]:
     """Records in COLUMNS order, oldest first. modelName matches whole names, ignoring case. aborts: ABORT_FILTERS
-    (default include = all records); result: RESULT_FILTERS (default all)."""
-    conditions, params = filterConditions(resolveAbortFilter(aborts), resolveResultFilter(result))
+    (default include = all records); result: RESULT_FILTERS (default all); bypassed: BYPASS_FILTERS (default include)."""
+    conditions, params = filterConditions(resolveAbortFilter(aborts), resolveResultFilter(result),
+                                          resolveBypassFilter(bypassed))
     if modelName is not None:
         if not str(modelName).strip():
             raise RequestError("model name must not be empty")

@@ -53,6 +53,14 @@ noResultLabelStylesheet = "border-style: outset; border-width: 3px; border-radiu
                       "stop: 0.15 #26265A, stop: 0.20 #3A3A78, stop: 0.3 #26265A, stop: 1.0 #15153A); " \
                       "color: {}"
 
+# "Bypassed" (a step the model's Machine Setting skips): neutral grey - neither OK nor Not OK, 2026-11-13
+BYPASSED_TEXT = "Bypassed"
+bypassedLabelStylesheet = "border-style: outset; border-width: 3px; border-radius: 5px; " \
+                      "border-color: beige; font: bold; min-width: 10em; padding: 2px; " \
+                      "background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #444444, " \
+                      "stop: 0.15 #5E5E5E, stop: 0.20 #777777, stop: 0.3 #5E5E5E, stop: 1.0 #444444); " \
+                      "color: {}"
+
 # Connection status tiles, connected: a much darker green than okLabelStylesheet (which stays for the OK results)
 connectionOkLabelStylesheet = "border-style: outset; border-width: 3px; border-radius: 5px; " \
                       "border-color: beige; font: bold; min-width: 10em; padding: 2px; " \

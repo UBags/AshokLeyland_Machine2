@@ -64,7 +64,7 @@ The trigger in each state is the tag read in that state; the write states write 
 | 7/8 | Top bearing | CheckBearing | Same. OK → 9 |
 | 9/10 | Nut and plate washer | CheckNutAndPlateWasher | Same. OK → 11 |
 | 11 | READ_TIGHTENING_TORQUE_1_DONE | Station2TorqueValueSet | → 12 |
-| 12 | READ_TIGHTENING_TORQUE_1 | Station2TorqueValue (float) | Value to FE; Set is reset 0.4 s later → 13 |
+| 12 | READ_TIGHTENING_TORQUE_1 | Station2TorqueValue (float) | Value to FE; Set is reset 0.4 s later → 13. Bypassed (`PC_PLC_Skip_Second_Tightening` True written in state 2): to FE with moveTo = 20 → 20 (13–19 skipped) |
 | 13/14 | Bunk for component press | CheckBunkForComponentPress | Handshake. OK → 15 |
 | 15 | READ_COMPONENT_PRESS_DONE | ComponentPressDone | To FE; reset after 0.4 s → 16 |
 | 16/17 | No bunk | CheckNoBunk | Handshake. OK → 18 |
@@ -83,8 +83,11 @@ The trigger in each state is the tag read in that state; the write states write 
 
 1. Reads the side and model from the QR code, and that model's latest `machine_settings` row.
 2. Writes each value with `_writeVerified`, then `_settingReadBack`.
-3. Stores `cycleSettings:<QR>` for the FE and DB.
-4. Returns False only if the side could not be written.
+3. `_writeSkipSecondTightening`: the model's `bypass_press_and_tightening2`, written to `PC_PLC_Skip_Second_Tightening`
+   (read back, 3 attempts). No tag name / no address / not on the PLC: nothing written, full run. Tag present but
+   not written: returns False (QR NOT OK). Sets `_skipSecondTighteningThisCycle` only if True was written.
+4. Stores `cycleSettings:<QR>` for the FE and DB (`bypass_press_and_tightening2: true` added only when bypassed).
+5. Returns False if the side, or an existing skip tag, could not be written.
 
 **`perform_write_state_action(tags, result)`**
 
@@ -238,6 +241,7 @@ One row per component. Primary key `record_id`, a sequence.
 | Each vision check | `check_<name>_imagefile`, `check_<name>_result` (default 'Not Checked'), `check_<name>_datetime`, for knuckle, hub_and_bottom_bearing, top_bearing, nut_and_platewasher, bunk_for_component_press, no_bunk, splitpin_and_washer, cap and bunk_cap_press |
 | Torques | `nut_tightening_torque_1/2`, `free_rotation_torque_1` (float, default −1), each with `_result` and `_datetime`; `nut_tightening_torque_1/2_rotation_done` (bool) |
 | Abort | `aborted` (bool, default false), `abort_reason` (varchar 255): emergency button on the machine or manual abort (Ctrl+Alt+Z); no record for an abort while waiting for the QR code |
+| Bypass | `bypassed_press_and_tightening2` (bool, default false). When true: the 4 skipped steps have result `Bypassed`, NULL datetimes, no picture file, `nut_tightening_torque_2` = -1.0, rotation done NULL; they do not count against the overall result |
 | Presses | `component_press_done`, `cap_press_done`, each with `_datetime` |
 | Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` |
 | Overall | `ok_notok_result`, `username` (FK to `users`), `remarks`, `created_on` |
@@ -255,6 +259,7 @@ is set up; a model with no row falls back to the latest such row.
 | `rotation_rpm` | 20–40 |
 | `tightening_torque1_setpoint`, `tightening_torque2_setpoint` | > 0 and < 20 |
 | `no_of_rotation1_ccw`, `no_of_rotation1_cw` | 1 to 4 |
+| `bypass_press_and_tightening2` | boolean, default false: skip the bung check, component press, bung removal and second tightening |
 | `model_name` | the model (NULL: the one set for all models used before 2026-11-08) |
 | `updated_by`, `updated_on_date` | — |
 

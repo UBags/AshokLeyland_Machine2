@@ -88,6 +88,15 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
 
   L. IOServer heartbeat (io2hb.q) DEAD while the read or the write loop is stuck, ALIVE once it goes round (2026-11-07).
 
+  M. (see run_frontend_abort_request) the frontend's own abort.
+
+  N. Bypass of the component press and second tightening (Machine Setting per model, 2026-11-13; see run_bypass)
+     N1: the setting is on but the PLC has no PC_PLC_Skip_Second_Tightening (no address / not on the PLC): full run.
+     N2: tag on the PLC: True written (read back) in state 2 with the other settings (Torque 2 setpoint too); after
+         Torque 1 the frontend is told moveToState = split pin picture and states 13-19 are skipped; the cycle ends OK.
+     N3: a model without the bypass: False written, full run.
+     N4: the tag cannot be written (PLC ignores it): QR code NOT OK, nothing moves on; re-scan once fixed -> bypass.
+
 COSTHETA_DRYRUN_SCENARIOS=G (or F,G ...) runs only those groups (A-E together).
 Run from the project root with Redis running:  python test/machine2_dryrun/DryRun_IOServer_Fault_Scenarios.py
 """
@@ -353,6 +362,7 @@ def run_scenarios():
     if IOServer.PLC_PC_Station2RotationDuringTighteningDone:
         RESET_TAGS["PLC_PC_Station2RotationDuringTighteningDone"] = "bool"
     NOT_RESET_ON_ABORT = {"PC_PLC_CycleAborted",        # set True after a PC-side abort, False at the next QR code
+                          "PC_PLC_Skip_Second_Tightening",   # written True / False in every state 2
                           "PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag", "PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
                           "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                           "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
@@ -1352,6 +1362,93 @@ def run_frontend_abort_request():
         check("M4 the next cycle completes", wrapped())
 
 
+def run_bypass():
+    """N (2026-11-13). Machine Setting "Bypass Component Press and Second Tightening" (per model)."""
+    print("\n=== N. Bypass of the component press and second tightening ===", flush=True)
+    import _plc_sim
+    import costhetaio.commonplc.PLCIOServer as PIO
+    tag = "PC_PLC_Skip_Second_Tightening"
+    SKIPPED = set(range(13, 20))
+    QR_OK = IOServer.PC_PLC_QRCodeCheckOK
+    check("N properties name the tag (pc.plc.skip.second.tightening.tagname)", IOServer.PC_PLC_Skip_Second_Tightening == tag,
+          IOServer.PC_PLC_Skip_Second_Tightening)
+    check("N optional tag: not needed for the IOServer to start", tag not in IOServer.requiredTagNames().values())
+    sent = []                                       # (state, moveToState) of every IOServer -> frontend message
+    origSend = PIO.sendDataFromIOServerToFEServer
+    def spy(*a, **k):
+        sent.append((k.get("currentMachineState"), k.get("moveToState", MS.INVALID_STATE)))
+        return origSend(*a, **k)
+    PIO.sendDataFromIOServerToFEServer = spy
+    use_machine_settings("Test", model_name="DOST", bypass_press_and_tightening2=True)
+    use_machine_settings("Test", model_name="DOSTPLUS", bypass_press_and_tightening2=False)
+    try:
+        # N1: no tag on the PLC -> full run, nothing written to it
+        if VENDOR == "allenbradley":
+            io._tagsMissingOnPlc.add(tag)
+        TRACE.clear(); mark = len(WRITES); r.delete("cycleSettings:" + QR_DOST_LHS)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        run_steps()
+        check("N1 setting on, PLC without the tag: full run (states 13-19 run), the tag not written",
+              wrapped() and SKIPPED <= set(TRACE) and not writes_of((tag,), mark), f"trace {TRACE}")
+        check("N1 ... not published as bypassed", "bypass_press_and_tightening2" not in readCycleSettingsForQRCode(r, QR_DOST_LHS))
+        if VENDOR == "allenbradley":
+            io._tagsMissingOnPlc.discard(tag)
+        else:
+            print("     (Siemens: no address in IOServerProperties.yaml - N2-N4 need the tag on the PLC: Allen-Bradley only)")
+            return
+        # N2: tag on the PLC -> True, jump after Torque 1
+        TRACE.clear(); mark = len(WRITES); del sent[:]; pics0 = len(PICTURE_REQUESTS)
+        r.delete("cycleSettings:" + QR_DOST_LHS)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        check("N2 state 2: True written (with the settings, Torque 2 setpoint included), before QRCodeCheckOK=True",
+              TAGS[tag] is True and (tag, True) in WRITES[mark:]
+              and dict(writes_of(SETTING_TAGS, mark)).get(IOServer.PC_PLC_TighteningTorque2Setpoint) == 19.0
+              and WRITES.index((tag, True), mark) < WRITES.index((QR_OK, True), mark), str(writes_of((tag, QR_OK), mark)))
+        check("N2 published as bypassed (the frontend marks the 4 tiles)",
+              readCycleSettingsForQRCode(r, QR_DOST_LHS).get("bypass_press_and_tightening2") is True)
+        run_steps(last="TORQUE1")
+        check("N2 after Torque 1: straight to the split pin picture",
+              wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, 5),
+              io.machineState.getCurrentState().name)
+        check("N2 the frontend is told moveToState = split pin picture with the Torque 1 value",
+              (MS.READ_TIGHTENING_TORQUE_1, MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER) in sent, str(sent))
+        run_steps(first="SPLITPIN")
+        check("N2 cycle completes without states 13-19 (no bung pictures, no press, no Torque 2)",
+              wrapped() and not (SKIPPED & set(TRACE)), f"trace {TRACE}")
+        check("N2 no picture asked for the bung checks",
+              not ({MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK}
+                   & set(PICTURE_REQUESTS[pics0:])), str(PICTURE_REQUESTS[pics0:]))
+        # N3: a model without the bypass -> False, full run
+        TRACE.clear(); mark = len(WRITES)
+        plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+        check("N3 model without the bypass: False written (the PLC held True from the last component)",
+              TAGS[tag] is False and (tag, False) in WRITES[mark:])
+        run_steps()
+        check("N3 full run", wrapped() and SKIPPED <= set(TRACE), f"trace {TRACE}")
+        # N4: the PLC does not take the tag -> QR code NOT OK
+        STUCK.add(tag)
+        TRACE.clear(); mark = len(WRITES)
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        qrw = writes_of((QR_OK,), mark)
+        check("N4 tag not taken by the PLC -> QRCodeCheckOK=False (no OK=True), not moved on",
+              (QR_OK, False) in qrw and (QR_OK, True) not in qrw and MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE.value not in TRACE
+              and wait_for(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE)), f"{qrw} {TRACE}")
+        STUCK.discard(tag)
+        QR_PLAN.append((ok, QR_DOST_LHS))
+        wait_for(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE)
+        TRACE.clear(); SCAN.set(); finish_qr_handshake()
+        run_steps(last="TORQUE1")
+        assert wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, 5)
+        run_steps(first="SPLITPIN")
+        check("N4 re-scan once fixed: True written, bypassed cycle completes", wrapped() and not (SKIPPED & set(TRACE)),
+              f"trace {TRACE}")
+    finally:
+        PIO.sendDataFromIOServerToFEServer = origSend
+        STUCK.discard(tag)
+        io._tagsMissingOnPlc.discard(tag)
+        use_machine_settings("Test", model_name="DOST", bypass_press_and_tightening2=False)
+
+
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
 def _wanted(*letters):
     return not _ONLY or bool(_ONLY & set(letters))
@@ -1366,6 +1463,7 @@ try:
     if _wanted("K"): run_abort_races()
     if _wanted("L"): run_loop_health()
     if _wanted("M"): run_frontend_abort_request()
+    if _wanted("N"): run_bypass()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

@@ -2481,3 +2481,42 @@ Architecture items not included (user).
   the QR code: screen only); full fault scenarios Siemens 186/186, Allen-Bradley 193/193; Mock 15/15, Real 12/12
   both PLCs.
 
+
+## 94. Machine Setting per model: Bypass Component Press and Second Tightening (2026-11-13)
+
+- **Use (user):** for a model, skip the bung check before the component press, the component press, the bung removal
+  check and the second tightening (states 13–19). The PLC branches; the PC tells it.
+- **PLC tag `PC_PLC_Skip_Second_Tightening`** (bool, PC writes): `pc.plc.skip.second.tightening.tagname` in all three
+  properties files, **no Siemens address yet** (PLC programmer to assign). Optional tag (`OPTIONAL_TAG_ATTRS`): the
+  IOServer starts without it.
+- **IOServer, state 2 (`writeCycleSettingsToPLC` → `_writeSkipSecondTightening`):** after the side, the model's setting
+  is written True / False and read back (3 attempts), before QR OK / Done; every cycle, so the PLC never keeps the
+  previous component's value. The Torque 2 setpoint is still written.
+  - No tag name, no address (Siemens) or not on the PLC (Allen-Bradley): nothing written, full run (logged; frontend
+    notice "Bypass not possible … full run" when the setting asked for it).
+  - Tag present but not written (True or False): QR code NOT OK — the PLC's sequence would not be known.
+  - After the Torque 1 value (state 12), when True was written: the frontend gets moveToState = 20 with the value and
+    the IOServer goes to 20 (`SKIP_TO_STATE_AFTER_TORQUE_1`). `cycleSettings:<QR>` carries
+    `bypass_press_and_tightening2: true` only when bypassed. The tag is in the tag dump; not reset on abort.
+- **Frontend:** the 4 skipped tiles show "Bypassed" (grey) from the knuckle result (`cycleSettings:<QR>`); Torque 1
+  with moveToState = split pin picture → straight to the split pin picture. Overall result: the skipped steps are left
+  out, not failed. Record: 'Bypassed' results, no datetimes (NULL), no pictures, torque 2 -1.0, rotation done NULL,
+  `bypassedPressAndTightening2` = True.
+- **Machine Settings dialog:** checkbox "Bypass Component Press and Second Tightening" per model. Save asks for the
+  password (`admin123`, `MACHINE_SETTINGS_PASSWORD`), then Yes / No listing the changes; wrong password / No: nothing
+  saved, the dialog stays open.
+- **Database:** `machine_settings.bypass_press_and_tightening2` and record column `bypassed_press_and_tightening2`
+  (boolean, default false; added by ALTER on existing databases); in the CSV exports and reports.
+- **Web service / MI:** `"bypassed"` filter (include / only / exclude) next to the abort filter; selectors on both pages.
+  The MI's torque 2 chart already leaves out -1.0.
+- **Mock-PLC window:** the auto cycle follows the PLC's branch (MockPLC holds the tag) and skips steps 6–9.
+- **For the PLC programmer:** add BOOL `PC_PLC_Skip_Second_Tightening`; when True after the first tightening, go
+  straight to CheckSplitPinAndWasher. Siemens: then add its address to IOServerProperties.yaml.
+- **DB server:** a bung check without a picture keeps the result 'Bypassed' (otherwise NOT OK, as before);
+  `rationaliseOK_NotOK` keeps 'Bypassed' (otherwise stored as 'Not Checked').
+- Checked: new fault scenarios N (Allen-Bradley 14/14: no tag -> full run; True written before QR OK, Torque 2
+  setpoint written, moveToState 20 to the frontend, states 13-19 skipped, no bung pictures; other model -> False, full
+  run; tag not taken -> QR NOT OK, re-scan -> bypass; Siemens 4/4: no address -> full run); full fault scenarios
+  Allen-Bradley 207/207 (C re-run after classifying the tag), Siemens 190/190; FE 120/120 both folders (F12); DB 62/62
+  both folders (6b, 9); endpoints 91/91 both folders; Mock window 17/17 both PLCs and machine 1 (U12, U13); Real
+  window 12/12 both PLCs.

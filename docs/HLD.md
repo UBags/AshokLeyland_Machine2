@@ -135,7 +135,9 @@ QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ t
 
 - **PostgreSQL**, schema `al_hub_and_disc_assembly_schema`, with tables:
   - `hub_and_disc_assembly_data`: one row per component.
-  - `machine_settings`: append-only, per model; a model's latest row is in force for it.
+  - `machine_settings`: append-only, per model; a model's latest row is in force for it. It includes the switch
+    "Bypass Component Press and Second Tightening" (skips states 13–19; needs `PC_PLC_Skip_Second_Tightening` on the
+    PLC, else full run).
   - `users` and `roles`.
 - **Images** are stored in day folders under the images root. The DB server creates the folder each day.
 - **Logs** go under `logs/`, with each process's level set in `logutils/LogSettings.py`.

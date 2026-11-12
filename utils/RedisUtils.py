@@ -36,6 +36,7 @@ logSource = getFullyQualifiedName(__file__)
 
 # Various states
 EMPTY_IMAGE_STRING : str = ""
+BYPASSED_RESULT : str = "Bypassed"          # result of a step skipped by the model's Machine Setting (frontend BYPASSED_TEXT)
 UNKNOWN : str = "Unknown"
 INVALID_STATE : str  = "Invalid State"
 INVALID_RESULT : str  = "Invalid Result"
@@ -112,6 +113,7 @@ tighteningTorque1RotationDoneKeyString : str = "torque1RotationDone"
 tighteningTorque2RotationDoneKeyString : str = "torque2RotationDone"
 abortedKeyString : str = "aborted"                  # cycle record: aborted ("1" / "0")
 abortReasonKeyString : str = "abortReason"          # cycle record: why it was aborted
+bypassedKeyString : str = "bypassedPressAndTightening2"   # cycle record: bung / press / second tightening bypassed
 rotationDoneKeyString : str = "rotationDone"           # io2fe: with a Station 2 torque value
 # io2camera -> camera2io / camera2fe: the IOServer's id for one picture request, echoed in the answers, so that an
 # answer that comes too late (after the IOServer stopped waiting for it) is not taken for a later request's result
@@ -1100,7 +1102,8 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
                                          aProducer : str = "FEServer",
                                          tighteningTorque1RotationDone : Optional[bool] = None,
                                          tighteningTorque2RotationDone : Optional[bool] = None,
-                                         aborted : bool = False, abortReason : str = ""):
+                                         aborted : bool = False, abortReason : str = "",
+                                         bypassedPressAndTightening2 : bool = False):
 
     # print("Reached here - 1")
     if (qrCode is None) or (qrCode == ""):
@@ -1245,6 +1248,7 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
         tighteningTorque2RotationDoneKeyString : encodeOptionalBool(tighteningTorque2RotationDone),
         abortedKeyString : "1" if aborted else "0",
         abortReasonKeyString : str(abortReason or "") if aborted else "",
+        bypassedKeyString : "1" if bypassedPressAndTightening2 else "0",
     }
     # print(f"size of data is {sys.getsizeof(data)}")
     # print(f"{data = }")
@@ -2177,7 +2181,8 @@ def readAllHeartbeatsInHeartbeatServer(redisConnection: redis.client.Redis, bloc
 
 def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, block : int = 500, printStatements : bool = False,
                                          deleteAfterRead : bool = True, returnMessageId : bool = False,
-                                         returnRotationDone : bool = False, returnAbort : bool = False):
+                                         returnRotationDone : bool = False, returnAbort : bool = False,
+                                         returnBypassed : bool = False):
     # Reads the OLDEST pending cycle record on fe2db.q (FIFO). The queue is never trimmed here, so records that arrive
     # while the DB server is busy are kept, not discarded.
     #   deleteAfterRead=False + returnMessageId=True: the caller deletes the record with
@@ -2186,6 +2191,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     #   With returnRotationDone=True, tighteningTorque1RotationDone and tighteningTorque2RotationDone (True / False /
     #   None) are appended after overallResult (before the message id).
     #   With returnAbort=True, aborted (bool) and abortReason (str) are appended after those (before the message id).
+    #   With returnBypassed=True, bypassedPressAndTightening2 (bool) is appended after those (before the message id).
 
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
@@ -2238,6 +2244,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     tighteningTorque2RotationDone = None
     aborted = False
     abortReason = ""
+    bypassed = False
     timeOfMessage = None
     aProducer = None
 
@@ -2264,6 +2271,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
         if returnAbort:
             _result = _result + (aborted, abortReason)
+        if returnBypassed:
+            _result = _result + (bypassed,)
         return (_result + (messageId,)) if returnMessageId else _result
 
     last_id = 0
@@ -2395,8 +2404,10 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 componentPressBunkPicture = None
 
             try:
-                if componentPressBunkPicture is not None:
-                    componentPressBunkCheckResult = str(newData[componentPressBunkCheckResultKeyString].decode('utf-8'))
+                sentResult = str(newData[componentPressBunkCheckResultKeyString].decode('utf-8'))
+                # without a picture only 'Bypassed' (Machine Setting: step skipped) is taken; else NOT OK
+                if componentPressBunkPicture is not None or sentResult == BYPASSED_RESULT:
+                    componentPressBunkCheckResult = sentResult
             except Exception:
                 componentPressBunkCheckResult = notok
 
@@ -2425,8 +2436,10 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 noBunkPicture = None
 
             try:
-                if noBunkPicture is not None:
-                    noBunkCheckResult = str(newData[noBunkCheckResultKeyString].decode('utf-8'))
+                sentResult = str(newData[noBunkCheckResultKeyString].decode('utf-8'))
+                # without a picture only 'Bypassed' (Machine Setting: step skipped) is taken; else NOT OK
+                if noBunkPicture is not None or sentResult == BYPASSED_RESULT:
+                    noBunkCheckResult = sentResult
             except Exception:
                 noBunkCheckResult = notok
 
@@ -2545,6 +2558,7 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             tighteningTorque2RotationDone = decodeOptionalBool(newData.get(tighteningTorque2RotationDoneKeyString))
             aborted = newData.get(abortedKeyString, b"0").decode("utf-8") == "1"     # absent (older sender): not aborted
             abortReason = newData.get(abortReasonKeyString, b"").decode("utf-8")
+            bypassed = newData.get(bypassedKeyString, b"0").decode("utf-8") == "1"       # absent: not bypassed
 
             if deleteAfterRead:
                 redisConnection.xdel(fe2dbq, last_id)
@@ -2572,6 +2586,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
         if returnAbort:
             _result = _result + (aborted, abortReason)
+        if returnBypassed:
+            _result = _result + (bypassed,)
         return (_result + (messageId,)) if returnMessageId else _result
 
     _result = (genuineDataReceived, timeOfMessage, qrCode,
@@ -2594,6 +2610,8 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
         _result = _result + (tighteningTorque1RotationDone, tighteningTorque2RotationDone)
     if returnAbort:
         _result = _result + (aborted, abortReason)
+    if returnBypassed:
+        _result = _result + (bypassed,)
     return (_result + (messageId,)) if returnMessageId else _result
 
 

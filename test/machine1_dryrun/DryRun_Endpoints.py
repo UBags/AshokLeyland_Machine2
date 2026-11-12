@@ -79,17 +79,18 @@ def seed():
                     reason = (random.choice(("emergency button pressed on the machine",
                                              "manual abort (Ctrl+Alt+Z) in the frontend")) if aborted else None)
                     n += 1
+                    bypassed = (not aborted) and n % 5 == 0     # component press + second tightening bypassed (2026-11-13)
                     cursor.execute(
                         f"INSERT INTO {TABLE} (qr_code, model_name, lhs_rhs, model_tonnage, nut_tightening_torque_1, "
                         f"nut_tightening_torque_2, free_rotation_torque_1, setting_tightening_torque1_setpoint, "
                         f"setting_tightening_torque2_setpoint, ok_notok_result, username, remarks, created_on, "
-                        f"aborted, abort_reason) "
-                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s, %s, %s)",
+                        f"aborted, abort_reason, bypassed_press_and_tightening2) "
+                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s, %s, %s, %s)",
                         (f"{TAG}{n:05d}", random.choice(MODELS),
                          round(random.gauss(15.2, 0.25), 2) if random.random() > 0.08 else -1.0,
-                         round(random.gauss(19.1, 0.3), 2), round(random.gauss(2.4, 0.15), 2),
+                         -1.0 if bypassed else round(random.gauss(19.1, 0.3), 2), round(random.gauss(2.4, 0.15), 2),
                          15.0 if day > 40 else 15.5, DB.OK_VALUE if ok else "NotOK",
-                         "DUPLICATE" if random.random() < 0.08 else "", created, aborted, reason))
+                         "DUPLICATE" if random.random() < 0.08 else "", created, aborted, reason, bypassed))
         c.commit()
     finally:
         c.close()
@@ -240,6 +241,47 @@ def abortFilterChecks(B):
     check("query page has the Aborted cycles and Result selectors", r.ok and 'id="aborts"' in r.text and 'id="result"' in r.text)
 
 
+def bypassFilterChecks(B, M):
+    print("\n=== Bypassed cycles (component press and second tightening): filters ===", flush=True)
+    d1, d2 = (date.today() - timedelta(days=60)).isoformat(), date.today().isoformat()
+    s, e = datetime.combine(date.today() - timedelta(days=60), datetime.min.time()), \
+        datetime.combine(date.today() + timedelta(days=1), datetime.min.time())
+    base = "created_on >= %s AND created_on < %s"
+    check("seed has bypassed records", sqlCount(f"{base} AND bypassed_press_and_tightening2", (s, e)) > 0)
+    for bypassed, aborts, cond, label in (
+            (None, None, "true", "default = every record"),
+            ("only", None, "bypassed_press_and_tightening2", "only bypassed"),
+            ("exclude", None, "NOT bypassed_press_and_tightening2", "no bypassed"),
+            ("bypassed", None, "bypassed_press_and_tightening2", "alias bypassed"),
+            ("only", "exclude", "bypassed_press_and_tightening2 AND NOT aborted", "bypassed, no aborts")):
+        body = {"db_name": "test", "start_date": d1, "end_date": d2}
+        if bypassed is not None: body["bypassed"] = bypassed
+        if aborts is not None: body["aborts"] = aborts
+        r = requests.post(B + "/api/get_data_by_date_limits/json/", json=body)
+        got = [x for x in r.json().get("data", []) if x["qr_code"].startswith(TAG)] if r.ok else []
+        n = sqlCount(f"{base} AND {cond}", (s, e))
+        check(f"by dates, {label}: {len(got)} = SQL {n}", r.ok and len(got) == n, r.text[:150])
+    r = requests.post(B + "/api/get_data_by_date_limits/json/", json={"db_name": "test", "start_date": d1, "end_date": d2,
+                                                                     "bypassed": "only"})
+    rows = [x for x in r.json()["data"] if x["qr_code"].startswith(TAG)]
+    check("bypassed records carry bypassed_press_and_tightening2 = true", rows and all(x["bypassed_press_and_tightening2"] is True for x in rows))
+    r = requests.post(B + "/api/get_all_data_of_today/json/", json={"db_name": "test", "bypassed": "sometimes"})
+    check("unknown bypassed filter -> HTTP 400 naming the choices", r.status_code == 400 and "Use one of" in r.json().get("error", ""))
+    check("query page has the Bypassed selector", 'id="bypassed"' in requests.get(B + "/").text)
+    start = date.today() - timedelta(days=29)
+    for bypassed, cond in (("only", "bypassed_press_and_tightening2"), ("exclude", "NOT bypassed_press_and_tightening2")):
+        r2 = requests.get(M + "/data", params={"db": "test", "model": MODELS[0], "day_period": "30_days", "bypassed": bypassed})
+        total = sum(sum(x["y"]) for x in r2.json()["components_day"]["data"]) if r2.ok else -1
+        check(f"[{MODELS[0]}] dashboard bypassed={bypassed}: 30-day total = SQL",
+              r2.ok and total == sqlCount(f"model_name = %s AND created_on >= %s AND {cond}", (MODELS[0], start)), total)
+    r2 = requests.get(M + "/data", params={"db": "test", "model": MODELS[0], "torque2_period": "90_days"})
+    values = r2.json()["torque2"]["data"][0]["x"] if r2.ok and r2.json()["torque2"]["data"] else []
+    check("dashboard torque 2: bypassed records (-1.0) left out", values and min(values) >= 0)
+    check("unknown bypassed filter on the dashboard -> HTTP 400",
+          requests.get(M + "/data", params={"db": "test", "bypassed": "x"}).status_code == 400)
+    check("dashboard page has the Bypassed selector", 'id="bypassed"' in requests.get(M + "/").text)
+
+
 def dashboardChecks(B):
     print("\n=== MI dashboard ===", flush=True)
     now = datetime.now()
@@ -317,6 +359,7 @@ if __name__ == "__main__":
         time.sleep(0.5)
         webServiceChecks(ws)
         abortFilterChecks(ws)
+        bypassFilterChecks(ws, mi)
         dashboardChecks(mi)
     except Exception as e:
         check("no exception", False, repr(e))

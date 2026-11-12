@@ -8,7 +8,7 @@ saves such a record with remarks "DUPLICATE"). Model filter (all models or one),
 database; the page refreshes itself every minute. Port 8050 (the next free port if 8050 is taken), all interfaces.
 
 GET /                 the page
-GET /data?db=&model=&aborts=&day_period=&week_period=&torque1_period=&torque2_period=&rotation_period=
+GET /data?db=&model=&aborts=&bypassed=&day_period=&week_period=&torque1_period=&torque2_period=&rotation_period=
          &reworked_period=&aborted_period=
                       the figures (Plotly JSON), today's / this week's / this month's counts and the database's models.
                       aborts: include (default) / only / exclude / emergency / manual (EndpointsDB.ABORT_FILTERS),
@@ -44,7 +44,7 @@ ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 GREEN, RED, BLUE, ORANGE, GREY, PURPLE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00", "#616161", "#6a1b9a"
 COLUMNS = ["created_on", "model_name", "ok_notok_result", "nut_tightening_torque_1", "nut_tightening_torque_2",
            "free_rotation_torque_1", "setting_tightening_torque1_setpoint", "setting_tightening_torque2_setpoint",
-           "remarks", "aborted", "abort_reason"]
+           "remarks", "aborted", "abort_reason", "bypassed_press_and_tightening2"]
 TORQUES = {  # key -> (column, title, setpoint column)
     "torque1": ("nut_tightening_torque_1", "Nut Tightening Torque 1", "setting_tightening_torque1_setpoint"),
     "torque2": ("nut_tightening_torque_2", "Nut Tightening Torque 2", "setting_tightening_torque2_setpoint"),
@@ -83,6 +83,7 @@ def loadFrame(database: str, now: datetime) -> pd.DataFrame:
     for column in COLUMNS[3:8]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame["aborted"] = frame["aborted"].fillna(False).astype(bool)
+    frame["bypassed"] = frame["bypassed_press_and_tightening2"].fillna(False).astype(bool)
     frame["ok"] = (frame["ok_notok_result"].fillna("") == DB.OK_VALUE) & ~frame["aborted"]
     frame["reworked"] = frame["remarks"].fillna("").str.contains("DUPLICATE", case=False)
     reason = frame["abort_reason"].fillna("").str.lower()
@@ -90,6 +91,15 @@ def loadFrame(database: str, now: datetime) -> pd.DataFrame:
     frame.loc[frame["aborted"], "abortKind"] = "other"
     frame.loc[frame["aborted"] & reason.str.startswith("emergency"), "abortKind"] = "emergency"
     frame.loc[frame["aborted"] & reason.str.startswith("manual"), "abortKind"] = "manual"
+    return frame
+
+
+def bypassFiltered(frame: pd.DataFrame, bypassed: str) -> pd.DataFrame:
+    """The records the bypass filter keeps (EndpointsDB.BYPASS_FILTERS; resolved name)."""
+    if bypassed == "only":
+        return frame[frame["bypassed"]]
+    if bypassed == "exclude":
+        return frame[~frame["bypassed"]]
     return frame
 
 
@@ -205,15 +215,17 @@ def dashboardData(query: dict) -> dict:
     database = DB.resolveDatabase(get("db", "production"))
     model = get("model", ALL_MODELS)
     aborts = DB.resolveAbortFilter(get("aborts", "include"))
+    bypassed = DB.resolveBypassFilter(get("bypassed", "include"))
     periods = {name: get(name, default) for name, default in (
         ("day_period", "7_days"), ("week_period", "12_weeks"), ("torque1_period", "30_days"),
         ("torque2_period", "30_days"), ("rotation_period", "30_days"), ("reworked_period", "30_days"),
         ("aborted_period", "30_days"))}
     now = datetime.now()
-    frame = abortFiltered(loadFrame(database, now), aborts)
+    frame = bypassFiltered(abortFiltered(loadFrame(database, now), aborts), bypassed)
     suffix = ("All Models" if model == ALL_MODELS else model) + \
              ({"only": ", aborted only", "exclude": ", no aborts", "emergency": ", emergency aborts",
-               "manual": ", manual aborts"}.get(aborts, ""))
+               "manual": ", manual aborts"}.get(aborts, "")) + \
+             {"only": ", bypassed only", "exclude": ", no bypassed"}.get(bypassed, "")
     label = lambda name, table: table.get(periods[name], periods[name])
     data = {
         "models": DB.fetchModelNames(database),
@@ -229,6 +241,7 @@ def dashboardData(query: dict) -> dict:
                                             f"Aborted Cycles per Day ({label('aborted_period', SHORT_PERIODS)} - "
                                             f"{suffix})"),
         "aborts": aborts,
+        "bypassed": bypassed,
     }
     for key in TORQUES:
         name = f"{key}_period"
@@ -281,6 +294,7 @@ def page(models) -> str:
     panes = "".join(_tab(k, label, periods, text, i == 0) for i, (k, label, periods, text, _) in enumerate(TABS))
     params = json.dumps({k: p for k, *_, p in TABS})
     abortOptions = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in DB.ABORT_FILTERS.items())
+    bypassOptions = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in DB.BYPASS_FILTERS.items())
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hub and Disc Assembly Dashboard</title>
@@ -302,6 +316,8 @@ def page(models) -> str:
       <select id="model" class="form-select" style="min-width: 220px;">{modelOptions}</select></div>
     <div><label class="form-label fw-semibold mb-0" for="aborts">Aborted cycles</label>
       <select id="aborts" class="form-select" style="min-width: 260px;">{abortOptions}</select></div>
+    <div><label class="form-label fw-semibold mb-0" for="bypassed">Bypassed</label>
+      <select id="bypassed" class="form-select" style="min-width: 260px;">{bypassOptions}</select></div>
     <div><label class="form-label fw-semibold mb-0" for="db">Database</label>
       <select id="db" class="form-select"><option value="production">Production</option><option value="test">Test</option></select></div>
   </div>
@@ -339,7 +355,8 @@ function draw(data) {{
 let last = null;
 function refresh() {{
   const q = new URLSearchParams({{db: document.getElementById('db').value, model: document.getElementById('model').value,
-                                  aborts: document.getElementById('aborts').value}});
+                                  aborts: document.getElementById('aborts').value,
+                                  bypassed: document.getElementById('bypassed').value}});
   for (const [key, name] of Object.entries(PARAMS)) q.set(name, document.getElementById(key + '-period').value);
   fetch('/data?' + q.toString())
     .then(r => r.json().then(j => {{ if (!r.ok) throw new Error(j.error || r.statusText); return j; }}))

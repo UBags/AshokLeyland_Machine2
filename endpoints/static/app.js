@@ -21,6 +21,7 @@ function query(method, format, params) {
     params.db_name = document.getElementById('dbName').value;
     params.aborts = document.getElementById('aborts').value;     // include / only / exclude / emergency / manual
     params.result = document.getElementById('result').value;     // all / ok / notok
+    params.bypassed = document.getElementById('bypassed').value; // include / only / exclude
     fetch(`api/${method}/${format}/`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(params)
     })
@@ -51,7 +52,8 @@ function query(method, format, params) {
 
 function suffix(params) {   // the filters in the file name, when not the defaults
     return (params.aborts && params.aborts !== 'include' ? `_aborts-${params.aborts}` : '') +
-           (params.result && params.result !== 'all' ? `_result-${params.result}` : '');
+           (params.result && params.result !== 'all' ? `_result-${params.result}` : '') +
+           (params.bypassed && params.bypassed !== 'include' ? `_bypassed-${params.bypassed}` : '');
 }
 
 function dates(startId, endId) {

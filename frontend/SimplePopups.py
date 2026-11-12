@@ -1780,6 +1780,36 @@ MACHINE_SETTINGS_FIELDS = (
 )
 
 
+# per-model switches (checkboxes), stored with the numeric settings: key, label
+MACHINE_SETTINGS_FLAG_FIELDS = (
+    ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening"),
+)
+MACHINE_SETTINGS_PASSWORD: str = "admin123"     # Save asks for it, then Yes / No (user, 2026-11-13)
+
+
+def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> bool:
+    """Save: the password (MACHINE_SETTINGS_PASSWORD), then a Yes / No confirmation listing what changes."""
+    entered = getJustPassword("Enter the password to change the machine settings")
+    if entered is None or entered == "":
+        return False
+    if entered != MACHINE_SETTINGS_PASSWORD:
+        showErrorMessage("Wrong password: machine settings not changed")
+        return False
+    lines = []
+    for key, label, kind in MACHINE_SETTINGS_FIELDS:
+        old, new = current.get(key), settings.get(key)
+        if old is None or abs(float(old) - float(new)) > 1e-9:
+            fmt = (lambda v: f"{float(v):.2f}") if kind == "torque" else (lambda v: str(int(round(float(v)))))
+            lines.append(f"{label.split(' (')[0]}: {fmt(old) if old is not None else '-'} -> {fmt(new)}")
+    for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
+        if bool(current.get(key, False)) != bool(settings.get(key, False)):
+            lines.append(f"{label}: {'Yes' if settings.get(key) else 'No'}")
+    changes = "\n".join(lines) if lines else "(no change)"
+    answer = sg.popup_yes_no(f"Change the machine settings for {model}?\n\n{changes}",
+                             title="Confirm Machine Settings", keep_on_top=True, modal=True, font=16)
+    return answer == "Yes"
+
+
 def canChangeMachineSettings(role: str) -> bool:
     return (role or "").strip().lower() in MACHINE_SETTINGS_ROLES
 
@@ -1857,6 +1887,8 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
             else:
                 field = sg.Input(shown(key, kind), size=(10, 1), font=16, k=key)
             rows.append([sg.Text(label, size=(44, 1), font=16), field])
+        for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
+            rows.append([sg.Checkbox(label, default=bool(current.get(key, False)), font=16, k=key)])
         layout = ([[sg.Text("Machine Settings", font=("Helvetica", 16, "bold"))],
                    [sg.Text(infoText(), font=12, size=(70, 1), k="info")],
                    [sg.HorizontalSeparator()]] + rows +
@@ -1875,12 +1907,18 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                     window["info"].update(infoText())
                 for key, _, kind in MACHINE_SETTINGS_FIELDS:
                     window[key].update(shown(key, kind))
+                for key, _ in MACHINE_SETTINGS_FLAG_FIELDS:
+                    window[key].update(bool(current.get(key, False)))
                 continue
             if event == "Save":
                 settings, errors = parseMachineSettingsInputs(values)
                 if errors:
                     showErrorMessage("\n".join(errors), auto_close_duration=5)
                     continue
+                for key, _ in MACHINE_SETTINGS_FLAG_FIELDS:
+                    settings[key] = bool(values.get(key, False))
+                if not confirmMachineSettingsChange(model, settings, current):
+                    continue                      # wrong password / No: the dialog stays open, nothing saved
                 if insertNewMachineSettings(db_name, updated_by=currentUser, model_name=model, **settings):
                     saved = True
                     showMessage(f"Machine settings for {model} saved.\nThey apply from the next {model} component.")

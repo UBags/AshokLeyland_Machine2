@@ -440,7 +440,12 @@ class PLCIOServer:
     PC_PLC_CycleAborted: str = CosThetaConfigurator.getInstance().getPcPlcCycleAbortedTagName()
     # Tags the PLC programme may not have yet: named in the properties, but the IOServer starts without their address
     # (Siemens: IOServerProperties.yaml) and writes them only where they exist; a write that cannot be made is logged.
-    OPTIONAL_TAG_ATTRS = ("PC_PLC_CycleAborted",)
+    # True in state 2 = this component skips states 13-19 (bung, component press, bung removal, second tightening):
+    # the model's Machine Setting "Bypass Component Press and Second Tightening"; the PLC branches on it
+    PC_PLC_Skip_Second_Tightening: str = CosThetaConfigurator.getInstance().getPcPlcSkipSecondTighteningTagName()
+    OPTIONAL_TAG_ATTRS = ("PC_PLC_CycleAborted", "PC_PLC_Skip_Second_Tightening")
+    # states skipped by the bypass: after the Torque 1 value (state 12) straight to the split pin picture (state 20)
+    SKIP_TO_STATE_AFTER_TORQUE_1 = MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER
     FRONTEND_ABORT_WRITE_ATTEMPTS: int = 3      # the frontend's abort: PC_PLC_CycleAborted = True, then abort
 
     # ==================== Configuration Values ====================
@@ -531,6 +536,7 @@ class PLCIOServer:
         # e.g. Siemens addresses; the optional tags (OPTIONAL_TAG_ATTRS) may have none
         plcDataIOClass(self.vendor).checkTagConfiguration(PLCIOServer.requiredTagNames())
         self._tagsMissingOnPlc: set = set()             # Allen-Bradley: tags the PLC does not know (first connection)
+        self._skipSecondTighteningThisCycle: bool = False   # written True to the PLC in this cycle's state 2
         self._optionalTagNoticeGiven: set = set()
         self.dataIOForReads: Optional[PLCDataIO] = None
         self.dataIOForWrites: Optional[PLCDataIO] = None
@@ -766,7 +772,10 @@ class PLCIOServer:
         The settings in force are published for the DB server (stored with the component's record): those written
         now, else the ones last written (None if not known).
         Returns True if the side (and, on the Allen-Bradley properties set-up, the model) was written.
+        Bypass (Machine Setting "Bypass Component Press and Second Tightening", per model): PC_PLC_Skip_Second_Tightening
+        written (True / False) after the side - see _writeSkipSecondTightening.
         """
+        self._skipSecondTighteningThisCycle = False      # full run unless True is written below
         if not qrCode:
             printBoldRed("Cannot write cycle settings: QR code is empty")
             return False
@@ -794,12 +803,14 @@ class PLCIOServer:
                     "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None}
             keyOfTag = {}                   # settings tag -> its key in `used`
             problems = []                   # settings not written this cycle (the cycle goes ahead with the PLC's)
+            bypassWanted = False            # the model's "Bypass Component Press and Second Tightening"
             if config.getCycleSettingsSource() == "database":
                 settings = None
                 try:
                     settings = getMachineSettings(getDatabaseName(), model_name=model)      # this model's settings
                 except Exception as e:
                     problems.append(f"machine settings could not be read from the database ({e})")
+                bypassWanted = bool(settings.get("bypass_press_and_tightening2")) if settings else False
                 missing = [k for k in used if settings.get(k) is None] if settings else list(used)
                 if missing and not problems:
                     problems.append(f"machine settings not available from the database ({', '.join(missing)})")
@@ -861,13 +872,19 @@ class PLCIOServer:
             if not sideWritten:
                 printBoldRed(f"Failed to write the cycle settings to the PLC ({written})")
                 return False
+            if not self._writeSkipSecondTightening(bypassWanted, model):
+                return False                # the PLC's sequence is not known: QR code NOT OK
             if problems:
                 message = (f"Cycle settings NOT updated for {qrCode}: {'; '.join(problems)}. The cycle goes ahead with "
                            f"the settings the PLC holds")
                 printBoldRed(message); self.logger.error(message); self._audit(message)
                 self._notice("settings", "Machine settings not updated: previous settings used", ttlSecs=30)
             try:
-                publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode, used)
+                # bypass_press_and_tightening2 only when this cycle skips states 13-19 (the frontend marks those
+                # tiles "Bypassed"); absent = full run
+                publishCycleSettingsForQRCode(self.redisConnectionForWrites, qrCode,
+                                              {**used, "bypass_press_and_tightening2": True}
+                                              if self._skipSecondTighteningThisCycle else used)
             except Exception as e:
                 printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
             printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
@@ -875,6 +892,32 @@ class PLCIOServer:
         except Exception as e:
             printBoldRed(f"Exception writing cycle settings to PLC: {e}")
             return False
+
+    def _writeSkipSecondTightening(self, wanted: bool, model: str) -> bool:
+        """State 2: PC_PLC_Skip_Second_Tightening = wanted (written and read back, SETTINGS_WRITE_ATTEMPTS). The cycle
+        skips states 13-19 only if True was written (_skipSecondTighteningThisCycle). No tag name, no address / not on
+        the PLC: full run whatever the setting (logged when the setting asked for the bypass) - the PLC cannot skip
+        without the tag. The tag exists but the write fails (True or False): False - the QR code is answered NOT OK,
+        as the PLC may still hold the previous component's value and skip while the PC runs the full sequence."""
+        tag = PLCIOServer.PC_PLC_Skip_Second_Tightening
+        self._skipSecondTighteningThisCycle = False
+        if not tag or not self._optionalTagWritable(tag):
+            if wanted:
+                message = (f"{model}: bypass of the component press and second tightening is set, but the PLC has no "
+                           f"{tag or 'skip tag (pc.plc.skip.second.tightening.tagname)'}: full run")
+                printBoldYellow(message); self.logger.warning(message); self._audit(message)
+                self._notice("settings", f"Bypass not possible ({tag} not on the PLC): full run", ttlSecs=30)
+            return True
+        if self._writeVerified(tag, bool(wanted), attempts=PLCIOServer.SETTINGS_WRITE_ATTEMPTS):
+            self._skipSecondTighteningThisCycle = bool(wanted)
+            if wanted:
+                message = f"{model}: component press and second tightening bypassed ({tag} = True)"
+                printBoldYellow(message); self.logger.warning(message); self._audit(message)
+            return True
+        message = (f"Could not write {tag} = {bool(wanted)} ({PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts): QR code "
+                   f"NOT OK (the PLC's sequence for this component is not known)")
+        printBoldRed(message); self.logger.error(message); self._audit(message)
+        return False
 
     def _settingReadBack(self, tag: str, value, kind) -> bool:
         """A cycle setting just written: read it back from the PLC; True if it holds the value written (INT exactly,
@@ -2178,8 +2221,12 @@ class PLCIOServer:
                     if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
                         printBoldGreen(f"Read Station 2 Torque Value (1st time): {valueRead}")
                         rotationDone = self._readStation2RotationDuringTighteningDone()
+                        skip = self._skipSecondTighteningThisCycle
+                        # moveToState tells the frontend where the cycle goes next when it is not the next state
                         successfullySent = sendDataFromIOServerToFEServer(self.redisConnectionForReads,
                                                                           currentMachineState=MachineState.READ_TIGHTENING_TORQUE_1,
+                                                                          moveToState=(PLCIOServer.SKIP_TO_STATE_AFTER_TORQUE_1
+                                                                                       if skip else MachineState.INVALID_STATE),
                                                                           value=valueRead,
                                                                           rotationDone=rotationDone)
                         if successfullySent:
@@ -2187,10 +2234,13 @@ class PLCIOServer:
                         # Reset Station 2 torque tags after reading (so Step 10 doesn't auto-trigger)
                         if successfullySent:
                             self._scheduleStation2TorqueReset(currentState)       # rule (c)
-                            # Transition to next state after successfully reading torque
+                            # Transition to next state after successfully reading torque; with the bypass of this
+                            # cycle straight to the split pin picture (states 13-19 skipped, as the PLC does)
                             printBold(f"Transition from state {self.machineState.getCurrentState().name}")
-                            self.machineState.incrementStateFrom(currentState)
-                            printBold(f"        ...to state {self.machineState.getCurrentState().name}")
+                            jump = (int(PLCIOServer.SKIP_TO_STATE_AFTER_TORQUE_1) - int(currentState)) if skip else 1
+                            self.machineState.incrementStateFrom(currentState, stateJumps=jump)
+                            printBold(f"        ...to state {self.machineState.getCurrentState().name}"
+                                      + ("  (component press and second tightening bypassed)" if skip else ""))
                     # Step 10B: Tightening Torque 2 Value
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2:
                         printBoldGreen(f"Read Station 2 Torque Value (2nd time): {valueRead}")
@@ -3101,10 +3151,9 @@ class PLCIOServer:
             if tag:                      # empty name = not on this PLC
                 tag_values[tag] = reader(tag, debug=False)
         tag_values[PLCIOServer.PC_PLC_ConnectionStatusTag] = self.read_bool(PLCIOServer.PC_PLC_ConnectionStatusTag, debug=False)
-        if PLCIOServer.PC_PLC_CycleAborted:      # optional: None where the PLC has no address for it
-            tag_values[PLCIOServer.PC_PLC_CycleAborted] = (
-                self.read_bool(PLCIOServer.PC_PLC_CycleAborted, debug=False)
-                if self._optionalTagWritable(PLCIOServer.PC_PLC_CycleAborted) else None)
+        for tag in (PLCIOServer.PC_PLC_CycleAborted, PLCIOServer.PC_PLC_Skip_Second_Tightening):
+            if tag:                              # optional: None where the PLC has no address for it
+                tag_values[tag] = self.read_bool(tag, debug=False) if self._optionalTagWritable(tag) else None
 
         # Add current machine state (enum name: str(IntEnum) is just "1" on Python 3.11+)
         tag_values["_currentMachineState"] = self.machineState.getCurrentState().name

@@ -398,6 +398,7 @@ def makeFoldersForImages(mode_data_subfolder):
 okResult = CosThetaConfigurator.getInstance().getOkCommand()
 notokResult = CosThetaConfigurator.getInstance().getNotOKCommand()
 notChecked: str = "Not Checked"
+bypassedResult: str = "Bypassed"            # step skipped by the Machine Setting (frontend BYPASSED_TEXT)
 notPopulated: str = "Not Populated"
 defaultTorqueValue: float = -0.1
 
@@ -523,6 +524,9 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     -- the cycle was aborted (emergency button on the machine, or manual abort in the frontend), and why
     aborted boolean NOT NULL DEFAULT false,
     abort_reason character varying(255) COLLATE pg_catalog."default",
+    -- the bung, component press, bung removal and second tightening were bypassed (the model's Machine Setting); those
+    -- steps then have result 'Bypassed', no date, torque 2 = -1.0
+    bypassed_press_and_tightening2 boolean NOT NULL DEFAULT false,
     ok_notok_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not OK',
     username character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Default User',
     remarks character varying(255) COLLATE pg_catalog."default",
@@ -553,6 +557,7 @@ ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUM
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS nut_tightening_torque_2_rotation_done boolean;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS aborted boolean NOT NULL DEFAULT false;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS abort_reason character varying(255);
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS bypassed_press_and_tightening2 boolean NOT NULL DEFAULT false;
 
 -- Machine 2 settings, edited in the frontend (Machine Settings menu, Administrator / Supervisor) and written by the
 -- IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row; the latest row is in force.
@@ -578,6 +583,7 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.machine_settings
     no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4),
     no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw BETWEEN 1 AND 4),
     model_name character varying(50) COLLATE pg_catalog."default",
+    bypass_press_and_tightening2 boolean NOT NULL DEFAULT false,
     updated_by character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'system',
     updated_on_date timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT machine_settings_pkey PRIMARY KEY (setting_id)
@@ -590,6 +596,8 @@ ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF 
 ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotation1_ccw_check CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4);
 ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotation1_cw_check CHECK (no_of_rotation1_cw BETWEEN 1 AND 4);
 CREATE INDEX IF NOT EXISTS idx_machine_settings_model ON al_hub_and_disc_assembly_schema.machine_settings (model_name, setting_id);
+-- 2026-11-13: per model, skip the bung, component press, bung removal and second tightening (PC_PLC_Skip_Second_Tightening)
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS bypass_press_and_tightening2 boolean NOT NULL DEFAULT false;
 '''
 
 
@@ -1114,6 +1122,9 @@ def activateInactiveUserInDatabase(username: str, db_name: str):
 # ************************* BEGIN - DATA TABLE ******************************************
 
 def rationaliseOK_NotOK(input: Union[str, bool], includeNotCheckedAsReturnValue: bool = False):
+    # a step skipped by the model's Machine Setting "Bypass Component Press and Second Tightening" keeps its result
+    if isinstance(input, str) and input.strip().lower() == bypassedResult.lower():
+        return bypassedResult
     if not includeNotCheckedAsReturnValue:
         if input is None:
             return notok.upper()
@@ -1398,6 +1409,7 @@ def insertData(
         # the cycle was aborted (emergency button / manual abort) and why
         aborted: bool = False,
         abort_reason: Optional[str] = None,
+        bypassed_press_and_tightening2: bool = False,
 
         ok_notok_result: str = "Not OK",
         username: str = "Default User",
@@ -1569,9 +1581,9 @@ def insertData(
         for v in (nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done):
             params.append(None if v is None else bool(v))
             placeholders.append("%s")
-        # Aborted cycle (emergency button / manual abort) and why
-        params.extend([bool(aborted), (abort_reason or None) if aborted else None])
-        placeholders.extend(["%s", "%s"])
+        # Aborted cycle (emergency button / manual abort) and why; bung / press / second tightening bypassed
+        params.extend([bool(aborted), (abort_reason or None) if aborted else None, bool(bypassed_press_and_tightening2)])
+        placeholders.extend(["%s", "%s", "%s"])
 
         # Final fields
         params.extend([ok_notok_result, username, remarks])
@@ -1601,7 +1613,7 @@ def insertData(
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
-                aborted, abort_reason,
+                aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
             ) VALUES ({ph})
         """).format(
@@ -1685,6 +1697,7 @@ all_columns_record_header = [
     "nut_tightening_torque_2_rotation_done",
     "aborted",
     "abort_reason",
+    "bypassed_press_and_tightening2",
     "ok_notok_result",
     "username",
     "remarks",
@@ -1748,6 +1761,7 @@ SELECT
     nut_tightening_torque_2_rotation_done,
     aborted,
     abort_reason,
+    bypassed_press_and_tightening2,
     ok_notok_result,
     username,
     remarks,
@@ -1909,6 +1923,7 @@ SELECT
     nut_tightening_torque_2_rotation_done,
     aborted,
     abort_reason,
+    bypassed_press_and_tightening2,
     ok_notok_result,
     username,
     remarks,
@@ -2016,7 +2031,7 @@ def getDataByModelNameAndDateLimits(
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
-                aborted, abort_reason,
+                aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE model_name = %s
@@ -2304,6 +2319,7 @@ SELECT
     nut_tightening_torque_2_rotation_done,
     aborted,
     abort_reason,
+    bypassed_press_and_tightening2,
     ok_notok_result,
     username,
     remarks,
@@ -2401,7 +2417,7 @@ def getDataByDateLimits(
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
                 setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
-                aborted, abort_reason,
+                aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
             FROM {schema}.hub_and_disc_assembly_data
             WHERE created_on::date BETWEEN %s AND %s
@@ -2653,6 +2669,10 @@ MACHINE_SETTINGS_LIMITS = {
     "no_of_rotation1_cw": (1.0, 4.0, True, True, 0),
 }
 MACHINE_SETTINGS_KEYS = tuple(MACHINE_SETTINGS_LIMITS)
+# On / off settings (per model, like the others; not range-checked). bypass_press_and_tightening2: skip the bung, the
+# component press, the bung removal and the second tightening (written to the PLC as PC_PLC_Skip_Second_Tightening).
+MACHINE_SETTINGS_FLAGS = ("bypass_press_and_tightening2",)
+DEFAULT_MACHINE_SETTINGS_FLAGS = {"bypass_press_and_tightening2": False}
 DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 15.0,
                             "tightening_torque2_setpoint": 19.0, "no_of_rotation1_ccw": 1.0, "no_of_rotation1_cw": 1.0}
 
@@ -2707,6 +2727,7 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
                         f"no_of_rotation1_ccw, no_of_rotation1_cw FROM {schema_name}.machine_settings "
                         f"WHERE model_name IS NULL ORDER BY setting_id DESC LIMIT 1;")
         legacy = aCursor.fetchone()
+        flags = dict(DEFAULT_MACHINE_SETTINGS_FLAGS)          # a new model: no bypass
         if legacy is not None:
             values = dict(zip(MACHINE_SETTINGS_KEYS, (float(v) for v in legacy)))
             for k in ("no_of_rotation1_ccw", "no_of_rotation1_cw"):        # stored before the 1 - 4 range: keep in range
@@ -2723,9 +2744,11 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
             if aCursor.fetchone()[0] == 0:
                 aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
                                         (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                         no_of_rotation1_ccw, no_of_rotation1_cw, model_name, updated_by)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s);""",
-                                tuple(values[k] for k in MACHINE_SETTINGS_KEYS) + (model, source))
+                                         no_of_rotation1_ccw, no_of_rotation1_cw, bypass_press_and_tightening2,
+                                         model_name, updated_by)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
+                                tuple(values[k] for k in MACHINE_SETTINGS_KEYS)
+                                + tuple(bool(flags[k]) for k in MACHINE_SETTINGS_FLAGS) + (model, source))
                 if reportMajorDatabaseActions:
                     printBoldGreen(f"Machine settings for {model or 'all models'} in {schema_name}: {source}")
         aCursor.close()
@@ -2742,14 +2765,18 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
 
 
 _SETTINGS_COLUMNS = "setting_id, rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, " \
-                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date, model_name"
+                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date, model_name, " \
+                    "bypass_press_and_tightening2"
 
 
 def _settingsRowToDict(row) -> dict:
-    keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date", "model_name")
+    keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date", "model_name") \
+           + MACHINE_SETTINGS_FLAGS
     d = dict(zip(keys, row))
     for k in MACHINE_SETTINGS_KEYS:
         d[k] = float(d[k])
+    for k in MACHINE_SETTINGS_FLAGS:
+        d[k] = bool(d[k])
     return d
 
 
@@ -2792,7 +2819,8 @@ def getMachineSettings(db_name: str, model_name: Optional[str] = None) -> dict:
 def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torque1_setpoint: float,
                              tightening_torque2_setpoint: float, no_of_rotation1_ccw: float,
                              no_of_rotation1_cw: float, updated_by: str = "unknown",
-                             model_name: Optional[str] = None) -> bool:
+                             model_name: Optional[str] = None,
+                             bypass_press_and_tightening2: bool = False) -> bool:
     """Save new settings for model_name (in force for it from its next component); model_name None: for every model
     (settingsModelNames). Validated first; returns False and prints the problems if any value is out of range."""
     global schema_name
@@ -2811,9 +2839,11 @@ def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torqu
         for model in models:
             aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
                                     (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                     no_of_rotation1_ccw, no_of_rotation1_cw, model_name, updated_by)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);""",
-                            tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS) + (model, str(updated_by)[:100]))
+                                     no_of_rotation1_ccw, no_of_rotation1_cw, bypass_press_and_tightening2,
+                                     model_name, updated_by)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
+                            tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS)
+                            + (bool(bypass_press_and_tightening2), model, str(updated_by)[:100]))
         aCursor.close()
         aConnection.close()
         if reportMajorDatabaseActions:

@@ -22,6 +22,10 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
       below it in a smaller font; the record carries both values.
   F8. Manual abort in the frontend (Ctrl+Alt+Z): the abort is sent to the IOServer on fe2io.q (it then goes back to
       the QR code), the abort screen is shown and the abort record sent.
+  F12. Bypass of the component press and second tightening (2026-11-13): the IOServer published the bypass for the QR
+      code -> the 4 skipped tiles show 'Bypassed'; Torque 1 with moveToState = split pin picture -> the frontend skips
+      to it; the record: overall OK, 'Bypassed' / no datetime / torque 2 -1.0 / no pictures for the skipped steps,
+      marked bypassed; the next component runs in full. Machine Settings: the checkbox, password, Yes / No.
   F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
       the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
       (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
@@ -489,6 +493,92 @@ def driver():
         check("F11 ... and the dialog count is back to 0 once it closes",
               wait_for(lambda: FE.dialogsOpen == 0, 4), FE.dialogsOpen)
         _C.getWorkLoopMaxSilence = _origLimit
+
+        # ---------------- F12 (2026-11-13) ----------------
+        print("\n=== F12. Bypass of the component press and second tightening (Machine Setting per model) ===", flush=True)
+        from frontend.CosThetaStylesheets import BYPASSED_TEXT
+        rc = fe.resultsContainer
+        skippedTiles = (rc.bunk_for_component_press_check_container, rc.component_press_check_container,
+                        rc.no_bunk_after_component_press_check_container, rc.tightening_torque2_check_container)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        time.sleep(1.0); r.delete(fe2dbq)          # F10's abort record (not read there)
+        TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear()
+        publishCycleSettingsForQRCode(r, QR1, {"rotation_rpm": 30.0, "bypass_press_and_tightening2": True})  # IOServer, state 2
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps(upto=1)
+        check("F12 bypass published for the QR code -> the 4 skipped tiles show 'Bypassed' after the knuckle result",
+              wait_for(lambda: all(t.getResult() == BYPASSED_TEXT for t in skippedTiles), 4),
+              [t.getResult() for t in skippedTiles])
+        run_steps(skip=1, upto=4)
+        assert wait_for(lambda: state() == MS.READ_TIGHTENING_TORQUE_1)
+        time.sleep(0.3)
+        sendDataFromIOServerToFEServer(r, currentMachineState=MS.READ_TIGHTENING_TORQUE_1, value=19.084,
+                                       moveToState=MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
+                                       action=updateValueCommand, result=ok, rotationDone=True)
+        check("F12 Torque 1 with moveToState = split pin picture -> the frontend goes straight to the split pin picture",
+              wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, 5), state().name)
+        check("F12 ... the 4 skipped tiles still 'Bypassed' (grey, not Not OK)",
+              all(t.getResult() == BYPASSED_TEXT for t in skippedTiles), [t.getResult() for t in skippedTiles])
+        run_steps(skip=9)
+        rec = None
+        t0 = time.time()
+        while time.time() - t0 < 8 and rec is None:
+            got = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True, returnAbort=True,
+                                                       returnBypassed=True)
+            rec = got if got[0] else None
+        check("F12 one record sent", rec is not None)
+        if rec is not None:
+            skippedResults = [rec[i] for i in (19, 21, 24, 27)]
+            check("F12 record: overall OK (the skipped steps are excluded, not failed)", rec[OVERALL_IDX] == ok, rec[OVERALL_IDX])
+            check("F12 record: 'Bypassed' for bung, component press, bung removal and Torque 2", skippedResults == [BYPASSED_TEXT] * 4,
+                  str(skippedResults))
+            check("F12 record: no datetimes for the skipped steps, Torque 2 -1.0, no rotation done with Torque 2",
+                  [rec[i] for i in (20, 22, 25, 28)] == [""] * 4 and rec[TORQUE_IDX["torque2"]] == -1.0
+                  and rec[ROTATION_IDX[1]] is None, str(([rec[i] for i in (20, 22, 25, 28)], rec[26], rec[45])))
+            check("F12 record: no pictures for the two bung checks", rec[18] is None and rec[23] is None)
+            check("F12 record: the other 10 steps OK, Torque 1 19.08", all(rec[i] == ok for i in RESULT_IDX if i not in (19, 21, 24, 27))
+                  and rec[TORQUE_IDX["torque1"]] == 19.08, str([rec[i] for i in RESULT_IDX]))
+            check("F12 record marked bypassed (bypassed_press_and_tightening2)", rec[-1] is True, str(rec[-3:]))
+        check("F12 success screen shown", wait_for(lambda: "showSuccess" in SCREENS, 5), str(SCREENS))
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        TILES.clear(); SENT_ORIGINALS.clear()
+        scan(QR2, "DOSTPLUS - RHS - 2.5T : 22881 : 15.10.2026")
+        check("F12 next component (no bypass published): the 4 tiles back to 'Result Awaited'",
+              wait_for(lambda: all(t.getResult() == "Result Awaited" for t in skippedTiles), 4),
+              [t.getResult() for t in skippedTiles])
+        run_steps()
+        rec = None
+        t0 = time.time()
+        while time.time() - t0 < 8 and rec is None:
+            got = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True, returnAbort=True,
+                                                       returnBypassed=True)
+            rec = got if got[0] else None
+        check("F12 ... full run, record not marked bypassed, all 14 steps OK",
+              rec is not None and rec[-1] is False and all(rec[i] == ok for i in RESULT_IDX), str(rec[-3:]) if rec else None)
+
+        # Machine Settings dialog: the bypass checkbox; Save asks for the password, then Yes / No
+        import frontend.SimplePopups as SP
+        check("F12 Machine Settings: 'Bypass Component Press and Second Tightening' checkbox (per model)",
+              ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening") in SP.MACHINE_SETTINGS_FLAG_FIELDS)
+        _pw, _yn, _err = SP.getJustPassword, SP.sg.popup_yes_no, SP.showErrorMessage
+        asked = []
+        SP.showErrorMessage = lambda *a, **k: asked.append(("error", a[0] if a else ""))
+        SP.sg.popup_yes_no = lambda text, **k: asked.append(("yesno", text)) or "Yes"
+        new = dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=True)
+        old = dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=False)
+        SP.getJustPassword = lambda *a, **k: "wrong"
+        check("F12 wrong password -> not saved, no Yes / No asked", SP.confirmMachineSettingsChange("DOST", new, old) is False
+              and [k for k, _ in asked] == ["error"], str(asked))
+        asked.clear(); SP.getJustPassword = lambda *a, **k: ""
+        check("F12 password cancelled -> not saved, nothing shown", SP.confirmMachineSettingsChange("DOST", new, old) is False
+              and asked == [], str(asked))
+        asked.clear(); SP.getJustPassword = lambda *a, **k: "admin123"
+        check("F12 admin123 + Yes -> saved; the confirmation names the change",
+              SP.confirmMachineSettingsChange("DOST", new, old) is True and asked and asked[0][0] == "yesno"
+              and "Bypass Component Press and Second Tightening: Yes" in asked[0][1], str(asked))
+        asked.clear(); SP.sg.popup_yes_no = lambda text, **k: "No"
+        check("F12 admin123 + No -> not saved", SP.confirmMachineSettingsChange("DOST", new, old) is False)
+        SP.getJustPassword, SP.sg.popup_yes_no, SP.showErrorMessage = _pw, _yn, _err
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:

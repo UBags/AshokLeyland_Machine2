@@ -333,6 +333,12 @@ class CosThetaResultsContainer(QFrame):
     def setCapPressResultDefault(self):
         self.cap_press_result_container.setDefault()
 
+    def setPressAndTightening2Bypassed(self):
+        """Machine Setting "Bypass Component Press and Second Tightening": the 4 skipped steps show "Bypassed"."""
+        for tile in (self.bunk_for_component_press_check_container, self.component_press_check_container,
+                     self.no_bunk_after_component_press_check_container, self.tightening_torque2_check_container):
+            tile.setBypassed()
+
     def setInstructionDefault(self):
         self.instructionLabel.setText("Instruction Label")
 

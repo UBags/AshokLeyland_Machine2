@@ -7,7 +7,8 @@ from multimethod import multimethod
 # from multidispatch import dispatch
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
 from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet, noResultLabelStylesheet, \
-    outcomeLabelStylesheet, titleLabelStylesheet, emptyImageStylesheet, numberDisplayStylesheet
+    outcomeLabelStylesheet, titleLabelStylesheet, emptyImageStylesheet, numberDisplayStylesheet, \
+    bypassedLabelStylesheet, BYPASSED_TEXT
 from frontend.frontendutils.CosThetaLabelUtils import *
 from frontend.frontendutils.CosThetaImageUtils import *
 from Configuration import *
@@ -190,6 +191,8 @@ class CosThetaOutcomeContainer(QFrame):
             # CosThetaOutcomeContainer.logger.debug(f"Creating Not OK result label")
             self.result_label.setStyleSheet(notokLabelStylesheet.format(
                 QColor(Qt.GlobalColor.white).name()))  # Set the background and foreground color of the container's label
+        elif result == BYPASSED_TEXT:
+            self.result_label.setStyleSheet(bypassedLabelStylesheet.format(QColor(Qt.GlobalColor.white).name()))
         else:
             # CosThetaOutcomeContainer.logger.debug(f"Creating label with {result}")
             self.result_label.setStyleSheet(noResultLabelStylesheet.format(
@@ -223,6 +226,11 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setText(self.imageHint)
         self.setResult(self.default_status)
         self.update()
+
+    def setBypassed(self):
+        """A step skipped by the model's Machine Setting: "Bypassed" in grey, the tile's hint left as it is."""
+        self.setDefault()
+        self.setResult(BYPASSED_TEXT)
 
     def displayDefault(self):
         self.setDefault()

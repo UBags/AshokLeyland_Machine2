@@ -237,6 +237,37 @@ if rs:
     check("6 no image file for the unreached picture steps", all(not v for v in unreached_files.values()), str(unreached_files))
     CREATED_FILES += [row[f"{s}_imagefile"] for s in images if row[f"{s}_imagefile"]]
 
+# 6b (2026-11-13): component press and second tightening bypassed (Machine Setting per model) - as the frontend sends it
+check("6b record column bypassed_press_and_tightening2 (boolean) present", "bypassed_press_and_tightening2" in cols)
+code6b = qr(QR_LHS, 7); CREATED_QRS.append(code6b)
+kw, expected, images = full_record(code6b, seed=7)
+SKIPPED_STEPS = ("check_bunk_for_component_press", "component_press", "check_no_bunk", "nut_tightening_torque_2")
+for stem, pic, res, dt in STEPS:
+    if stem in SKIPPED_STEPS:
+        if pic: kw[pic] = None; images.pop(stem, None)
+        kw[res] = "Bypassed"; kw[dt] = ""
+        expected[result_col(stem)] = "Bypassed"; expected[datetime_col(stem)] = "None"
+kw["tighteningTorque2"] = -1.0; expected["nut_tightening_torque_2"] = -1.0
+kw["tighteningTorque2RotationDone"] = None
+sendDataFromFEServerToDatabaseServer(r, bypassedPressAndTightening2=True, **kw)
+rs = wait_rows(code6b, 1)
+check("6b bypassed record stored", len(rs) == 1)
+if rs:
+    row = rs[0]
+    bad = {}
+    for col, v in expected.items():
+        got = row[col]; got = str(got) if col.endswith("_datetime") else got
+        if got != v: bad[col] = (got, v)
+    check("6b 'Bypassed' + NULL datetimes for the 4 skipped steps, torque 2 -1.0, the rest OK, overall OK", bad == {}, str(bad))
+    check("6b marked bypassed; rotation done with torque 2 NULL",
+          row["bypassed_press_and_tightening2"] is True and row["nut_tightening_torque_2_rotation_done"] is None,
+          str((row["bypassed_press_and_tightening2"], row["nut_tightening_torque_2_rotation_done"])))
+    check("6b no image file for the two bung checks",
+          not row["check_bunk_for_component_press_imagefile"] and not row["check_no_bunk_imagefile"])
+    CREATED_FILES += [row[f"{s}_imagefile"] for s in images if row[f"{s}_imagefile"]]
+rs6 = rows_for(code6)
+check("6b an ordinary record is not marked bypassed", rs6 and rs6[0]["bypassed_press_and_tightening2"] is False)
+
 # =====================================================================================================
 print("\n=== 7. Reports and counters ===", flush=True)
 today = P.getAllDataOfToday(db_name=DB)
@@ -252,7 +283,8 @@ byModelDates = P.getDataByModelNameAndDateLimits(modelName="DOSTPLUS", db_name=D
 check("7 getDataByModelNameAndDateLimits('DOSTPLUS', today) contains the DOSTPLUS record", code in byModelDates)
 check("7 getUniqueModelNames includes DOST and DOSTPLUS", {"DOST", "DOSTPLUS"} <= set(P.getUniqueModelNames(db_name=DB)))
 okAfter = P.getComponentsProducedToday(db_name=DB)
-check("7 getComponentsProducedToday counts only the 2 OK rows added (not the NOTOK ones)", okAfter - okBefore == 2,
+check("7 getComponentsProducedToday counts only the 3 OK rows added (the bypassed one included; not the NOTOK ones)",
+      okAfter - okBefore == 3,
       f"{okBefore} -> {okAfter}")
 
 # =====================================================================================================
@@ -262,7 +294,7 @@ cur.execute(f"delete from {SCHEMA}.{TABLE} where qr_code = any(%s)", (CREATED_QR
 for f in CREATED_FILES:
     try: os.remove(f)
     except OSError: pass
-check("8 test rows deleted (1 direct + 2 duplicate + 1 aborted)", deleted == 4 and all(not rows_for(q_) for q_ in CREATED_QRS), f"{deleted} deleted")
+check("8 test rows deleted (1 direct + 2 duplicate + 1 aborted + 1 bypassed)", deleted == 5 and all(not rows_for(q_) for q_ in CREATED_QRS), f"{deleted} deleted")
 check("8 test image files removed", not any(os.path.exists(f) for f in CREATED_FILES))
 
 # =====================================================================================================
@@ -322,6 +354,13 @@ history = P.getMachineSettingsHistory(DB, 2, model_name="DOST")
 check("9 history of a model newest first: its latest change, then the one before",
       len(history) == 2 and history[0]["setting_id"] == d["setting_id"]
       and history[1]["setting_id"] == perModel["DOST"]["setting_id"], str(history))
+check("9 bypass switch per model: off by default", d.get("bypass_press_and_tightening2") is False
+      and dp.get("bypass_press_and_tightening2") is False, f"{d.get('bypass_press_and_tightening2')} / {dp.get('bypass_press_and_tightening2')}")
+check("9 bypass switch saved for DOST only",
+      P.insertNewMachineSettings(DB, updated_by="dryrun-db", model_name="DOST", bypass_press_and_tightening2=True, **DOST_ONLY)
+      and P.getMachineSettings(DB, model_name="DOST")["bypass_press_and_tightening2"] is True
+      and P.getMachineSettings(DB, model_name="DOSTPLUS")["bypass_press_and_tightening2"] is False)
+assert P.insertNewMachineSettings(DB, updated_by="dryrun-db", model_name="DOST", **DOST_ONLY)   # off again
 cur.execute(f"delete from {SCHEMA}.machine_settings where updated_by = 'dryrun-db'")
 check("9 clean-up: settings in force back to what they were", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
 cur.execute(f"select count(*) from {SCHEMA}.machine_settings where model_name is null")

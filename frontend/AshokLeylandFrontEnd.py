@@ -62,7 +62,7 @@ from frontend.CosThetaStylesheets import (
     modeLabelStylesheet_with_no_qr_code,
     modeLabelStylesheet_with_qr_code,
     okLabelStylesheet, connectionOkLabelStylesheet,
-    notokLabelStylesheet, outcomeLabelStylesheet, companyNameStylesheet,
+    notokLabelStylesheet, outcomeLabelStylesheet, companyNameStylesheet, BYPASSED_TEXT,
 )
 from frontend.widgets.CosThetaInitialSplashScreen import CosThetaInitialSplashScreen
 from frontend.widgets.CosThetaExitingSplashScreen import CosThetaExitingSplashScreen
@@ -81,7 +81,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, sendFrontendAbortRequestFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
+from utils.RedisUtils import (readCycleSettingsForQRCode, readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, sendFrontendAbortRequestFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -164,6 +164,10 @@ class AshokLeylandFrontEnd(QMainWindow):
     processedNutAndPlateWasherCheckImage: Union[np.ndarray, None] = None
     currentNutAndPlateWasherCheckResult: Union[str, None] = None
     currentNutAndPlateWasherCheckDatetime: str = defaultTime
+
+    # Machine Setting "Bypass Component Press and Second Tightening" in force for this component: the IOServer
+    # answered Torque 1 with moveToState = the split pin picture (states 13-19 skipped)
+    bypassedPressAndTightening2: bool = False
 
     currentTighteningTorque1: float = 0.0
     currentTighteningTorque1CheckResult: str = notok
@@ -878,6 +882,7 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         AshokLeylandFrontEnd.currentQRCode = None
         AshokLeylandFrontEnd.currentQRCodeForDisplay = None
+        AshokLeylandFrontEnd.bypassedPressAndTightening2 = False
         AshokLeylandFrontEnd.currentComponentAssemblyStartDatetime = defaultTime
 
         AshokLeylandFrontEnd.originalKnuckleCheckImage = None
@@ -1318,10 +1323,22 @@ class AshokLeylandFrontEnd(QMainWindow):
             result=AshokLeylandFrontEnd.currentKnuckleCheckResult
         )
         if AshokLeylandFrontEnd.currentKnuckleCheckResult == ok:
+            self._showBypassedStepsIfSet()
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
         else:
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
         self.requestPictureAndResult()
+
+    def _showBypassedStepsIfSet(self):
+        """The bypass the IOServer wrote to the PLC in state 2 (cycleSettings:<QR>, published before QR Done): the 4
+        skipped tiles show "Bypassed" from the start. Display only - the cycle jumps on the IOServer's moveToState."""
+        try:
+            settings = readCycleSettingsForQRCode(AshokLeylandFrontEnd.processUpdationRedisConnection,
+                                                  AshokLeylandFrontEnd.currentQRCode)
+            if settings.get("bypass_press_and_tightening2"):
+                self.resultsContainer.setPressAndTightening2Bypassed()
+        except Exception:
+            noteSuppressed()
 
     def _handleHubAndBottomBearingCheck(self):
         self.showATemporaryLargeImage(
@@ -1484,8 +1501,13 @@ class AshokLeylandFrontEnd(QMainWindow):
                 value=f"{AshokLeylandFrontEnd.currentTighteningTorque1:.2f}", result=ok,
                 rotationDone=AshokLeylandFrontEnd.currentTighteningTorque1RotationDone
             )
-            # Machine 2: no separate free-rotation step; next is the bunk check before component press
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+            if AshokLeylandFrontEnd.bypassedPressAndTightening2:
+                # bung, component press, bung removal and second tightening skipped (as the IOServer and the PLC)
+                self.resultsContainer.setPressAndTightening2Bypassed()
+                self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
+            else:
+                # Machine 2: no separate free-rotation step; next is the bunk check before component press
+                self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
             self.requestPictureAndResult()
         else:
             self.resultsContainer.setTighteningTorque1Default()
@@ -1543,16 +1565,17 @@ class AshokLeylandFrontEnd(QMainWindow):
         if self.currentComponentEndTime is None:
             self.currentComponentEndTime = datetime.now()       # the processing time stops here (shown till next scan)
 
+        bypassed = AshokLeylandFrontEnd.bypassedPressAndTightening2      # skipped steps are excluded, not failed
         checks = [
             AshokLeylandFrontEnd.currentKnuckleCheckResult == ok,
             AshokLeylandFrontEnd.currentHubAndBottomBearingCheckResult == ok,
             AshokLeylandFrontEnd.currentTopBearingCheckResult == ok,
             AshokLeylandFrontEnd.currentNutAndPlateWasherCheckResult == ok,
             AshokLeylandFrontEnd.currentTighteningTorque1CheckResult == ok,  # ADD
-            AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult == ok,
-            AshokLeylandFrontEnd.currentComponentPressDone == ok,
-            AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult == ok,
-            AshokLeylandFrontEnd.currentTighteningTorque2CheckResult == ok,  # ADD
+            bypassed or AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult == ok,
+            bypassed or AshokLeylandFrontEnd.currentComponentPressDone == ok,
+            bypassed or AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult == ok,
+            bypassed or AshokLeylandFrontEnd.currentTighteningTorque2CheckResult == ok,  # ADD
             AshokLeylandFrontEnd.currentSplitPinAndWasherCheckResult == ok,
             AshokLeylandFrontEnd.currentCapCheckResult == ok,
             AshokLeylandFrontEnd.currentBunkForCapPressCheckResult == ok,
@@ -1608,6 +1631,13 @@ class AshokLeylandFrontEnd(QMainWindow):
         #        because of the use of QTimer in calling setInProcessDefaultDisplay()
         AshokLeylandFrontEnd.emergencyButtonPressed = False
 
+        # bypassed steps: result 'Bypassed', no datetime (NULL), no picture, torque 2 = -1.0, rotation done NULL
+        bypassed = AshokLeylandFrontEnd.bypassedPressAndTightening2
+        def stepResult(value):
+            return BYPASSED_TEXT if bypassed else self.okNotokResult(value)
+        def stepTime(value):
+            return "" if bypassed else value
+
         sendDataFromFEServerToDatabaseServer(redisConnection=AshokLeylandFrontEnd.databaseUpdationRedisConnection,
                                              qrCode=AshokLeylandFrontEnd.currentQRCode,
                                              knucklePicture=AshokLeylandFrontEnd.originalKnuckleCheckImage,
@@ -1625,17 +1655,17 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              tighteningTorque1=AshokLeylandFrontEnd.currentTighteningTorque1,
                                              tighteningTorque1Result=self.okNotokResult(AshokLeylandFrontEnd.currentTighteningTorque1CheckResult),
                                              tighteningTorque1Datetime=AshokLeylandFrontEnd.currentTighteningTorque1Datetime,
-                                             componentPressBunkCheckingPicture=AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage,
-                                             componentPressBunkCheckingResult=self.okNotokResult(AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult),
-                                             componentPressBunkCheckDatetime=AshokLeylandFrontEnd.currentBunkForComponentPressCheckDatetime,
-                                             componentPressDone=self.okNotokResult(AshokLeylandFrontEnd.currentComponentPressDone),
-                                             componentPressDoneDatetime=AshokLeylandFrontEnd.currentComponentPressDatetime,
-                                             noBunkCheckingPicture=AshokLeylandFrontEnd.originalNoBunkAfterComponentPressCheckImage,
-                                             noBunkCheckingResult=self.okNotokResult(AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult),
-                                             noBunkCheckDatetime=AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckDatetime,
-                                             tighteningTorque2=AshokLeylandFrontEnd.currentTighteningTorque2,
-                                             tighteningTorque2Result=self.okNotokResult(AshokLeylandFrontEnd.currentTighteningTorque2CheckResult),
-                                             tighteningTorque2Datetime=AshokLeylandFrontEnd.currentTighteningTorque2Datetime,
+                                             componentPressBunkCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage,
+                                             componentPressBunkCheckingResult=stepResult(AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult),
+                                             componentPressBunkCheckDatetime=stepTime(AshokLeylandFrontEnd.currentBunkForComponentPressCheckDatetime),
+                                             componentPressDone=stepResult(AshokLeylandFrontEnd.currentComponentPressDone),
+                                             componentPressDoneDatetime=stepTime(AshokLeylandFrontEnd.currentComponentPressDatetime),
+                                             noBunkCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalNoBunkAfterComponentPressCheckImage,
+                                             noBunkCheckingResult=stepResult(AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult),
+                                             noBunkCheckDatetime=stepTime(AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckDatetime),
+                                             tighteningTorque2=-1.0 if bypassed else AshokLeylandFrontEnd.currentTighteningTorque2,
+                                             tighteningTorque2Result=stepResult(AshokLeylandFrontEnd.currentTighteningTorque2CheckResult),
+                                             tighteningTorque2Datetime=stepTime(AshokLeylandFrontEnd.currentTighteningTorque2Datetime),
                                              splitPinAndWasherPicture=AshokLeylandFrontEnd.originalSplitPinAndWasherCheckImage,
                                              splitPinAndWasherResult=self.okNotokResult(AshokLeylandFrontEnd.currentSplitPinAndWasherCheckResult),
                                              splitPinAndWasherDatetime=AshokLeylandFrontEnd.currentSplitPinAndWasherCheckDatetime,
@@ -1652,9 +1682,10 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              freeRotationTorque1Datetime=AshokLeylandFrontEnd.currentRotationTorque1Datetime,
                                              overallResult=ok if AshokLeylandFrontEnd.finalResult == ok else notok,
                                              tighteningTorque1RotationDone=AshokLeylandFrontEnd.currentTighteningTorque1RotationDone,
-                                             tighteningTorque2RotationDone=AshokLeylandFrontEnd.currentTighteningTorque2RotationDone,
+                                             tighteningTorque2RotationDone=None if bypassed else AshokLeylandFrontEnd.currentTighteningTorque2RotationDone,
                                              aborted=aborted,
-                                             abortReason=abortReason or "aborted"
+                                             abortReason=abortReason or "aborted",
+                                             bypassedPressAndTightening2=bypassed
                                              )
         AshokLeylandFrontEnd.emergencyAfterCompletion = False
         self.resetAllDataPoints()
@@ -1989,6 +2020,7 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
         try:
             handler = self.validStates[currentState]
             self.lastRotationDone = rotationDone       # with the Station 2 torque values (None if not provided)
+            self.lastMoveToState = moveToState         # Torque 1: the split pin picture = bypass of states 13-19
             handler(value, result)
             self.gotTorqueReadingPlusCapPressAndResult.emit()
         except Exception as e:
@@ -2005,6 +2037,8 @@ class GetTorqueReadingPlusCapPressAndResultWorker(QObject):
             AshokLeylandFrontEnd.currentTighteningTorque1CheckResult = notok
         AshokLeylandFrontEnd.currentTighteningTorque1Datetime = getPostgresDatetimeFromString(getCurrentTime())
         AshokLeylandFrontEnd.currentTighteningTorque1RotationDone = getattr(self, "lastRotationDone", None)
+        AshokLeylandFrontEnd.bypassedPressAndTightening2 = (
+            result == ok and getattr(self, "lastMoveToState", None) == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
 
     def _handleComponentPress(self, value, result):
         if result == ok:

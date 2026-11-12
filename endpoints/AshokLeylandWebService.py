@@ -23,6 +23,7 @@ POST /api/<method>/<csv|json>/  the API; the body is JSON (empty {} where nothin
     "aborts": "include" (default: every record) | "only" (only aborted cycles) | "exclude" (no aborted cycles) |
               "emergency" (only aborts with the machine's emergency button) | "manual" (only manual aborts, Ctrl+Alt+Z)
     "result": "all" (default) | "ok" | "notok"
+    "bypassed": "include" (default) | "only" (component press and second tightening bypassed) | "exclude" (full cycles)
   e.g. {"aborts": "exclude", "result": "notok"} = the completed cycles that failed a check (rejects, not aborts).
   The records carry the columns aborted (true / false) and abort_reason.
   Model names match whole names, ignoring case.
@@ -75,7 +76,8 @@ def _first(body: dict, *names):
 def _filters(body: dict) -> dict:
     """The abort and result filters of a records body (checked here, so a bad value is a 400 before any query)."""
     return {"aborts": DB.resolveAbortFilter(_first(body, "aborts", "abort_filter", "abortFilter")),
-            "result": DB.resolveResultFilter(_first(body, "result", "result_filter", "resultFilter"))}
+            "result": DB.resolveResultFilter(_first(body, "result", "result_filter", "resultFilter")),
+            "bypassed": DB.resolveBypassFilter(_first(body, "bypassed", "bypass_filter", "bypassFilter"))}
 
 
 def _modelName(body: dict) -> str:
@@ -183,7 +185,7 @@ def index():
     base = request.host_url.rstrip("/")
     return render_template_string(PAGE, model_names=modelNames, base=base, api=API_REFERENCE,
                                   columns=DB.COLUMNS, note=databaseNote, abort_filters=DB.ABORT_FILTERS,
-                                  result_filters=DB.RESULT_FILTERS)
+                                  result_filters=DB.RESULT_FILTERS, bypass_filters=DB.BYPASS_FILTERS)
 
 
 # ------------------------------------------------------------------------------------------------ page
@@ -241,7 +243,9 @@ PAGE = """<!DOCTYPE html>
   <select id="aborts">{% for k, v in abort_filters.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
   <label>Result:</label>
   <select id="result">{% for k, v in result_filters.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
-  <span class="small">Dates are whole days (both included), by the time the record was saved. The two filters apply to
+  <label>Bypassed:</label>
+  <select id="bypassed">{% for k, v in bypass_filters.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+  <span class="small">Dates are whole days (both included), by the time the record was saved. The filters apply to
   every query below.</span>
 </div>
 
@@ -292,6 +296,7 @@ PAGE = """<!DOCTYPE html>
   {% for k, v in abort_filters.items() %}<code>"{{ k }}"</code> {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}.
   And <code>"result"</code>: {% for k, v in result_filters.items() %}<code>"{{ k }}"</code> {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}.
   Both together, e.g. <code>{"aborts": "exclude", "result": "notok"}</code>: completed cycles that failed a check.
+  And <code>"bypassed"</code>: {% for k, v in bypass_filters.items() %}<code>"{{ k }}"</code> {{ v }}{% if not loop.last %}; {% endif %}{% endfor %}.
   Every record has the columns <code>aborted</code> and <code>abort_reason</code>.</p>
   {% for fmt, cls in (("json", "json"), ("csv", "csv")) %}
   <h3>{{ fmt|upper }} responses</h3>
