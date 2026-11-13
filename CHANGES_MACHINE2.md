@@ -2754,6 +2754,27 @@ Architecture items not included (user).
   - **Change:** `siemens.vision.nutwasher.nut.outer.diameter.min` 70 -> **77**, midway between 70.3 and 84.2 (6.7 px
     each side). The ring fallback cannot accept that picture either: its ring measures 103 against the fallback
     maximum of 94. Verifier ALL EQUIVALENT.
-  - **Proposed, not yet done (awaiting the user):** a guard in the nut / washer check. If the top bearing ring finder
-    finds a bearing-sized ring in the nut picture (outer >= 94, mean >= 80, inner >= 65), the result is NOT OK. It
-    found one on 10/10 bearing pictures, and none on 11 nut + washer, 4 washer-only or 10 open-bore pictures.
+  - **Bearing-ring guard (user: both machines):** `CheckNutAndPlateWasher.BEARING_RING_GUARD`
+    (`<vendor>.vision.nutwasher.bearing.ring.guard`, True for both machines). Before the nut is looked for, the top
+    bearing ring finder runs on the nut picture; a ring within that machine's top bearing size limits means the
+    bearing is uncovered -> NOT OK ("[Guard] Bearing ring visible ... no nut and washer on the bearing"; the ring drawn
+    in red).
+    - **Machine 2:** a bearing-sized ring on 10/10 bearing pictures, and none on the nut + washer (11, ring outer
+      83.6-85.2, mean 71.6-72.3, inner 57.6-59.2), washer-only (4, no ring) or open-bore (10, no ring) pictures.
+    - **Machine 1** (limits outer >= 86, mean >= 75, no inner minimum): no Machine 1 nut / bearing pictures are in
+      the repo, so not run here. From the measurements recorded in sections 47-49, nuts found as a ring measured
+      outer 75-81 and mean 64-68, bearings 92-98 and 78.5-83.3. The guard would reject bearings and pass nuts, with
+      5 px (outer) and 7 px (mean) margin on the nut side. To confirm on Machine 1 pictures.
+    - **Cost:** about 1.1-1.4 s per nut / washer check on the sandbox CPU (the ring finder); about 2.4-2.7 s for a
+      whole check here. The check timeout is 12 s.
+    - Results: the full nut / washer run unchanged (67/67 nut + washer OK, 0/20 washer only, top bearing as before);
+      all 10 bearing pictures offered as the nut picture NOT OK by the guard. Verifier reference aa18044; both copies
+      ALL EQUIVALENT (193 parameters).
+  - **`siemens.vision.nutwasher.washer.threshold.r` 33 -> 38 (user):**
+    - **Washer present:** lowest 48.8 with the stand-in outline (67 pairs), 56.2 with MobileSAM (22 pictures, the
+      user's run).
+    - **No washer:** bearing against bearing of the same model, 42 pairs, highest 24.3 (24.8 in the same-part
+      pairs).
+    - **Margins at 38:** 10.8 / 18.2 below the washer values, 13.7 above the no-washer values.
+    - The window's +36.8 came from a bearing picture taken for a nut picture (MobileSAM's mask on the bearing's inner
+      ring); the guard now stops that case before the washer comparison.
