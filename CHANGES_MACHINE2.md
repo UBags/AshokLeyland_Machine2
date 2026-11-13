@@ -2656,3 +2656,32 @@ Architecture items not included (user).
 - **Pictures:** `test/machine2_dryrun/hub_images/` replaced by the 13 Nov set (DOST_01-05, DOSTPLUS_01-05); the old set
   is in git history. Verifier ALL EQUIVALENT.
 - **To confirm on the laptop (needs the models):** `DryRun_Hub_Check.py` on `hub_images`, i.e. the MobileSAM step itself.
+
+## 97. Machine 2 camera moved again: top bearing check re-centred; sizes and brightness limit checked (2026-11-13)
+
+- **Code checked:** the only position in the top bearing check is `<vendor>.vision.topbearing.annular.center`: the
+  search disc is cut round it, the two start points (`center.offsets` 0,0 and 0,-11) are relative to it, and the
+  brightness comparison cuts the hub picture of the same cycle (same camera) round it. Everything else is a size
+  (search disc 132, detection mask 66, prompt radius 40 with edge windows 0.65-1.2 / 0.8-1.6 of it, ring thickness
+  15 / 16, refinement spans, bearing limits) or a brightness limit.
+- **Old pictures (3 Nov, 4 uploaded), old settings:** all OK; ring centres (707.1-707.7, 350.9-354.4), outer
+  diameter 98.0-101.7, width 14.0-14.5, mean diameter 83.5-87.0, brighter than the hub by +51.7..+57.9.
+- **New pictures (13 Nov: DOST x2, DOSTPLUS x4), real check, OpenCV only (no models), against new open-bore hub
+  pictures:**
+  - Old centre: no ring found on any of them.
+  - **Centre sweep:** every centre within +/-15 px of (642, 340) in x and y (3 px grid) gives OK on all 6, so the
+    exact centre is not critical.
+  - **Setting:** 3 px below the rings' median centre (641, 342), as on 4 Nov: **642,345**. The start points (y 345
+    and 334) bracket both models' rings (DOST about y 335-336, DOSTPLUS 342-344; the DOST parts sat higher, as on
+    the hub pictures).
+- **At 642,345:** all 6 OK. Rings: outer diameter 102.6-107.1 (limits 86-113), width 15.0-15.5 (9-21), mean diameter
+  87.6-92.1 (>= 75), brighter than the hub by +82.7..+105.5 (limit 30). The 10 new open-bore hub pictures given as
+  bearing pictures: all NOT OK (no ring).
+- **Sizes not changed:** the rings grew by x1.035-1.05 and stay inside every limit, with 5.9 px to the outer-diameter
+  maximum. Rejecting a nut offered as a bearing rests on the outer-diameter minimum 86 (nuts measured 75-81 before
+  the move, so expect about 78-84 now) and the mean-diameter minimum 75; to be re-checked on the new nut pictures.
+- **Brightness limit (user: lower it for greasy bearings, to the Allen-Bradley value):** `final.gamma.threshold` is
+  30 on both machines and was 30 in the original production code (`FINAL_GAMMA_THRESHOLD = 30.0`), so the
+  Allen-Bradley value is the one already in use. Unchanged.
+- **Pictures:** `test/machine2_dryrun/top_bearing_images/` replaced by the 13 Nov set (DOST_bearing_01-02,
+  DOSTPLUS_bearing_01-04); the old set is in git history. Verifier ALL EQUIVALENT.
