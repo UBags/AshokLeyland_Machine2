@@ -4,7 +4,7 @@
     "camera/CheckKnuckle.py": "635215e",
     "camera/CheckHubAndBottomBearing.py": "88d3a0d",
     "camera/CheckTopBearing.py": "8d7cdd5",
-    "camera/CheckNutAndPlateWasher.py": "a29234b",
+    "camera/CheckNutAndPlateWasher.py": "9e2812a",
     "camera/HexagonNutDetector.py": "4e04121",
     "camera/CheckCap.py": "e9171d2",
     "camera/BunkSegmenter.py": "f399967"

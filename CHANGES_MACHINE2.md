@@ -2788,4 +2788,25 @@ Architecture items not included (user).
       CPU; the camera server's log of each check's time shows it.
     - Results unchanged: 67/67, 0/20, 24 no-washer pairs under 38, top bearing 12/12 with 0/31, guard 10/10.
       Verifier reference a29234b; both copies ALL EQUIVALENT.
+  - **Guard moved to the camera server process (user, after measuring 2.0-2.2 s per nut check on the laptop):** a thread
+    beside the nut detector gave no real overlap. Both are mostly Python-level work, and Python runs one thread's
+    Python code at a time (the GIL). Measured: ring finder 1.03-1.18 s alone, Python work 1.20 s alone, the two in
+    threads 1.91-2.02 s, in two processes 1.20 s. A process pool inside the check is impossible: the checks run in
+    the vision check worker, a daemon process, which may not start children ("daemonic processes are not allowed to
+    have children", tested).
+    - **Now:** the camera server, which only waits while the worker runs a check (it talks to the worker over a
+      multiprocessing Pipe), runs the ring finder in a thread of its own process on a copy of the nut picture
+      (`VisionCheckWorker._startBearingRingGuard`, in `assess` right after the job is sent). After the worker's
+      verdict it takes the ring (`_finishBearingRingGuard`, at most 5 s more, `GUARD_MAX_WAIT_SECS`). A bearing-sized
+      ring makes the verdict NOT OK, with the ring drawn in red and the reason "bearing ring visible ...". Logged
+      each time with the ring finder's time and the wait after the check.
+    - **In the worker process** `_workerMain` sets `CheckNutAndPlateWasher.GUARD_DONE_BY_CALLER = True`, so the check
+      itself skips the guard. In-thread mode (`check.in.worker.process=False`) and the dry-run windows keep the guard
+      inside the check (correct, about 1 s slower). The decision is one function for both,
+      `CheckNutAndPlateWasher.bearingRingVerdict`.
+    - **Checked:** new `DryRun_Bearing_Ring_Guard.py` (both folders) 9/9: every nut check 1.21 s against a 1.2 s
+      worker, waited 0.00 s after the check. The 11 nut + washer pictures OK, the 4 washer-only without a bearing ring,
+      the 10 bearings NOT OK "bearing ring visible"; other states and the guard switched off unaffected.
+      DryRun_Vision_Check_Timeout 22/22. The in-check path as before (67/67, 0/20, guard 10/10). Verifier reference
+      9e2812a; ALL EQUIVALENT.
 

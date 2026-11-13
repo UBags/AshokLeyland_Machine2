@@ -62,6 +62,7 @@ def _workerMain(conn) -> None:
         pass
     import camera.CameraProcessorServer as cps
     cps.ImageProcessor.fetchQRCodeInChecks = False        # the camera server sends the QR code with the job
+    cps.CheckNutAndPlateWasher.GUARD_DONE_BY_CALLER = True   # the camera server runs the bearing-ring guard (assess)
     try:
         problems = cps.verifyVisionDependencies(loadModels=True)
     except Exception as e:
@@ -118,6 +119,10 @@ def _warmUp(cps) -> None:
         cps.ImageProcessor.restoreState(snapshot)
     _log('logInfo', f"Vision check worker: warm-up of the model-based checks took {time.monotonic() - t0:.1f} s "
                     f"(the NOT OK results logged during it are on blank pictures, not parts)")
+
+
+# Longest wait for the bearing-ring guard after the worker's verdict (it normally finishes during the check)
+GUARD_MAX_WAIT_SECS = 5.0
 
 
 class VisionCheckWorker:
@@ -243,6 +248,7 @@ class VisionCheckWorker:
             except (EOFError, OSError, BrokenPipeError, AttributeError) as e:
                 self._restart(f"could not send the check ({e})")
                 return False, fallback, fallback, "vision check worker stopped; restarting"
+            guard = self._startBearingRingGuard(state, images)    # runs here while the worker runs the check
             sentAt = time.monotonic()
             deadline = sentAt + timeout
             while True:
@@ -275,4 +281,54 @@ class VisionCheckWorker:
         if error:
             _log('logCritical', f"{getattr(state, 'name', state)}: the check raised {error}")
             return False, fallback, fallback, f"check failed ({error})"
+        if guard is not None:
+            bearingVisible, annotated, reason = self._finishBearingRingGuard(guard, images[0])
+            if bearingVisible:
+                return False, annotated, original, reason
         return allok, processed, original, None
+
+    # ------------------------------------------------------------------------------------------------ guard
+    @staticmethod
+    def _startBearingRingGuard(state, images: list):
+        """Nut and plate washer check only, guard on: the top bearing ring finder on a copy of the picture, in a thread of
+        the camera server, while the worker process runs the nut check (two processes: truly in parallel). None when
+        not applicable."""
+        from camera.CameraProcessorServer import CheckNutAndPlateWasher, CheckTopBearing
+        from statemachine.StateMachine import MachineState
+        if (state != MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER or not images
+                or images[0] is None or not CheckNutAndPlateWasher.BEARING_RING_GUARD):
+            return None
+        picture = images[0].copy()
+        box = {}
+
+        def run():
+            started = time.monotonic()
+            try:
+                box["ring"] = CheckTopBearing.findRing(picture)
+            except Exception as e:
+                box["error"] = str(e) or type(e).__name__
+            box["secs"] = time.monotonic() - started
+
+        thread = threading.Thread(target=run, name="Bearing-ring guard", daemon=True)
+        thread.start()
+        return thread, box
+
+    @staticmethod
+    def _finishBearingRingGuard(guard, picture) -> Tuple[bool, Any, str]:
+        """Wait for the guard (it normally finished while the worker ran the check) and decide."""
+        from camera.CameraProcessorServer import CheckNutAndPlateWasher
+        thread, box = guard
+        waitedFrom = time.monotonic()
+        thread.join(GUARD_MAX_WAIT_SECS)
+        waited = time.monotonic() - waitedFrom
+        if thread.is_alive():
+            _log('logWarning', f"Bearing-ring guard: no answer in {GUARD_MAX_WAIT_SECS:g} s after the check; not applied")
+            return False, None, ""
+        if "error" in box:
+            _log('logWarning', f"Bearing-ring guard: ring finder failed ({box['error']}); not applied")
+            return False, None, ""
+        visible, annotated, reason = CheckNutAndPlateWasher.bearingRingVerdict(picture, box.get("ring"))
+        _log('logError' if visible else 'logInfo',
+             f"Bearing-ring guard (camera server): {reason or 'no ring in the picture'} - ring finder {box['secs']:.2f} s, "
+             f"waited {waited:.2f} s after the check")
+        return visible, annotated, reason
