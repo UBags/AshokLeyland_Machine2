@@ -2810,3 +2810,67 @@ Architecture items not included (user).
       DryRun_Vision_Check_Timeout 22/22. The in-check path as before (67/67, 0/20, guard 10/10). Verifier reference
       9e2812a; ALL EQUIVALENT.
 
+
+## 99. Machine 2 camera moved again: cap check re-centred, re-measured, and a seating step for skewed caps (2026-11-14)
+- **What depends on the camera position:** the centre (all three circles: r DOST, r DOSTPLUS, the r25 brightness
+  circle) and the two radii. The six brightening limits compare the cap picture with the hub, top bearing and nut
+  pictures of the same part, so they were re-measured against the new pictures of those three. The R-B and brightness
+  limits are colour / lighting, re-checked.
+- **Old settings confirmed** on 18 pictures from the earlier position (13 already in `cap_images/`): cap rim fitted at
+  (704-710, 344-352) r 97-100 (setting 707,348, r100); brass insert r 81-84 (r70 inside it); brass R-B(r70) +43.1..+44.7,
+  silver R-B(r100) -13.8..-18.0, silver brightness(r25) 111-168.
+- **New pictures:** 20 (11 silver, 9 brass), `cap_images/` replaced. 10 of them are caps placed skewed (pushed
+  off-centre or tilted): `<MODEL>_skewed_NN`; seated ones `<MODEL>_cap_NN`. The user's labels; DOST_skewed_01 (first
+  thought "unsure") measured skewed, DOSTPLUS_cap_05 (likewise) measured seated, and both confirmed by the user.
+- **Machine 2 values** (`siemens.vision.cap.*`, all three properties files; Machine 1 unchanged):
+
+  | key | was | now | measured |
+  |---|---|---|---|
+  | center | 707,348 | 644,340 | hub bore centre (hub recess fitted r 106-111 at 642-648, 336-344) |
+  | radius.dost / .dostplus | 100 / 70 | 109 / 76 | x1.09: the cap sits nearer the camera, like the nut |
+  | rb.threshold.dostplus | 15 | 35 | brass R-B(r76) 66.9+; silver 1.5 at most, no cap 4.5 at most |
+  | rb.threshold.dost | -1 | 20 | silver R-B(r109) -2.2 at most (a skewed cap lets rusty flange into the circle; -1 left 1.2 margin), brass 44.4+. Bare steel without a cap now reads +0.8..+7: the brightness test rejects it |
+  | silver.brightness.min | 100 | 125 | silver caps 170-238 (lighting brighter), no cap 60-83 |
+  | delta.threshold hub / top / nut .dost | 40 / 30 / 28 | 64 / 50 / 50 | lowest with a cap 84.5 / 65.0 / 68.0, highest without (nut / washer pictures as either model) 44.6 / 36.3 / 32.1 |
+  | delta.threshold hub / top / nut .dostplus | 43 / 30 / 20 | 61 / 42 / 37 | 74.6 / 53.8 / 52.7 vs 48.7 / 31.6 / 23.1 |
+
+  Each limit is midway between the two. Every value holds with the centre anywhere within +-10 px of 644,340, except
+  the old silver R-B limit (-1), which is why it moved. Lighting is the same across the four picture sets (outer disc
+  band 103-120 in each), so the brightening values are real, not a lighting change.
+- **Skewed caps passed the check before:** colour, brightness and brightening ask only whether there is enough bright,
+  cap-coloured metal in the circle; a skewed cap has plenty. Tried and rejected (measured on the 20 pictures):
+  - fixed-centre tests (dark gap in a ring, cap centre by colour, rim edge at the seated radius): brass separates,
+    silver does not - some skewed silver caps move only 3-7 px, as much as the hub's own placement on the fixture
+    (bore centre over 10 hub pictures of different parts: 641-646, 334-342);
+  - oval shape: does not separate;
+  - the cap outline against the bore of a hub picture (`currentPictures`): needs the same part's hub picture; with
+    other parts' hubs a seated cap read 9.4 px;
+  - outline template matching: separates, but needs a stored picture, and all pictures are one hub per model.
+- **Step 4, seating (`CheckCap.checkSeating`; on for Machine 2, `vision.cap.seating.check`):** MobileSAM, one point
+  prompt at `cap.center`, three masks back (small to large), picked by radius:
+  - **brass:** the cap face (`seating.brass.radius` 75-95) and the bore round it (`seating.bore.radius` 104-120), both
+    from the cap picture; cap centre to bore centre <= `seating.brass.offset.max` (9). Seated 0.8-1.7 px, skewed
+    16.0-17.6;
+  - **silver:** the cap outline (`seating.silver.radius` 95-112), then its top face (box = outline centre +-
+    `seating.face.box.scale` 0.8 x its radius, point at that centre, the smallest mask). A tilted cup keeps its body in
+    the bore but its top slides over and the side wall shows on one side. Top face centre to outline centre <=
+    `seating.silver.face.offset.max` (9). Seated 1.6-4.3 px, skewed 14.4-20.3.
+  Both are self-referenced (no fixed centre, no other picture), so the hub's placement on the fixture does not matter.
+  Run only when the right cap is found and the brightening passes; no mask found = NOT OK. The marked picture shows
+  the bore (blue), the cap (green / red), the top face (yellow) and "CAP: NOT SEATED" with the offset. Logged.
+  MobileSAM through `ModelManager` (shared model, one `SamPredictor` per thread, as the nut detector); about 1.3 s on
+  the CPU here, less on the GPU. No extra warm-up: the worker's warm-up already runs the model through the hub check.
+- **The hub picture is not used by the seating step** (user's question). It is kept for the cap check's brightening
+  step in `ImageProcessor.currentPictures` (camera server, in memory), for all later checks of the component, and
+  set to None by `ImageProcessor.endOfCycle()` - on the IOServer's end-of-cycle message (cycle completed or aborted)
+  and at the knuckle check of the next component. Unchanged.
+- **Tool:** `test/SAMSegmentation_CapSeating.py`, derived from `SAMSegmentation_v0.996` (the user's): MobileSAM cap
+  and bore segmentation and the two seating measures, with editable limits; tkinter window (cap pictures, optional hub
+  pictures of the same parts, CSV of a folder) or `--batch <folder> [--hub ...] [--csv] [--save]`. No YOLO needed.
+- **Checked:** `DryRun_Cap_Check.py` (both folders; now also skewed rows, each NOT OK with seating on and OK with it
+  off, and the seating offset printed), with the real MobileSAM model: Machine 2 - 10 seated caps OK, 10 caps as the
+  other model NOT OK, 10 skewed caps NOT OK only through seating, 30 no-cap rows NOT OK: all as expected. Machine 1
+  (seating off) - 13 caps identified, 13 wrong-model NOT OK, as before. DryRun_Vision_Check_Timeout 22/22. Verifier
+  reference 8a38061 for CheckCap; both copies ALL EQUIVALENT.
+- **To check on the laptop:** `DryRun_Cap_Check.py` (ModelManager loads MobileSAM and YOLO); the seating step's time
+  on the GPU in the camera server log.

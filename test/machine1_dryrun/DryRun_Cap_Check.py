@@ -8,10 +8,13 @@ The check:
      within silver.brightness.radius reaches silver.brightness.min; else none;
   2. it must be the model's cap (DOST silver, DOSTPLUS brass - the model comes from the QR code);
   3. the cap picture must be brighter than each earlier picture of the same part (hub + bottom bearing, top bearing,
-     nut + plate washer) by at least delta.threshold.<hub|top|nut>.<model of the cap found>.
+     nut + plate washer) by at least delta.threshold.<hub|top|nut>.<model of the cap found>;
+  4. (cap.seating.check) the cap must be seated - MobileSAM: brass cap centre to the bore centre round it, silver top
+     face centre to the cap outline centre, within seating.brass.offset.max / seating.silver.face.offset.max.
 
 Pictures (in this folder):
-  cap_images/<MODEL>_cap_NN.jpg                       the cap pictures
+  cap_images/<MODEL>_cap_NN.jpg                       the cap pictures (seated)
+  cap_images/<MODEL>_skewed_NN.jpg                    caps placed skewed (off-centre or tilted)
   hub_images/<MODEL>_NN.jpg                            hub + bottom bearing pictures
   top_bearing_images/<MODEL>_bearing_NN.jpg            top bearing pictures
   nut_washer_images/<MODEL>_nut_NN.jpg (and _washer_)  nut + plate washer pictures
@@ -20,10 +23,13 @@ its model: the table shows the lowest and highest brightening; the check itself 
 give the lowest brightening for a cap (hardest case to accept) and the highest for a picture without a cap (hardest case
 to reject). Without earlier pictures only steps 1 and 2 are reported.
 
-Rows: every cap as its own model (must be OK); every cap as the other model (wrong cap, must be NOT OK); every nut /
-washer picture as the cap picture (cap left off), as DOST and as DOSTPLUS (must be NOT OK).
+Rows: every seated cap as its own model (must be OK); every cap as the other model (wrong cap, must be NOT OK); every
+skewed cap as its own model (must be NOT OK with seating on, and OK with seating off - so it is the seating step that
+rejects it; only when seating is on for this machine); every nut / washer picture as the cap picture (cap left off), as
+DOST and as DOSTPLUS (must be NOT OK). The seating column shows the measured offset (seated caps and skewed caps).
+Seating needs MobileSAM (models/MobileSAM, through ModelManager), as in production.
 
-Run from the project root:   python test/machine1_dryrun/DryRun_Cap_Check.py   [--save]   (--save writes the check's
+Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Check.py   [--save]   (--save writes the check's
 marked pictures to cap_images/cap_results/)
 """
 import glob
@@ -56,6 +62,8 @@ def main() -> int:
             module.nutAndPlateWasherPictureKeyString)
     print(f"Machine: {os.environ['COSTHETA_PLC_VENDOR']}   centre {tuple(CheckCap.CENTER)}   "
           f"radius DOST {CheckCap.RADIUS_DOST} / DOSTPLUS {CheckCap.RADIUS_DOSTPLUS}")
+    print(f"Seating: {'on' if CheckCap.SEATING_CHECK else 'off'} - brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, "
+          f"silver top face to outline <= {CheckCap.SEATING_SILVER_FACE_OFFSET_MAX} px")
     print(f"Which cap: brass if R-B(r{CheckCap.RADIUS_DOSTPLUS}) > {CheckCap.RB_THRESHOLD_DOSTPLUS}; else silver if "
           f"R-B(r{CheckCap.RADIUS_DOST}) < {CheckCap.RB_THRESHOLD_DOST} and brightness(r{CheckCap.SILVER_BRIGHTNESS_RADIUS}) "
           f">= {CheckCap.SILVER_BRIGHTNESS_MIN}; else none")
@@ -78,7 +86,13 @@ def main() -> int:
             found = "none"
         return found, rbBrass, rbSilver, bright
 
-    def run(name, image, model, expectOK, exclude=None, tag=""):
+    def seatingText(image, found):
+        if not CheckCap.SEATING_CHECK or found == "none":
+            return ""
+        s = CheckCap.checkSeating(image, "DOSTPLUS" if found == "brass" else "DOST")
+        return f"seat {s['offset']:5.1f}/{s['limit']}" if s["offset"] is not None else f"seat: {s['reason']}"
+
+    def run(name, image, model, expectOK, exclude=None, tag="", skewed=False):
         nonlocal failures
         found, rbBrass, rbSilver, bright = capFound(image)
         group = bases(model)
@@ -94,14 +108,23 @@ def main() -> int:
                 cells.append(f"{label} {min(x[0] for x in d):5.1f}-{max(x[0] for x in d):5.1f}")
             annotated, ok = CheckCap.checkCap(image, dict(zip(keys, chosen)), QR[model])
             verdict = "OK" if ok else "NOT OK"
+            if skewed:      # the same picture with seating off must be OK: it is the seating step that rejects it
+                CheckCap.SEATING_CHECK = False
+                try:
+                    _, okWithout = CheckCap.checkCap(image, dict(zip(keys, chosen)), QR[model])
+                finally:
+                    CheckCap.SEATING_CHECK = True
+                verdict += f" (seating off: {'OK' if okWithout else 'NOT OK'})"
+                ok = ok or not okWithout
         else:
             annotated = image
             ok = {"brass": "DOSTPLUS", "silver": "DOST"}.get(found) == model
             verdict = ("cap " + ("OK" if ok else "NOT OK")) + " (no earlier pictures)"
         wrong = ok != expectOK
         failures += wrong
+        seat = seatingText(image, found) if (expectOK or skewed) else ""
         print(f"    {name:24s} as {model:8s} cap={found:6s} R-B {rbBrass:6.1f}/{rbSilver:6.1f} bright {bright:5.0f}  "
-              f"{' | '.join(cells):45s} {verdict}{'   <-- UNEXPECTED' if wrong else ''}")
+              f"{' | '.join(cells):45s} {seat:16s} {verdict}{'   <-- UNEXPECTED' if wrong else ''}")
         if SAVE and all(group):
             outDir.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(str(outDir / f"{pathlib.Path(name).stem}_as_{model}{tag}.png"), annotated)
@@ -117,6 +140,14 @@ def main() -> int:
         print(f"\n=== {model} caps as {other[model]} (wrong cap) - must be NOT OK")
         for name, image in caps:
             run(name, image, other[model], False)
+    if CheckCap.SEATING_CHECK:
+        for model in ("DOST", "DOSTPLUS"):
+            skewed = pictures(f"cap_images/{model}_skewed_*.*")
+            print(f"\n=== {model} caps placed skewed ({len(skewed)}), as {model} - must be NOT OK (not seated)")
+            for name, image in skewed:
+                run(name, image, model, False, skewed=True)
+    else:
+        print("\n(seating check off on this machine - skewed caps not checked)")
     noCap = pictures("nut_washer_images/*.*")
     for model in ("DOST", "DOSTPLUS"):
         print(f"\n=== no cap: nut / washer pictures as {model} - must be NOT OK")
