@@ -40,6 +40,7 @@ import importlib
 from statemachine.StateMachine import MachineState
 from Configuration import CosThetaConfigurator
 from utils.RedisUtils import (
+    publishCycleSettingsForQRCode, CYCLE_SETTINGS_KEY_PREFIX,
     sendDataFromQRCodeServerToFEServer,
     sendComponentQRCodeFromQRCodeServerToCameraServer,
     sendDataFromCameraServerToFEServer,
@@ -111,6 +112,11 @@ def createDisplayString(qrCode: str, printQRCode: bool = False) -> Union[str, No
     displayString = tempDisplayValue
     return displayString
 
+# Steps a bypassed cycle skips (Machine Setting "Bypass Component Press and Second Tightening")
+BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
+                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MachineState.READ_TIGHTENING_TORQUE_2)
+
+
 class TestStep:
     """Represents a single step in the test pipeline."""
 
@@ -148,6 +154,11 @@ class ImageProcessorTestUI:
         # Current QR code
         self.current_qr_code: str = ""
 
+        # Bypass of the component press and second tightening (Machine Setting per model, 2026-11-13): taken when the
+        # QR code is sent; then this window plays the IOServer as when it wrote PC_PLC_Skip_Second_Tightening = True
+        self.bypass_var = tk.BooleanVar(self.root, value=False)
+        self.cycle_bypass: bool = False
+
         # Current state index (which step we're on)
         self.current_step_index: int = 0
 
@@ -158,7 +169,7 @@ class ImageProcessorTestUI:
         self.bearing_geometry: Optional[dict] = None
 
         # Live camera mode flag
-        self.use_live_camera = tk.BooleanVar(value=False)
+        self.use_live_camera = tk.BooleanVar(self.root, value=False)
 
         # Set while the last message has not yet been consumed (buttons are disabled meanwhile)
         self.waiting_for: Optional[str] = None
@@ -251,6 +262,12 @@ class ImageProcessorTestUI:
         redis_status = "Connected" if self.redis_connection else "Disconnected"
         self.redis_label = ttk.Label(status_frame, text=f"Redis: {redis_status}")
         self.redis_label.pack(side="right", padx=20)
+
+        bypass_frame = ttk.Frame(scrollable_frame, padding="5")
+        bypass_frame.pack(fill="x", padx=5)
+        ttk.Checkbutton(bypass_frame, variable=self.bypass_var,
+                        text="Bypass Component Press and Second Tightening (taken when the QR code is sent: the bung, "
+                             "component press, bung removal and Torque 2 steps are skipped)").pack(side="left")
 
         # Live Camera Mode checkbox
         mode_frame = ttk.LabelFrame(scrollable_frame, text="Camera Mode", padding="5")
@@ -459,9 +476,34 @@ class ImageProcessorTestUI:
     def _advance(self):
         """Move to the next step; after the final step start the next cycle at the QR step."""
         self.current_step_index += 1
+        # bypassed cycle: after Torque 1 straight to the split pin picture (as the IOServer and the PLC)
+        while self.cycle_bypass and self.current_step_index < len(self.steps) and \
+                self.steps[self.current_step_index].state in BYPASSED_STATES:
+            self._mark_bypassed(self.current_step_index)
+            self.current_step_index += 1
         if self.current_step_index >= len(self.steps):
             self.current_step_index = 0
             self.status_label.config(text="Cycle complete - FE sends the record to the DB server. Send the next QR Code.")
+
+    def _mark_bypassed(self, idx: int):
+        step, widgets = self.steps[idx], self.step_widgets[idx]
+        label = {"camera": "result_label", "torque": "value_label", "torque_final": "value_label",
+                 "done": "status_label"}.get(step.step_type)
+        if label and label in widgets:
+            widgets[label].config(text="Bypassed (Machine Setting)", foreground="gray")
+
+    def _publish_bypass(self, qr_code: str):
+        """What the IOServer publishes in state 2: cycleSettings:<QR> with the bypass (the frontend marks the 4 tiles
+        'Bypassed'); without the bypass the key is removed."""
+        self.cycle_bypass = bool(self.bypass_var.get())
+        for widgets in self.step_widgets.values():          # "Bypassed" marks of the previous cycle
+            for label in ("result_label", "value_label", "status_label"):
+                if label in widgets and str(widgets[label].cget("text")).startswith("Bypassed"):
+                    widgets[label].config(text="", foreground="")
+        if self.cycle_bypass:
+            publishCycleSettingsForQRCode(self.redis_connection, qr_code, {"bypass_press_and_tightening2": True})
+        else:
+            self.redis_connection.delete(f"{CYCLE_SETTINGS_KEY_PREFIX}{qr_code}")
 
     def _send_qr_code(self, qr_code: str, model_name: str):
         """Send QR code to FE Server and Camera Server."""
@@ -475,6 +517,7 @@ class ImageProcessorTestUI:
 
             # Send to FE Server for display
             display_string = createDisplayString(qr_code)
+            self._publish_bypass(qr_code)
             sendDataFromQRCodeServerToFEServer(
                 redisConnection=self.redis_connection,
                 qrCode=qr_code,
@@ -781,7 +824,10 @@ class ImageProcessorTestUI:
             sendDataFromIOServerToFEServer(
                 redisConnection=self.redis_connection,
                 currentMachineState=step.state,
-                moveToState=MachineState.READ_QR_CODE if is_final else MachineState.INVALID_STATE,
+                moveToState=(MachineState.READ_QR_CODE if is_final
+                             else MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER
+                             if self.cycle_bypass and step.state == MachineState.READ_TIGHTENING_TORQUE_1
+                             else MachineState.INVALID_STATE),
                 result=ok,
                 action=moveAheadToNextComponent if is_final else updateValueCommand,
                 value=value,
@@ -843,6 +889,7 @@ class ImageProcessorTestUI:
             self.current_step_index = 0
             self.waiting_for = None
             self.current_qr_code = ""
+            self.cycle_bypass = False
             self.stored_images = {}  # Clear stored intermediate images
             self.bearing_geometry = None  # Clear bearing geometry
             self.qr_display.config(text="No QR Code selected")
@@ -856,11 +903,11 @@ class ImageProcessorTestUI:
 
                 if step.step_type == "camera":
                     widgets["file_label"].config(text="No file selected")
-                    widgets["result_label"].config(text="")
+                    widgets["result_label"].config(text="", foreground="")
                 elif step.step_type in ("torque", "torque_final"):
-                    widgets["value_label"].config(text="")
+                    widgets["value_label"].config(text="", foreground="")
                 elif step.step_type == "done":
-                    widgets["status_label"].config(text="")
+                    widgets["status_label"].config(text="", foreground="")
 
             self._update_button_states()
             self.status_label.config(text="Reset complete - Select QR Code to begin")

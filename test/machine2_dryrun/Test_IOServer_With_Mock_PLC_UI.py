@@ -21,6 +21,10 @@ What it does:
    answer, then answers the PLC NOT OK itself (CHANGES 81). Pressing OK / Not OK by hand can take longer: the
    "Camera answer timeout" box (this window's IOServer runs in this process) sets it for this session; the step
    shows when the IOServer has answered NOT OK on its own.
+5b. Bypass (Machine Setting "Bypass Component Press and Second Tightening", per model, 2026-11-13): with the setting on
+   for the QR code's model the IOServer writes PC_PLC_Skip_Second_Tightening = True in state 2 (MockPLC takes any tag);
+   the IOServer then goes from Torque 1 to the split pin picture. The step buttons follow the IOServer's state; the
+   auto cycle skips steps 6-9 (states 13-19), as the PLC does, and expects them missing from the trace.
 6. No heartbeat server: the IOServer then applies no server-down rules, as when it is commissioned on its own
    (before 2026-11-07 the window sent "combined ALIVE" messages; the IOServer now takes those for a heartbeat server,
    and holds cycles when they stop).
@@ -132,7 +136,8 @@ TORQUE_TAGS = {
 CYCLE_SETTING_ATTRS = tuple(a for a in ("PC_PLC_LH_RH_Selection", "PC_PLC_ModelSelection",
                                          "PC_PLC_TighteningTorque1Setpoint", "PC_PLC_TighteningTorque2Setpoint",
                                          "PC_PLC_RotationRPM1", "PC_PLC_RotationRPM2",
-                                         "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW")
+                                         "PC_PLC_RotationRPM", "PC_PLC_NoOfRotation1CCW", "PC_PLC_NoOfRotation1CW",
+                                         "PC_PLC_Skip_Second_Tightening")
                             if getattr(PLCIOServer, a, ""))       # empty tag name = not on this PLC
 SYSTEM_ATTRS = ("PLC_PC_EmergencyAbort", "PLC_PC_WatchTag", "PC_PLC_ConnectionStatusTag")
 
@@ -648,6 +653,7 @@ class TestIOServerGUI:
             for idx, label, kind, trig, first, last, _tags in STEPS:
                 if first.value in skipped:
                     self._set_status(f"Auto: Step {idx}: {label} - bypassed (Machine Setting of the model)")
+                    self._set_step_status(idx, "Bypassed (Machine Setting of the model)", "gray")
                     continue
                 self._set_status(f"Auto: Step {idx}: {label}")
                 if kind == QR:

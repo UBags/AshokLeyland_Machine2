@@ -26,6 +26,9 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
       code -> the 4 skipped tiles show 'Bypassed'; Torque 1 with moveToState = split pin picture -> the frontend skips
       to it; the record: overall OK, 'Bypassed' / no datetime / torque 2 -1.0 / no pictures for the skipped steps,
       marked bypassed; the next component runs in full. Machine Settings: the checkbox, password, Yes / No.
+  F13. The Tk windows that play the servers, with "Bypass ..." ticked (needs a display: xvfb-run): the simulated-inputs
+      window drives a whole bypassed cycle (11 messages, record OK and bypassed); the image-files window publishes the
+      bypass with the QR code and sends Torque 1 with moveToState = split pin (both move there; 4 steps 'Bypassed').
   F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
       the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
       (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
@@ -579,6 +582,71 @@ def driver():
         asked.clear(); SP.sg.popup_yes_no = lambda text, **k: "No"
         check("F12 admin123 + No -> not saved", SP.confirmMachineSettingsChange("DOST", new, old) is False)
         SP.getJustPassword, SP.sg.popup_yes_no, SP.showErrorMessage = _pw, _yn, _err
+
+        # ---------------- F13 (2026-11-13) ----------------
+        print("\n=== F13. The Tk test windows that play the servers: bypass option ===", flush=True)
+        if not os.environ.get("DISPLAY"):
+            print("     (no DISPLAY: F13 needs one for Tk - run under xvfb-run)", flush=True)
+        else:
+            import importlib.util as _ilu, tkinter as _tk
+            _here = pathlib.Path(__file__).resolve().parent
+            def _load(name):
+                spec = _ilu.spec_from_file_location(name, str(_here / f"{name}.py"))
+                mod = _ilu.module_from_spec(spec); spec.loader.exec_module(mod); return mod
+            sim = _load("Test_FEServer_Simulated_Inputs_UI")
+            _root = _tk.Tk()
+            simApp = sim.FrontEndTesterApp(_root)
+            simApp.wait_for_fe.set(False); simApp.bypass_var.set(True)
+            assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+            time.sleep(1.0); r.delete(fe2dbq)
+            sent, cycle0 = [], simApp.cycle_count
+            while simApp.cycle_count == cycle0 and len(sent) < 20:
+                cmd = sim.commands[simApp.current_command_index]
+                assert wait_for(lambda: state() == cmd["state"], 10), f"FE not in {cmd['state'].name} ({state().name})"
+                time.sleep(0.3)
+                simApp._send(ok); sent.append(cmd["state"])
+                assert wait_for(lambda: consumed(cmd["queue"]), 10)
+                _root.update()
+            check("F13 Simulated-inputs window, Bypass ticked: QR, 4 pictures, Torque 1, then split pin ... free rotation "
+                  "(the bung, press, bung removal and Torque 2 steps not sent)",
+                  not (set(sent) & set(sim.BYPASSED_STATES)) and len(sent) == 11, [x.name for x in sent])
+            rec = None; t0 = time.time()
+            while time.time() - t0 < 8 and rec is None:
+                got = readDataInDatabaseServerFromFEServer(r, block=200, returnRotationDone=True, returnAbort=True,
+                                                           returnBypassed=True)
+                rec = got if got[0] else None
+            check("F13 ... the frontend's record: overall OK, marked bypassed",
+                  rec is not None and rec[OVERALL_IDX] == ok and rec[-1] is True, str(rec[-3:]) if rec else None)
+            simApp.bypass_var.set(False)
+            check("F13 ... the next QR code without the bypass removes cycleSettings:<QR> (full run)",
+                  wait_for(lambda: state() == MS.READ_QR_CODE, 10) and (simApp._send(ok) or True)
+                  and r.get(f"{CYCLE_SETTINGS_KEY_PREFIX}{sim.DEFAULT_QR_CODE}") is None and not sim.BYPASS["cycle"])
+            sendEmergencyAbortFromIOServerToFEServer(r)
+            assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+            time.sleep(1.0); r.delete(fe2dbq)
+
+            img = _load("Test_FEServer_Mock_With_Image_Files_UI")
+            _root2 = _tk.Toplevel(_root)
+            imgApp = img.ImageProcessorTestUI(_root2)
+            imgApp.bypass_var.set(True)
+            imgApp._send_qr_code(img.DOST_QR_CODE, "DOST")
+            check("F13 Image-files window, Bypass ticked: the QR code publishes the bypass for the frontend",
+                  readCycleSettingsForQRCode(r, img.DOST_QR_CODE).get("bypass_press_and_tightening2") is True)
+            assert wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, 10)
+            for i, st in enumerate(SEQUENCE[:4]):
+                send_step(st[0], st[1], st[2], seed=500 + i)          # the 4 pictures (camera checks not run here)
+            imgApp.current_step_index = 5
+            imgApp._send_torque(imgApp.steps[5], 5, 18.9, 19.1)
+            check("F13 ... Torque 1 sent with moveToState = split pin: the frontend and the window both go to the split pin "
+                  "step, the 4 steps between marked 'Bypassed'",
+                  wait_for(lambda: state() == MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, 6)
+                  and imgApp.steps[imgApp.current_step_index].state == MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER
+                  and all(str(imgApp.step_widgets[i][k].cget("text")).startswith("Bypassed")
+                          for i, k in ((6, "result_label"), (7, "status_label"), (8, "result_label"), (9, "value_label"))),
+                  f"{state().name} {imgApp.current_step_index}")
+            sendEmergencyAbortFromIOServerToFEServer(r)
+            assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+            _root.destroy()
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:

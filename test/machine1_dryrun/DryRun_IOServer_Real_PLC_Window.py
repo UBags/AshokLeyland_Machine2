@@ -3,7 +3,9 @@
 The real window (Tk) against the real IOServer (PLCIOServer) on the simulated PLC of _plc_sim.py, in this process (the
 window itself only talks to the IOServer over Redis, as with the real PLC): state read over Redis, "Get Tag Values" (every
 tag in the dump), "Send LHS QRCode", "OK" before the PLC asks (not sent), a PLC trigger then "OK" for the knuckle (OK before Done), "Reset to Step 0" (abort to
-the IOServer, back at the QR code). Needs Redis, PostgreSQL and a display (on Linux without one: xvfb-run). Vendor:
+the IOServer, back at the QR code); the bypass of the component press and second tightening (DOST setting): the window
+marks steps 6-9 "Bypassed" and goes on at the split pin (Allen-Bradley: the simulated PLC has the tag; Siemens: no
+address, full run). Needs Redis, PostgreSQL and a display (on Linux without one: xvfb-run). Vendor:
 COSTHETA_PLC_VENDOR, else plc.vendor.
 
     python test/<this folder>/DryRun_IOServer_Real_PLC_Window.py
@@ -87,9 +89,70 @@ def scenario():
         check("R7 'Reset to Step 0' -> abort sent, IOServer back at the QR code, window confirms",
               until(lambda: "back at the QR code" in app.status_text.get("1.0", "end"), 15)
               and io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), app.status_text.get("1.0", "end")[-160:])
+        bypassScenario()
     except Exception as e:
         import traceback; traceback.print_exc(); check("scenario raised", False, str(e))
     finally:
         print(f"RESULT {sum(o for _, o in res)}/{len(res)}", flush=True); os._exit(0 if all(o for _, o in res) else 1)
+VISION_TAGS = {1: (IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDone),
+               2: (IOServer.PLC_PC_CheckHub, IOServer.PC_PLC_HubCheckDone),
+               3: (IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone),
+               4: (IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone),
+               10: (IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone),
+               11: (IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone),
+               12: (IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone)}
+
+def vision(idx):
+    """The PLC asks for the picture, the window answers OK (its own handler), the PLC drops the trigger."""
+    trig, done = VISION_TAGS[idx]
+    until(lambda: app.current_step == idx and not app.signal_monitor_active, 20)
+    TAGS[trig] = True
+    assert until(lambda: io.machineState.getCurrentState() == app.write_state_map[idx], 10), \
+        f"IOServer not waiting for step {idx} ({io.machineState.getCurrentState().name})"
+    root.after(0, lambda: app._send_ok(idx))
+    assert until(lambda: TAGS[done] is True, 10), f"no Done for step {idx}"
+    TAGS[trig] = False
+    until(lambda: TAGS[done] is False, 5)
+
+def bypassScenario():
+    """R8 (2026-11-13): DOST with the bypass: after Torque 1 the IOServer is at the split pin picture; the window marks
+    steps 6-9 'Bypassed', goes on at step 10, and the cycle completes. Siemens (no address): full run."""
+    from persistence import Persistence as P
+    P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", model_name="DOST",
+                               **dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=True))
+    try:
+        app.model_var.set("DOST")
+        until(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 10)
+        TAGS[IOServer.PLC_PC_CheckQRCode] = True
+        until(lambda: io.machineState.getCurrentState() == MS.WRITE_QR_CODE, 8)
+        root.after(0, lambda: app._send_qr_code("LHS"))
+        assert until(lambda: app.current_step == 1, 15), "QR code not accepted"
+        for idx in (1, 2, 3, 4):
+            vision(idx)
+        TAGS[IOServer.PLC_PC_Station2TorqueValue] = 19.04; TAGS[IOServer.PLC_PC_Station2TorqueValueSet] = True
+        if VENDOR == "allenbradley":
+            check("R8 DOST with the bypass: PC_PLC_Skip_Second_Tightening = True written in state 2",
+                  TAGS[IOServer.PC_PLC_Skip_Second_Tightening] is True)
+            check("R8 after Torque 1: the window marks steps 6-9 'Bypassed' and goes on at step 10 (split pin)",
+                  until(lambda: app.current_step == 10 and not app.signal_monitor_active, 20) and app.bypass_this_cycle
+                  and all(app.step_widgets[i]['status'].cget("text").startswith("Bypassed") for i in (6, 7, 8, 9)),
+                  f"{app.current_step} {[app.step_widgets[i]['status'].cget('text') for i in (6, 7, 8, 9)]}")
+            time.sleep(2.5)                                  # the IOServer resets the torque tags after 2 s
+            for idx in (10, 11, 12):
+                vision(idx)
+            TAGS[IOServer.PLC_PC_CapPressDone] = True; time.sleep(0.8); TAGS[IOServer.PLC_PC_CapPressDone] = False
+            TAGS[IOServer.PLC_PC_Station3TorqueValue] = 2.4; TAGS[IOServer.PLC_PC_Station3TorqueValueSet] = True
+            check("R9 ... the bypassed cycle completes: IOServer back at the QR code, window at step 0 or done",
+                  until(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 20)
+                  and until(lambda: not app.signal_monitor_active, 10), io.machineState.getCurrentState().name)
+        else:
+            check("R8 Siemens without an address for PC_PLC_Skip_Second_Tightening: full run, the window waits at step 6",
+                  until(lambda: app.current_step == 6 and not app.signal_monitor_active, 20) and not app.bypass_this_cycle,
+                  f"{app.current_step} {io.machineState.getCurrentState().name}")
+            root.after(0, app._abort_and_reset)
+            until(lambda: io.machineState.getCurrentState() in (MS.READ_QR_CODE, MS.WRITE_QR_CODE), 15)
+    finally:
+        P.insertNewMachineSettings(P.getDatabaseName(), updated_by="dryrun", model_name="DOST", **P.DEFAULT_MACHINE_SETTINGS)
+
 threading.Thread(target=scenario, daemon=True).start()
 root.mainloop()

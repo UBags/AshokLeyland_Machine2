@@ -23,6 +23,11 @@ Machine 2 operator steps (15) and the frontend state each message is sent for:
 
 There is no separate free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
+Bypass (Machine Setting "Bypass Component Press and Second Tightening", per model, 2026-11-13): tick "Bypass ..." before
+the QR code and this window plays the IOServer as it does when it wrote PC_PLC_Skip_Second_Tightening = True: it
+publishes cycleSettings:<QR> with bypass_press_and_tightening2 (the frontend marks the 4 tiles "Bypassed"), sends
+Torque 1 with moveToState = split pin picture, and skips steps 7-10. The record is then OK with 'Bypassed' steps.
+
 Message ordering: every frontend reader trims its queue to the latest message and the IO reader discards a message whose
 state differs from the frontend's current state. So, with "Wait for FE to consume each message" ticked (default), the
 next message is only sent once the frontend has consumed the previous one (its queue is empty again).
@@ -52,6 +57,7 @@ from utils.RedisUtils import (
     sendDataFromQRCodeServerToFEServer,
     sendDataFromCameraServerToFEServer,
     sendDataFromIOServerToFEServer,
+    publishCycleSettingsForQRCode, CYCLE_SETTINGS_KEY_PREFIX,
     ok, notok, updateValueCommand, moveAheadToNextComponent,
     qrcode2feq, camera2feq, io2feq,
 )
@@ -154,6 +160,23 @@ def _camera_command(name: str, description: str, state: MachineState) -> dict:
     }
 
 
+# This cycle's bypass (set when the QR code is sent with "Bypass ..." ticked): steps 7-10 skipped
+BYPASS = {"cycle": False}
+BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
+                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MachineState.READ_TIGHTENING_TORQUE_2)
+
+
+def _send_qr_code(result):
+    """The QR code server's message; before it, what the IOServer publishes in state 2 (the bypass, if on)."""
+    key = f"{CYCLE_SETTINGS_KEY_PREFIX}{DEFAULT_QR_CODE}"
+    if result == ok and BYPASS["cycle"]:
+        publishCycleSettingsForQRCode(trialRedisConnection, DEFAULT_QR_CODE, {"bypass_press_and_tightening2": True})
+    else:
+        trialRedisConnection.delete(key)
+    return sendDataFromQRCodeServerToFEServer(trialRedisConnection, qrCode=DEFAULT_QR_CODE,
+                                              displayString=DEFAULT_QR_DISPLAY, qrCodeStatus=result)
+
+
 def _io_command(name: str, description: str, cmd_type: str, state: MachineState, value: float,
                 action: str = updateValueCommand, moveToState: MachineState = MachineState.INVALID_STATE,
                 ends_cycle: bool = False) -> dict:
@@ -168,7 +191,9 @@ def _io_command(name: str, description: str, cmd_type: str, state: MachineState,
         "action": lambda result: sendDataFromIOServerToFEServer(
             trialRedisConnection,
             currentMachineState=state,
-            moveToState=moveToState,
+            # Torque 1 of a bypassed cycle: straight to the split pin picture, as the IOServer tells the frontend
+            moveToState=(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER
+                         if BYPASS["cycle"] and state == MachineState.READ_TIGHTENING_TORQUE_1 else moveToState),
             result=result,
             action=action,
             value=value
@@ -183,12 +208,7 @@ commands = [
         "type": "qrcode",
         "state": MachineState.READ_QR_CODE,
         "queue": qrcode2feq,
-        "action": lambda result: sendDataFromQRCodeServerToFEServer(
-            trialRedisConnection,
-            qrCode=DEFAULT_QR_CODE,
-            displayString=DEFAULT_QR_DISPLAY,
-            qrCodeStatus=result
-        ),
+        "action": _send_qr_code,
     },
     _camera_command("Knuckle Check", "Visual inspection of knuckle",
                     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE),
@@ -306,9 +326,14 @@ class FrontEndTesterApp:
                                       command=self.flush_redis, font=("Arial", 10), width=12)
         self.flush_button.pack(side=tk.LEFT, padx=5)
 
-        self.wait_for_fe = tk.BooleanVar(value=True)
-        ttk.Checkbutton(root, text="Wait for FE to consume each message before the next one",
-                        variable=self.wait_for_fe).grid(row=5, column=0, columnspan=2)
+        self.wait_for_fe = tk.BooleanVar(root, value=True)
+        options = ttk.Frame(root)
+        options.grid(row=5, column=0, columnspan=2)
+        ttk.Checkbutton(options, text="Wait for FE to consume each message before the next one",
+                        variable=self.wait_for_fe).pack(anchor="w")
+        self.bypass_var = tk.BooleanVar(root, value=False)
+        ttk.Checkbutton(options, text="Bypass Component Press and Second Tightening (taken when the QR code is sent)",
+                        variable=self.bypass_var).pack(anchor="w")
 
         log_frame = ttk.LabelFrame(root, text="Log", padding=5)
         log_frame.grid(row=6, column=0, columnspan=2, padx=10, pady=5, sticky="nsew")
@@ -347,10 +372,16 @@ class FrontEndTesterApp:
     def _send(self, result) -> bool:
         """Send the current step's message with the given result and advance the step pointer."""
         cmd = commands[self.current_command_index]
+        if cmd["state"] == MachineState.READ_QR_CODE:
+            BYPASS["cycle"] = bool(self.bypass_var.get())       # the model's setting, as of this QR code
         cmd["action"](result)
         self.log(f"Sent [{'OK' if result == ok else 'NOT OK'}]: {cmd['name']} ({cmd['state'].name})")
         if result == ok or cmd.get("ends_cycle", False):
             self.current_command_index += 1
+            if BYPASS["cycle"] and cmd["state"] == MachineState.READ_TIGHTENING_TORQUE_1:
+                while commands[self.current_command_index]["state"] in BYPASSED_STATES:
+                    self.log(f"  Bypassed: {commands[self.current_command_index]['name']}")
+                    self.current_command_index += 1
             if self.current_command_index >= len(commands):
                 self.cycle_count += 1
                 self.current_command_index = 0
@@ -385,6 +416,7 @@ class FrontEndTesterApp:
             messagebox.showerror("Error", f"Failed to send command:\n{e}")
 
     def reset_sequence(self):
+        BYPASS["cycle"] = False
         self.current_command_index = 0
         self.pending_queue = None
         self.auto_running = False

@@ -45,6 +45,11 @@ Machine 2 process steps (15) and IOServer states (28):
                                                       IOServer then wraps to state 1)
 There is no separate free-rotation step on Machine 2 (free rotation happens during tightening at station 2).
 
+Bypass (Machine Setting "Bypass Component Press and Second Tightening", per model, 2026-11-13): when the IOServer wrote
+PC_PLC_Skip_Second_Tightening = True in state 2, the PLC and the IOServer go from Torque 1 straight to the split pin
+picture; this window sees that from the IOServer's state, marks steps 6-9 "Bypassed" and goes on with step 10 (Run Full
+Cycle skips their answers too). The tag is shown with the cycle settings (None = not on the PLC: full run).
+
 In state 2 (WRITE_QR_CODE) IOServer writes the cycle settings to the PLC (only tags with a configured name), before
 QRCodeCheckOK / Done. Both PLCs: PC_PLC_LH_RH_Selection (1=LHS, 2=RHS, from the QR code), and
 PC_PLC_TighteningTorque1/2Setpoint, PC_PLC_RotationRPM, PC_PLC_NoOfRotation1CCW / 1CW (REAL) from machine_settings
@@ -95,7 +100,12 @@ CYCLE_SETTING_TAGS = [
     _cfg.getPcPlcRotation1RPMTagName(), _cfg.getPcPlcRotation2RPMTagName(),
     _cfg.getPcPlcRotationRPMTagName(), _cfg.getPcPlcNoOfRotation1CCWTagName(), _cfg.getPcPlcNoOfRotation1CWTagName(),
 ]
+# bypass of the component press and second tightening (Machine Setting per model; None in the dump = not on the PLC)
+CYCLE_SETTING_TAGS.append(_cfg.getPcPlcSkipSecondTighteningTagName())
 CYCLE_SETTING_TAGS = [t for t in CYCLE_SETTING_TAGS if t]     # empty name = not on this PLC
+# Steps 6-9 (states 13-19) are skipped by the PLC and the IOServer when the model's Machine Setting "Bypass Component
+# Press and Second Tightening" is on and PC_PLC_Skip_Second_Tightening = True was written in state 2
+BYPASSED_STEPS = (6, 7, 8, 9)
 TAG_GROUPS = [
     ("Step 0: QR Code", [_cfg.getPlcPcCheckQRCodeTagName(), _cfg.getPcPlcQRCodeOKTagName(),
                          _cfg.getPcPlcQRCodeDoneTagName()]),
@@ -172,6 +182,7 @@ class IOServerTestApp:
         self.stop_signal_monitor = False  # Flag to stop signal monitoring thread
         self.stop_full_cycle = False  # Flag to stop a running "Run Full Cycle"
         self.full_cycle_running = False
+        self.bypass_this_cycle = False  # the IOServer went from Torque 1 straight to the split pin picture
 
         # Model used for the QR code buttons (side is chosen by the button)
         self.model_var = tk.StringVar(value="DOSTPLUS")
@@ -696,6 +707,19 @@ step for easy reading.
             self.root.after(0, lambda sn=completed_name: self._update_status(f"{sn} completed!"))
 
             current_signal_step += 1
+            # After Torque 1 the IOServer is already at the split pin picture (or past it): the model's bypass of the
+            # component press and second tightening is on (PC_PLC_Skip_Second_Tightening True) - steps 6-9 skipped
+            if completed_step == 5 and current_io_state not in (MS.READ_QR_CODE, MS.WRITE_QR_CODE) and \
+                    MachineState.getMachineStateAsInt(current_io_state) >= \
+                    MachineState.getMachineStateAsInt(MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER):
+                self.bypass_this_cycle = True
+                for i in BYPASSED_STEPS:
+                    self.root.after(0, lambda i=i: self.step_widgets[i]['status'].config(
+                        text="Bypassed (Machine Setting of the model)", foreground="gray"))
+                self.root.after(0, lambda: self._update_status(
+                    "Component press and second tightening bypassed (PC_PLC_Skip_Second_Tightening = True): "
+                    "the IOServer went from Torque 1 to the split pin picture"))
+                current_signal_step = BYPASSED_STEPS[-1] + 1
 
         # Update current_step and enable next vision step
         self.current_step = current_signal_step
@@ -716,6 +740,7 @@ step for easy reading.
         model = self.model_var.get()
         qr_code = QR_CODES[(model, qr_type)]
         self.cycle_complete = False
+        self.bypass_this_cycle = False
 
         def checkThenSend():
             if not self._ioserver_waiting_for(0):
@@ -899,6 +924,7 @@ step for easy reading.
         self.stop_signal_monitor = True  # Stop any active monitoring
         self.stop_full_cycle = True  # Stop a running full cycle
         self.signal_monitor_active = False
+        self.bypass_this_cycle = False
         self.current_step = 0
         for idx, widgets in self.step_widgets.items():
             widgets['status'].config(text="Waiting...", foreground="gray")
@@ -942,6 +968,8 @@ step for easy reading.
                     # Wait if signal monitoring is active
                     while self.signal_monitor_active and not self.stop_full_cycle:
                         time.sleep(0.5)
+                    if self.bypass_this_cycle and idx in BYPASSED_STEPS:
+                        continue                # the PLC and the IOServer skip it (Machine Setting of the model)
 
                     # Camera / QR responses are consumed only in the step's WRITE state, and IOServer keeps just the
                     # latest message, so send each one only when IOServer is waiting for it

@@ -2520,3 +2520,16 @@ Architecture items not included (user).
   Allen-Bradley 207/207 (C re-run after classifying the tag), Siemens 190/190; FE 120/120 both folders (F12); DB 62/62
   both folders (6b, 9); endpoints 91/91 both folders; Mock window 17/17 both PLCs and machine 1 (U12, U13); Real
   window 12/12 both PLCs.
+- **Test windows (follow-up, 2026-11-13), both folders:**
+  - FE windows (`Test_FEServer_Simulated_Inputs_UI`, `_Mock_With_Image_Files_UI`, `_With_Live_Camera_UI`): a "Bypass
+    Component Press and Second Tightening" tick box, taken when the QR code is sent. The window then plays the IOServer
+    of a bypassed cycle: publishes `cycleSettings:<QR>` with the bypass, sends Torque 1 with moveToState = split pin,
+    skips the 4 steps (marked "Bypassed"). Unticked: the key is removed (full run). Tk variables now bound to their
+    window (they had taken the first Tk created in the process).
+  - IOServer Real-PLC window: `PC_PLC_Skip_Second_Tightening` shown with the cycle settings; when the IOServer goes from
+    Torque 1 to the split pin picture, steps 6-9 are marked "Bypassed" and the window goes on at step 10; Run Full
+    Cycle skips their answers. Mock-PLC window: the tag shown with the cycle settings; skipped steps marked.
+  - Dry runs: Real window R8/R9 (Allen-Bradley 15/15: bypassed cycle through the window; Siemens 13/13: no address, full
+    run), Mock window 17/17 both PLCs and machine 1, FE 125/125 both folders (F13: the simulated-inputs window drives a
+    whole bypassed cycle, record OK and bypassed; the image-files window publishes the bypass and jumps with the
+    frontend). F13 needs a display (xvfb-run on Linux).
