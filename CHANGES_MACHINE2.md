@@ -2922,3 +2922,19 @@ Architecture items not included (user).
   verdicts as expected (DOST_cap_01 4.3 / 7.9, DOST_skewed_03 16.1, DOSTPLUS_cap_01 1.2, DOSTPLUS_skewed_02 16.3).
   On a GPU the embedding should take tens of ms. MobileSAM is not run when the cap already failed steps 1-3 (about
   0.01 s), or when seating is off (old settings).
+
+## 100. Machine 2 camera moved again: bung checks (states 13 and 24) re-centred; seating to follow (2026-11-14)
+- **Centre:** `siemens.vision.bunk.outer.disc.center` 715,341 -> **646,328** (all three properties files; Machine 1
+  unchanged). Measured with MobileSAM on the 13 Nov pictures: seated bung top face DOST 646,325, DOSTPLUS 647,330 (old
+  pictures, 3 Nov: about 711-716, 335-344). Holes 54-57 px from the face centre, inside the r110 search disc. Other
+  bunk settings unchanged (user: the holes must be found by MobileSAM as they are). Verifier ALL EQUIVALENT.
+- **Pictures:** the 60 pictures of 13 Nov in `test/machine2_dryrun/bunk_images_20261113/`, named as uploaded: A01-A20,
+  B01-B20, C01-C20 (DOST / DOSTPLUS, seated and not seated, 3 with a hand in the frame). `bunk_images/` (4 Nov) kept
+  until the new set is labelled.
+- **DryRun_Bunk_Check_UI** (both folders): default folder `bunk_images_20261113` (Folder... to choose another); model
+  "Both" (each picture checked as DOST and as DOSTPLUS) added and the default; no text on the picture (green / red
+  border, disc, search circle and holes only); per picture and model a terminal line
+  `HOLES <picture> as <model> <n> holes OK / NOT OK <time> <spacing, centre offset, gamma>` and the same in the list
+  (scrollable). Checked under Xvfb with real MobileSAM and YOLO stubbed (no YOLO weights here): window, default folder,
+  both models, terminal lines. The hole counts need YOLO: the user runs it on the laptop.
+- **Next:** with the hole counts from the laptop, the seating step (MobileSAM top face position and roundness).
