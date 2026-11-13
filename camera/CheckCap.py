@@ -11,7 +11,14 @@ Detection Method:
         - For each pixel in circular mask, calculate (R_cap - R_base), (G_cap - G_base), (B_cap - B_base)
         - Clamp values to [0, 255] and average to get grayscale delta
         - All 3 averages must reach the limits of the cap found
-    Result OK = right cap AND all 3 comparisons pass.
+    Step 4 (seating, Machine 2; vision.cap.seating.check): MobileSAM, one point prompt at CENTER (multimask):
+        - brass cap: the cap face mask and the bore mask round it, both from the cap picture; the cap centre must be
+          within seating.brass.offset.max of the bore centre (a cap pushed off-centre shows the bore on one side);
+        - silver cap: the cap outline mask, then the top face (box = outline centre +- face.box.scale x its radius);
+          the top face centre must be within seating.silver.face.offset.max of the outline centre (a tilted cup keeps
+          its body in the bore but its top slides over and the side wall shows on one side).
+        Masks are picked by radius (seating.*.radius.min/max). No mask found = NOT OK. Run only when steps 2 and 3 pass.
+    Result OK = right cap AND all 3 comparisons pass AND (seating off or the cap is seated).
 
 Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.properties):
     CENTER: centre of the cap region (Machine 1: 635, 360)
@@ -19,6 +26,7 @@ Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.prope
     DELTA_THRESHOLD_HUB/TOP/NUT: Step 3 minimum brightening against each earlier picture, per cap
     RB_THRESHOLD: Step 1 R-B limits (silver: below -1, brass: above 15)
     SILVER_BRIGHTNESS_RADIUS / _MIN: Step 1 silver brightness test (radius 25; minimum 0 = off)
+    SEATING_*: Step 4 (off on Machine 1)
 """
 
 import cv2
@@ -26,8 +34,8 @@ import numpy as np
 from typing import Dict, Tuple
 import glob
 import os
+import threading
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -73,29 +81,46 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = 30.0
+    DELTA_THRESHOLD_TOP_DOST = 30.0
+    DELTA_THRESHOLD_NUT_DOST = 35.0
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
+    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
-    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
+    SILVER_BRIGHTNESS_RADIUS = 25
+    SILVER_BRIGHTNESS_MIN = 0.0
+
+    # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
+    SEATING_CHECK = False
+    SEATING_BRASS_RADIUS_MIN = 75.0    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = 95.0
+    SEATING_BORE_RADIUS_MIN = 104.0     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = 120.0
+    SEATING_SILVER_RADIUS_MIN = 95.0  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = 112.0
+    SEATING_BRASS_OFFSET_MAX = 9.0     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = 9.0  # face to outline
+    SEATING_FACE_BOX_SCALE = 0.8
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}
+
+    # One MobileSAM predictor per thread, on the shared model (ModelManager); the model loads on first use.
+    # samModelProvider can be replaced (tests); it returns a MobileSAM model.
+    _samLocal = threading.local()
+    samModelProvider = None
 
     @classmethod
     def _get_radius_for_component(cls, componentType: str) -> int:
@@ -169,6 +194,88 @@ class CheckCap:
 
         return average
 
+    @classmethod
+    def _sam_predictor(cls):
+        predictor = getattr(cls._samLocal, "predictor", None)
+        if predictor is None:
+            from mobile_sam import SamPredictor
+            if cls.samModelProvider is not None:
+                model = cls.samModelProvider()
+            else:
+                from camera.ModelManager import ModelManager
+                model = ModelManager.get_instance().get_sam_model()
+            predictor = SamPredictor(model)
+            cls._samLocal.predictor = predictor
+        return predictor
+
+    @staticmethod
+    def _ellipse_of(mask: np.ndarray):
+        """Ellipse fitted to the largest outer contour of a mask: dict(cx, cy, radius, ratio, area, contour) or None."""
+        cs, _ = cv2.findContours(mask.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not cs:
+            return None
+        c = max(cs, key=cv2.contourArea)
+        if len(c) < 5:
+            return None
+        (x, y), (a, b), _ = cv2.fitEllipse(c)
+        major, minor = max(a, b) / 2.0, min(a, b) / 2.0
+        if major <= 0:
+            return None
+        return dict(cx=float(x), cy=float(y), radius=(major + minor) / 2.0, ratio=minor / major,
+                    area=float(cv2.contourArea(c)), contour=c)
+
+    @staticmethod
+    def _pick_by_radius(fits, low: float, high: float):
+        """The mask with mean radius in [low, high] (closest to the middle if several)."""
+        mid = (low + high) / 2.0
+        ok = [f for f in fits if f is not None and low <= f["radius"] <= high]
+        return min(ok, key=lambda f: abs(f["radius"] - mid)) if ok else None
+
+    @staticmethod
+    def checkSeating(anImage: np.ndarray, cap_found: str) -> Dict:
+        """Step 4. Returns dict(seated, offset, limit, reason, cap, bore, face) - contours for the marked picture."""
+        import torch
+        predictor = CheckCap._sam_predictor()
+        predictor.set_image(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB))
+        centre = np.array([[float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])]], dtype=np.float32)
+        with torch.inference_mode():
+            masks, _, _ = predictor.predict(point_coords=centre, point_labels=np.array([1]), multimask_output=True)
+        fits = [CheckCap._ellipse_of(m) for m in masks]
+        result = dict(seated=False, offset=None, limit=None, reason="", cap=None, bore=None, face=None)
+        if cap_found == DOSTPLUS:
+            cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_BRASS_RADIUS_MIN, CheckCap.SEATING_BRASS_RADIUS_MAX)
+            bore = CheckCap._pick_by_radius([f for f in fits if f is not cap], CheckCap.SEATING_BORE_RADIUS_MIN,
+                                            CheckCap.SEATING_BORE_RADIUS_MAX)
+            result.update(cap=cap, bore=bore, limit=CheckCap.SEATING_BRASS_OFFSET_MAX)
+            if cap is None or bore is None:
+                result["reason"] = "brass cap or bore not found by the segmenter"
+                return result
+            offset = float(np.hypot(cap["cx"] - bore["cx"], cap["cy"] - bore["cy"]))
+            what = "cap centre to bore centre"
+        else:
+            cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_SILVER_RADIUS_MIN, CheckCap.SEATING_SILVER_RADIUS_MAX)
+            result.update(cap=cap, limit=CheckCap.SEATING_SILVER_FACE_OFFSET_MAX)
+            if cap is None:
+                result["reason"] = "silver cap outline not found by the segmenter"
+                return result
+            r = cap["radius"] * CheckCap.SEATING_FACE_BOX_SCALE
+            box = np.array([cap["cx"] - r, cap["cy"] - r, cap["cx"] + r, cap["cy"] + r], dtype=np.float32)
+            with torch.inference_mode():
+                masks, _, _ = predictor.predict(point_coords=np.array([[cap["cx"], cap["cy"]]], dtype=np.float32),
+                                                point_labels=np.array([1]), box=box, multimask_output=True)
+            faces = [f for f in (CheckCap._ellipse_of(m) for m in masks) if f is not None]
+            face = min(faces, key=lambda f: f["area"]) if faces else None
+            result["face"] = face
+            if face is None:
+                result["reason"] = "silver cap top face not found by the segmenter"
+                return result
+            offset = float(np.hypot(face["cx"] - cap["cx"], face["cy"] - cap["cy"]))
+            what = "top face centre to cap outline centre"
+        result["offset"] = offset
+        result["seated"] = offset <= result["limit"]
+        result["reason"] = f"{what} {offset:.1f} px {'<=' if result['seated'] else '>'} {result['limit']}"
+        return result
+
     @staticmethod
     def _create_annotated_image(image: np.ndarray,
                                 is_cap_present: bool,
@@ -178,7 +285,8 @@ class CheckCap:
                                 delta_averages: list,
                                 rb_average: float,
                                 brightness: float,
-                                radius: int) -> np.ndarray:
+                                radius: int,
+                                seating: Dict | None = None) -> np.ndarray:
         """Create an annotated version of the input image showing the detection result."""
         annotated = image.copy()
         centre = (int(CheckCap.CENTER[0]), int(CheckCap.CENTER[1]))
@@ -211,6 +319,17 @@ class CheckCap:
             for i, (label, avg) in enumerate(zip(labels, delta_averages)):
                 cv2.putText(annotated, f"  {label}: {avg:.1f}", (50, 180 + i * 25),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+        # Step 4: seating - cap / bore / top face outlines and the verdict
+        if seating is not None:
+            seat_color = (0, 255, 0) if seating["seated"] else (0, 0, 255)
+            for key, col in (("bore", (255, 128, 0)), ("cap", seat_color), ("face", (0, 255, 255))):
+                if seating.get(key) is not None:
+                    cv2.drawContours(annotated, [seating[key]["contour"]], -1, col, 2)
+            cv2.putText(annotated, f"Seating: {'SEATED' if seating['seated'] else 'NOT SEATED'}", (50, 270),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, seat_color, 2)
+            cv2.putText(annotated, f"  {seating['reason']}", (50, 295), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                        (255, 255, 255), 2)
 
         return annotated
 
@@ -365,21 +484,39 @@ class CheckCap:
                                 MessageType.SUCCESS)
 
             # =====================================================================
+            # STEP 4: Is the cap seated? (MobileSAM; only when steps 2 and 3 passed)
+            # =====================================================================
+            seating = None
+            seated = True
+            if CheckCap.SEATING_CHECK and right_cap and step1_passed:
+                try:
+                    seating = CheckCap.checkSeating(anImage, cap_found)
+                    seated = seating["seated"]
+                except Exception as e:
+                    seated = False
+                    seating = dict(seated=False, offset=None, limit=None, cap=None, bore=None, face=None,
+                                   reason=f"segmenter error: {e}")
+                logBoth('logInfo' if seated else 'logError', _src,
+                        f"CheckCap seating: {'SEATED' if seated else 'NOT SEATED'} - {seating['reason']}",
+                        MessageType.SUCCESS if seated else MessageType.ISSUE)
+
+            # =====================================================================
             # Final Decision
             # =====================================================================
-            is_cap_present = right_cap and step1_passed
+            is_cap_present = right_cap and step1_passed and seated
 
             if is_cap_present:
                 logBoth('logInfo', _src, "CheckCap: CAP DETECTED - right cap, all comparisons passed", MessageType.SUCCESS)
             else:
                 logBoth('logError', _src, "CheckCap: CAP NOT DETECTED - " +
-                        ("no cap" if cap_found is None else "wrong cap" if not right_cap else "comparisons failed"),
+                        ("no cap" if cap_found is None else "wrong cap" if not right_cap
+                         else "comparisons failed" if not step1_passed else "cap not seated"),
                         MessageType.ISSUE)
 
             # Create annotated output image
             annotated_image = CheckCap._create_annotated_image(
                 anImage, is_cap_present, cap_found, modelName, step1_passed,
-                delta_averages, rb_brass if cap_found == DOSTPLUS else rb_silver, brightness, radius
+                delta_averages, rb_brass if cap_found == DOSTPLUS else rb_silver, brightness, radius, seating
             )
 
             return annotated_image, is_cap_present
