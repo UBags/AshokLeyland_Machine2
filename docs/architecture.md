@@ -281,7 +281,7 @@ A NOT OK result also sends `alarm.q`, which plays BadComponent.wav.
 
 | Check | Verifies | Method | Pass criterion | QR use |
 |---|---|---|---|---|
-| Knuckle | Knuckle present; side and model match the QR | Classical: grey means of fixed ROIs | ROIs below 84; side box detected equals the QR side; Step 2/3 polygon mean below or above 96 gives DOST or DOSTPLUS | model and side |
+| Knuckle | Knuckle present; side and model match the QR | Classical: grey means of fixed ROIs | ROIs below `common.check.threshold`; side box detected equals the QR side; Step 2/3 polygon mean below or above `component.identification.darkness.threshold` gives DOST or DOSTPLUS. Machine 2 (`side.by.difference`, CHANGES 95): contours A / A' and side boxes D1 / D2 must each differ by more than `side.difference.threshold` and agree on the side | model and side |
 | Hub and bottom bearing | Hub seated, bearing centre empty, stud pattern | Gamma 3 annulus mean below 144; then **YOLO ObjectAwareModel + MobileSAM** masks, filtered for a regular K-gon; smart gamma order 1–6 | 4 holes (DOST) or 5 holes (DOSTPLUS), matching the QR model | model |
 | Top bearing | Top bearing placed | Classical: 10 gamma/offset branches, ray-trace plus RANSAC circle fit; brightness delta over 30 against the hub image | min score above 0.65, G above 77, delta above 30. **Outputs bearing geometry.** | none |
 | Nut and plate washer | Hex nut present; washer covers the bearing ring | NutDetector (YOLO + MobileSAM, hexagon rules); washer by colour difference from the top-bearing image inside the bearing ring | Nut found **and** diffR above 0.55 and diffRB above 5.57 | none (parsed only) |

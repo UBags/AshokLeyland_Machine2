@@ -2533,3 +2533,61 @@ Architecture items not included (user).
     run), Mock window 17/17 both PLCs and machine 1, FE 125/125 both folders (F13: the simulated-inputs window drives a
     whole bypassed cycle, record OK and bypassed; the image-files window publishes the bypass and jumps with the
     frontend). F13 needs a display (xvfb-run on Linux).
+
+## 95. Machine 2 camera moved again: knuckle check re-placed; side and presence by differences (2026-11-13)
+
+- **Camera change** (old pictures of 3 Nov against new ones of 13 Nov):
+  - **On the plate** (both pin seats, both top holes, the block hole and both screws, as fitted circles): zoom
+    x1.049, rotation +0.95 deg, old (705, 353) -> (641.5, 351.2). Leaving out any one feature changes the zoom by at
+    most 0.003, the rotation by at most 0.06 deg and the centre by under 1 px.
+  - **On the same knuckles** (5 old / new pairs, ECC alignment): zoom x1.037-1.041, rotation +0.84..+0.98 deg, old
+    (705, 353) -> (640.2-641.0, 345.3-349.2). The knuckle face sits higher than the plate (closer to the camera), so its
+    zoom changes slightly less. The knuckle regions were moved with the mean of these: x1.039, +0.89 deg,
+    (705, 353) -> (640.7, 347.1).
+  - **The fixture changed too:** the plate is now bright (120-165 where it was dark), and the bottom bar and the
+    bracket below the hub are different parts.
+- **Moved by that transform:** side boxes, B, C, D, E with their alternates, the step 2 / step 3 model polygons,
+  and the (now unused) rectangle A with its alternate. All 19 knuckles are then read with the right side and model;
+  only A failed. A and its alternate sat on the top edge of the casting between the bosses, and on the LHS knuckles that
+  edge is lower, so they caught the bright plate.
+- **`siemens.vision.knuckle.common.check.threshold` 84 -> 100** (user): the casting reads about 40-70 and the bare
+  plate 120-165.
+- **Side and presence by differences (user's design; `CheckKnuckle`, new keys, both machines' files):**
+  - `<vendor>.vision.knuckle.side.by.difference` (siemens True, allenbradley False); `.side.difference.threshold` 10
+    (user: 15 -> 10 for small camera / part movements).
+  - **Contours A / A'** (`.common.check.a.polygon.points`, `.common.check.a.alt.polygon.points`): left / right of the
+    hub between the bosses, top at y 199 and sides as the moved rectangle A' (A: its mirror about the hub, x 581-613).
+    Each one's bottom sits 3 px above the highest casting edge measured on the knuckles of the other side (A: the RHS
+    knuckles, A': the LHS knuckles), with a point every 4 px. The LHS knuckle's casting reaches higher on the left and
+    darkens A; the RHS knuckle's reaches higher on the right and darkens A'. A' - A > 10 -> LHS, A - A' > 10 -> RHS,
+    otherwise NOT OK (the empty fixture shows bare plate in both).
+  - **Side boxes D1 / D2** (the existing `lhs.crop` / `rhs.crop`, mean grey level): D1 - D2 > 10 -> RHS (arm on D2),
+    D2 - D1 > 10 -> LHS, otherwise NOT OK.
+  - **Both must give the same side**, which must match the QR code. In this mode the rectangle A, its alternate and
+    `lhs.rhs.darkness.threshold` are not used. A polygon `0,0;0,0;0,0` = not set (Machine 1).
+  - The two new polygons are plain `vPoints` constants, so a live configuration reload applies them. The step 2 / step 3
+    polygons, wrapped in `np.array`, are still not reloaded; that limitation is older than this change.
+- **Measured (19 knuckles; the margin is beyond the threshold):**
+  - **Contours:** A' - A is +26.9..+42.6 on the LHS knuckles and -25.2..-40.4 on the RHS ones (smallest margin 15.2).
+    With the picture moved +/-3 px the smallest difference is 13.4. Empty fixture: -1.7.
+  - **Side boxes:** the arm reads 37.5-48.9, the bare bar 85.1-99.1 (smallest margin 33.9). The empty fixture
+    differs by 11-16 on its own (the bar is unevenly rusty), and the contours reject it.
+  - **B, C, D, E:** margin to 100 at least 38.8 (alternates at least 30.2).
+  - **Model polygons:** DOST at most 94.9, DOSTPLUS at least 223.7 (limit 160).
+- **Pictures:** `test/machine2_dryrun/knuckle_images/` replaced by the 13 Nov set: DOST LHS x5 (one with a bearing on the
+  spindle), DOST RHS x3, DOSTPLUS LHS x6, DOSTPLUS RHS x5, empty fixture x1 (labels confirmed by the user). The old set
+  is in git history. Figure: `docs/knuckle_regions_machine2.jpg`.
+- **DryRun_CheckKnuckle_Images** (both folders, same file):
+  - The margins of both differences are printed and must be at least 10 beyond the threshold.
+  - Paint over the darker contour -> NOT OK; over the brighter one -> OK.
+  - The rectangle A is not paint-tested in this mode.
+  - New for both machines: the picture moved +/-3 px (8 shifts) must still be OK with its own QR code. This is a check
+    on Machine 2 and reported only on Machine 1, where circle C reads 88.6 (> 84) on DOSTPLUS_RHS_4 at +3 / +3.
+    Machine 1 is not re-tuned.
+  - Results: Machine 2 155/155; Machine 1 30/30, plus that one NOTE.
+- **Machine 1 unchanged:** old and new `CheckKnuckle` with the Machine 1 settings on all 43 knuckle pictures in the repo
+  (Machine 1, old and new Machine 2 sets) x 9 positions x 4 QR codes: 1548 verdicts, 0 different.
+- **Verifier:** reference commit 635215e (the new `CheckKnuckle` with its values written in) in `baseline_per_file`;
+  both copies ALL EQUIVALENT (190 parameters).
+- **Not yet done:** the other stations (hub, top bearing, nut / washer, no bunk, cap, bunk) need the same work on their
+  new pictures.
