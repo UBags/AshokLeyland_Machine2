@@ -2623,3 +2623,36 @@ Architecture items not included (user).
     window 9/9; verifier ALL EQUIVALENT. Figure `docs/knuckle_regions_machine2.jpg` redrawn (by the window's own
     drawing).
 
+
+## 96. Machine 2 camera moved again: hub check re-centred (2026-11-13)
+
+- **Code checked:** the hub check's only position is `<vendor>.vision.hub.segment.center`. It sets:
+  - the crop (the ring `segment.inner/outer.radius` round it);
+  - the grouping of the shapes found by their distance from it;
+  - the envelope filter (the centre must lie inside each group's outline);
+  - the even-spacing test round it.
+
+  Everything else is a size (ring radii 116 / 253, mask areas 121-3630, the 10 / 20 / 40 px shape-size steps) or
+  independent of position (the gamma order from the mean brightness of the whole picture). The "no bearing in the
+  bore" circle has its own centre (`centre.check.x/y`; off in production).
+- **Old pictures (3 Nov, 6 uploaded):** hole circle centred at (707.2-708.2, 350.8-353.2), r 143.3-143.8 (configured
+  707,352); studs r 179 (DOST) / 186 (DOSTPLUS), their circle about 6 px higher (the stud tops stand above the flange).
+- **New pictures (13 Nov, 10: DOST x5, DOSTPLUS x5):** hole circle (643.5-645.0, 335.9-342.6), r 147.9-149.0 (x1.035);
+  studs r 181-196, about 7 px higher. The parts sat less consistently than on 3 Nov (DOST about y 336, DOSTPLUS
+  340-342). Holes and studs stay well inside the 116-253 ring and the area window: sizes unchanged.
+- **Geometry test:** the real `segment_holes` post-processing (shape classification, area-ratio and shape filters,
+  grouping, envelope, even spacing, model match) on masks at the holes and studs found on each picture, in place of
+  MobileSAM, with the centre swept.
+  - **New pictures:** every picture passes with its own model and is rejected as the other model for centres in
+    x 628-659, y 322-346. The middle, **(645, 334)**, is 9.8 px from the nearest centre that fails. (644, 340), the
+    hole-circle median, was only 4.2 px from it.
+  - **Old pictures:** all 6 pass for centres in x 690-727, y 330-369; middle (709, 352), 14.0 px from the nearest
+    failing centre. This confirms the old setting.
+  - **New pictures with the old centre:** 0 of 10 pass.
+- **Change (all three properties files, siemens only):** `segment.center` 707,352 -> **645,334**; `centre.check`
+  707,352 -> **644,340** (the hole circle's centre; the check runs only when enforceBearingAbsenceCheck=True).
+- **A stand-in tried first and dropped:** dark / bright blobs given to the check as MobileSAM masks. It failed 8 of
+  19 old pictures with the old, proven centre (holes merged with dark surroundings), so it could not judge a centre.
+- **Pictures:** `test/machine2_dryrun/hub_images/` replaced by the 13 Nov set (DOST_01-05, DOSTPLUS_01-05); the old set
+  is in git history. Verifier ALL EQUIVALENT.
+- **To confirm on the laptop (needs the models):** `DryRun_Hub_Check.py` on `hub_images`, i.e. the MobileSAM step itself.
