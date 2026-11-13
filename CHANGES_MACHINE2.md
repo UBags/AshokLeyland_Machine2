@@ -2778,3 +2778,14 @@ Architecture items not included (user).
     - **Margins at 38:** 10.8 / 18.2 below the washer values, 13.7 above the no-washer values.
     - The window's +36.8 came from a bearing picture taken for a nut picture (MobileSAM's mask on the bearing's inner
       ring); the guard now stops that case before the washer comparison.
+  - **Guard in parallel with the nut detector (user: it added about 1 s):** the ring finder is started in its own
+    thread (`CheckNutAndPlateWasher._guard_executor`, one worker kept for the process) before the nut detector runs,
+    and its result is taken after the detector returns. A bearing-sized ring then means NOT OK, as before. The ring
+    fallback reuses that ring instead of running the ring finder a second time.
+    - **Time measured:** nut detector played by a 1.2 s step (MobileSAM's time on the GPU, which releases the GIL):
+      the whole check took 1.24 s with the guard on and 1.24 s with it off; the ring finder alone took 1.20 s.
+    - **On the plant PC:** the overlap depends on free CPU while MobileSAM runs, since the ring finder is OpenCV on the
+      CPU; the camera server's log of each check's time shows it.
+    - Results unchanged: 67/67, 0/20, 24 no-washer pairs under 38, top bearing 12/12 with 0/31, guard 10/10.
+      Verifier reference a29234b; both copies ALL EQUIVALENT.
+
