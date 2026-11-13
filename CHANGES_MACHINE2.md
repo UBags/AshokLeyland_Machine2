@@ -2874,3 +2874,20 @@ Architecture items not included (user).
   reference 8a38061 for CheckCap; both copies ALL EQUIVALENT.
 - **To check on the laptop:** `DryRun_Cap_Check.py` (ModelManager loads MobileSAM and YOLO); the seating step's time
   on the GPU in the camera server log.
+- **Cap check window (follow-up, user):** new `test/machine2_dryrun/DryRun_Cap_Check_UI.py` (and the machine1 copy).
+  - **What it does:** choose a folder or one picture, the component type (DOST / DOSTPLUS, or from the file name) and
+    the seconds between pictures (1 - 10, 3 at start); type and seconds can be changed during the run (they apply from
+    the next picture); Stop. Each picture goes through the real `CheckCap` with this machine's settings; the window
+    shows the check's own marked picture (cap found, comparisons, seating outlines and offset) with a banner CAP OK /
+    CAP NOT OK and the check's reason (no cap, wrong cap, comparisons failed, cap not seated); counts at the end;
+    optional saving to `<folder>/cap_check_results/`.
+  - **Earlier pictures:** the first hub, top bearing and nut picture of the component type from this machine's dry-run
+    folders, or from a folder chosen with "Earlier pictures..." (Machine 1 has none in the repo: NOT OK, said so).
+  - **MobileSAM:** loaded in a background thread when the window opens (seating on); the loading thread only sets a
+    flag, the window polls it (Tk may only be used from its own thread). `--sam <mobile_sam.pt>` loads the model
+    directly instead of through ModelManager.
+  - **Checked:** driven under Xvfb with the real MobileSAM model, 14/14 on Machine 2: model loaded in the background;
+    the 20 pictures (type from the file name) - 10 seated OK, 10 skewed NOT OK "not seated" with the offset; seconds
+    set to 10 during the run holds the next picture; brass caps checked as DOST: wrong cap; type changed during the run
+    applies from the next picture; a single picture, Stop part-way, an unreadable file, earlier pictures missing;
+    saving. Machine 1 copy: allenbradley settings, seating off, no model loaded.
