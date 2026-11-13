@@ -135,8 +135,8 @@ class NutWasherCheckWindow:
             C = module.CheckNutAndPlateWasher
             self.results.put(("ready", (configured,
                 f"Models loaded in {time.time() - t0:.1f} s. Nut search centre {tuple(C.NUT_DETECTION_CENTER)} radius "
-                f"{C.NUT_DETECTION_RADIUS}; washer limits diff_R > {C.WASHER_THRESHOLD_R}, diff_RB > "
-                f"{C.WASHER_THRESHOLD_RB}; configuration: washer check {'ON' if configured else 'OFF'}.")))
+                f"{C.NUT_DETECTION_RADIUS}; washer limits diff_R > {C.WASHER_THRESHOLD_R}, diff_RB "
+                + (f"> {C.WASHER_THRESHOLD_RB}" if getattr(C, "WASHER_CHECK_RB", True) else "not checked") + f"; configuration: washer check {'ON' if configured else 'OFF'}.")))
         except Exception as e:
             self.results.put(("fatal", f"Could not load the nut and washer check: {e}"))
 
@@ -261,9 +261,10 @@ class NutWasherCheckWindow:
             if "diff_R=" in message:
                 values = dict(part.split("=") for part in message.split("] ")[-1].split(", "))
                 dR, dRB = float(values["diff_R"]), float(values["diff_RB"])
+                rbText = (f"diff_RB {dRB:+.1f} ({'>' if dRB > C.WASHER_THRESHOLD_RB else '<='} {C.WASHER_THRESHOLD_RB})"
+                          if getattr(C, "WASHER_CHECK_RB", True) else f"diff_RB {dRB:+.1f} (not checked)")
                 return (f"{nutText}; washer: diff_R {dR:+.1f} ({'>' if dR > C.WASHER_THRESHOLD_R else '<='} "
-                        f"{C.WASHER_THRESHOLD_R}), diff_RB {dRB:+.1f} ({'>' if dRB > C.WASHER_THRESHOLD_RB else '<='} "
-                        f"{C.WASHER_THRESHOLD_RB})")
+                        f"{C.WASHER_THRESHOLD_R}), {rbText}")
         return nutText + ("" if ok else ", washer check could not run")
 
     def decorate(self, image, overlay, ok, geometry, reason, seconds, name):

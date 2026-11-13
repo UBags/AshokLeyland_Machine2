@@ -2685,3 +2685,61 @@ Architecture items not included (user).
   Allen-Bradley value is the one already in use. Unchanged.
 - **Pictures:** `test/machine2_dryrun/top_bearing_images/` replaced by the 13 Nov set (DOST_bearing_01-02,
   DOSTPLUS_bearing_01-04); the old set is in git history. Verifier ALL EQUIVALENT.
+
+## 98. Machine 2 camera moved again: nut / washer and no-bunk centre; nut sizes; bearing-or-nut limits; washer test on diff_R alone (2026-11-13)
+
+- **Code checked:** positions are `<vendor>.vision.nutwasher.nut.detection.center` and `.nobunk.nut.detection.center`
+  (the search disc); the hexagon tests (`vision.nut.*`, `nut.reference.center` in crop coordinates) and the washer
+  comparison (the top bearing ring of the same cycle) are relative and unchanged.
+- **Measured (13 Nov, thresholded nut outline standing in for MobileSAM):** nut centre (643.6-644.5, 328.5-336.6) -
+  DOST about y 329, DOSTPLUS 336.5 (old pictures (707.4-708.5, 348.2-350.9), detection centre 708,358). The nut grew
+  x1.09 across / x1.19 in area (it sits higher, nearer the camera; the hub only x1.035): outline 4830-5370 px (window
+  max was 5500), nut outer diameter 77.4-81.7 (max 84), mean diameter 69.4-70.9 (max 72); as a ring (fallback and top
+  bearing ring finder) outer 83.6-85.2, mean 71.6-72.3, inner 57.6-59.2.
+- **Changes (siemens, all three properties files; user approved):**
+
+  | key (siemens.vision.) | was | now |
+  |---|---|---|
+  | nutwasher.nut.detection.center, nobunk.nut.detection.center | 708,358 | **644,344** |
+  | nut.min/max.mask.area | 3000 / 5500 | **3500 / 6500** |
+  | nutwasher.nut.outer.diameter.min/max | 64 / 84 | **70 / 92** |
+  | nutwasher.nut.mean.diameter.min/max | 60 / 72 | **65 / 80** |
+  | nutwasher.nut.ring.outer.diameter.min/max | 70 / 86 | **76 / 94** |
+  | nutwasher.nut.ring.mean.diameter.max | 74 | **80** |
+  | topbearing.outer.diameter.min | 86 | **94** |
+  | topbearing.mean.diameter.min | 75 | **80** |
+  | topbearing.inner.diameter.min (new) | - | **65** |
+  | nutwasher.washer.threshold.r | 0.55 | **33** |
+  | nutwasher.washer.check.rb (new) | - | **False** |
+
+- **Centre 644,344:** hexagon accepted on 11/11 nut pictures with the centre moved +/-8 px in x or y; symmetry 75-89
+  (minimum 55).
+- **Bearing or nut (user: the 84.9 vs 86 margin was too small):** midpoints of the measured gaps. Nuts 83.6-85.2 /
+  71.6-72.3 / 57.6-59.2 against bearings 102.6-107.6 / 87.6-92.1 / 71.6-77.1 (outer / mean / inner diameter).
+  **New code:** `CheckTopBearing.BEARING_INNER_DIAMETER_MIN` (`<vendor>.vision.topbearing.inner.diameter.min`,
+  0 = not checked; allenbradley 0.0).
+- **Washer test (user decision):** diff_RB no longer separates under the new light. A DOST washer alone reads diff_RB
+  -0.6, below the no-washer values; DOST nut + washer 2.3-4.8 failed the 3.5 limit. diff_R separates. **New code:**
+  `CheckNutAndPlateWasher.WASHER_CHECK_RB` (`<vendor>.vision.nutwasher.washer.check.rb`; siemens False, allenbradley
+  True: Machine 1 unchanged); washer present = diff_R > threshold.r [and diff_RB > threshold.rb when on].
+- **Results (real checks, OpenCV only; nut outline by thresholding in place of MobileSAM):**
+  - **Nut + washer:** OK 67/67 (every nut picture against every bearing picture of the same part; DOST 2 parts,
+    DOSTPLUS 1), diff_R 48.8-64.7.
+  - **Washer only:** 0/20 OK (no nut).
+  - **No washer** (bearing against bearing of the same part, 24 pairs, 3 parts): diff_R -6.6..+24.8, all under 33.
+    The 24.8 comes from exposure differences between two pictures of the same bearing.
+  - **Top bearing:** 12/12 bearings OK; 21 nut pictures and 10 open bores NOT OK.
+- **OpenCV in the sandbox:** it had OpenCV 5.0, whose `HoughLinesP` returns (N, 4) instead of (N, 1, 4); the hexagon
+  detector then crashed in `cluster_lines_by_angle`. The project pins 4.11 (requirements.txt), so the sandbox was
+  set to 4.11 and every check of sections 95-97 was re-run: knuckle 155/155 and 30/30, knuckle window 9/9, hub 10/10,
+  top bearing as above. If OpenCV is ever upgraded to 5.x, `cluster_lines_by_angle` needs `np.reshape(lines, (-1, 4))`.
+- **Verifier:** reference commit 8d7cdd5 for CheckTopBearing (previous reference 4e04121 + this change; 9 manifest
+  lines moved) and CheckNutAndPlateWasher; both copies ALL EQUIVALENT (192 parameters).
+- **Pictures:**
+  - `nut_washer_images/` replaced: DOST_nut_01-05 (part 1, use DOST_bearing_01/03/04), DOST_nut_06-07 (part 2,
+    use DOST_bearing_02/05/06), DOST_washer_01-02, DOSTPLUS_nut_01-04 and DOSTPLUS_washer_01-02 (use
+    DOSTPLUS_bearing_02-04).
+  - `top_bearing_images/` gains DOST_bearing_03-06.
+  - DryRun_NutWasher_Check shows "diff_RB (not checked)" when the R-B test is off.
+- **To confirm on the laptop (models):** DryRun_NutWasher_Check on `nut_washer_images` - the MobileSAM nut mask must
+  fall inside 3500-6500 and the nut sizes inside the new ranges.
