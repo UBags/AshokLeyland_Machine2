@@ -12,13 +12,16 @@ until a definite answer); holes count only inside r<inner.disc.radius> round the
              square.min/max.interior.angle)
   DOSTPLUS : exactly 2 holes, dostplus.hole.pair.distance.min..max apart; a DOST square found = NOT OK
 
-  Start: model (DOST / DOSTPLUS - every picture in the folder is checked as this model), folder, seconds between
-  pictures, check (state 24 / state 13), "Save marked pictures" (<folder>/bunk_results/).
-  Markings: cyan circle = the segmented disc, yellow circle and cross = the hole search disc and its centre, green =
-  the holes found, red dots = their centres; banner = OK / NOT OK with the holes found, their spacing (DOSTPLUS: pair
-  distance; DOST: the 4 sides), how far their centre is from the set centre, the deciding gamma and the time.
+  Start: model (DOST / DOSTPLUS - every picture is checked as this model; "Both" - every picture is checked as DOST
+  and as DOSTPLUS), folder (default: bunk_images_20261113 next to this script, the pictures that come with git pull;
+  "Folder..." to choose another), seconds between pictures, check (state 24 / state 13), "Save marked pictures"
+  (<folder>/bunk_results/).
+  Picture: no text on it - cyan circle = the segmented disc, yellow circle and cross = the hole search disc and its
+  centre, red dots = the holes found (green border = OK, red = NOT OK). The list at the bottom and the terminal give,
+  for each picture, the model checked, the number of holes found, OK / NOT OK, the time, the spacing, their centre's
+  distance from the set centre and the deciding gamma. Terminal lines start "HOLES".
 
-Run from the project root:   python test/machine1_dryrun/DryRun_Bunk_Check_UI.py
+Run from the project root:   python test/machine2_dryrun/DryRun_Bunk_Check_UI.py
 """
 import os
 import pathlib
@@ -63,11 +66,12 @@ class BunkCheckWindow:
         bar = ttk.Frame(root, padding=6)
         bar.pack(fill="x")
         ttk.Label(bar, text="Model").pack(side="left")
-        self.model = tk.StringVar(value="DOST")
-        ttk.Combobox(bar, textvariable=self.model, values=("DOST", "DOSTPLUS"), state="readonly",
+        self.model = tk.StringVar(value="Both")
+        ttk.Combobox(bar, textvariable=self.model, values=("Both", "DOST", "DOSTPLUS"), state="readonly",
                      width=10).pack(side="left", padx=4)
         ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left", padx=(10, 0))
-        self.folder = tk.StringVar(value="")
+        default = HERE / "bunk_images_20261113"
+        self.folder = tk.StringVar(value=str(default) if default.is_dir() else "")
         ttk.Label(bar, textvariable=self.folder, width=52).pack(side="left", padx=6)
         ttk.Label(bar, text="Seconds between pictures").pack(side="left", padx=(10, 0))
         self.seconds = tk.StringVar(value="3")
@@ -89,8 +93,14 @@ class BunkCheckWindow:
         self.view.pack(fill="both", expand=True)
         self.status = tk.StringVar(value="Loading the models ...")
         ttk.Label(root, textvariable=self.status, padding=6, font=("Segoe UI", 11, "bold")).pack(fill="x")
-        self.list = tk.Listbox(root, height=7, font=("Consolas", 10))
-        self.list.pack(fill="x", padx=6, pady=(0, 6))
+        listFrame = ttk.Frame(root)
+        listFrame.pack(fill="x", padx=6, pady=(0, 6))
+        self.list = tk.Listbox(listFrame, height=8, font=("Consolas", 10))
+        yscroll = ttk.Scrollbar(listFrame, command=self.list.yview)
+        xscroll = ttk.Scrollbar(listFrame, orient="horizontal", command=self.list.xview)
+        self.list.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        xscroll.pack(side="bottom", fill="x"); yscroll.pack(side="right", fill="y")
+        self.list.pack(side="left", fill="x", expand=True)
 
         threading.Thread(target=self.load, name="Load models", daemon=True).start()
         root.after(100, self.poll)
@@ -170,21 +180,27 @@ class BunkCheckWindow:
             if image is None:
                 self.results.put(("shown", (n, len(files), path.name, None, False, "cannot read the picture", 0.0)))
                 continue
-            self.last.clear()
-            t0 = time.time()
-            try:
-                marked, ok, gamma = check(image.copy(), QR[model], None)
-                holes = self.holes()
-                reason = self.reason(holes, gamma)
-            except Exception as e:
-                marked, ok, holes, reason = None, False, [], f"exception: {e}"
-            seconds = time.time() - t0
-            shown = self.decorate(image, marked, ok, holes, reason, seconds, path.name, model)
-            if save:
-                cv2.imwrite(str(outFolder / f"{'OK' if ok else 'NOTOK'}_{path.stem}_as_{model}.png"), shown)
-            self.advance.clear()
-            self.results.put(("shown", (n, len(files), path.name, shown, ok, reason, seconds)))
-            self.advance.wait()
+            for asModel in (("DOST", "DOSTPLUS") if model == "Both" else (model,)):
+                self.last.clear()
+                t0 = time.time()
+                try:
+                    marked, ok, gamma = check(image.copy(), QR[asModel], None)
+                    holes = self.holes()
+                    reason = self.reason(holes, gamma)
+                except Exception as e:
+                    marked, ok, holes, reason = None, False, [], f"exception: {e}"
+                seconds = time.time() - t0
+                print(f"HOLES  {path.name:28s} as {asModel:8s}  {len(holes)} holes  {'OK    ' if ok else 'NOT OK'}  "
+                      f"{seconds:5.2f} s  {reason}", flush=True)
+                shown = self.decorate(image, marked, ok, holes)
+                if save:
+                    cv2.imwrite(str(outFolder / f"{'OK' if ok else 'NOTOK'}_{path.stem}_as_{asModel}.png"), shown)
+                self.advance.clear()
+                self.results.put(("shown", (n, len(files), f"{path.name} as {asModel}", shown, ok,
+                                            f"{len(holes)} holes - {reason}", seconds)))
+                self.advance.wait()
+                if self.stopRequested.is_set():
+                    break
         self.results.put(("done", None))
 
     def holes(self):
@@ -213,7 +229,8 @@ class BunkCheckWindow:
         return (f"{len(holes)} holes, {spacing}, their centre ({mid[0]:.0f},{mid[1]:.0f}) is {off:.1f} px from the set "
                 f"centre; {decided}")
 
-    def decorate(self, image, marked, ok, holes, reason, seconds, name, model):
+    def decorate(self, image, marked, ok, holes):
+        """Shapes only, no text (verdict and values are in the list and the terminal)."""
         BS = self.BS
         out = marked.copy() if marked is not None and marked.shape == image.shape else image.copy()
         centre = tuple(int(v) for v in BS.OUTER_DISC_CENTER)
@@ -223,11 +240,7 @@ class BunkCheckWindow:
         for x, y in holes:
             cv2.circle(out, (int(round(x)), int(round(y))), 4, (0, 0, 255), -1)
         colour = (0, 170, 0) if ok else (0, 0, 220)
-        cv2.rectangle(out, (0, out.shape[0] - 70), (out.shape[1], out.shape[0]), colour, -1)
-        cv2.putText(out, f"{'OK' if ok else 'NOT OK'}  bung as {model}", (12, out.shape[0] - 38),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
-        cv2.putText(out, f"{reason}  |  {seconds:.2f} s  |  {name}", (12, out.shape[0] - 12),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        cv2.rectangle(out, (0, 0), (out.shape[1] - 1, out.shape[0] - 1), colour, 8)
         return out
 
     # ------------------------------------------------------------------ window side
@@ -247,7 +260,7 @@ class BunkCheckWindow:
                     self.show(*data)
                 elif kind == "done":
                     okCount = sum(1 for r in self.summary if r)
-                    self.status.set(f"Done: {len(self.summary)} picture(s) as {self.model.get()}: {okCount} OK, "
+                    self.status.set(f"Done: {len(self.summary)} check(s), model {self.model.get()}: {okCount} OK, "
                                     f"{len(self.summary) - okCount} NOT OK" +
                                     (f"  -  marked pictures in {self.folder.get()}/bunk_results"
                                      if self.save.get() else ""))
@@ -259,7 +272,7 @@ class BunkCheckWindow:
 
     def show(self, n, total, name, image, ok, reason, seconds):
         self.summary.append(ok)
-        self.list.insert("end", f"{n:3}/{total}  {'OK    ' if ok else 'NOT OK'}  {name:34}  {seconds:5.2f} s  {reason}")
+        self.list.insert("end", f"{n:3}/{total}  {'OK    ' if ok else 'NOT OK'}  {name:42}  {seconds:5.2f} s  {reason}")
         self.list.see("end")
         self.status.set(f"{n}/{total}  {name}: {'OK' if ok else 'NOT OK'}  -  {reason}")
         if image is not None:
