@@ -21,7 +21,6 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
-from camera.VisionConfig import vInt, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -51,6 +50,13 @@ class CheckKnuckle():
        for an LHS knuckle and on the right for an RHS one. Each side box is binarised and mean-filtered; an average
        below vision.knuckle.lhs.rhs.darkness.threshold means the arm is there. Exactly one side must show the arm
        (both dark = something else on the bar: rejected), and it must match the QR code.
+    With vision.knuckle.side.by.difference = True (Machine 2), check A and step 1 work by differences instead: contour A
+       (left of the hub) and contour A' (right of the hub) lie just above where the RHS / LHS knuckle's casting ends
+       between the bosses; the darker one tells the side, and they must differ by more than
+       vision.knuckle.side.difference.threshold (the bare plate of an empty fixture shows in both). The side boxes
+       (D1 = lhs.crop, D2 = rhs.crop) must also differ by more than that threshold (the arm darkens one of them), and
+       both comparisons must give the same side, which must match the QR code. The rectangle A, its alternate and
+       vision.knuckle.lhs.rhs.darkness.threshold are then not used.
     2./3. DOST / DOSTPLUS: two polygons next to the two kingpin bosses (vision.knuckle.step2.polygon.points and
        vision.knuckle.step3.polygon.points), binarised and mean-filtered. The DOSTPLUS boss face reaches into them
        (bright), the DOST casting does not (dark): an average below
@@ -58,92 +64,111 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
-    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
-    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
-    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
+    LHS_CROP_X: int = 380
+    LHS_CROP_Y: int = 650
+    LHS_CROP_WIDTH: int = 130
+    LHS_CROP_HEIGHT: int = 50
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
-    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
-    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
-    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
+    RHS_CROP_X: int = 765
+    RHS_CROP_Y: int = 650
+    RHS_CROP_WIDTH: int = 100
+    RHS_CROP_HEIGHT: int = 55
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
-    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
-    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
-    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
+    COMMON_CHECK_A_X: int = 775
+    COMMON_CHECK_A_Y: int = 300
+    COMMON_CHECK_A_WIDTH: int = 35
+    COMMON_CHECK_A_HEIGHT: int = 25
 
-    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
-    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
-    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
-    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
+    COMMON_CHECK_B_X: int = 440
+    COMMON_CHECK_B_Y: int = 310
+    COMMON_CHECK_B_WIDTH: int = 40
+    COMMON_CHECK_B_HEIGHT: int = 20
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
+    COMMON_CHECK_THRESHOLD: int = 84
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
-    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
-    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
+    COMMON_CHECK_C_CENTER_X: int = 390
+    COMMON_CHECK_C_CENTER_Y: int = 465
+    COMMON_CHECK_C_RADIUS: int = 13
 
-    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
-    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
-    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
+    COMMON_CHECK_D_CENTER_X: int = 865
+    COMMON_CHECK_D_CENTER_Y: int = 465
+    COMMON_CHECK_D_RADIUS: int = 13
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
-    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
-    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
-    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
+    COMMON_CHECK_E_X: int = 600
+    COMMON_CHECK_E_Y: int = 600
+    COMMON_CHECK_E_WIDTH: int = 50
+    COMMON_CHECK_E_HEIGHT: int = 20
 
     # Alternate area of each common check (same rule; the check passes if the region OR its alternate is dark).
     # A width, height or radius of 0 means no alternate (the default).
-    COMMON_CHECK_A_ALT_X: int = vInt("vision.knuckle.common.check.a.alt.x", 0)
-    COMMON_CHECK_A_ALT_Y: int = vInt("vision.knuckle.common.check.a.alt.y", 0)
-    COMMON_CHECK_A_ALT_WIDTH: int = vInt("vision.knuckle.common.check.a.alt.width", 0)
-    COMMON_CHECK_A_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.a.alt.height", 0)
-    COMMON_CHECK_B_ALT_X: int = vInt("vision.knuckle.common.check.b.alt.x", 0)
-    COMMON_CHECK_B_ALT_Y: int = vInt("vision.knuckle.common.check.b.alt.y", 0)
-    COMMON_CHECK_B_ALT_WIDTH: int = vInt("vision.knuckle.common.check.b.alt.width", 0)
-    COMMON_CHECK_B_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.b.alt.height", 0)
-    COMMON_CHECK_C_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.c.alt.center.x", 0)
-    COMMON_CHECK_C_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.c.alt.center.y", 0)
-    COMMON_CHECK_C_ALT_RADIUS: int = vInt("vision.knuckle.common.check.c.alt.radius", 0)
-    COMMON_CHECK_D_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.d.alt.center.x", 0)
-    COMMON_CHECK_D_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.d.alt.center.y", 0)
-    COMMON_CHECK_D_ALT_RADIUS: int = vInt("vision.knuckle.common.check.d.alt.radius", 0)
-    COMMON_CHECK_E_ALT_X: int = vInt("vision.knuckle.common.check.e.alt.x", 0)
-    COMMON_CHECK_E_ALT_Y: int = vInt("vision.knuckle.common.check.e.alt.y", 0)
-    COMMON_CHECK_E_ALT_WIDTH: int = vInt("vision.knuckle.common.check.e.alt.width", 0)
-    COMMON_CHECK_E_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.e.alt.height", 0)
+    COMMON_CHECK_A_ALT_X: int = 0
+    COMMON_CHECK_A_ALT_Y: int = 0
+    COMMON_CHECK_A_ALT_WIDTH: int = 0
+    COMMON_CHECK_A_ALT_HEIGHT: int = 0
+    COMMON_CHECK_B_ALT_X: int = 0
+    COMMON_CHECK_B_ALT_Y: int = 0
+    COMMON_CHECK_B_ALT_WIDTH: int = 0
+    COMMON_CHECK_B_ALT_HEIGHT: int = 0
+    COMMON_CHECK_C_ALT_CENTER_X: int = 0
+    COMMON_CHECK_C_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_C_ALT_RADIUS: int = 0
+    COMMON_CHECK_D_ALT_CENTER_X: int = 0
+    COMMON_CHECK_D_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_D_ALT_RADIUS: int = 0
+    COMMON_CHECK_E_ALT_X: int = 0
+    COMMON_CHECK_E_ALT_Y: int = 0
+    COMMON_CHECK_E_ALT_WIDTH: int = 0
+    COMMON_CHECK_E_ALT_HEIGHT: int = 0
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
+    STEP2_POLYGON_POINTS = np.array([
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
+    STEP3_POLYGON_POINTS = np.array([
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
+    LHS_RHS_DARKNESS_THRESHOLD: int = 220
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
 
     # Binarisation threshold: grey levels below this become black, the rest white
-    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
+    BINARIZATION_THRESHOLD: int = 48
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
+    KERNEL_SIZE: Tuple[int, int] = (5, 5)
+
+    # Side and presence by differences (vision.knuckle.side.by.difference = True). Two comparisons decide the side and
+    # whether a knuckle is there; both must agree:
+    #   (a) contour A (vision.knuckle.common.check.a.polygon.points, between the bosses left of the hub, just above
+    #       where the RHS knuckle's casting ends) and contour A' (vision.knuckle.common.check.a.alt.polygon.points,
+    #       right of the hub, just above where the LHS knuckle's casting ends). The LHS knuckle's casting reaches
+    #       higher on the left and darkens A; the RHS knuckle's reaches higher on the right and darkens A'.
+    #       mean(A') - mean(A) > vision.knuckle.side.difference.threshold -> LHS;
+    #       mean(A) - mean(A') > vision.knuckle.side.difference.threshold -> RHS;
+    #       otherwise (no knuckle: both show the bare plate) -> NOT OK.
+    #   (b) side boxes D1 (vision.knuckle.lhs.crop.*) and D2 (vision.knuckle.rhs.crop.*) on the bar where the steering
+    #       arm rests, mean grey level: mean(D1) - mean(D2) > the same threshold -> RHS (arm on D2);
+    #       mean(D2) - mean(D1) > it -> LHS; otherwise -> NOT OK.
+    # Then the rectangle A and its alternate, and vision.knuckle.lhs.rhs.darkness.threshold, are not used.
+    # A polygon 0,0;0,0;0,0 means not set.
+    SIDE_BY_DIFFERENCE: bool = False
+    SIDE_DIFFERENCE_THRESHOLD: int = 10
+    COMMON_CHECK_A_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
+    COMMON_CHECK_A_ALT_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,
@@ -315,6 +340,19 @@ class CheckKnuckle():
         return float(np.mean(gray[mask == 255]))
 
     @staticmethod
+    def _polygon_mean(gray: np.ndarray, points) -> Optional[float]:
+        """Mean grey level inside a polygon; None if it is not set (no area) or reaches outside the image."""
+        pts = np.array(points, dtype=np.int32).reshape(-1, 2)
+        if len(pts) < 3 or cv2.contourArea(pts) <= 0:
+            return None
+        if pts[:, 0].min() < 0 or pts[:, 1].min() < 0 or pts[:, 0].max() >= gray.shape[1] or pts[:, 1].max() >= gray.shape[0]:
+            return None
+        mask = np.zeros(gray.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [pts], 255)
+        values = gray[mask == 255]
+        return float(np.mean(values)) if len(values) > 0 else None
+
+    @staticmethod
     def _alt_text(alt_mean: Optional[float]) -> str:
         return "" if alt_mean is None else f"; alternate mean {alt_mean:.2f}"
 
@@ -466,37 +504,69 @@ class CheckKnuckle():
             # These checks verify basic knuckle presence before detailed analysis
             # =====================================================================
 
-            # =====================================================================
-            # Common Check A: rectangle vision.knuckle.common.check.a.* (knuckle casting next to the right boss)
-            # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
-            # =====================================================================
-            cropped_a = gray_image[
-                        CheckKnuckle.COMMON_CHECK_A_Y:CheckKnuckle.COMMON_CHECK_A_Y + CheckKnuckle.COMMON_CHECK_A_HEIGHT,
-                        CheckKnuckle.COMMON_CHECK_A_X:CheckKnuckle.COMMON_CHECK_A_X + CheckKnuckle.COMMON_CHECK_A_WIDTH
-                        ]
-            mean_a = np.mean(cropped_a)
+            side_from_contours = None
+            if CheckKnuckle.SIDE_BY_DIFFERENCE:
+                # =================================================================
+                # Common Check A by contours A / A' (vision.knuckle.common.check.a.polygon.points,
+                # vision.knuckle.common.check.a.alt.polygon.points): their mean grey levels must differ by more than
+                # vision.knuckle.side.difference.threshold; which one is darker tells the side
+                # =================================================================
+                mean_a_poly = CheckKnuckle._polygon_mean(gray_image, CheckKnuckle.COMMON_CHECK_A_POLYGON_POINTS)
+                mean_a_alt_poly = CheckKnuckle._polygon_mean(gray_image, CheckKnuckle.COMMON_CHECK_A_ALT_POLYGON_POINTS)
+                if mean_a_poly is None or mean_a_alt_poly is None:
+                    logBoth('logError', _src,
+                            "CheckKnuckle: Common Check A failed - contour A or A' not set or outside the picture "
+                            "(vision.knuckle.common.check.a.polygon.points / a.alt.polygon.points)",
+                            MessageType.ISSUE)
+                    return anImage, False
+                difference_a = mean_a_alt_poly - mean_a_poly
+                if difference_a > CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD:
+                    side_from_contours = "LHS"
+                elif -difference_a > CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD:
+                    side_from_contours = "RHS"
+                else:
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Common Check A failed - contour A mean {mean_a_poly:.2f}, contour A' mean "
+                            f"{mean_a_alt_poly:.2f}: they differ by {abs(difference_a):.2f}, not more than "
+                            f"{CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD} (no knuckle, or its side cannot be told)",
+                            MessageType.ISSUE)
+                    return anImage, False
+                logBoth('logInfo', _src,
+                        f"CheckKnuckle: Common Check A passed - contour A mean {mean_a_poly:.2f}, contour A' mean "
+                        f"{mean_a_alt_poly:.2f} (difference {difference_a:+.2f}): {side_from_contours}",
+                        MessageType.SUCCESS)
+            else:
+                # =====================================================================
+                # Common Check A: rectangle vision.knuckle.common.check.a.* (knuckle casting next to the right boss)
+                # Mean must be below vision.knuckle.common.check.threshold, otherwise the component is invalid
+                # =====================================================================
+                cropped_a = gray_image[
+                            CheckKnuckle.COMMON_CHECK_A_Y:CheckKnuckle.COMMON_CHECK_A_Y + CheckKnuckle.COMMON_CHECK_A_HEIGHT,
+                            CheckKnuckle.COMMON_CHECK_A_X:CheckKnuckle.COMMON_CHECK_A_X + CheckKnuckle.COMMON_CHECK_A_WIDTH
+                            ]
+                mean_a = np.mean(cropped_a)
 
-            logBoth('logDebug', _src,
-                    f"Common Check A - Region ({CheckKnuckle.COMMON_CHECK_A_X}, {CheckKnuckle.COMMON_CHECK_A_Y}) "
-                    f"{CheckKnuckle.COMMON_CHECK_A_WIDTH}x{CheckKnuckle.COMMON_CHECK_A_HEIGHT}: "
-                    f"mean = {mean_a:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
-                    MessageType.GENERAL)
+                logBoth('logDebug', _src,
+                        f"Common Check A - Region ({CheckKnuckle.COMMON_CHECK_A_X}, {CheckKnuckle.COMMON_CHECK_A_Y}) "
+                        f"{CheckKnuckle.COMMON_CHECK_A_WIDTH}x{CheckKnuckle.COMMON_CHECK_A_HEIGHT}: "
+                        f"mean = {mean_a:.2f}, threshold = {CheckKnuckle.COMMON_CHECK_THRESHOLD}",
+                        MessageType.GENERAL)
 
-            # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
-            mean_a_alt = CheckKnuckle._alt_rect_mean(gray_image, CheckKnuckle.COMMON_CHECK_A_ALT_X, CheckKnuckle.COMMON_CHECK_A_ALT_Y,
-                                                      CheckKnuckle.COMMON_CHECK_A_ALT_WIDTH, CheckKnuckle.COMMON_CHECK_A_ALT_HEIGHT)
-            if mean_a >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
-                    mean_a_alt is None or mean_a_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
-                logBoth('logError', _src,
-                        f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
-                        f"{CheckKnuckle._alt_text(mean_a_alt)}",
-                        MessageType.ISSUE)
-                return anImage, False
+                # alternate area: passes if the region OR its alternate is dark (a paint mark can make one bright)
+                mean_a_alt = CheckKnuckle._alt_rect_mean(gray_image, CheckKnuckle.COMMON_CHECK_A_ALT_X, CheckKnuckle.COMMON_CHECK_A_ALT_Y,
+                                                          CheckKnuckle.COMMON_CHECK_A_ALT_WIDTH, CheckKnuckle.COMMON_CHECK_A_ALT_HEIGHT)
+                if mean_a >= CheckKnuckle.COMMON_CHECK_THRESHOLD and (
+                        mean_a_alt is None or mean_a_alt >= CheckKnuckle.COMMON_CHECK_THRESHOLD):
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Common Check A failed - Region A mean {mean_a:.2f} >= {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                            f"{CheckKnuckle._alt_text(mean_a_alt)}",
+                            MessageType.ISSUE)
+                    return anImage, False
 
-            logBoth('logInfo', _src,
-                    f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
-                        f"{CheckKnuckle._alt_text(mean_a_alt)}",
-                    MessageType.SUCCESS)
+                logBoth('logInfo', _src,
+                        f"CheckKnuckle: Common Check A passed - Region A mean {mean_a:.2f} < {CheckKnuckle.COMMON_CHECK_THRESHOLD}"
+                            f"{CheckKnuckle._alt_text(mean_a_alt)}",
+                        MessageType.SUCCESS)
 
             # =====================================================================
             # Common Check B: rectangle vision.knuckle.common.check.b.* (knuckle casting next to the left boss)
@@ -652,59 +722,90 @@ class CheckKnuckle():
                         f"{CheckKnuckle._alt_text(mean_e_alt)}",
                     MessageType.SUCCESS)
 
-            # =====================================================================
-            # Step 1A: LHS side box vision.knuckle.lhs.crop.* (left end of the bottom bar)
-            # Binarised (vision.knuckle.binarization.threshold) and mean-filtered (vision.knuckle.kernel.size);
-            # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an LHS knuckle is there
-            # =====================================================================
-            lhs_avg = CheckKnuckle._crop_and_analyze(
-                anImage,
-                CheckKnuckle.LHS_CROP_X,
-                CheckKnuckle.LHS_CROP_Y,
-                CheckKnuckle.LHS_CROP_WIDTH,
-                CheckKnuckle.LHS_CROP_HEIGHT
-            )
-            is_lhs_component = lhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
+            if CheckKnuckle.SIDE_BY_DIFFERENCE:
+                # =================================================================
+                # Side boxes D1 (vision.knuckle.lhs.crop.*) and D2 (vision.knuckle.rhs.crop.*): mean grey levels must
+                # differ by more than vision.knuckle.side.difference.threshold; the darker one has the arm on it.
+                # Must agree with the side from contours A / A'.
+                # =================================================================
+                mean_d1 = float(np.mean(gray_image[CheckKnuckle.LHS_CROP_Y:CheckKnuckle.LHS_CROP_Y + CheckKnuckle.LHS_CROP_HEIGHT,
+                                                   CheckKnuckle.LHS_CROP_X:CheckKnuckle.LHS_CROP_X + CheckKnuckle.LHS_CROP_WIDTH]))
+                mean_d2 = float(np.mean(gray_image[CheckKnuckle.RHS_CROP_Y:CheckKnuckle.RHS_CROP_Y + CheckKnuckle.RHS_CROP_HEIGHT,
+                                                   CheckKnuckle.RHS_CROP_X:CheckKnuckle.RHS_CROP_X + CheckKnuckle.RHS_CROP_WIDTH]))
+                difference_d = mean_d1 - mean_d2
+                if difference_d > CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD:
+                    side_from_boxes = "RHS"
+                elif -difference_d > CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD:
+                    side_from_boxes = "LHS"
+                else:
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Invalid component - side box D1 mean {mean_d1:.2f}, D2 mean {mean_d2:.2f}: "
+                            f"they differ by {abs(difference_d):.2f}, not more than {CheckKnuckle.SIDE_DIFFERENCE_THRESHOLD} "
+                            f"(no arm on the bar, or something lying on the other end?)",
+                            MessageType.ISSUE)
+                    return anImage, False
+                logBoth('logDebug', _src, f"Side boxes D1 {mean_d1:.2f}, D2 {mean_d2:.2f}: {side_from_boxes}", MessageType.GENERAL)
+                if side_from_boxes != side_from_contours:
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Invalid component - contours A / A' say {side_from_contours}, side boxes "
+                            f"D1 / D2 say {side_from_boxes}",
+                            MessageType.ISSUE)
+                    return anImage, False
+                detected_side = side_from_boxes
+            else:
+                # =====================================================================
+                # Step 1A: LHS side box vision.knuckle.lhs.crop.* (left end of the bottom bar)
+                # Binarised (vision.knuckle.binarization.threshold) and mean-filtered (vision.knuckle.kernel.size);
+                # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an LHS knuckle is there
+                # =====================================================================
+                lhs_avg = CheckKnuckle._crop_and_analyze(
+                    anImage,
+                    CheckKnuckle.LHS_CROP_X,
+                    CheckKnuckle.LHS_CROP_Y,
+                    CheckKnuckle.LHS_CROP_WIDTH,
+                    CheckKnuckle.LHS_CROP_HEIGHT
+                )
+                is_lhs_component = lhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
 
-            logBoth('logDebug', _src, f"LHS region average: {lhs_avg:.2f}, is_LHS: {is_lhs_component}", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"LHS region average: {lhs_avg:.2f}, is_LHS: {is_lhs_component}", MessageType.GENERAL)
 
-            # =====================================================================
-            # Step 1B: RHS side box vision.knuckle.rhs.crop.* (right end of the bottom bar), same processing;
-            # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an RHS knuckle is there
-            # =====================================================================
-            rhs_avg = CheckKnuckle._crop_and_analyze(
-                anImage,
-                CheckKnuckle.RHS_CROP_X,
-                CheckKnuckle.RHS_CROP_Y,
-                CheckKnuckle.RHS_CROP_WIDTH,
-                CheckKnuckle.RHS_CROP_HEIGHT
-            )
-            is_rhs_component = rhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
+                # =====================================================================
+                # Step 1B: RHS side box vision.knuckle.rhs.crop.* (right end of the bottom bar), same processing;
+                # an average below vision.knuckle.lhs.rhs.darkness.threshold means the arm of an RHS knuckle is there
+                # =====================================================================
+                rhs_avg = CheckKnuckle._crop_and_analyze(
+                    anImage,
+                    CheckKnuckle.RHS_CROP_X,
+                    CheckKnuckle.RHS_CROP_Y,
+                    CheckKnuckle.RHS_CROP_WIDTH,
+                    CheckKnuckle.RHS_CROP_HEIGHT
+                )
+                is_rhs_component = rhs_avg < CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD
 
-            logBoth('logDebug', _src, f"RHS region average: {rhs_avg:.2f}, is_RHS: {is_rhs_component}", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"RHS region average: {rhs_avg:.2f}, is_RHS: {is_rhs_component}", MessageType.GENERAL)
 
-            # =====================================================================
-            # Validation: At least one side must be detected
-            # =====================================================================
-            if not is_lhs_component and not is_rhs_component:
-                logBoth('logError', _src,
-                        f"CheckKnuckle: Invalid component - neither LHS nor RHS detected "
-                        f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f})",
-                        MessageType.ISSUE)
-                return anImage, False
+                # =====================================================================
+                # Validation: At least one side must be detected
+                # =====================================================================
+                if not is_lhs_component and not is_rhs_component:
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Invalid component - neither LHS nor RHS detected "
+                            f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f})",
+                            MessageType.ISSUE)
+                    return anImage, False
 
-            # Both sides dark: the arm is on one side and something else (a glove, a rag, a hand) lies on the other.
-            # The side cannot be told, and assuming one could accept a knuckle of the wrong side: rejected.
-            if is_lhs_component and is_rhs_component:
-                logBoth('logError', _src,
-                        f"CheckKnuckle: Invalid image - both LHS and RHS side boxes are dark "
-                        f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f}, threshold={CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD}); "
-                        f"is something lying on the bar?",
-                        MessageType.ISSUE)
-                return anImage, False
+                # Both sides dark: the arm is on one side and something else (a glove, a rag, a hand) lies on the other.
+                # The side cannot be told, and assuming one could accept a knuckle of the wrong side: rejected.
+                if is_lhs_component and is_rhs_component:
+                    logBoth('logError', _src,
+                            f"CheckKnuckle: Invalid image - both LHS and RHS side boxes are dark "
+                            f"(LHS avg={lhs_avg:.2f}, RHS avg={rhs_avg:.2f}, threshold={CheckKnuckle.LHS_RHS_DARKNESS_THRESHOLD}); "
+                            f"is something lying on the bar?",
+                            MessageType.ISSUE)
+                    return anImage, False
 
-            # Determine detected side from image
-            detected_side = "LHS" if is_lhs_component else "RHS"
+                # Determine detected side from image
+                detected_side = "LHS" if is_lhs_component else "RHS"
 
             # =====================================================================
             # Match detected side with QR code side
