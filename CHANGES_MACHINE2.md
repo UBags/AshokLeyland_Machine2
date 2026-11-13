@@ -2591,3 +2591,18 @@ Architecture items not included (user).
   both copies ALL EQUIVALENT (190 parameters).
 - **Not yet done:** the other stations (hub, top bearing, nut / washer, no bunk, cap, bunk) need the same work on their
   new pictures.
+- **Knuckle check window (follow-up, user):** new `test/machine2_dryrun/DryRun_Knuckle_Check_UI.py` (and the machine1
+  copy).
+  - **What it does:** choose a folder or one picture. Each picture goes through the real `CheckKnuckle` with this
+    machine's settings and each of the four QR codes, and the window shows DOST / DOSTPLUS LHS / RHS, or NEITHER with
+    the check's first reasons (more than one match would show AMBIGUOUS).
+  - **Markings:** the regions with their mean grey levels. A / A' and D1 / D2 are highlighted only when the darker one
+    is darker by more than the threshold.
+  - **Controls:** seconds between pictures 1 - 10 (3 at start), read at each picture so a change applies during the
+    run; Stop; a count per knuckle at the end; optional saving of the marked pictures to
+    `<folder>/knuckle_check_results/`.
+  - **Runs on its own:** the check's log messages are collected by the window, so no Redis, models, PLC or camera are
+    needed.
+  - **Checked:** driven under Xvfb, 9/9 on each machine (Machine 2: the 20 pictures identified as labelled, the empty
+    fixture NEITHER with its reason; Machine 1: its 4 pictures, three times each). Covers the seconds changed during
+    the run, a single picture, Stop part-way, an unreadable file reported with the run going on, and saving.
