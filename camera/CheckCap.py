@@ -297,7 +297,8 @@ class CheckCap:
         cv2.circle(annotated, centre, int(CheckCap.SILVER_BRIGHTNESS_RADIUS), (255, 255, 0), 1)
 
         # Add result text
-        result_text = "CAP: PRESENT" if is_cap_present else "CAP: NOT DETECTED"
+        not_seated = seating is not None and not seating["seated"]
+        result_text = "CAP: PRESENT" if is_cap_present else ("CAP: NOT SEATED" if not_seated else "CAP: NOT DETECTED")
         cv2.putText(annotated, result_text, (50, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.2, color, 3)
 
