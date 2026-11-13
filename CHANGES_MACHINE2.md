@@ -2916,3 +2916,9 @@ Architecture items not included (user).
     off is shown as information - DOST_skewed_07 is rejected before seating); Machine 1 as before; the window 15/15
     (new: every line has the time and a values line follows); the marked pictures carry no text. Verifier reference
     15bb871 for CheckCap; both copies ALL EQUIVALENT.
+- **Is MobileSAM really used? (user: the check is fast on the laptop):** new `test/machine2_dryrun/Diag_Cap_Seating.py`
+  - seating on / centre, CUDA and GPU, the SAM model's device, then per picture the embedding time, the seating time,
+  the mask radii and the verdict, through ModelManager. Here (CPU): embedding 0.94-1.28 s, seating 1.05-1.35 s,
+  verdicts as expected (DOST_cap_01 4.3 / 7.9, DOST_skewed_03 16.1, DOSTPLUS_cap_01 1.2, DOSTPLUS_skewed_02 16.3).
+  On a GPU the embedding should take tens of ms. MobileSAM is not run when the cap already failed steps 1-3 (about
+  0.01 s), or when seating is off (old settings).
