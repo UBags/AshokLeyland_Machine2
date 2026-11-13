@@ -2743,3 +2743,17 @@ Architecture items not included (user).
   - DryRun_NutWasher_Check shows "diff_RB (not checked)" when the R-B test is off.
 - **To confirm on the laptop (models):** DryRun_NutWasher_Check on `nut_washer_images` - the MobileSAM nut mask must
   fall inside 3500-6500 and the nut sizes inside the new ranges.
+- **Follow-up (user's run of DryRun_NutWasher_Check with MobileSAM on the laptop):**
+  - **Real nuts, 22 pictures, as MobileSAM measures them:** outer diameter 84.2-85.0, mean 71.9-72.7, width
+    11.8-12.5, bore radius 29.8-30.5, symmetry 85-96, diff_R +56.2..+71.3. The thresholded stand-in had read the
+    outer diameter 3-7 px small.
+  - **False accept:** DOSTPLUS_bearing_03 (a bearing, no washer, no nut) gave "nut found". MobileSAM took the
+    bearing's inner ring for the nut: outer diameter 70.3 (just over the 70 minimum), mean 71.1, width 3.6,
+    symmetry 62. The washer comparison then read diff_R +36.8 against the window's bearing reference, over 33; the
+    same-part pairs measured here had reached only +24.8.
+  - **Change:** `siemens.vision.nutwasher.nut.outer.diameter.min` 70 -> **77**, midway between 70.3 and 84.2 (6.7 px
+    each side). The ring fallback cannot accept that picture either: its ring measures 103 against the fallback
+    maximum of 94. Verifier ALL EQUIVALENT.
+  - **Proposed, not yet done (awaiting the user):** a guard in the nut / washer check. If the top bearing ring finder
+    finds a bearing-sized ring in the nut picture (outer >= 94, mean >= 80, inner >= 65), the result is NOT OK. It
+    found one on 10/10 bearing pictures, and none on 11 nut + washer, 4 washer-only or 10 open-bore pictures.
