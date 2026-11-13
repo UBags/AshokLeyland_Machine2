@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Import the v2 Bunk segmentation engine
 try:
+    import camera.BunkSegmenter as BS_MODULE
     from camera.BunkSegmenter import (
         BunkSegmenter,
         paint_bunk_masks_on_image,
@@ -303,8 +304,27 @@ class CheckBunk:
                                         f"[CheckBunk] Cancelled preprocessing of gamma {gamma_sequence[idx + 1]} (not needed)",
                                         MessageType.GENERAL)
 
+                        # Seating (after the hole pattern passed; vision.bunk.seating.check)
+                        seating = None
+                        if success and BS_MODULE.SEATING_CHECK:
+                            try:
+                                seating = BS_MODULE.check_bung_seating(anImage_rgb, components, model)
+                            except Exception as e:
+                                seating = dict(seated=False, reason=f"segmenter error: {e}", face_contour=None)
+                            success = bool(seating["seated"])
+                            logBoth('logInfo' if success else 'logError', _src,
+                                    f"[CheckBunk] Seating: {'SEATED' if success else 'NOT SEATED'} - {seating['reason']}",
+                                    MessageType.SUCCESS if success else MessageType.ISSUE)
+                        logBoth('logInfo', _src,
+                                f"[CheckBunk] summary: {'OK' if success else 'NOT OK'} - model {model}, {detected_count} holes "
+                                f"(expected {expected_count}), gamma {gamma}"
+                                + (f", seating: {seating['reason']}" if seating is not None else ""), MessageType.GENERAL)
+
                         # Paint masks on original image (even for failures, to show what was detected)
                         result_image = paint_bunk_masks_on_image(anImage_rgb, components, color=(0, 255, 0))
+                        if seating is not None and seating.get("face_contour") is not None:
+                            cv2.drawContours(result_image, [seating["face_contour"]], -1,
+                                             (0, 255, 0) if success else (255, 0, 0), 2)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckBunk] Painted {len(components)} masks on image", MessageType.GENERAL)

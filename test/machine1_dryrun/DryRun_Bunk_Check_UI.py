@@ -20,6 +20,10 @@ until a definite answer); holes count only inside r<inner.disc.radius> round the
   centre, red dots = the holes found (green border = OK, red = NOT OK). The list at the bottom and the terminal give,
   for each picture, the model checked, the number of holes found, OK / NOT OK, the time, the spacing, their centre's
   distance from the set centre and the deciding gamma. Terminal lines start "HOLES".
+  Seating (vision.bunk.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
+  centre against the model's seated position and the roundness of the top-face mask (MobileSAM); the line after HOLES
+  starts "SEATING" (SEATED / NOT SEATED and both values; "not run" when the holes did not pass). On the picture the
+  top-face outline is green (seated) or red.
 
 Run from the project root:   python test/machine2_dryrun/DryRun_Bunk_Check_UI.py
 """
@@ -122,13 +126,24 @@ class BunkCheckWindow:
                 return result
 
             BS.BunkSegmenter.segment_holes_single = recording
+            originalSeating = BS.check_bung_seating
+
+            def recordingSeating(image_rgb, components, model_type):
+                result = originalSeating(image_rgb, components, model_type)
+                self.last["seating"] = result
+                return result
+
+            BS.check_bung_seating = recordingSeating
             self.BS = BS
             self.checks = {CHECKS[0]: CheckBunk.checkBunk, CHECKS[1]: CheckNoCapBunk.checkNoCapBunk}
             self.results.put(("ready",
                 f"Models loaded in {time.time() - t0:.1f} s. Centre {tuple(BS.OUTER_DISC_CENTER)}, segmented disc "
                 f"r{BS.OUTER_DISC_RADIUS}, holes within r{BS.INNER_DISC_RADIUS}; DOSTPLUS pair "
                 f"{BS.DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}-{BS.DOSTPLUS_HOLE_PAIR_DISTANCE_MAX} px; DOST square sides within "
-                f"{BS.SQUARE_SIDE_LENGTH_TOLERANCE:.0%}."))
+                f"{BS.SQUARE_SIDE_LENGTH_TOLERANCE:.0%}. Seating {'ON' if BS.SEATING_CHECK else 'OFF'}"
+                + (f" (holes centre within {BS.SEATING_HOLE_CENTRE_OFFSET_MAX} px of DOST {tuple(BS.SEATING_SEATED_CENTRE_DOST)} "
+                   f"/ DOSTPLUS {tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS)}, roundness >= {BS.SEATING_ROUNDNESS_MIN_DOST} / "
+                   f"{BS.SEATING_ROUNDNESS_MIN_DOSTPLUS})." if BS.SEATING_CHECK else ".")))
         except Exception as e:
             self.results.put(("fatal", f"Could not load the bunk check: {e}"))
 
@@ -190,8 +205,18 @@ class BunkCheckWindow:
                 except Exception as e:
                     marked, ok, holes, reason = None, False, [], f"exception: {e}"
                 seconds = time.time() - t0
-                print(f"HOLES  {path.name:28s} as {asModel:8s}  {len(holes)} holes  {'OK    ' if ok else 'NOT OK'}  "
-                      f"{seconds:5.2f} s  {reason}", flush=True)
+                seat = self.last.get("seating")
+                holesOK = ok or (seat is not None)          # seating runs only after the hole pattern passed
+                print(f"HOLES    {path.name:28s} as {asModel:8s}  {len(holes)} holes  "
+                      f"{'OK    ' if holesOK else 'NOT OK'}  {reason}", flush=True)
+                if self.BS.SEATING_CHECK:
+                    seatText = ("not run (hole check failed)" if seat is None else
+                                f"{'SEATED    ' if seat['seated'] else 'NOT SEATED'}  {seat['reason']}")
+                    print(f"SEATING  {path.name:28s} as {asModel:8s}  {seatText}", flush=True)
+                print(f"RESULT   {path.name:28s} as {asModel:8s}  {'OK' if ok else 'NOT OK'}  {seconds:5.2f} s",
+                      flush=True)
+                if seat is not None:
+                    reason += f"; seating: {'SEATED' if seat['seated'] else 'NOT SEATED'} - {seat['reason']}"
                 shown = self.decorate(image, marked, ok, holes)
                 if save:
                     cv2.imwrite(str(outFolder / f"{'OK' if ok else 'NOTOK'}_{path.stem}_as_{asModel}.png"), shown)

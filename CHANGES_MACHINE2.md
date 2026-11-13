@@ -2937,4 +2937,31 @@ Architecture items not included (user).
   `HOLES <picture> as <model> <n> holes OK / NOT OK <time> <spacing, centre offset, gamma>` and the same in the list
   (scrollable). Checked under Xvfb with real MobileSAM and YOLO stubbed (no YOLO weights here): window, default folder,
   both models, terminal lines. The hole counts need YOLO: the user runs it on the laptop.
-- **Next:** with the hole counts from the laptop, the seating step (MobileSAM top face position and roundness).
+- **Hole counts on the laptop (user's run, all 60 as DOST and as DOSTPLUS):** DOST 4 holes OK on A01, A07-A16 (seated)
+  and B06, B09 (not seated); DOSTPLUS 2 holes OK on A03, A04, B11-B20 (seated) and 16 not seated (A05, A06, A17, C03,
+  C05-C07, C09-C11, C13-C15, C17-C19); no pattern for either model on the rest (all not seated or a hand in the frame).
+  So the hole check alone passes 18 bungs that are not seated.
+- **Seating step (user: holes first, then MobileSAM; `BunkSegmenter.check_bung_seating`, called by CheckBunk and
+  CheckNoCapBunk only when the hole pattern passed):**
+  - **A. hole-pattern centre** (from the hole step) to the model's seated position
+    (`seating.seated.centre.dost` 646,325 / `.dostplus` 647,330) <= `seating.hole.centre.offset.max` (15 px). On the 41
+    pictures that pass the hole check: seated 1.0-9.4, not seated 21.2-79.6;
+  - **B. top-face mask** (MobileSAM, one point prompt at the hole-pattern centre; the smallest mask of radius
+    `seating.face.radius.min/max` 100-145): roundness (minor / major axis of the fitted ellipse) >=
+    `seating.roundness.min.dost` 0.952 / `.dostplus` 0.96. Seated DOST 0.956-0.978, DOSTPLUS 0.978-0.999; not seated
+    DOST 0.889-0.948, DOSTPLUS 0.825-0.944. A tilted or lifted bung shows its side wall, so the mask is oval.
+  - Seated = A and B; each alone separates the 41. Not seated = NOT OK; no face mask = NOT OK; error = NOT OK. Logged
+    ("Seating: SEATED / NOT SEATED - ..." and one summary line per check); the face outline drawn green / red.
+  - `vision.bunk.seating.check` siemens True, allenbradley False (Machine 1 unchanged; its seated centres = defaults).
+  - Margins: A about 6 px each side (fixed centre: the hub's placement on the fixture moves about +/-4 px); B wide for
+    DOSTPLUS, thin for DOST (B09 0.948 vs 0.956), but B09 fails A at 47.5 px.
+  - Checked: `check_bung_seating` on the 41 pictures with the user's hole centres: 41/41 as labelled. The whole check
+    through the window under Xvfb (real MobileSAM; YOLO replaced by circle proposals, which finds fewer holes than
+    YOLO): hole pattern -> seating -> NOT SEATED -> NOT OK (C05), "not run" after a failed hole check.
+- **No text on the hole picture:** `paint_bunk_masks_on_image` no longer writes "COUNT: n" (the count is logged).
+- **DryRun_Bunk_Check_UI:** after each `HOLES` line a `SEATING` line (SEATED / NOT SEATED with both values, or "not run
+  (hole check failed)") and a `RESULT` line (OK / NOT OK, time); the status line shows the seating settings.
+- Verifier: reference 04e5e6e for BunkSegmenter (the earlier reference f399967 plus this change; 6 manifest lines
+  moved); both copies ALL EQUIVALENT. DryRun_Vision_Check_Timeout 22/22.
+- **Labels used** (by eye; the hole step agrees): seated A01, A03, A04, A07-A16, B11-B20; hand A02, B04, C02; the rest
+  not seated.
