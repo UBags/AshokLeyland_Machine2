@@ -2891,3 +2891,28 @@ Architecture items not included (user).
     set to 10 during the run holds the next picture; brass caps checked as DOST: wrong cap; type changed during the run
     applies from the next picture; a single picture, Stop part-way, an unreadable file, earlier pictures missing;
     saving. Machine 1 copy: allenbradley settings, seating off, no model loaded.
+- **No text on the picture; times in the window; a cap pushed off the bore (follow-up, user, 2026-11-14):**
+  - **Picture for the frontend:** `CheckCap._create_annotated_image` now draws shapes only - the comparison circle
+    (green OK / red NOT OK), the brightness circle, and with seating the bore (blue), the cap (green / red) and a
+    silver cap's top face (yellow). The text it wrote before (CAP: PRESENT / NOT DETECTED, cap found / needed, R-B,
+    brightness, the three brightening values - all from the original code - and the seating line) is gone. Every
+    value goes to one log line per check: "CheckCap summary: OK / NOT OK - model, cap found, R-B r76 / r109,
+    brightness r25, brightening hub/top/nut, seating: ...".
+  - **Window:** no banner or text on the picture (it shows exactly what the frontend gets). Each picture's line in the
+    list gives the verdict, the time the check took and the reason; the check's summary line follows it; both are also
+    printed in the terminal. Horizontal scrollbar for the long lines.
+  - **Picture flagged as a correct cap by the user (silver cap pushed right off the bore, now
+    `cap_images/DOST_skewed_07.jpg`):** with the committed settings it is NOT OK twice over - step 1 finds no cap (the
+    cap's outline centre is at 706,342, 62 px from the bore, so the r25 circle sees the dark bore: brightness 109 <
+    125) and seating measures the top face 16.5 px off the outline (> 9). With the old Machine 2 settings (centre
+    707,348, no seating) the cap sits right in the check's circles and passes: most likely what the user ran.
+  - **Guard added anyway (it was rejected as "no cap", not as "not seated"):** `seating.silver.outline.offset.max`
+    (siemens 20, allenbradley 0 = not checked): a silver cap's outline centre within 20 px of `cap.center`. Seated
+    caps 7.4-8.6 (the tall cap's top is seen a little above the bore; the hub's placement on the fixture moves it about
+    +/-4 more), skewed 6.4-62.0 - catches DOST_skewed_05 (33.4) and _07 (62.0) whatever the face test says.
+  - **Other checks that write text on the frontend's picture (not changed; asked):** hub (a model-mismatch line and the
+    segmenter's hole count), bunk (hole count), the camera server's "NOT OK: <reason>" on timeouts / stalled camera.
+  - **Checked:** DryRun_Cap_Check Machine 2 all as expected (skewed rows now must be NOT OK; the result with seating
+    off is shown as information - DOST_skewed_07 is rejected before seating); Machine 1 as before; the window 15/15
+    (new: every line has the time and a values line follows); the marked pictures carry no text. Verifier reference
+    15bb871 for CheckCap; both copies ALL EQUIVALENT.

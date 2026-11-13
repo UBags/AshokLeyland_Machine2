@@ -13,10 +13,11 @@ cap, comparisons failed, cap not seated).
      type is taken from this machine's dry-run folders (hub_images/, top_bearing_images/, nut_washer_images/), or from
      the folder chosen with "Earlier pictures..." (files named <MODEL>_NN, <MODEL>_bearing_NN, <MODEL>_nut_NN). For
      pictures of other parts the comparison values are only indicative.
-  5. The marked picture is the check's own: cap found / needed, R-B and brightness, the three comparisons, and - with
-     seating on (Machine 2) - the bore (blue), the cap (green / red), the silver cap's top face (yellow) and the
-     seating offset. Banner: CAP OK / CAP NOT OK and the check's first reason.
-  6. At the end: OK / NOT OK counts and the list. "Save marked pictures" writes them to <folder>/cap_check_results/.
+  5. The picture shown is exactly the one the check gives the frontend: shapes only, no text or values (comparison
+     circle green / red, brightness circle; with seating on (Machine 2) the bore blue, the cap green / red, a silver
+     cap's top face yellow). Verdict, reason, time and every value (R-B, brightness, brightening, seating offsets) go
+     to the list at the bottom and to the terminal.
+  6. At the end: OK / NOT OK counts. "Save marked pictures" writes the pictures to <folder>/cap_check_results/.
 
 Settings: <vendor>.vision.cap.* in ApplicationConfiguration.properties (vendor from the folder: machine1 = allenbradley,
 machine2 = siemens). The seating step uses MobileSAM through ModelManager (models/MobileSAM), loaded in the background
@@ -108,7 +109,7 @@ def earlierPictures(folder: pathlib.Path | None, model: str):
 
 
 def runCheck(image, model: str, earlier):
-    """(ok, marked picture, reason) of the real check."""
+    """(ok, marked picture, reason, summary) of the real check."""
     _messages.clear()
     marked, ok = CheckCap.checkCap(image.copy(), dict(earlier), QR[model])
     ok = bool(ok)
@@ -120,19 +121,8 @@ def runCheck(image, model: str, earlier):
         detail = [e for e in errors if not e.startswith("CAP NOT DETECTED")]
         reason = ": ".join(x for x in ((final[0].replace("CAP NOT DETECTED - ", "") if final else ""),
                                        (detail[0] if detail else "")) if x)
-    return ok, (marked if marked is not None else image), reason or ""
-
-
-def banner(marked, ok: bool, model: str, reason: str, name: str):
-    img = marked.copy()
-    h, w = img.shape[:2]
-    colour = (0, 200, 0) if ok else (0, 0, 255)
-    cv2.rectangle(img, (0, h - 70), (w, h), (0, 0, 0), -1)
-    cv2.putText(img, f"{'CAP OK' if ok else 'CAP NOT OK'}  ({model})  {name}", (15, h - 42),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.9, colour, 2, cv2.LINE_AA)
-    if reason:
-        cv2.putText(img, reason[:120], (15, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-    return img
+    summary = next((m.replace("CheckCap summary: ", "") for level, m in _messages if m.startswith("CheckCap summary:")), "")
+    return ok, (marked if marked is not None else image), reason or "", summary
 
 
 class CapCheckWindow:
@@ -165,7 +155,8 @@ class CapCheckWindow:
         self.earlierText = tk.StringVar(master=root, value=f"hub / top bearing / nut pictures: {HERE.name} dry-run folders")
         ttk.Label(bar2, textvariable=self.earlierText).pack(side="left", padx=6)
         seat = (f"seating ON (brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, silver top face to outline <= "
-                f"{CheckCap.SEATING_SILVER_FACE_OFFSET_MAX} px)" if CheckCap.SEATING_CHECK else "seating OFF")
+                f"{CheckCap.SEATING_SILVER_FACE_OFFSET_MAX}, silver outline to centre <= "
+                f"{CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX} px)" if CheckCap.SEATING_CHECK else "seating OFF")
         ttk.Label(bar2, text=f"centre {tuple(CheckCap.CENTER)}, {seat}").pack(side="right")
 
         self.canvas = tk.Label(root, background="black", width=VIEW_W, height=VIEW_H)
@@ -174,9 +165,12 @@ class CapCheckWindow:
                                    + ("" if self.modelReady else "  (loading MobileSAM...)"))
         ttk.Label(root, textvariable=self.status).pack(fill="x", padx=6)
         listFrame = ttk.Frame(root); listFrame.pack(fill="both", expand=True, padx=6, pady=4)
-        self.listbox = tk.Listbox(listFrame, height=8, font=("Consolas", 10))
-        scroll = ttk.Scrollbar(listFrame, command=self.listbox.yview); self.listbox.configure(yscrollcommand=scroll.set)
-        self.listbox.pack(side="left", fill="both", expand=True); scroll.pack(side="right", fill="y")
+        self.listbox = tk.Listbox(listFrame, height=10, font=("Consolas", 10))
+        scroll = ttk.Scrollbar(listFrame, command=self.listbox.yview)
+        xscroll = ttk.Scrollbar(listFrame, orient="horizontal", command=self.listbox.xview)
+        self.listbox.configure(yscrollcommand=scroll.set, xscrollcommand=xscroll.set)
+        xscroll.pack(side="bottom", fill="x"); scroll.pack(side="right", fill="y")
+        self.listbox.pack(side="left", fill="both", expand=True)
         root.protocol("WM_DELETE_WINDOW", self.close)
         if not self.modelReady:
             # the loading thread only sets flags (Tk may be used from this thread only); polled below
@@ -243,7 +237,7 @@ class CapCheckWindow:
         path = self.files[self.index]; name = os.path.basename(path)
         model = modelFor(self.componentType.get(), name)       # read now: a change applies from this picture
         image = cv2.imread(path)
-        marked, elapsed = None, 0.0
+        marked, elapsed, summary = None, 0.0, ""
         if image is None:
             verdict, reason = "UNREADABLE", "the file could not be read as a picture"
         else:
@@ -251,15 +245,18 @@ class CapCheckWindow:
             earlier = earlierPictures(self.earlierFolder, model)
             missing = [s for s, k in zip(("hub", "top bearing", "nut"), KEYS) if earlier[k] is None]
             t0 = time.perf_counter()
-            ok, marked, reason = runCheck(image, model, earlier)
+            ok, marked, reason, summary = runCheck(image, model, earlier)
             elapsed = time.perf_counter() - t0
             if missing:
                 reason = f"no {', '.join(missing)} picture for {model}" + (f"; {reason}" if reason else "")
             verdict = "OK" if ok else "NOT OK"
-            marked = banner(marked, ok, model, reason, name)
         self.results.append((name, model, verdict, reason))
-        self.listbox.insert("end", f"{name:34s} {model:9s} {verdict:7s}" + (f" {reason}" if reason else ""))
+        line = f"{name:34s} {model:9s} {verdict:7s} {elapsed:5.2f} s" + (f"   {reason}" if reason else "")
+        self.listbox.insert("end", line)
+        if summary:
+            self.listbox.insert("end", f"    {summary}")
         self.listbox.see("end")
+        print(line + (f"\n    {summary}" if summary else ""), flush=True)
         if marked is not None:
             self.show(marked)
             if self.save.get():

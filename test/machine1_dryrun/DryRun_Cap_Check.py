@@ -24,8 +24,8 @@ give the lowest brightening for a cap (hardest case to accept) and the highest f
 to reject). Without earlier pictures only steps 1 and 2 are reported.
 
 Rows: every seated cap as its own model (must be OK); every cap as the other model (wrong cap, must be NOT OK); every
-skewed cap as its own model (must be NOT OK with seating on, and OK with seating off - so it is the seating step that
-rejects it; only when seating is on for this machine); every nut / washer picture as the cap picture (cap left off), as
+skewed cap as its own model (must be NOT OK; the result with seating off is shown, to tell which step rejects it - a
+cap pushed far off the bore is already "no cap" at step 1; only when seating is on for this machine); every nut / washer picture as the cap picture (cap left off), as
 DOST and as DOSTPLUS (must be NOT OK). The seating column shows the measured offset (seated caps and skewed caps).
 Seating needs MobileSAM (models/MobileSAM, through ModelManager), as in production.
 
@@ -63,7 +63,8 @@ def main() -> int:
     print(f"Machine: {os.environ['COSTHETA_PLC_VENDOR']}   centre {tuple(CheckCap.CENTER)}   "
           f"radius DOST {CheckCap.RADIUS_DOST} / DOSTPLUS {CheckCap.RADIUS_DOSTPLUS}")
     print(f"Seating: {'on' if CheckCap.SEATING_CHECK else 'off'} - brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, "
-          f"silver top face to outline <= {CheckCap.SEATING_SILVER_FACE_OFFSET_MAX} px")
+          f"silver top face to outline <= {CheckCap.SEATING_SILVER_FACE_OFFSET_MAX} px, silver outline to centre <= "
+          f"{CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX} px (0 = off)")
     print(f"Which cap: brass if R-B(r{CheckCap.RADIUS_DOSTPLUS}) > {CheckCap.RB_THRESHOLD_DOSTPLUS}; else silver if "
           f"R-B(r{CheckCap.RADIUS_DOST}) < {CheckCap.RB_THRESHOLD_DOST} and brightness(r{CheckCap.SILVER_BRIGHTNESS_RADIUS}) "
           f">= {CheckCap.SILVER_BRIGHTNESS_MIN}; else none")
@@ -90,7 +91,9 @@ def main() -> int:
         if not CheckCap.SEATING_CHECK or found == "none":
             return ""
         s = CheckCap.checkSeating(image, "DOSTPLUS" if found == "brass" else "DOST")
-        return f"seat {s['offset']:5.1f}/{s['limit']}" if s["offset"] is not None else f"seat: {s['reason']}"
+        if s["offset"] is None:
+            return f"seat: {s['reason']}"
+        return f"seat {s['offset']:5.1f}/{s['limit']}" + (f" ctr {s['outline_offset']:4.1f}" if "outline_offset" in s else "")
 
     def run(name, image, model, expectOK, exclude=None, tag="", skewed=False):
         nonlocal failures
@@ -108,14 +111,14 @@ def main() -> int:
                 cells.append(f"{label} {min(x[0] for x in d):5.1f}-{max(x[0] for x in d):5.1f}")
             annotated, ok = CheckCap.checkCap(image, dict(zip(keys, chosen)), QR[model])
             verdict = "OK" if ok else "NOT OK"
-            if skewed:      # the same picture with seating off must be OK: it is the seating step that rejects it
+            if skewed:      # with seating off: which step rejects it (information)
                 CheckCap.SEATING_CHECK = False
                 try:
                     _, okWithout = CheckCap.checkCap(image, dict(zip(keys, chosen)), QR[model])
                 finally:
                     CheckCap.SEATING_CHECK = True
-                verdict += f" (seating off: {'OK' if okWithout else 'NOT OK'})"
-                ok = ok or not okWithout
+                verdict += (" (seating off: OK - rejected by the seating step)" if okWithout
+                            else " (seating off: NOT OK - rejected before the seating step)")
         else:
             annotated = image
             ok = {"brass": "DOSTPLUS", "silver": "DOST"}.get(found) == model
