@@ -2606,3 +2606,20 @@ Architecture items not included (user).
   - **Checked:** driven under Xvfb, 9/9 on each machine (Machine 2: the 20 pictures identified as labelled, the empty
     fixture NEITHER with its reason; Machine 1: its 4 pictures, three times each). Covers the seconds changed during
     the run, a single picture, Stop part-way, an unreadable file reported with the run going on, and saving.
+- **Side boxes D1 / D2 moved to the middle of the leg resting on the bar (follow-up, user):**
+  - **Why they were where they were:** the 3 Nov positions (on the old bar, where the arm lay) moved by the camera
+    transform; no measurement placed them, and D2 ended up near the corner of the arm's tip.
+  - **How the new positions were found:** the leg on the bar was found on every picture by colour (the bar is rusty
+    brown, R-B 31-39; the leg is neutral, R-B about -3..-6), each row filled between the leg's edges, and the area
+    covered on every LHS / RHS picture taken. Each box is centred on its deepest point: (420, 672) and (853, 669),
+    16-17 px from the nearest leg or bar edge.
+  - **Change:** `siemens.vision.knuckle.lhs.crop` 389,663 -> **409,661**, `rhs.crop` 855,677 -> **842,658** (still
+    23 x 23; all three properties files).
+  - **Arm box / bare box:** LHS 30.0-30.9 / 79.2-87.1 (was 37.4-43.6 / 85.1-89.3); RHS 37.8-42.2 / 89.5-94.1 (was
+    44.1-48.9 / 94.1-99.1).
+  - **Smallest difference:** as photographed 49.1 (was 43.9); with the picture moved +/-3 px 46.5 (was 28.2). The
+    empty fixture differs by 9.2 (largest with shifts 13.7), and the contours reject it.
+  - **Checked:** DryRun_CheckKnuckle_Images Machine 2 155/155 (side-box margin 39.1 beyond 10), Machine 1 30/30; the
+    window 9/9; verifier ALL EQUIVALENT. Figure `docs/knuckle_regions_machine2.jpg` redrawn (by the window's own
+    drawing).
+
