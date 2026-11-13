@@ -33,7 +33,6 @@ except Exception:
 
 from camera.HexagonNutDetector import NutDetector
 from camera.CheckTopBearing import CheckTopBearing
-from camera.VisionConfig import vInt, vFloat, vBool, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -90,34 +89,36 @@ class CheckNutAndPlateWasher:
     """
 
     # Washer detection parameters (configurable)
-    WASHER_THRESHOLD_R = vFloat("vision.nutwasher.washer.threshold.r", 0.55)     # 1% FPR - R channel threshold
-    WASHER_THRESHOLD_RB = vFloat("vision.nutwasher.washer.threshold.rb", 3.5)   # R-B difference threshold (washer +5.4..+31, no washer within +/-0.8)
-    WASHER_GAMMA = vFloat("vision.nutwasher.washer.gamma", 3.0)                  # Gamma correction value
+    WASHER_THRESHOLD_R = 0.55     # 1% FPR - R channel threshold
+    # R-B test on or off (off on Machine 2 since the camera move of 2026-11-13: R-B no longer tells washer from no washer)
+    WASHER_CHECK_RB = True
+    WASHER_THRESHOLD_RB = 3.5   # R-B difference threshold (washer +5.4..+31, no washer within +/-0.8)
+    WASHER_GAMMA = 3.0                  # Gamma correction value
     # Washer comparison area: the bearing ring's measured edges moved this many px into the race (outer edge inward,
     # inner edge outward), so that every pixel compared is on the race; then the nut's mask is removed from it
-    WASHER_MASK_EDGE_MARGIN = vFloat("vision.nutwasher.washer.mask.edge.margin", 1.0)
+    WASHER_MASK_EDGE_MARGIN = 1.0
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = vTuple("vision.nutwasher.nut.detection.center", (632, 360))
-    NUT_DETECTION_RADIUS = vInt("vision.nutwasher.nut.detection.radius", 80)
+    NUT_DETECTION_CENTER = (632, 360)
+    NUT_DETECTION_RADIUS = 80
 
     # Accepted nut (the outline found by the nut detector): outer diameter (circle of the outline's area), px; the
     # width (outer radius minus the bore radius) is only reported, not limited. A shape outside these ranges
     # is not a nut (a bearing ring is about 92-102 px across).
-    NUT_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.outer.diameter.min", 64.0)
-    NUT_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.outer.diameter.max", 84.0)
+    NUT_OUTER_DIAMETER_MIN = 64.0
+    NUT_OUTER_DIAMETER_MAX = 84.0
     # and its mean diameter (outline and bore averaged round the nut) within this range (nuts 64-70, a whole bearing
     # 78-87, a disc the size of a bearing's bore 54-58)
-    NUT_MEAN_DIAMETER_MIN = vFloat("vision.nutwasher.nut.mean.diameter.min", 60.0)
-    NUT_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.mean.diameter.max", 72.0)
+    NUT_MEAN_DIAMETER_MIN = 60.0
+    NUT_MEAN_DIAMETER_MAX = 72.0
 
     # Fallback when the nut detector accepts no hexagon: the top bearing ring finder (CheckTopBearing.findRing) on
     # the nut picture; a ring of a nut's size is accepted as the nut. Nuts: outer diameter 75-82 px, mean diameter
     # 64-68; bearings 92-102 / 78-87; washer only: no ring.
-    NUT_RING_FALLBACK = vBool("vision.nutwasher.nut.ring.fallback", True)
-    NUT_RING_OUTER_DIAMETER_MIN = vFloat("vision.nutwasher.nut.ring.outer.diameter.min", 70.0)
-    NUT_RING_OUTER_DIAMETER_MAX = vFloat("vision.nutwasher.nut.ring.outer.diameter.max", 86.0)
-    NUT_RING_MEAN_DIAMETER_MAX = vFloat("vision.nutwasher.nut.ring.mean.diameter.max", 74.0)
+    NUT_RING_FALLBACK = True
+    NUT_RING_OUTER_DIAMETER_MIN = 70.0
+    NUT_RING_OUTER_DIAMETER_MAX = 86.0
+    NUT_RING_MEAN_DIAMETER_MAX = 74.0
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None
@@ -709,14 +710,16 @@ class CheckNutAndPlateWasher:
         logBoth('logDebug', _src, "[Step 6] DECISION", MessageType.GENERAL)
         logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
         logBoth('logDebug', _src,
-                f"Thresholds: diff_R > {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f} AND "
-                f"diff_RB > {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f}",
+                f"Thresholds: diff_R > {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f}"
+                + (f" AND diff_RB > {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f}" if CheckNutAndPlateWasher.WASHER_CHECK_RB
+                   else " (diff_RB not checked)"),
                 MessageType.GENERAL)
         logBoth('logDebug', _src,
                 f"Measured:   diff_R = {diff_R:.2f} AND diff_RB = {diff_RB:.2f}",
                 MessageType.GENERAL)
 
-        washer_present = (diff_R > CheckNutAndPlateWasher.WASHER_THRESHOLD_R) and (diff_RB > CheckNutAndPlateWasher.WASHER_THRESHOLD_RB)
+        washer_present = (diff_R > CheckNutAndPlateWasher.WASHER_THRESHOLD_R) and \
+                         (not CheckNutAndPlateWasher.WASHER_CHECK_RB or diff_RB > CheckNutAndPlateWasher.WASHER_THRESHOLD_RB)
 
         if washer_present:
             logBoth('logInfo', _src, "✓ WASHER PRESENT - Top Bearing Detected", MessageType.SUCCESS)
@@ -724,7 +727,7 @@ class CheckNutAndPlateWasher:
             logBoth('logError', _src, "✗ WASHER MISSING - Nut Only", MessageType.ISSUE)
             if diff_R <= CheckNutAndPlateWasher.WASHER_THRESHOLD_R:
                 logBoth('logError', _src, f"  Reason: R channel failed ({diff_R:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_R:.2f})", MessageType.ISSUE)
-            if diff_RB <= CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:
+            if CheckNutAndPlateWasher.WASHER_CHECK_RB and diff_RB <= CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:
                 logBoth('logError', _src, f"  Reason: R-B failed ({diff_RB:.2f} <= {CheckNutAndPlateWasher.WASHER_THRESHOLD_RB:.2f})", MessageType.ISSUE)
 
         logBoth('logDebug', _src, "="*80, MessageType.GENERAL)
