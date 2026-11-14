@@ -21,7 +21,6 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
-from camera.VisionConfig import vInt, vBool, vTuple, vPoints
 
 CosThetaConfigurator.getInstance()
 
@@ -65,92 +64,92 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
-    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
-    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
-    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
+    LHS_CROP_X: int = 380
+    LHS_CROP_Y: int = 650
+    LHS_CROP_WIDTH: int = 130
+    LHS_CROP_HEIGHT: int = 50
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
-    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
-    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
-    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
+    RHS_CROP_X: int = 765
+    RHS_CROP_Y: int = 650
+    RHS_CROP_WIDTH: int = 100
+    RHS_CROP_HEIGHT: int = 55
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
-    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
-    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
-    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
+    COMMON_CHECK_A_X: int = 775
+    COMMON_CHECK_A_Y: int = 300
+    COMMON_CHECK_A_WIDTH: int = 35
+    COMMON_CHECK_A_HEIGHT: int = 25
 
-    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
-    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
-    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
-    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
+    COMMON_CHECK_B_X: int = 440
+    COMMON_CHECK_B_Y: int = 310
+    COMMON_CHECK_B_WIDTH: int = 40
+    COMMON_CHECK_B_HEIGHT: int = 20
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
+    COMMON_CHECK_THRESHOLD: int = 84
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
-    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
-    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
+    COMMON_CHECK_C_CENTER_X: int = 390
+    COMMON_CHECK_C_CENTER_Y: int = 465
+    COMMON_CHECK_C_RADIUS: int = 13
 
-    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
-    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
-    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
+    COMMON_CHECK_D_CENTER_X: int = 865
+    COMMON_CHECK_D_CENTER_Y: int = 465
+    COMMON_CHECK_D_RADIUS: int = 13
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
-    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
-    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
-    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
+    COMMON_CHECK_E_X: int = 600
+    COMMON_CHECK_E_Y: int = 600
+    COMMON_CHECK_E_WIDTH: int = 50
+    COMMON_CHECK_E_HEIGHT: int = 20
 
     # Alternate area of each common check (same rule; the check passes if the region OR its alternate is dark).
     # A width, height or radius of 0 means no alternate (the default).
-    COMMON_CHECK_A_ALT_X: int = vInt("vision.knuckle.common.check.a.alt.x", 0)
-    COMMON_CHECK_A_ALT_Y: int = vInt("vision.knuckle.common.check.a.alt.y", 0)
-    COMMON_CHECK_A_ALT_WIDTH: int = vInt("vision.knuckle.common.check.a.alt.width", 0)
-    COMMON_CHECK_A_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.a.alt.height", 0)
-    COMMON_CHECK_B_ALT_X: int = vInt("vision.knuckle.common.check.b.alt.x", 0)
-    COMMON_CHECK_B_ALT_Y: int = vInt("vision.knuckle.common.check.b.alt.y", 0)
-    COMMON_CHECK_B_ALT_WIDTH: int = vInt("vision.knuckle.common.check.b.alt.width", 0)
-    COMMON_CHECK_B_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.b.alt.height", 0)
-    COMMON_CHECK_C_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.c.alt.center.x", 0)
-    COMMON_CHECK_C_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.c.alt.center.y", 0)
-    COMMON_CHECK_C_ALT_RADIUS: int = vInt("vision.knuckle.common.check.c.alt.radius", 0)
-    COMMON_CHECK_D_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.d.alt.center.x", 0)
-    COMMON_CHECK_D_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.d.alt.center.y", 0)
-    COMMON_CHECK_D_ALT_RADIUS: int = vInt("vision.knuckle.common.check.d.alt.radius", 0)
-    COMMON_CHECK_E_ALT_X: int = vInt("vision.knuckle.common.check.e.alt.x", 0)
-    COMMON_CHECK_E_ALT_Y: int = vInt("vision.knuckle.common.check.e.alt.y", 0)
-    COMMON_CHECK_E_ALT_WIDTH: int = vInt("vision.knuckle.common.check.e.alt.width", 0)
-    COMMON_CHECK_E_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.e.alt.height", 0)
+    COMMON_CHECK_A_ALT_X: int = 0
+    COMMON_CHECK_A_ALT_Y: int = 0
+    COMMON_CHECK_A_ALT_WIDTH: int = 0
+    COMMON_CHECK_A_ALT_HEIGHT: int = 0
+    COMMON_CHECK_B_ALT_X: int = 0
+    COMMON_CHECK_B_ALT_Y: int = 0
+    COMMON_CHECK_B_ALT_WIDTH: int = 0
+    COMMON_CHECK_B_ALT_HEIGHT: int = 0
+    COMMON_CHECK_C_ALT_CENTER_X: int = 0
+    COMMON_CHECK_C_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_C_ALT_RADIUS: int = 0
+    COMMON_CHECK_D_ALT_CENTER_X: int = 0
+    COMMON_CHECK_D_ALT_CENTER_Y: int = 0
+    COMMON_CHECK_D_ALT_RADIUS: int = 0
+    COMMON_CHECK_E_ALT_X: int = 0
+    COMMON_CHECK_E_ALT_Y: int = 0
+    COMMON_CHECK_E_ALT_WIDTH: int = 0
+    COMMON_CHECK_E_ALT_HEIGHT: int = 0
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
+    STEP2_POLYGON_POINTS = np.array([
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
+    STEP3_POLYGON_POINTS = np.array([
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ]), dtype=np.int32)
+    ], dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
+    LHS_RHS_DARKNESS_THRESHOLD: int = 220
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
 
     # Binarisation threshold: grey levels below this become black, the rest white
-    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
+    BINARIZATION_THRESHOLD: int = 48
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
+    KERNEL_SIZE: Tuple[int, int] = (5, 5)
 
     # Side and presence by differences (vision.knuckle.side.by.difference = True). Two comparisons decide the side and
     # whether a knuckle is there; both must agree:
@@ -166,10 +165,26 @@ class CheckKnuckle():
     #       mean(D2) - mean(D1) > it -> LHS; otherwise -> NOT OK.
     # Then the rectangle A and its alternate, and vision.knuckle.lhs.rhs.darkness.threshold, are not used.
     # A polygon 0,0;0,0;0,0 means not set.
-    SIDE_BY_DIFFERENCE: bool = vBool("vision.knuckle.side.by.difference", False)
-    SIDE_DIFFERENCE_THRESHOLD: int = vInt("vision.knuckle.side.difference.threshold", 10)
-    COMMON_CHECK_A_POLYGON_POINTS = vPoints("vision.knuckle.common.check.a.polygon.points", [(0, 0), (0, 0), (0, 0)])
-    COMMON_CHECK_A_ALT_POLYGON_POINTS = vPoints("vision.knuckle.common.check.a.alt.polygon.points", [(0, 0), (0, 0), (0, 0)])
+    SIDE_BY_DIFFERENCE: bool = False
+    SIDE_DIFFERENCE_THRESHOLD: int = 10
+    COMMON_CHECK_A_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
+    COMMON_CHECK_A_ALT_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
+
+    # Which knuckle check runs (vision.knuckle.method):
+    #   regions       - the grey-level regions above (checkKnuckleByRegions; Machine 1, and Machine 2 until CHANGES 102)
+    #   segmentation  - MobileSAM finds the spindle, the 2 machined bosses (with the fixture pins in them) and the lower
+    #                   arm (camera/KnuckleLocator.py); type and side from them; also gives the frame that places the
+    #                   later checks' centres (camera/VisionFrame.py). Machine 2 from CHANGES 102.
+    METHOD: str = "regions"
+    # Segmentation: largest camera movement accepted (measured from the fixture pins). The later checks' search areas
+    # are 80-250 px; beyond these the camera has been knocked and must be set again (NOT OK, "camera moved").
+    FRAME_MAX_SHIFT: float = 40.0            # px
+    FRAME_MAX_ROTATION: float = 3.0       # degrees
+    FRAME_MAX_ZOOM_CHANGE: float = 0.05  # 0.05 = +-5 %
+    # The locator (created on first use; a dry run can set one with its own MobileSAM predictor)
+    locator = None
+    # The last segmentation result (for the camera server: the frame for the later checks; for dry runs: the values)
+    lastResult: Dict = None
 
     @staticmethod
     def _show_debug_step3(original_image: np.ndarray, polygon_points: np.ndarray,
@@ -443,6 +458,71 @@ class CheckKnuckle():
     @staticmethod
     def checkKnuckle(anImage: np.ndarray, currentPictures: Dict[str, np.ndarray | None] = None,
                      componentQRCode: str = DOST, gamma: float = 2.0) -> Tuple[np.ndarray | None, bool]:
+        """The knuckle check: (picture for the frontend, OK). vision.knuckle.method = segmentation (Machine 2): MobileSAM
+        (checkKnuckleBySegmentation; its frame is in CheckKnuckle.lastResult); otherwise the grey-level regions
+        (checkKnuckleByRegions)."""
+        if str(CheckKnuckle.METHOD).strip().lower() == "segmentation":
+            image, ok, _ = CheckKnuckle.checkKnuckleBySegmentation(anImage, componentQRCode)
+            return image, ok
+        return CheckKnuckle.checkKnuckleByRegions(anImage, currentPictures, componentQRCode, gamma)
+
+    @staticmethod
+    def checkKnuckleBySegmentation(anImage: np.ndarray, componentQRCode: Optional[str]
+                                   ) -> Tuple[np.ndarray | None, bool, Optional[Dict]]:
+        """MobileSAM knuckle check (camera/KnuckleLocator.py): (picture with the parts outlined, OK, frame for the
+        later checks or None). OK when both bosses (with their pins), the lower arm on the back rest and a clear type
+        are found, type and side match the QR code, and the camera has not moved beyond vision.knuckle.frame.max.*.
+        The frame is returned only with OK."""
+        _src = getFullyQualifiedName(__file__, CheckKnuckle)
+        CheckKnuckle.lastResult = None
+        if anImage is None:
+            logBoth('logError', _src, "CheckKnuckle: Input image is None", MessageType.ISSUE)
+            return anImage, False, None
+        modelName, sideFromQR, _ = getModel_LHSRHS_AndTonnage(componentQRCode)
+        if modelName == UNKNOWN or sideFromQR == UNKNOWN:
+            logBoth('logError', _src, f"CheckKnuckle: Invalid QR Code - could not parse model/side: {componentQRCode}",
+                    MessageType.ISSUE)
+            return anImage, False, None
+        try:
+            from camera.KnuckleLocator import KnuckleLocator, draw, summary
+            from camera import VisionFrame
+            if CheckKnuckle.locator is None:
+                CheckKnuckle.locator = KnuckleLocator()
+            result = CheckKnuckle.locator.locate(anImage)
+        except Exception as e:
+            logBoth('logCritical', _src, f"CheckKnuckle: segmentation failed: {e}", MessageType.PROBLEM)
+            import traceback
+            traceback.print_exc()
+            return anImage, False, None
+        reasons = list(result["notes"])
+        frame = result.get("frame")
+        if result.get("type") and result["type"].upper() != str(modelName).upper():
+            reasons.append(f"type {result['type']} but the QR code says {modelName}")
+        if result.get("side") and result["side"].upper() != str(sideFromQR).upper():
+            reasons.append(f"side {result['side']} but the QR code says {sideFromQR}")
+        if frame is not None:
+            within, why = VisionFrame.withinLimits(frame, CheckKnuckle.FRAME_MAX_SHIFT, CheckKnuckle.FRAME_MAX_ROTATION,
+                                                   CheckKnuckle.FRAME_MAX_ZOOM_CHANGE)
+            if not within:
+                reasons.append(why + " - set the camera again")
+        # the notes about the spindle mask alone do not fail the check (the pins give the spindle)
+        failing = [r for r in reasons if not r.startswith("spindle")]
+        ok = frame is not None and not failing
+        result["ok"], result["reasons"] = ok, failing
+        CheckKnuckle.lastResult = result
+        line = summary(result)
+        if ok:
+            logBoth('logInfo', _src, f"CheckKnuckle: SUCCESS - {result['side']} {result['type']} matches the QR code; "
+                                     f"{line}; frame: {VisionFrame.describe(frame)}", MessageType.SUCCESS)
+        else:
+            logBoth('logError', _src, f"CheckKnuckle: NOT OK - {'; '.join(failing) or 'knuckle not found'} (QR code "
+                                      f"{modelName} {sideFromQR}); {line}", MessageType.ISSUE)
+        return draw(anImage, result, ok), ok, (frame if ok else None)
+
+    # The check by grey-level regions (vision.knuckle.method = regions): Machine 1, and Machine 2 until CHANGES 102.
+    @staticmethod
+    def checkKnuckleByRegions(anImage: np.ndarray, currentPictures: Dict[str, np.ndarray | None] = None,
+                              componentQRCode: str = DOST, gamma: float = 2.0) -> Tuple[np.ndarray | None, bool]:
         """
         Verify that the knuckle in the image matches the scanned QR code.
 
