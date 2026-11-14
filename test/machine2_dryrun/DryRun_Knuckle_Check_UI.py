@@ -46,6 +46,7 @@ from PIL import Image, ImageTk
 
 import camera.CheckKnuckle as CheckKnuckleModule
 from camera.CheckKnuckle import CheckKnuckle as K
+K.METHOD = "regions"   # this tests the grey-level regions method; Machine 2 runs segmentation since CHANGES 102 (DryRun_Knuckle_Frame.py)
 
 QR = {("DOST", "LHS"): "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
       ("DOST", "RHS"): "7204838$400102VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$",

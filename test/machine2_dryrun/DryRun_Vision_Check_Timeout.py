@@ -134,6 +134,23 @@ if __name__ == "__main__":
     IP.fetchQRCodeInChecks = False
     conv = cps.ConverterScalerAndProcessor(name="dry run", consumer=None)     # not started: processItem called here
     QR = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"   # DOSTPLUS RHS
+    # Machine 2 knuckle check by segmentation (CHANGES 102) when the MobileSAM weights are here (models/MobileSAM or
+    # COSTHETA_MOBILESAM); otherwise the regions method (this part is about the QR code, not the method)
+    from camera.CheckKnuckle import CheckKnuckle as CK
+    samFile = os.environ.get("COSTHETA_MOBILESAM", str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
+    if str(CK.METHOD).lower() == "segmentation" and os.path.isfile(samFile):
+        import torch
+        from mobile_sam import sam_model_registry, SamPredictor
+        from camera.KnuckleLocator import KnuckleLocator
+        _load = torch.load
+        torch.load = lambda f, *a, **k: _load(f, *a, **{**k, "weights_only": False})
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        CK.locator = KnuckleLocator(SamPredictor(sam_model_registry["vit_t"](checkpoint=samFile).to(dev).eval()), dev)
+        torch.load = _load
+        print(f"   knuckle method: segmentation ({dev})", flush=True)
+    else:
+        CK.METHOD = "regions"
+        print("   knuckle method: regions (no MobileSAM weights here)", flush=True)
     picFile = sorted((HERE / "knuckle_images").glob("DOSTPLUS_RHS_*.jpg"))[0]     # this machine's pictures
     pic = cv2.imread(str(picFile))
     def item(state, rid):
@@ -146,6 +163,7 @@ if __name__ == "__main__":
     sendComponentQRCodeFromQRCodeServerToCameraServer(r, QR)
     t0 = time.monotonic()
     conv.processItem(item(MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, "7-1"))
+    firstTook = time.monotonic() - t0
     a = lastAnswer(camera2ioq)
     check("K1 new cycle: the QR code from the QR code server is used; knuckle OK", a.get("result") == ok
           and IP.currentComponentQRCodeValue == QR, f"{a.get('result')} {time.monotonic() - t0:.2f} s")
@@ -156,9 +174,13 @@ if __name__ == "__main__":
     took = time.monotonic() - t0
     a = lastAnswer(camera2ioq)
     check("K2 knuckle retake (no new QR code): the cycle's QR code is kept, OK again, no 5 s wait",
-          a.get("result") == ok and a.get(requestIdKeyString) == "7-2" and took < 3.0, f"{a.get('result')} {took:.2f} s")
+          a.get("result") == ok and a.get(requestIdKeyString) == "7-2" and took < max(3.0, firstTook + 2.0), f"{a.get('result')} {took:.2f} s")
+    if str(CK.METHOD).lower() == "segmentation":
+        check("K2 the knuckle check's frame is kept for the later checks", IP.visionFrame is not None
+              and IP.visionFrame.get("type") == "DOSTPLUS" and IP.visionFrame.get("side") == "RHS", IP.visionFrame)
     IP.endOfCycle()
-    check("K3 end of cycle drops the QR code", IP.currentComponentQRCodeValue is None)
+    check("K3 end of cycle drops the QR code (and the frame)", IP.currentComponentQRCodeValue is None
+          and IP.visionFrame is None)
 
     # ------------------------------------------------------------------------------------------------ R
     print("\n=== R. A check that times out in the pipeline ===", flush=True)

@@ -29,6 +29,7 @@ from camera.CheckCap import CheckCap
 from camera.CheckNoCapBunk import CheckNoCapBunk
 from camera.CheckNoBunk import CheckNoBunk
 from camera.CheckBunk import CheckBunk
+from camera import VisionFrame
 
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
@@ -647,6 +648,11 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
     is_no_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
     is_top_bearing = (
                 currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
+    # knuckle by segmentation (Machine 2): one MobileSAM run on one picture instead of three pictures and a vote
+    is_knuckle_segmentation = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE
+                               and str(CheckKnuckle.METHOD).strip().lower() == "segmentation")
+    # every check looks where this cycle's frame says (the knuckle check's frame), or where the properties say
+    VisionFrame.applyToChecks(ImageProcessor.visionFrame)
 
     # Defensive defaults — overwritten by all branches below
     allok = False
@@ -659,7 +665,24 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
         # assessment, in ImageProcessor.prepareForKnuckleCheck, so that a knuckle retake keeps the cycle's QR code)
 
         try:
-            if is_hub_and_bearing:
+            if is_knuckle_segmentation:
+                test_image = imagesToBeProcessed[0]
+                ImageProcessor.setVisionFrame(None)
+                try:
+                    ImageProcessor.currentPictures[knucklePictureKeyString] = test_image
+                    chosenProcessedImage, allok, frame = CheckKnuckle.checkKnuckleBySegmentation(
+                        test_image, ImageProcessor.currentComponentQRCodeValue)
+                    chosenOriginalImage = test_image
+                    # the later checks of this cycle look where this frame says (kept only with OK)
+                    ImageProcessor.setVisionFrame(frame if allok else None)
+                except Exception as e:
+                    logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                            f"CheckKnuckle (segmentation) exception: {e}", Logger.ISSUE)
+                    allok = False
+                    chosenProcessedImage = test_image
+                    chosenOriginalImage = test_image
+
+            elif is_hub_and_bearing:
                 # NEW: Use batch processing instead of threading
                 logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckHubAndBottomBearing", Logger.GENERAL)
 
@@ -903,7 +926,7 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                     Logger.PROBLEM)
             pass
 
-    if not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
+    if not is_knuckle_segmentation and not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
         allok = False
         # Original voting mechanism
         okcount: int = 0
@@ -997,6 +1020,10 @@ class ImageProcessor():
     currentSide : str | None = None
     bearingCentreAndRadii: Dict[str, Any] | None = None      # top bearing ring and edge profile, for the nut / washer check
     bearingProfileQRCode: str | None = None                  # component it was kept for
+    # Where this cycle's later checks look (camera/VisionFrame.py): built by the knuckle check (segmentation method)
+    # from the spindle, the bosses' pins and the lower arm; None = the centres in the properties file. Dropped at the
+    # end of a cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle retake.
+    visionFrame: Dict[str, Any] | None = None
 
     # this lock is needed because 3 threads simultaneously call this function, and only 1 message is in the queue
     getQRCodeLock = threading.Lock()
@@ -1004,7 +1031,7 @@ class ImageProcessor():
     # the knuckle check (prepareForKnuckleCheck) and turns this off, so a check never waits on the QR queue.
     fetchQRCodeInChecks: bool = True
     _STATE_ATTRIBUTES = ("currentComponentQRCodeValue", "currentModelName", "currentSide", "bearingCentreAndRadii",
-                         "bearingProfileQRCode")
+                         "bearingProfileQRCode", "visionFrame")
 
     @classmethod
     def snapshotState(cls) -> Dict[str, Any]:
@@ -1021,6 +1048,7 @@ class ImageProcessor():
         if "currentPictures" in state:
             ImageProcessor.currentPictures.clear()
             ImageProcessor.currentPictures.update(state["currentPictures"])
+        VisionFrame.applyToChecks(ImageProcessor.visionFrame)
 
     @classmethod
     def applyStateChanges(cls, changes: Dict[str, Any]) -> None:
@@ -1029,6 +1057,13 @@ class ImageProcessor():
             if name in changes:
                 setattr(ImageProcessor, name, changes[name])
         ImageProcessor.currentPictures.update(changes.get("currentPictures", {}))
+        VisionFrame.applyToChecks(ImageProcessor.visionFrame)
+
+    @classmethod
+    def setVisionFrame(cls, frame: Dict[str, Any] | None) -> None:
+        """This cycle's frame (None: drop it); the checks' centres follow at once."""
+        ImageProcessor.visionFrame = frame
+        VisionFrame.applyToChecks(frame)
 
     @classmethod
     def endOfCycle(cls) -> None:
@@ -1038,6 +1073,7 @@ class ImageProcessor():
         ImageProcessor.currentSide = None
         ImageProcessor.clearCurrentPictures()
         ImageProcessor.clearBearingCentreAndRadii()
+        ImageProcessor.setVisionFrame(None)
 
     @classmethod
     def prepareForKnuckleCheck(cls) -> None:
@@ -1064,6 +1100,7 @@ class ImageProcessor():
                     Logger.SUCCESS)
         elif ImageProcessor.currentComponentQRCodeValue is not None:
             ImageProcessor.currentPictures[knucklePictureKeyString] = None
+            ImageProcessor.setVisionFrame(None)      # the retake builds it again
             logBoth('logInfo', ImageProcessor.logSource,
                     f"Knuckle retake: QR code {ImageProcessor.currentComponentQRCodeValue} kept", Logger.SUCCESS)
         else:

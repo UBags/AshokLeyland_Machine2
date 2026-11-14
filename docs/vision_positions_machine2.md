@@ -9,6 +9,39 @@ Purpose: a later step to make the checks immune to small camera movements - find
 in each picture, then place every region by these offsets (and scale them by the measured zoom) instead of by fixed
 image coordinates.
 
+## Since CHANGES 102: the centres follow the knuckle (2026-11-15)
+
+With `siemens.vision.knuckle.method=segmentation` the knuckle check (state 3) finds the spindle, the two machined bosses
+with the fixture pins in them and the lower arm (`camera/KnuckleLocator.py`), and builds the cycle's frame
+(`camera/VisionFrame.py`): camera rotation and zoom from the pin line against its usual angle / length for the type and
+side, and the anchor = the spindle (mask, or from the pins when the spindle is hidden). Every centre in the table below
+is then placed for the cycle as
+
+    centre = anchor + zoom * R(rotation) * (reference centre - (642.2, 359.1))
+
+where the reference centres are the values below (held in `VisionFrame.CENTRES`, in the code) and (642.2, 359.1) is
+the spindle position they were set with (mean of the 13 Nov knuckles). The `siemens.vision.*.center` keys below are used
+only when no knuckle frame exists in the cycle (method `regions`, or the camera server restarted during a cycle). The
+frame is dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle
+retake. A camera move beyond `vision.knuckle.frame.max.*` (40 px, 3 deg, 5 %) makes the knuckle check NOT OK.
+
+Offsets of the reference centres from the reference spindle (642.2, 359.1):
+
+| Centre | Reference (x, y) | From the spindle (dx, dy) |
+|---|---|---|
+| hub.segment.center | (645, 334) | (+2.8, -25.1) |
+| hub.centre.check | (644, 340) | (+1.8, -19.1) |
+| topbearing.annular.center | (642, 345) | (-0.2, -14.1) |
+| nutwasher.nut.detection.center | (644, 344) | (+1.8, -15.1) |
+| nobunk.nut.detection.center | (644, 344) | (+1.8, -15.1) |
+| bunk.outer.disc.center | (646, 328) | (+3.8, -31.1) |
+| bunk.seating.seated.centre.dost | (646, 325) | (+3.8, -34.1) |
+| bunk.seating.seated.centre.dostplus | (647, 330) | (+4.8, -29.1) |
+| cap.center | (644, 340) | (+1.8, -19.1) |
+
+Still to confirm with paired pictures (knuckle, hub and cap of the same component over a few full cycles): whether
+the hub follows the spindle 1:1 (the DOST RHS knuckles sit 2-3 px higher than the others; their centres move with them).
+
 ## Checks on the hub and what is pressed onto it (states 5-24)
 
 | Region (key) | Absolute (x, y) | Offset from hub centre (dx, dy) | Size | Note |

@@ -33,6 +33,7 @@ import cv2
 import numpy as np
 from Configuration import CosThetaConfigurator as C
 from camera.CheckKnuckle import CheckKnuckle as K
+K.METHOD = "regions"   # this tests the grey-level regions method; Machine 2 runs segmentation since CHANGES 102 (DryRun_Knuckle_Frame.py)
 
 MIN_MARGIN = 20          # grey levels between a measured value and its threshold
 MIN_DIFF_MARGIN = 10     # side.by.difference: grey levels beyond vision.knuckle.side.difference.threshold

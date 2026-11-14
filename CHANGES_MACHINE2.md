@@ -3092,3 +3092,49 @@ First steps towards vision checks that do not depend on the camera staying exact
     on every picture (same camera position); DOST_LHS_02 (bearing on the spindle) spindle from the pins 643.0, 359.3
     against the usual 643.2, 359.8; window under Xvfb.
 
+
+## 102. Machine 2 knuckle check by MobileSAM; later checks' centres from the knuckle (camera movement) (2026-11-15)
+
+User: the laptop run of the study window (31 pictures: 28 knuckles + 3 empty) - (a) time; (b) replace the knuckle check
+with this logic for type and LHS / RHS; (c) from the bosses, the spindle and the lower arm, work out the centres of
+all later checks; (d) build that into the later checks instead of the properties' centres, cleared at cycle end / abort.
+
+- **(a) Time on the laptop GPU (study window, grid):** 0.34-0.41 s per knuckle picture (embedding 0.02-0.03 s,
+  prompts 0.32-0.38 s; first picture 0.52 s; one empty fixture 1.29 s). Type and side right on all 28 knuckles.
+- **`camera/KnuckleLocator.py` (new):** the study's method in production form, same rules and numbers: one embedding;
+  spindle by one point; per boss the 4 x 4 grid / 24 pairs (one decoder call per boss), boss = bright machined ring
+  round the dark core, best group by score, the pin = dark core centre; the two lower-arm prompts; type by boss area x
+  1000 / pin distance^2 (34.5) cross-checked by boss radius / pin distance (0.1095). Uses the shared predictor
+  (ModelManager). Two changes from the study: the grid is placed relative to the spindle mask (the usual picture
+  place when there is none; retried at the usual place if a boss is missing), so it follows a moved camera; and the
+  result carries the frame. `draw()`: spindle, bosses (pin dots) and lower arm outlined, green OK / red NOT OK, no text.
+- **`camera/VisionFrame.py` (new) - (c):** camera rotation and zoom from the pin line against `NOMINAL_PINS` of the
+  type / side, translation from the pin midpoint (the pins do not move with the part: camera only); anchor = the
+  spindle mask when it lies within 6 px of where the pins put the usual spindle, else that pin-derived spindle (bearing
+  on the spindle). Every later centre: `anchor + zoom * R(rotation) * (reference - (642.2, 359.1))`. Reference centres
+  (`CENTRES`, in the code): hub segmentation (645, 334), hub centre check (644, 340), top bearing (642, 345), nut / washer
+  and no-bunk nut (644, 344), bung disc (646, 328), bung seated DOST (646, 325) / DOSTPLUS (647, 330), cap (644, 340) -
+  the 13 Nov values (docs/vision_positions_machine2.md, new section with the offsets from the spindle). Radii unchanged.
+- **(d) Into the checks:** `VisionFrame.applyToChecks(frame)` writes the placed centres into the checks' constants
+  (HubAndBearingSegmenter incl. its single instance's annular centre, CheckHubAndBottomBearing, CheckTopBearing,
+  CheckNutAndPlateWasher, CheckNoBunk, BunkSegmenter, CheckCap); with no frame it puts back the properties values
+  (the old behaviour - Machine 1, method regions, or the camera server restarted mid-cycle). Called at the start of
+  every assessment, when the worker process restores the cycle state and when the camera server applies a check's
+  changes (so the bearing-ring guard thread uses it too).
+  - `ImageProcessor.visionFrame` is cycle state (`_STATE_ATTRIBUTES`: sent to and back from the worker process), set by
+    the knuckle check only with OK. **Cleared** in `endOfCycle()` (the IOServer's end of cycle: completed **or aborted**,
+    and a new QR code at the knuckle check), at a knuckle retake, and at the start of every knuckle check.
+- **(b) `CheckKnuckle`:** new `vision.knuckle.method` - `segmentation` for Machine 2 (`siemens.vision.knuckle.method`
+  in the three properties files), `regions` by default (Machine 1 unchanged). `checkKnuckle()` dispatches;
+  `checkKnuckleBySegmentation()` is OK when both bosses with pins, the lower arm and a clear type are found, type and
+  side match the QR code and the camera movement is within `vision.knuckle.frame.max.shift` 40 px / `.max.rotation`
+  3 deg / `.max.zoom.change` 0.05 (else NOT OK "... - set the camera again"); a missing spindle mask alone does not
+  fail it. The grey-level method is kept whole as `checkKnuckleByRegions()` (renamed, not commented out: Machine 1 runs
+  the same code and uses it). In the camera server the knuckle state runs once on one picture (no 3-picture vote).
+- **Dry runs:** new `test/machine2_dryrun/DryRun_Knuckle_Frame.py` (results below); `DryRun_Vision_Check_Timeout.py`
+  part K runs the real pipeline with segmentation when the weights are there (frame kept after OK, dropped at the end
+  of the cycle), regions otherwise; `DryRun_CheckKnuckle_Images.py` and `DryRun_Knuckle_Check_UI.py` pin
+  `K.METHOD = "regions"` (they test that method: 155/155, Machine 1 copy 30/30).
+- **Verifier:** CheckKnuckle reference commit 6846f37 (the previous reference plus this logic, hard-coded values) in
+  `baseline_per_file` of both manifests; `allenbradley.vision.knuckle.method=regions` and the `frame.max.*` keys
+  added for Machine 1. Both machines: ALL EQUIVALENT.

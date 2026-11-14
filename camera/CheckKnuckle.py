@@ -21,6 +21,7 @@ import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
 from Configuration import *
+from camera.VisionConfig import vInt, vBool, vTuple, vPoints, vStr, vFloat
 
 CosThetaConfigurator.getInstance()
 
@@ -64,92 +65,92 @@ class CheckKnuckle():
     """
 
     # Region of Interest for LHS detection
-    LHS_CROP_X: int = 380
-    LHS_CROP_Y: int = 650
-    LHS_CROP_WIDTH: int = 130
-    LHS_CROP_HEIGHT: int = 50
+    LHS_CROP_X: int = vInt("vision.knuckle.lhs.crop.x", 380)
+    LHS_CROP_Y: int = vInt("vision.knuckle.lhs.crop.y", 650)
+    LHS_CROP_WIDTH: int = vInt("vision.knuckle.lhs.crop.width", 130)
+    LHS_CROP_HEIGHT: int = vInt("vision.knuckle.lhs.crop.height", 50)
 
     # Region of Interest for RHS detection
-    RHS_CROP_X: int = 765
-    RHS_CROP_Y: int = 650
-    RHS_CROP_WIDTH: int = 100
-    RHS_CROP_HEIGHT: int = 55
+    RHS_CROP_X: int = vInt("vision.knuckle.rhs.crop.x", 765)
+    RHS_CROP_Y: int = vInt("vision.knuckle.rhs.crop.y", 650)
+    RHS_CROP_WIDTH: int = vInt("vision.knuckle.rhs.crop.width", 100)
+    RHS_CROP_HEIGHT: int = vInt("vision.knuckle.rhs.crop.height", 55)
 
     # Common check regions (apply to all knuckles)
-    COMMON_CHECK_A_X: int = 775
-    COMMON_CHECK_A_Y: int = 300
-    COMMON_CHECK_A_WIDTH: int = 35
-    COMMON_CHECK_A_HEIGHT: int = 25
+    COMMON_CHECK_A_X: int = vInt("vision.knuckle.common.check.a.x", 775)
+    COMMON_CHECK_A_Y: int = vInt("vision.knuckle.common.check.a.y", 300)
+    COMMON_CHECK_A_WIDTH: int = vInt("vision.knuckle.common.check.a.width", 35)
+    COMMON_CHECK_A_HEIGHT: int = vInt("vision.knuckle.common.check.a.height", 25)
 
-    COMMON_CHECK_B_X: int = 440
-    COMMON_CHECK_B_Y: int = 310
-    COMMON_CHECK_B_WIDTH: int = 40
-    COMMON_CHECK_B_HEIGHT: int = 20
+    COMMON_CHECK_B_X: int = vInt("vision.knuckle.common.check.b.x", 440)
+    COMMON_CHECK_B_Y: int = vInt("vision.knuckle.common.check.b.y", 310)
+    COMMON_CHECK_B_WIDTH: int = vInt("vision.knuckle.common.check.b.width", 40)
+    COMMON_CHECK_B_HEIGHT: int = vInt("vision.knuckle.common.check.b.height", 20)
 
     # Threshold for common checks
-    COMMON_CHECK_THRESHOLD: int = 84
+    COMMON_CHECK_THRESHOLD: int = vInt("vision.knuckle.common.check.threshold", 84)
 
     # Common check circular regions (apply to all knuckles)
-    COMMON_CHECK_C_CENTER_X: int = 390
-    COMMON_CHECK_C_CENTER_Y: int = 465
-    COMMON_CHECK_C_RADIUS: int = 13
+    COMMON_CHECK_C_CENTER_X: int = vInt("vision.knuckle.common.check.c.center.x", 390)
+    COMMON_CHECK_C_CENTER_Y: int = vInt("vision.knuckle.common.check.c.center.y", 465)
+    COMMON_CHECK_C_RADIUS: int = vInt("vision.knuckle.common.check.c.radius", 13)
 
-    COMMON_CHECK_D_CENTER_X: int = 865
-    COMMON_CHECK_D_CENTER_Y: int = 465
-    COMMON_CHECK_D_RADIUS: int = 13
+    COMMON_CHECK_D_CENTER_X: int = vInt("vision.knuckle.common.check.d.center.x", 865)
+    COMMON_CHECK_D_CENTER_Y: int = vInt("vision.knuckle.common.check.d.center.y", 465)
+    COMMON_CHECK_D_RADIUS: int = vInt("vision.knuckle.common.check.d.radius", 13)
 
     # Common check rectangular region (apply to all knuckles)
-    COMMON_CHECK_E_X: int = 600
-    COMMON_CHECK_E_Y: int = 600
-    COMMON_CHECK_E_WIDTH: int = 50
-    COMMON_CHECK_E_HEIGHT: int = 20
+    COMMON_CHECK_E_X: int = vInt("vision.knuckle.common.check.e.x", 600)
+    COMMON_CHECK_E_Y: int = vInt("vision.knuckle.common.check.e.y", 600)
+    COMMON_CHECK_E_WIDTH: int = vInt("vision.knuckle.common.check.e.width", 50)
+    COMMON_CHECK_E_HEIGHT: int = vInt("vision.knuckle.common.check.e.height", 20)
 
     # Alternate area of each common check (same rule; the check passes if the region OR its alternate is dark).
     # A width, height or radius of 0 means no alternate (the default).
-    COMMON_CHECK_A_ALT_X: int = 0
-    COMMON_CHECK_A_ALT_Y: int = 0
-    COMMON_CHECK_A_ALT_WIDTH: int = 0
-    COMMON_CHECK_A_ALT_HEIGHT: int = 0
-    COMMON_CHECK_B_ALT_X: int = 0
-    COMMON_CHECK_B_ALT_Y: int = 0
-    COMMON_CHECK_B_ALT_WIDTH: int = 0
-    COMMON_CHECK_B_ALT_HEIGHT: int = 0
-    COMMON_CHECK_C_ALT_CENTER_X: int = 0
-    COMMON_CHECK_C_ALT_CENTER_Y: int = 0
-    COMMON_CHECK_C_ALT_RADIUS: int = 0
-    COMMON_CHECK_D_ALT_CENTER_X: int = 0
-    COMMON_CHECK_D_ALT_CENTER_Y: int = 0
-    COMMON_CHECK_D_ALT_RADIUS: int = 0
-    COMMON_CHECK_E_ALT_X: int = 0
-    COMMON_CHECK_E_ALT_Y: int = 0
-    COMMON_CHECK_E_ALT_WIDTH: int = 0
-    COMMON_CHECK_E_ALT_HEIGHT: int = 0
+    COMMON_CHECK_A_ALT_X: int = vInt("vision.knuckle.common.check.a.alt.x", 0)
+    COMMON_CHECK_A_ALT_Y: int = vInt("vision.knuckle.common.check.a.alt.y", 0)
+    COMMON_CHECK_A_ALT_WIDTH: int = vInt("vision.knuckle.common.check.a.alt.width", 0)
+    COMMON_CHECK_A_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.a.alt.height", 0)
+    COMMON_CHECK_B_ALT_X: int = vInt("vision.knuckle.common.check.b.alt.x", 0)
+    COMMON_CHECK_B_ALT_Y: int = vInt("vision.knuckle.common.check.b.alt.y", 0)
+    COMMON_CHECK_B_ALT_WIDTH: int = vInt("vision.knuckle.common.check.b.alt.width", 0)
+    COMMON_CHECK_B_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.b.alt.height", 0)
+    COMMON_CHECK_C_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.c.alt.center.x", 0)
+    COMMON_CHECK_C_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.c.alt.center.y", 0)
+    COMMON_CHECK_C_ALT_RADIUS: int = vInt("vision.knuckle.common.check.c.alt.radius", 0)
+    COMMON_CHECK_D_ALT_CENTER_X: int = vInt("vision.knuckle.common.check.d.alt.center.x", 0)
+    COMMON_CHECK_D_ALT_CENTER_Y: int = vInt("vision.knuckle.common.check.d.alt.center.y", 0)
+    COMMON_CHECK_D_ALT_RADIUS: int = vInt("vision.knuckle.common.check.d.alt.radius", 0)
+    COMMON_CHECK_E_ALT_X: int = vInt("vision.knuckle.common.check.e.alt.x", 0)
+    COMMON_CHECK_E_ALT_Y: int = vInt("vision.knuckle.common.check.e.alt.y", 0)
+    COMMON_CHECK_E_ALT_WIDTH: int = vInt("vision.knuckle.common.check.e.alt.width", 0)
+    COMMON_CHECK_E_ALT_HEIGHT: int = vInt("vision.knuckle.common.check.e.alt.height", 0)
 
     # Polygon points for Step 2 verification
-    STEP2_POLYGON_POINTS = np.array([
+    STEP2_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step2.polygon.points", [
         [480, 260],
         [490, 228],
         [495, 270],
         [460, 290]
-    ], dtype=np.int32)
+    ]), dtype=np.int32)
 
     # Polygon points for Step 3 - DOSTPLUS vs DOST determination
-    STEP3_POLYGON_POINTS = np.array([
+    STEP3_POLYGON_POINTS = np.array(vPoints("vision.knuckle.step3.polygon.points", [
         [785, 265],
         [820, 290],
         [770, 280],
         [760, 235]
-    ], dtype=np.int32)
+    ]), dtype=np.int32)
 
     # Threshold for dark region detection (below this = dark/present)
-    LHS_RHS_DARKNESS_THRESHOLD: int = 220
-    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = 96
+    LHS_RHS_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.lhs.rhs.darkness.threshold", 220)
+    COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD: int = vInt("vision.knuckle.component.identification.darkness.threshold", 96)
 
     # Binarisation threshold: grey levels below this become black, the rest white
-    BINARIZATION_THRESHOLD: int = 48
+    BINARIZATION_THRESHOLD: int = vInt("vision.knuckle.binarization.threshold", 48)
 
     # Mean filter kernel size
-    KERNEL_SIZE: Tuple[int, int] = (5, 5)
+    KERNEL_SIZE: Tuple[int, int] = vTuple("vision.knuckle.kernel.size", (5, 5))
 
     # Side and presence by differences (vision.knuckle.side.by.difference = True). Two comparisons decide the side and
     # whether a knuckle is there; both must agree:
@@ -165,22 +166,22 @@ class CheckKnuckle():
     #       mean(D2) - mean(D1) > it -> LHS; otherwise -> NOT OK.
     # Then the rectangle A and its alternate, and vision.knuckle.lhs.rhs.darkness.threshold, are not used.
     # A polygon 0,0;0,0;0,0 means not set.
-    SIDE_BY_DIFFERENCE: bool = False
-    SIDE_DIFFERENCE_THRESHOLD: int = 10
-    COMMON_CHECK_A_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
-    COMMON_CHECK_A_ALT_POLYGON_POINTS = [(0, 0), (0, 0), (0, 0)]
+    SIDE_BY_DIFFERENCE: bool = vBool("vision.knuckle.side.by.difference", False)
+    SIDE_DIFFERENCE_THRESHOLD: int = vInt("vision.knuckle.side.difference.threshold", 10)
+    COMMON_CHECK_A_POLYGON_POINTS = vPoints("vision.knuckle.common.check.a.polygon.points", [(0, 0), (0, 0), (0, 0)])
+    COMMON_CHECK_A_ALT_POLYGON_POINTS = vPoints("vision.knuckle.common.check.a.alt.polygon.points", [(0, 0), (0, 0), (0, 0)])
 
     # Which knuckle check runs (vision.knuckle.method):
     #   regions       - the grey-level regions above (checkKnuckleByRegions; Machine 1, and Machine 2 until CHANGES 102)
     #   segmentation  - MobileSAM finds the spindle, the 2 machined bosses (with the fixture pins in them) and the lower
     #                   arm (camera/KnuckleLocator.py); type and side from them; also gives the frame that places the
     #                   later checks' centres (camera/VisionFrame.py). Machine 2 from CHANGES 102.
-    METHOD: str = "regions"
+    METHOD: str = vStr("vision.knuckle.method", "regions")
     # Segmentation: largest camera movement accepted (measured from the fixture pins). The later checks' search areas
     # are 80-250 px; beyond these the camera has been knocked and must be set again (NOT OK, "camera moved").
-    FRAME_MAX_SHIFT: float = 40.0            # px
-    FRAME_MAX_ROTATION: float = 3.0       # degrees
-    FRAME_MAX_ZOOM_CHANGE: float = 0.05  # 0.05 = +-5 %
+    FRAME_MAX_SHIFT: float = vFloat("vision.knuckle.frame.max.shift", 40.0)            # px
+    FRAME_MAX_ROTATION: float = vFloat("vision.knuckle.frame.max.rotation", 3.0)       # degrees
+    FRAME_MAX_ZOOM_CHANGE: float = vFloat("vision.knuckle.frame.max.zoom.change", 0.05)  # 0.05 = +-5 %
     # The locator (created on first use; a dry run can set one with its own MobileSAM predictor)
     locator = None
     # The last segmentation result (for the camera server: the frame for the later checks; for dry runs: the values)
