@@ -3064,4 +3064,13 @@ First steps towards vision checks that do not depend on the camera staying exact
     score, best), `boss_grid_summary.csv`, `boss_grid_masks.xlsx` (xlsxwriter, already in requirements.txt).
   - Time: 7-8 s per picture on the sandbox CPU, 5.5 s of it MobileSAM's decoder on 48 prompts (embedding 0.7-1.1 s,
     measuring about 1 s); on the GPU the decoder takes milliseconds.
+  - **Speed (user's laptop: 13.35 s per picture with the GPU):** per-stage times now printed. Laptop: embedding 0.02 s,
+    decoder 0.37 s on cuda:0, to CPU 0.02 s, **measuring 12.40 s**, grouping 0.49 s (sandbox CPU: measuring 0.71 s).
+    Most of the 144 masks are 100,000-480,000 px of background, each measured in full (contours, holes, ellipse,
+    dark core). Now a mask is measured only when its area is 1,979-11,310 px (`AREA_GATE`: above pi x 60^2 its
+    enclosing radius is over 60, below 0.7 x pi x 30^2 its radius is under 30 or its fill under 0.70 - so it could not
+    pass the candidate rule anyway; and masks with IoU >= 0.85 have areas within 15 %, so no vote of a possible boss
+    changes); the others are listed with area and box, why_not "area outside ... (not measured)". Grouping skips pairs
+    whose areas differ by more than 15 %. Sandbox: measuring 0.71 -> 0.05 s; 7-20 of 72 masks per boss measured; the
+    summary of all 20 pictures identical in every field. `--measure-all` keeps the old behaviour.
 

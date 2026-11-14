@@ -22,6 +22,9 @@ A mask is a boss CANDIDATE when (limits are arguments of judge(), printed in the
 SCORE = votes x circularity x fill x min(contrast, 120) / 120 x (1 - concentricity / 20). The BEST is the candidate
 group with the highest score; none -> no boss in that region (empty fixture, or the camera moved more than the grid).
 
+Masks whose area is outside 1979-11310 px (it rules them out by itself: see AREA_GATE) are listed with their area
+and box only, unless --measure-all.
+
 Output (default folder <pictures>/boss_grid_masks/):
   boss_grid_masks.csv      every mask: picture, boss, prompt pair (row/col of both points, across/down), mask index
                            0-2, SAM score, the measures above, group, votes, candidate (and why not), score, best
@@ -62,8 +65,14 @@ GRID_N = 4
 BOSS_FIXED = {"BOSS_L": (KS.REF_SPINDLE[0] + KS.BOSS_CENTRES["BOSS_L"][0], KS.REF_SPINDLE[1] + KS.BOSS_CENTRES["BOSS_L"][1]),
               "BOSS_R": (KS.REF_SPINDLE[0] + KS.BOSS_CENTRES["BOSS_R"][0], KS.REF_SPINDLE[1] + KS.BOSS_CENTRES["BOSS_R"][1])}
 DEDUPE_IOU = 0.85
+# A mask can only pass judge() if its area is in this range: above pi x 60^2 its enclosing radius is over 60; below
+# 0.7 x pi x 30^2 either its radius is under 30 or its fill under 0.70. Masks outside it are not measured (unless
+# --measure-all): they cannot be a boss, and two masks with IoU >= 0.85 have areas within 15 % of each other, so
+# leaving them out changes no vote of a possible boss. Most of the 144 masks are 100,000-480,000 px of background, and
+# measuring them took 12 s per picture on the laptop.
 LIMITS = dict(radius=(30.0, 60.0), circularity_min=0.75, fill_min=0.70, ring_min=80.0, contrast_min=40.0,
               core_radius=(6.0, 22.0), concentricity_max=8.0)
+AREA_GATE = (LIMITS["fill_min"] * math.pi * LIMITS["radius"][0] ** 2, math.pi * LIMITS["radius"][1] ** 2)
 
 
 def grid_points(cx: float, cy: float) -> List[Tuple[int, int, float, float]]:
@@ -177,7 +186,8 @@ def iou(a: Dict, b: Dict) -> float:
 
 
 class BossGridStudy:
-    def __init__(self, sam_path: str):
+    def __init__(self, sam_path: str, measure_all: bool = False):
+        self.measure_all = measure_all
         self.study = KS.KnuckleMaskStudy(sam_path)
         self.predictor = self.study.predictor
         self.device = self.study.device
@@ -233,7 +243,17 @@ class BossGridStudy:
                         m = masks[p, k]
                         if not m.any():
                             continue
+                        area = int(np.count_nonzero(m))
+                        if not self.measure_all and not (AREA_GATE[0] <= area <= AREA_GATE[1]):
+                            x0, y0, x1, y1 = bbox_of(m, pad=0)
+                            rows.append(dict(id=len(rows), area=area, iou=float(scores[p, k]), bbox=(x0, y0, x1 - x0,
+                                             y1 - y0), boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}",
+                                             orient=orient, mask_index=k, grid_cx=cx, grid_cy=cy, candidate=False,
+                                             why_not=f"area outside {AREA_GATE[0]:.0f}-{AREA_GATE[1]:.0f} (not "
+                                                     f"measured)", measured=False))
+                            continue
                         d = measure(m, grey, len(rows), float(scores[p, k]))
+                        d["measured"] = True
                         d.update(boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}", orient=orient, mask_index=k,
                                  grid_cx=cx, grid_cy=cy)
                         ok, why = judge(d)
@@ -244,10 +264,16 @@ class BossGridStudy:
         t5 = time.time()
         summary = {}
         for boss in centres:
-            bm = [r for r in rows if r["boss"] == boss]
+            bm = [r for r in rows if r["boss"] == boss and r["measured"]]
+            for r in rows:
+                if r["boss"] == boss and not r["measured"]:
+                    r.update(group=None, votes=None, score=0.0, best=False)
             groups: List[List[Dict]] = []
             for r in sorted(bm, key=lambda r: -r["iou"]):
                 for g in groups:
+                    a0, a1 = g[0]["area"], r["area"]
+                    if min(a0, a1) < DEDUPE_IOU * max(a0, a1):      # IoU >= 0.85 impossible
+                        continue
                     if iou(g[0], r) >= DEDUPE_IOU:
                         g.append(r)
                         break
@@ -270,6 +296,7 @@ class BossGridStudy:
                                      candidate_groups=len({r["group"] for r in cands}), masks=len(bm))
             else:
                 summary[boss] = dict(best=None, candidates=0, candidate_groups=0, masks=len(bm))
+            summary[boss]["masks_total"] = sum(1 for r in rows if r["boss"] == boss)
         bl, br = summary["BOSS_L"]["best"], summary["BOSS_R"]["best"]
         tm["group"] = time.time() - t5
         secs = time.time() - t0
@@ -288,10 +315,11 @@ MASK_COLS = ["picture", "boss", "pair", "orient", "mask_index", "iou", "area", "
              "circularity", "circle_x", "circle_y", "radius", "round_fill", "ellipse_x", "ellipse_y", "ellipse_major",
              "ellipse_minor", "ellipse_ratio", "ellipse_angle", "holes", "holes_area", "rect_fill", "grey",
              "core_x", "core_y", "core_area", "core_radius", "core_grey", "core_threshold", "ring_grey", "contrast",
-             "concentricity", "group", "votes", "candidate", "why_not", "score", "best", "grid_cx", "grid_cy", "bbox"]
+             "concentricity", "group", "votes", "candidate", "why_not", "score", "best", "measured", "grid_cx", "grid_cy",
+             "bbox"]
 SUM_COLS = ["picture", "boss", "found", "pin_x", "pin_y", "cx", "cy", "radius", "area", "eq_diameter", "circularity",
             "round_fill", "ring_grey", "core_grey", "contrast", "core_radius", "concentricity", "votes", "score",
-            "candidates", "candidate_groups", "masks", "pair", "mask_index", "type", "area_ratio", "pin_distance",
+            "candidates", "candidate_groups", "masks", "masks_total", "pair", "mask_index", "type", "area_ratio", "pin_distance",
             "angle", "pin_mid_x", "pin_mid_y", "seconds"]
 
 
@@ -312,7 +340,8 @@ def summary_rows(name: str, summary: Dict, info: Dict) -> List[Dict]:
     for boss, s in summary.items():
         b = s["best"]
         row = dict(picture=name, boss=boss, found=b is not None, candidates=s["candidates"],
-                   candidate_groups=s["candidate_groups"], masks=s["masks"], seconds=info["time"],
+                   candidate_groups=s["candidate_groups"], masks=s["masks"], masks_total=s["masks_total"],
+                   seconds=info["time"],
                    type=info.get("type", ""), area_ratio=info.get("area_ratio"), pin_distance=info.get("pin_distance"),
                    angle=info.get("angle"), pin_mid_x=info.get("pin_mid", (None, None))[0],
                    pin_mid_y=info.get("pin_mid", (None, None))[1])
@@ -378,6 +407,9 @@ def main():
     ap.add_argument("--sam", default=KS.DEFAULT_SAM, help="MobileSAM weights")
     ap.add_argument("--centre", choices=["fixed", "spindle"], default="fixed", help="where the grids are placed")
     ap.add_argument("--pictures", action="store_true", help="also save the marked pictures")
+    ap.add_argument("--measure-all", action="store_true",
+                    help="measure every mask, also those whose area rules them out (slow: about 12 s per picture on "
+                         "the laptop)")
     args = ap.parse_args()
     if KS.sam_model_registry is None:
         sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(args.sam))))
@@ -386,9 +418,11 @@ def main():
             sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
     out_dir = args.out or os.path.join(args.folder if os.path.isdir(args.folder) else os.path.dirname(args.folder),
                                        "boss_grid_masks")
-    st = BossGridStudy(args.sam)
+    st = BossGridStudy(args.sam, args.measure_all)
     print(f"MobileSAM on {st.device}; grid {GRID_N} x {GRID_N}, spacing {SPACING:.1f} px, {len(grid_pairs())} pairs x "
-          f"3 masks per boss; grids at {args.centre}; limits {LIMITS}")
+          f"3 masks per boss; grids at {args.centre}; limits {LIMITS}; "
+          + ("every mask measured" if args.measure_all else
+             f"masks measured when their area is {AREA_GATE[0]:.0f}-{AREA_GATE[1]:.0f} px"))
     st.run(np.zeros((KS.IMAGE_SIZE[1], KS.IMAGE_SIZE[0], 3), np.uint8))      # warm-up (CUDA set-up)
     all_masks, all_sum = [], []
     for path in KS.list_pictures(args.folder):
