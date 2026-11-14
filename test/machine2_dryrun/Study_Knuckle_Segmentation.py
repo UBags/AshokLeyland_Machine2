@@ -124,7 +124,11 @@ BOSS_CENTRES = {"BOSS_L": (-198, -161), "BOSS_R": (200, -161)}
 # Boss points: 4 (default) on the diagonals at 26 px; 8 / 16 evenly round a ring at 24 px (the ring 24 px out stays
 # 9.8 px inside every boss of the 19 pictures). Tested with the prompts moved +-8 px (266 boss masks each): 4 points
 # 266/266, centroid moving median 0.34 / worst 1.39 px; 16 points 258/266, 0.72 / 1.82 px.
-BOSS_POINT_CHOICES = (4, 8, 16)
+BOSS_POINT_CHOICES = ("grid", 4, 8, 16)
+# "grid" (default): Study_Boss_Grid_Masks - per boss a 4 x 4 grid (36.8 px spacing, about +-55 px round the boss's
+# usual place, fixed in the picture), its 24 neighbouring pairs as 2-point prompts (3 masks each), every boss-sized
+# mask judged by its bright machined ring round the dark core (bore + pin); the best group kept. Its pin centre (the
+# dark core's centre) is steadier than the mask centre and is used for the distance, angle, type and spindle fallback.
 
 
 def boss_point_offsets(n: int) -> List[Tuple[float, float]]:
@@ -141,10 +145,23 @@ NOMINAL = {
     ("DOSTPLUS", "LHS"): dict(distance=383.8, angle=1.25, mid=(3.0, -155.9), spindle=(642.1, 359.1)),
     ("DOSTPLUS", "RHS"): dict(distance=383.7, angle=0.63, mid=(1.6, -156.4), spindle=(642.3, 360.3)),
 }
+# The same from the pin centres (grid method; user's laptop run of the 19 knuckles, 15 Nov): distance between the
+# pins, its angle, and the pin midpoint from the spindle.
+NOMINAL_PINS = {
+    ("DOST", "LHS"): dict(distance=400.35, angle=0.65, mid=(0.92, -164.82), spindle=(643.2, 359.8),
+                          pin_mid=(644.15, 194.93)),
+    ("DOST", "RHS"): dict(distance=400.17, angle=0.68, mid=(2.55, -164.18), spindle=(641.5, 357.1),
+                          pin_mid=(643.75, 192.95)),
+    ("DOSTPLUS", "LHS"): dict(distance=394.26, angle=0.69, mid=(1.74, -159.46), spindle=(642.1, 359.1),
+                              pin_mid=(643.70, 199.65)),
+    ("DOSTPLUS", "RHS"): dict(distance=394.64, angle=0.77, mid=(1.42, -160.24), spindle=(642.3, 360.3),
+                              pin_mid=(643.62, 200.00)),
+}
 REF_SPINDLE = (642.2, 359.1)
 HUB_CENTRE = (645, 334)                 # siemens.vision.hub.segment.center, set with the spindle at REF_SPINDLE
 TYPE_AREA_RATIO = 34.5                  # boss area x 1000 / distance^2: DOST 29.5-31.2, DOSTPLUS 38.0-41.1
 TYPE_RADIUS_RATIO = 0.111               # boss radius / distance: DOST 0.104-0.107, DOSTPLUS 0.116-0.122
+TYPE_RADIUS_RATIO_PINS = 0.1095         # the same over the pin distance (grid): DOST 0.102-0.105, DOSTPLUS 0.114-0.124
 SPINDLE_R_OK = (46.0, 52.0)             # 48.1-49.9 measured; 53.9 with a bearing on the spindle
 BOSS_BOX_HALF = 52
 BOSS_POINT_R = 26
@@ -326,7 +343,7 @@ class KnuckleMaskStudy:
             self._derive(found, found["measures"], sp, found["measures"]["spindle"][:2])
         return masks, found, time.time() - t0
 
-    def segment_prompted(self, image_rgb: np.ndarray, rules: Dict = RULES, boss_points: int = 4
+    def segment_prompted(self, image_rgb: np.ndarray, rules: Dict = RULES, boss_points="grid"
                          ) -> Tuple[List[Dict], Dict, float]:
         """Fast method: one image embedding, one point prompt on the spindle, then the 4 parts (4 points each) in one
         batched decoder call, placed relative to the spindle found. Each mask is then judged by the same size / shape
@@ -348,19 +365,29 @@ class KnuckleMaskStudy:
             sx, sy = (sp["circle_x"], sp["circle_y"]) if sp else (float(ex), float(ey))
             shape = image_rgb.shape[:2]
             tf = self.predictor.transform
-            # bosses: box + N points, 3 candidates each (one batched call)
             bnames = ["BOSS_L", "BOSS_R"]
-            bpts = np.array([[(sx + BOSS_CENTRES[n][0] + dx, sy + BOSS_CENTRES[n][1] + dy)
-                              for dx, dy in boss_point_offsets(boss_points)] for n in bnames], dtype=np.float32)
-            boxes = np.array([[sx + BOSS_CENTRES[n][0] - BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] - BOSS_BOX_HALF,
-                               sx + BOSS_CENTRES[n][0] + BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] + BOSS_BOX_HALF]
-                              for n in bnames], dtype=np.float32)
-            bc = torch.as_tensor(tf.apply_coords(bpts, shape), dtype=torch.float, device=self.device)
-            bb = torch.as_tensor(tf.apply_boxes(boxes, shape), dtype=torch.float, device=self.device)
-            bm, bq, _ = self.predictor.predict_torch(bc, torch.ones(bc.shape[:2], dtype=torch.int, device=self.device),
-                                                     boxes=bb, multimask_output=True)
-            boss_cands = bm.cpu().numpy()
-            boss_q = bq.cpu().numpy()
+            grid = None
+            if boss_points == "grid":
+                import Study_Boss_Grid_Masks as BG       # imports this module; loaded lazily to avoid a cycle
+                _rows, grid, grid_pts, _tm = BG.grid_bosses(self.predictor, self.device, image_rgb, grey,
+                                                            dict(BG.BOSS_FIXED))
+                bpts = np.array(list(grid_pts.values()), dtype=np.float32)
+                boxes = np.zeros((0, 4))
+            else:
+                # bosses: box + N points, 3 candidates each (one batched call)
+                bpts = np.array([[(sx + BOSS_CENTRES[n][0] + dx, sy + BOSS_CENTRES[n][1] + dy)
+                                  for dx, dy in boss_point_offsets(int(boss_points))] for n in bnames],
+                                dtype=np.float32)
+                boxes = np.array([[sx + BOSS_CENTRES[n][0] - BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] - BOSS_BOX_HALF,
+                                   sx + BOSS_CENTRES[n][0] + BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] + BOSS_BOX_HALF]
+                                  for n in bnames], dtype=np.float32)
+                bc = torch.as_tensor(tf.apply_coords(bpts, shape), dtype=torch.float, device=self.device)
+                bb = torch.as_tensor(tf.apply_boxes(boxes, shape), dtype=torch.float, device=self.device)
+                bm, bq, _ = self.predictor.predict_torch(
+                    bc, torch.ones(bc.shape[:2], dtype=torch.int, device=self.device), boxes=bb,
+                    multimask_output=True)
+                boss_cands = bm.cpu().numpy()
+                boss_q = bq.cpu().numpy()
             # arms: 4 points each, one mask each (one batched call)
             anames = ["ARM_L", "ARM_R"]
             apts = np.array([[(sx + dx, sy + dy) for dx, dy in PROMPTS[n]] for n in anames], dtype=np.float32)
@@ -378,8 +405,21 @@ class KnuckleMaskStudy:
                     and r["boss_dy"][0] <= d["circle_y"] - sy <= r["boss_dy"][1]
                     and r["boss_dx"][0] <= sign * (d["circle_x"] - sx) <= r["boss_dx"][1])
 
-        part_masks, ious, boss_pass = [], [], {}
+        part_masks, ious, boss_pass, boss_extra = [], [], {}, {}
         for j, n in enumerate(bnames):
+            if grid is not None:
+                b = grid[n]["best"]
+                full = np.zeros(shape, bool)
+                if b is not None:
+                    x0, y0, x1, y1 = b["box"]
+                    full[y0:y1, x0:x1] = b["mask"]
+                    boss_extra[n] = {k: b[k] for k in ("core_x", "core_y", "core_radius", "core_grey", "ring_grey",
+                                                       "contrast", "concentricity", "votes", "score")}
+                    boss_extra[n]["candidate_groups"] = grid[n]["candidate_groups"]
+                part_masks.append(full)
+                ious.append(b["iou"] if b else 0.0)
+                boss_pass[n] = b is not None
+                continue
             ds = [describe(m, grey, 0, float(q)) for m, q in zip(boss_cands[j], boss_q[j]) if m.any()]
             good = [d for d in ds if boss_ok(d, n[-1])]
             best = max(good or ds, key=lambda d: d["round_fill"]) if ds else None
@@ -401,6 +441,7 @@ class KnuckleMaskStudy:
                 continue
             d = describe(m, grey, i, float(q))
             d["prompt"] = n
+            d.update(boss_extra.get(n, {}))
             masks.append(d)
             if n.startswith("BOSS"):
                 if boss_pass[n]:
@@ -439,6 +480,12 @@ class KnuckleMaskStudy:
             dx, dy = br["circle_x"] - bl["circle_x"], br["circle_y"] - bl["circle_y"]
             meas["boss_distance"] = round(math.hypot(dx, dy), 1)
             meas["boss_angle_deg"] = round(math.degrees(math.atan2(dy, dx)), 2)
+            if "core_x" in bl and "core_x" in br:          # grid method: the pins are the reference
+                dx, dy = br["core_x"] - bl["core_x"], br["core_y"] - bl["core_y"]
+                meas["pins"] = ((round(bl["core_x"], 1), round(bl["core_y"], 1)),
+                                (round(br["core_x"], 1), round(br["core_y"], 1)))
+                meas["boss_distance"] = round(math.hypot(dx, dy), 1)
+                meas["boss_angle_deg"] = round(math.degrees(math.atan2(dy, dx)), 2)
         if "LOWER_ARM" in found:
             lo = found["LOWER_ARM"]
             meas["lower_area"], meas["lower_bbox"] = lo["area"], lo["bbox"]
@@ -460,18 +507,20 @@ class KnuckleMaskStudy:
             dist = meas["boss_distance"]
             area_ratio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / (dist * dist)
             radius_ratio = (bl["radius"] + br["radius"]) / 2.0 / dist
+            rad_limit = TYPE_RADIUS_RATIO_PINS if "pins" in meas else TYPE_RADIUS_RATIO
             t_area = "DOSTPLUS" if area_ratio >= TYPE_AREA_RATIO else "DOST"
-            t_rad = "DOSTPLUS" if radius_ratio >= TYPE_RADIUS_RATIO else "DOST"
-            meas["type_values"] = (round(area_ratio, 2), round(radius_ratio, 4))
+            t_rad = "DOSTPLUS" if radius_ratio >= rad_limit else "DOST"
+            meas["type_values"] = (round(area_ratio, 2), round(radius_ratio, 4), rad_limit)
             found["type"] = t_area if t_area == t_rad else f"? (area ratio {t_area}, radius ratio {t_rad})"
         typ = found.get("type")
-        nom = NOMINAL.get((typ, side))
+        pins = meas.get("pins")
+        nom = (NOMINAL_PINS if pins else NOMINAL).get((typ, side))
         # spindle: the mask if its radius is plausible, else from the boss midpoint (bearing on the spindle, not seen)
         sx, sy = s_xy
         src = "mask"
         if (sp is None or not (SPINDLE_R_OK[0] <= sp["radius"] <= SPINDLE_R_OK[1])) and bl and br and nom:
-            mx = (bl["circle_x"] + br["circle_x"]) / 2.0
-            my = (bl["circle_y"] + br["circle_y"]) / 2.0
+            mx, my = ((pins[0][0] + pins[1][0]) / 2.0, (pins[0][1] + pins[1][1]) / 2.0) if pins else \
+                ((bl["circle_x"] + br["circle_x"]) / 2.0, (bl["circle_y"] + br["circle_y"]) / 2.0)
             sx, sy = mx - nom["mid"][0], my - nom["mid"][1]
             src = ("bosses (spindle mask r %.1f outside %.0f-%.0f)" % (sp["radius"], *SPINDLE_R_OK)) if sp \
                 else "bosses (spindle mask not found)"
@@ -479,9 +528,12 @@ class KnuckleMaskStudy:
             src = "expected position (not found)"
         meas["spindle_used"] = (round(sx, 1), round(sy, 1), src)
         if bl and br:
-            mx = (bl["circle_x"] + br["circle_x"]) / 2.0
-            my = (bl["circle_y"] + br["circle_y"]) / 2.0
+            mx, my = ((pins[0][0] + pins[1][0]) / 2.0, (pins[0][1] + pins[1][1]) / 2.0) if pins else \
+                ((bl["circle_x"] + br["circle_x"]) / 2.0, (bl["circle_y"] + br["circle_y"]) / 2.0)
             meas["boss_mid"] = (round(mx, 1), round(my, 1), round(mx - sx, 1), round(my - sy, 1))
+            if pins and nom:
+                # the pins against their usual place for this type / side: how far the camera has moved
+                meas["pin_shift"] = (round(mx - nom["pin_mid"][0], 1), round(my - nom["pin_mid"][1], 1))
         if src != "expected position (not found)":
             dx, dy = sx - REF_SPINDLE[0], sy - REF_SPINDLE[1]
             meas["shift"] = (round(dx, 1), round(dy, 1))
@@ -491,7 +543,7 @@ class KnuckleMaskStudy:
                 meas["rotation"] = round(meas["boss_angle_deg"] - nom["angle"], 2)
                 meas["vs_nominal"] = (round(sx - nom["spindle"][0], 1), round(sy - nom["spindle"][1], 1))
 
-    def run(self, image_rgb: np.ndarray, method: str, boss_points: int = 4) -> Tuple[List[Dict], Dict, float]:
+    def run(self, image_rgb: np.ndarray, method: str, boss_points="grid") -> Tuple[List[Dict], Dict, float]:
         """method: FAST, or the grid size of the automatic generator ("16" ... "48")."""
         if method == FAST:
             return self.segment_prompted(image_rgb, boss_points=boss_points)
@@ -520,7 +572,7 @@ def summary_lines(name: str, found: Dict, n: int, secs: float, masks: Optional[L
     if "type" in found:
         tv = meas.get("type_values", ("-", "-"))
         lines.append(f"    TYPE      {found['type']}  (boss area x1000/distance^2 {tv[0]}, limit {TYPE_AREA_RATIO}; "
-                     f"boss radius/distance {tv[1]}, limit {TYPE_RADIUS_RATIO})")
+                     f"boss radius/distance {tv[1]}, limit {tv[2] if len(tv) > 2 else TYPE_RADIUS_RATIO})")
     if "spindle_used" in meas:
         su = meas["spindle_used"]
         lines.append(f"    REFERENCE spindle {su[0]}, {su[1]} from {su[2]}")
@@ -532,7 +584,10 @@ def summary_lines(name: str, found: Dict, n: int, secs: float, masks: Optional[L
                      f"{meas['hub_centre'][1]} (set {HUB_CENTRE[0]}, {HUB_CENTRE[1]}){z}")
     if "boss_mid" in meas:
         bm = meas["boss_mid"]
-        lines.append(f"    BOSS_MID  {bm[0]}, {bm[1]} (from spindle {bm[2]:+.1f}, {bm[3]:+.1f})")
+        what = "PIN_MID " if "pins" in meas else "BOSS_MID"
+        lines.append(f"    {what}  {bm[0]}, {bm[1]} (from spindle {bm[2]:+.1f}, {bm[3]:+.1f})"
+                     + (f"; against its usual place for this type / side {meas['pin_shift'][0]:+.1f}, "
+                        f"{meas['pin_shift'][1]:+.1f} (camera movement)" if "pin_shift" in meas else ""))
     if "SPINDLE" in found:
         lines.append(f"    SPINDLE   centre {meas['spindle'][0]}, {meas['spindle'][1]}  r {meas['spindle'][2]}")
     elif "spindle" in meas:
@@ -541,10 +596,14 @@ def summary_lines(name: str, found: Dict, n: int, secs: float, masks: Optional[L
     for s in ("L", "R"):
         b = meas.get("boss_" + s)
         if b:
-            lines.append(f"    BOSS_{s}    from spindle {b[0]:+.1f}, {b[1]:+.1f}  r {b[2]}  "
-                         f"(fill {found['BOSS_' + s]['round_fill']:.2f}, grey {found['BOSS_' + s]['grey']:.0f})")
+            bb = found["BOSS_" + s]
+            pin = (f"  pin {bb['core_x']:.1f}, {bb['core_y']:.1f}  ring {bb['ring_grey']:.0f} core "
+                   f"{bb['core_grey']:.0f}  votes {bb['votes']}") if "core_x" in bb else ""
+            lines.append(f"    BOSS_{s}    from spindle {b[0]:+.1f}, {b[1]:+.1f}  r {b[2]}  area {bb['area']}  "
+                         f"(fill {bb['round_fill']:.2f}, grey {bb['grey']:.0f}){pin}")
     if "boss_distance" in meas:
-        lines.append(f"    BOSSES    distance {meas['boss_distance']} px  angle {meas['boss_angle_deg']:+.2f} deg")
+        lines.append(f"    {'PINS     ' if 'pins' in meas else 'BOSSES   '} distance {meas['boss_distance']} px  "
+                     f"angle {meas['boss_angle_deg']:+.2f} deg")
     for s in ("L", "R"):
         u = found.get("UPPER_ARM_" + s)
         if u:
@@ -597,6 +656,10 @@ def draw(image_rgb: np.ndarray, masks: List[Dict], found: Dict, show_all: bool =
             out[sel] = (0.55 * out[sel] + 0.45 * np.array(colour)).astype(np.uint8)
         cs, _ = cv2.findContours(m["mask"].astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(out, cs, -1, colour, 3)
+    for k in ("BOSS_L", "BOSS_R"):
+        b = found.get(k)
+        if b is not None and "core_x" in b:
+            cv2.circle(out, (int(round(b["core_x"])), int(round(b["core_y"]))), 4, (255, 0, 0), -1)
     for (x0, y0, x1, y1) in found.get("measures", {}).get("boxes", []):
         cv2.rectangle(out, (x0, y0), (x1, y1), (255, 255, 255), 1)
     for (px, py) in found.get("measures", {}).get("prompts", []):
@@ -695,7 +758,7 @@ def run_window(args) -> None:
 
     def method_key():
         return pps_var.get() + ("|%s" % bp_var.get() if pps_var.get() == FAST else "")
-    show_var = tk.StringVar(value="All masks")
+    show_var = tk.StringVar(value="Named parts" if args.method == "prompted" else "All masks")
     ttk.Button(top, text="Folder...", command=lambda: choose_folder()).pack(side="left")
     ttk.Label(top, textvariable=folder_var, width=40).pack(side="left", padx=4)
     ttk.Label(top, text="Picture").pack(side="left")
@@ -705,7 +768,7 @@ def run_window(args) -> None:
     ttk.Combobox(top, textvariable=pps_var, values=[FAST, "16", "24", "32", "48"], width=14, state="readonly").pack(
         side="left", padx=4)
     ttk.Label(top, text="Boss points").pack(side="left")
-    bp_box = ttk.Combobox(top, textvariable=bp_var, values=[str(n) for n in BOSS_POINT_CHOICES], width=3,
+    bp_box = ttk.Combobox(top, textvariable=bp_var, values=[str(n) for n in BOSS_POINT_CHOICES], width=5,
                           state="readonly")
     bp_box.pack(side="left", padx=4)
     ttk.Button(top, text="Segment", command=lambda: start([pic_var.get()])).pack(side="left", padx=2)
@@ -844,7 +907,7 @@ def run_window(args) -> None:
             return
         state["busy"] = True
         pps = pps_var.get()
-        bp = int(bp_var.get())
+        bp = bp_var.get()
         key = method_key()
 
         def work():
@@ -921,8 +984,9 @@ def main():
     ap.add_argument("--method", choices=["prompted", "all"], default="prompted",
                     help="prompted: 4 points per part, about 1 s (default); all: every mask (automatic generator)")
     ap.add_argument("--pps", type=int, default=32, help="all: points per side of the generator grid")
-    ap.add_argument("--boss-points", type=int, choices=BOSS_POINT_CHOICES, default=4,
-                    help="prompted: points per boss (4 default; 8 / 16 tested worse, see BOSS_POINT_CHOICES)")
+    ap.add_argument("--boss-points", choices=[str(c) for c in BOSS_POINT_CHOICES], default="grid",
+                    help="prompted: how the bosses are found - grid (default: 4 x 4 grid of 2-point prompts, best "
+                         "boss by its bright ring round the dark pin) or a box + 4 / 8 / 16 points")
     ap.add_argument("--sam", default=DEFAULT_SAM, help="MobileSAM weights")
     ap.add_argument("--save", help="batch: folder for the CSV, the marked pictures and knuckle_parts.txt")
     ap.add_argument("--csv", help="batch: CSV file of every mask")

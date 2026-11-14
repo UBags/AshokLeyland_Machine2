@@ -3073,4 +3073,22 @@ First steps towards vision checks that do not depend on the camera staying exact
     changes); the others are listed with area and box, why_not "area outside ... (not measured)". Grouping skips pairs
     whose areas differ by more than 15 %. Sandbox: measuring 0.71 -> 0.05 s; 7-20 of 72 masks per boss measured; the
     summary of all 20 pictures identical in every field. `--measure-all` keeps the old behaviour.
+- **Grid bosses in the study window (follow-up, user: show the final masks - 2 bosses, spindle, the arm on the back
+  rest):** `Study_Knuckle_Segmentation.py`, fast method, "Boss points" = **grid** (new default; 4 / 8 / 16 kept).
+  - The bosses come from `Study_Boss_Grid_Masks.grid_bosses()` (split out of the grid program, no change to its
+    results: all 20 summaries identical) on the window's own image embedding; the spindle and arm prompts are as
+    before. The window opens on "Named parts": spindle, both bosses with their pin centres (red dots), the lower arm;
+    the grid points as dots; no text.
+  - With pins: distance and angle between the pins; type by boss area x1000 / pin distance^2 (limit 34.5; DOST
+    29.0-30.5, DOSTPLUS 36.9-39.4) cross-checked by boss radius / pin distance (own limit 0.1095: DOST 0.102-0.105,
+    DOSTPLUS 0.114-0.124 - the 0.111 of the box method sat 0.003 from DOSTPLUS here); the spindle fallback from the pin
+    midpoint; zoom / rotation against `NOMINAL_PINS`; new **PIN_MID** line: the pin midpoint against its usual place for
+    the type and side = an estimate of the camera's movement that does not depend on where the part sits.
+  - `NOMINAL_PINS` (user's laptop run, 19 knuckles joined with the spindles of his study run): pin distance DOST LHS
+    400.35, DOST RHS 400.17, DOSTPLUS LHS 394.26, RHS 394.64 px; angle 0.65 / 0.68 / 0.69 / 0.77 deg; pin midpoint
+    from the spindle (+0.9, -164.8), (+2.6, -164.2), (+1.7, -159.5), (+1.4, -160.2) - each within +-0.5 px over its
+    group; pin midpoints (644.15, 194.93), (643.75, 192.95), (643.70, 199.65), (643.62, 200.00).
+  - Checked (sandbox CPU): type, side and both bosses right on 20/20 (empty: nothing); pin shift within 0.4 px of zero
+    on every picture (same camera position); DOST_LHS_02 (bearing on the spindle) spindle from the pins 643.0, 359.3
+    against the usual 643.2, 359.8; window under Xvfb.
 

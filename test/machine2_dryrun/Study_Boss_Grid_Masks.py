@@ -214,101 +214,117 @@ class BossGridStudy:
                 sp = self.spindle(image_rgb, grey)
                 if sp:
                     centres = {k: (sp[0] + KS.BOSS_CENTRES[k][0], sp[1] + KS.BOSS_CENTRES[k][1]) for k in centres}
-            rows: List[Dict] = []
-            grids = {}
-            tm = dict(decoder=0.0, to_cpu=0.0, measure=0.0, group=0.0)
-            cuda = str(self.device).startswith("cuda")
-            for boss, (cx, cy) in centres.items():
-                pts = {(r, c): (x, y) for r, c, x, y in grid_points(cx, cy)}
-                grids[boss] = list(pts.values())
-                pairs = grid_pairs()
-                coords = np.array([[pts[a], pts[b]] for a, b, _ in pairs], dtype=np.float32)
-                tc = torch.as_tensor(self.predictor.transform.apply_coords(coords, image_rgb.shape[:2]),
-                                     dtype=torch.float, device=self.device)
-                tl = torch.ones(tc.shape[:2], dtype=torch.int, device=self.device)
-                t1 = time.time()
-                masks_t, iou_t, _ = self.predictor.predict_torch(tc, tl, multimask_output=True)
-                if cuda:
-                    torch.cuda.synchronize()
-                t2 = time.time()
-                masks = masks_t.cpu().numpy()
-                scores = iou_t.cpu().numpy()
-                t3 = time.time()
-                tm["decoder"] += t2 - t1
-                tm["to_cpu"] += t3 - t2
-                tm["decoder_device"] = str(masks_t.device)
-                t4 = time.time()
-                for p, (a, b, orient) in enumerate(pairs):
-                    for k in range(masks.shape[1]):
-                        m = masks[p, k]
-                        if not m.any():
-                            continue
-                        area = int(np.count_nonzero(m))
-                        if not self.measure_all and not (AREA_GATE[0] <= area <= AREA_GATE[1]):
-                            x0, y0, x1, y1 = bbox_of(m, pad=0)
-                            rows.append(dict(id=len(rows), area=area, iou=float(scores[p, k]), bbox=(x0, y0, x1 - x0,
-                                             y1 - y0), boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}",
-                                             orient=orient, mask_index=k, grid_cx=cx, grid_cy=cy, candidate=False,
-                                             why_not=f"area outside {AREA_GATE[0]:.0f}-{AREA_GATE[1]:.0f} (not "
-                                                     f"measured)", measured=False))
-                            continue
-                        d = measure(m, grey, len(rows), float(scores[p, k]))
-                        d["measured"] = True
-                        d.update(boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}", orient=orient, mask_index=k,
-                                 grid_cx=cx, grid_cy=cy)
-                        ok, why = judge(d)
-                        d.update(candidate=ok, why_not=why)
-                        rows.append(d)
-                tm["measure"] += time.time() - t4
-        # duplicates -> groups and votes, per boss
-        t5 = time.time()
-        summary = {}
-        for boss in centres:
-            bm = [r for r in rows if r["boss"] == boss and r["measured"]]
-            for r in rows:
-                if r["boss"] == boss and not r["measured"]:
-                    r.update(group=None, votes=None, score=0.0, best=False)
-            groups: List[List[Dict]] = []
-            for r in sorted(bm, key=lambda r: -r["iou"]):
-                for g in groups:
-                    a0, a1 = g[0]["area"], r["area"]
-                    if min(a0, a1) < DEDUPE_IOU * max(a0, a1):      # IoU >= 0.85 impossible
-                        continue
-                    if iou(g[0], r) >= DEDUPE_IOU:
-                        g.append(r)
-                        break
-                else:
-                    groups.append([r])
-            for gi, g in enumerate(groups):
-                for r in g:
-                    r["group"] = gi
-                    r["votes"] = len(g)
-            for r in bm:
-                r["score"] = (r["votes"] * r["circularity"] * r["round_fill"] * min(max(r["contrast"], 0.0), 120.0)
-                              / 120.0 * max(0.0, 1.0 - (r["concentricity"] if r["concentricity"] == r["concentricity"]
-                                                         else 20.0) / 20.0)) if r["candidate"] else 0.0
-                r["best"] = False
-            cands = [r for r in bm if r["candidate"]]
-            if cands:
-                best = max(cands, key=lambda r: (r["score"], r["iou"]))
-                best["best"] = True
-                summary[boss] = dict(best=best, candidates=len(cands),
-                                     candidate_groups=len({r["group"] for r in cands}), masks=len(bm))
-            else:
-                summary[boss] = dict(best=None, candidates=0, candidate_groups=0, masks=len(bm))
-            summary[boss]["masks_total"] = sum(1 for r in rows if r["boss"] == boss)
-        bl, br = summary["BOSS_L"]["best"], summary["BOSS_R"]["best"]
-        tm["group"] = time.time() - t5
+        rows, summary, grids, tm = grid_bosses(self.predictor, self.device, image_rgb, grey, centres,
+                                               self.measure_all)
         secs = time.time() - t0
         info = dict(time=secs, embed=t_embed, grids=grids, centres=centres, timing=tm)
-        if bl and br:
-            dist = math.hypot(br["core_x"] - bl["core_x"], br["core_y"] - bl["core_y"])
-            ratio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / dist ** 2
-            info.update(pin_distance=dist, angle=math.degrees(math.atan2(br["core_y"] - bl["core_y"],
-                                                                          br["core_x"] - bl["core_x"])),
-                        area_ratio=ratio, type="DOSTPLUS" if ratio >= KS.TYPE_AREA_RATIO else "DOST",
-                        pin_mid=((bl["core_x"] + br["core_x"]) / 2.0, (bl["core_y"] + br["core_y"]) / 2.0))
+        info.update(pin_geometry(summary))
         return rows, summary, info
+
+
+def pin_geometry(summary: Dict) -> Dict:
+    """Pin distance, angle, midpoint and type from the two best boss masks ({} unless both were found)."""
+    bl, br = summary["BOSS_L"]["best"], summary["BOSS_R"]["best"]
+    if not (bl and br):
+        return {}
+    dist = math.hypot(br["core_x"] - bl["core_x"], br["core_y"] - bl["core_y"])
+    ratio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / dist ** 2
+    return dict(pin_distance=dist, angle=math.degrees(math.atan2(br["core_y"] - bl["core_y"],
+                                                                 br["core_x"] - bl["core_x"])),
+                area_ratio=ratio, type="DOSTPLUS" if ratio >= KS.TYPE_AREA_RATIO else "DOST",
+                pin_mid=((bl["core_x"] + br["core_x"]) / 2.0, (bl["core_y"] + br["core_y"]) / 2.0))
+
+
+def grid_bosses(predictor, device, image_rgb: np.ndarray, grey: np.ndarray, centres: Dict[str, Tuple[float, float]],
+                measure_all: bool = False) -> Tuple[List[Dict], Dict, Dict, Dict]:
+    """The grid prompts, measures, groups and the best mask per boss, on a predictor whose image is already set
+    (shared with Study_Knuckle_Segmentation). Returns rows (every mask), summary (per boss), grid points, timings."""
+    rows: List[Dict] = []
+    grids = {}
+    tm = dict(decoder=0.0, to_cpu=0.0, measure=0.0, group=0.0)
+    cuda = str(device).startswith("cuda")
+    with torch.no_grad():
+        for boss, (cx, cy) in centres.items():
+            pts = {(r, c): (x, y) for r, c, x, y in grid_points(cx, cy)}
+            grids[boss] = list(pts.values())
+            pairs = grid_pairs()
+            coords = np.array([[pts[a], pts[b]] for a, b, _ in pairs], dtype=np.float32)
+            tc = torch.as_tensor(predictor.transform.apply_coords(coords, image_rgb.shape[:2]),
+                                 dtype=torch.float, device=device)
+            tl = torch.ones(tc.shape[:2], dtype=torch.int, device=device)
+            t1 = time.time()
+            masks_t, iou_t, _ = predictor.predict_torch(tc, tl, multimask_output=True)
+            if cuda:
+                torch.cuda.synchronize()
+            t2 = time.time()
+            masks = masks_t.cpu().numpy()
+            scores = iou_t.cpu().numpy()
+            t3 = time.time()
+            tm["decoder"] += t2 - t1
+            tm["to_cpu"] += t3 - t2
+            tm["decoder_device"] = str(masks_t.device)
+            t4 = time.time()
+            for p, (a, b, orient) in enumerate(pairs):
+                for k in range(masks.shape[1]):
+                    m = masks[p, k]
+                    if not m.any():
+                        continue
+                    area = int(np.count_nonzero(m))
+                    if not measure_all and not (AREA_GATE[0] <= area <= AREA_GATE[1]):
+                        x0, y0, x1, y1 = bbox_of(m, pad=0)
+                        rows.append(dict(id=len(rows), area=area, iou=float(scores[p, k]), bbox=(x0, y0, x1 - x0,
+                                         y1 - y0), boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}",
+                                         orient=orient, mask_index=k, grid_cx=cx, grid_cy=cy, candidate=False,
+                                         why_not=f"area outside {AREA_GATE[0]:.0f}-{AREA_GATE[1]:.0f} (not "
+                                                 f"measured)", measured=False))
+                        continue
+                    d = measure(m, grey, len(rows), float(scores[p, k]))
+                    d["measured"] = True
+                    d.update(boss=boss, pair=f"r{a[0]}c{a[1]}-r{b[0]}c{b[1]}", orient=orient, mask_index=k,
+                             grid_cx=cx, grid_cy=cy)
+                    ok, why = judge(d)
+                    d.update(candidate=ok, why_not=why)
+                    rows.append(d)
+            tm["measure"] += time.time() - t4
+    # duplicates -> groups and votes, per boss
+    t5 = time.time()
+    summary = {}
+    for boss in centres:
+        bm = [r for r in rows if r["boss"] == boss and r["measured"]]
+        for r in rows:
+            if r["boss"] == boss and not r["measured"]:
+                r.update(group=None, votes=None, score=0.0, best=False)
+        groups: List[List[Dict]] = []
+        for r in sorted(bm, key=lambda r: -r["iou"]):
+            for g in groups:
+                a0, a1 = g[0]["area"], r["area"]
+                if min(a0, a1) < DEDUPE_IOU * max(a0, a1):      # IoU >= 0.85 impossible
+                    continue
+                if iou(g[0], r) >= DEDUPE_IOU:
+                    g.append(r)
+                    break
+            else:
+                groups.append([r])
+        for gi, g in enumerate(groups):
+            for r in g:
+                r["group"] = gi
+                r["votes"] = len(g)
+        for r in bm:
+            r["score"] = (r["votes"] * r["circularity"] * r["round_fill"] * min(max(r["contrast"], 0.0), 120.0)
+                          / 120.0 * max(0.0, 1.0 - (r["concentricity"] if r["concentricity"] == r["concentricity"]
+                                                     else 20.0) / 20.0)) if r["candidate"] else 0.0
+            r["best"] = False
+        cands = [r for r in bm if r["candidate"]]
+        if cands:
+            best = max(cands, key=lambda r: (r["score"], r["iou"]))
+            best["best"] = True
+            summary[boss] = dict(best=best, candidates=len(cands),
+                                 candidate_groups=len({r["group"] for r in cands}), masks=len(bm))
+        else:
+            summary[boss] = dict(best=None, candidates=0, candidate_groups=0, masks=len(bm))
+        summary[boss]["masks_total"] = sum(1 for r in rows if r["boss"] == boss)
+    tm["group"] = time.time() - t5
+    return rows, summary, grids, tm
 
 
 MASK_COLS = ["picture", "boss", "pair", "orient", "mask_index", "iou", "area", "cx", "cy", "perimeter", "eq_diameter",
