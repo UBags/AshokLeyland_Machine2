@@ -206,6 +206,8 @@ class BossGridStudy:
                     centres = {k: (sp[0] + KS.BOSS_CENTRES[k][0], sp[1] + KS.BOSS_CENTRES[k][1]) for k in centres}
             rows: List[Dict] = []
             grids = {}
+            tm = dict(decoder=0.0, to_cpu=0.0, measure=0.0, group=0.0)
+            cuda = str(self.device).startswith("cuda")
             for boss, (cx, cy) in centres.items():
                 pts = {(r, c): (x, y) for r, c, x, y in grid_points(cx, cy)}
                 grids[boss] = list(pts.values())
@@ -214,9 +216,18 @@ class BossGridStudy:
                 tc = torch.as_tensor(self.predictor.transform.apply_coords(coords, image_rgb.shape[:2]),
                                      dtype=torch.float, device=self.device)
                 tl = torch.ones(tc.shape[:2], dtype=torch.int, device=self.device)
+                t1 = time.time()
                 masks_t, iou_t, _ = self.predictor.predict_torch(tc, tl, multimask_output=True)
+                if cuda:
+                    torch.cuda.synchronize()
+                t2 = time.time()
                 masks = masks_t.cpu().numpy()
                 scores = iou_t.cpu().numpy()
+                t3 = time.time()
+                tm["decoder"] += t2 - t1
+                tm["to_cpu"] += t3 - t2
+                tm["decoder_device"] = str(masks_t.device)
+                t4 = time.time()
                 for p, (a, b, orient) in enumerate(pairs):
                     for k in range(masks.shape[1]):
                         m = masks[p, k]
@@ -228,8 +239,9 @@ class BossGridStudy:
                         ok, why = judge(d)
                         d.update(candidate=ok, why_not=why)
                         rows.append(d)
-        secs = time.time() - t0
+                tm["measure"] += time.time() - t4
         # duplicates -> groups and votes, per boss
+        t5 = time.time()
         summary = {}
         for boss in centres:
             bm = [r for r in rows if r["boss"] == boss]
@@ -259,7 +271,9 @@ class BossGridStudy:
             else:
                 summary[boss] = dict(best=None, candidates=0, candidate_groups=0, masks=len(bm))
         bl, br = summary["BOSS_L"]["best"], summary["BOSS_R"]["best"]
-        info = dict(time=secs, embed=t_embed, grids=grids, centres=centres)
+        tm["group"] = time.time() - t5
+        secs = time.time() - t0
+        info = dict(time=secs, embed=t_embed, grids=grids, centres=centres, timing=tm)
         if bl and br:
             dist = math.hypot(br["core_x"] - bl["core_x"], br["core_y"] - bl["core_y"])
             ratio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / dist ** 2
@@ -393,7 +407,10 @@ def main():
                                        f"({s['candidate_groups']} cand. groups)" if b else "none"))
         typ = (f"; {info['type']} (ratio {info['area_ratio']:.1f}), pins {info['pin_distance']:.1f} px apart, "
                f"angle {info['angle']:+.2f}") if "type" in info else ""
-        print(f"{name}: {info['time']:.2f} s (embedding {info['embed']:.2f}); " + "; ".join(parts) + typ, flush=True)
+        tm = info["timing"]
+        print(f"{name}: {info['time']:.2f} s (embedding {info['embed']:.2f}, decoder {tm['decoder']:.2f} on "
+              f"{tm.get('decoder_device', '?')}, to CPU {tm['to_cpu']:.2f}, measuring {tm['measure']:.2f}, grouping "
+              f"{tm['group']:.2f}); " + "; ".join(parts) + typ, flush=True)
         if args.pictures:
             os.makedirs(out_dir, exist_ok=True)
             cv2.imwrite(os.path.join(out_dir, os.path.splitext(name)[0] + "_bossgrid.png"),
