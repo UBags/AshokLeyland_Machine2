@@ -2965,3 +2965,31 @@ Architecture items not included (user).
   moved); both copies ALL EQUIVALENT. DryRun_Vision_Check_Timeout 22/22.
 - **Labels used** (by eye; the hole step agrees): seated A01, A03, A04, A07-A16, B11-B20; hand A02, B04, C02; the rest
   not seated.
+
+## 101. Positions relative to the hub centre; knuckle segmentation study with MobileSAM (2026-11-14)
+
+First steps towards vision checks that do not depend on the camera staying exactly where it is.
+
+- **`docs/vision_positions_machine2.md`**: every Machine 2 vision position and size (knuckle regions and polygons, hub
+  centre check, top bearing, nut / washer, no-bunk, bung incl. seated positions, cap) in 1280 x 720 picture coordinates
+  and as offsets from the hub segmentation centre (645, 334), with the measured feature positions behind them and the
+  zoom of the 13 Nov move. Written from the properties file, not by hand.
+- **`test/machine2_dryrun/Study_Knuckle_Segmentation.py`** (study tool, nothing in production changes): runs the
+  MobileSAM automatic mask generator over a knuckle picture and names the parts among the masks by size, shape and
+  position relative to the spindle: SPINDLE (round, r 35-65, within 80 px of 642,360), BOSS_L / BOSS_R (the 2 machined
+  areas on the upper arm: round fill >= 0.70, r 28-55, grey >= 80, 100-240 px above and 130-290 px beside the spindle),
+  UPPER_ARM_L / R (dark mask touching the boss), LOWER_ARM (dark, long and bent - rotated-box fill < 0.75 -, starting
+  20-150 px below the spindle and reaching more than 220 px below it; holes filled) and the side from the lower arm.
+- **Results on the 20 knuckle pictures (grid 24 x 24)**: on all 19 knuckles both bosses and the whole lower arm found,
+  side right on all 19 (11 LHS / 8 RHS); EMPTY_01: nothing (the fixture's locating pin is not taken for the spindle).
+  Upper arm on the side without the long arm sometimes only a part (DOSTPLUS RHS); no rule depends on it.
+  Measures: spindle (641.7-642.4, 359.2-360.1) r about 49 (the hub centre 645,334 is 26 px higher: the hub top is
+  nearer the camera); bosses from the spindle DOST (-195..-200, -160..-163) and (+195..+203, -158..-161), r 40-42;
+  DOSTPLUS (-188..-190, -156..-160) and (+195..+196, -151..-155), r 45-48. Boss-to-boss distance DOST LHS 393.5-395.4,
+  DOST RHS 398.7-399.7, DOSTPLUS 383.6-387.7 px; angle +0.04..+1.23 deg. Lower arm about 19,000-20,000 px, tip from
+  the spindle LHS (-216, +342), RHS (+200..+205, +347..+351).
+- One point prompt on a boss gives the boss as the middle of SAM's 3 masks (DOST_RHS_01: r 45, fill 0.82) in about 1 s
+  on the CPU - a cheap way for a check to find the bosses once the study has settled the rules.
+- Speed: the generator takes about 90 s per picture at 24 x 24 on the sandbox CPU (a few seconds on the laptop GPU);
+  16 x 16 is too coarse (misses the spindle and a boss).
+
