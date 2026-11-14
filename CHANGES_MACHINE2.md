@@ -3013,6 +3013,6 @@ First steps towards vision checks that do not depend on the camera staying exact
   - **Results (sandbox CPU, no GPU):** 19/19 knuckles with spindle, both bosses, the lower arm and the right side; EMPTY_01
     nothing. 0.99-1.42 s per picture (embedding 0.74-1.01 s, prompts 0.36-0.52 s); on the laptop GPU the embedding
     should be far quicker. Arm prompts moved +-10 px: 80/80. Measures as with the automatic method (bosses from the
-    spindle DOST (-194..-200, -159..-162) / (+195..+203, -158..-161), DOSTPLUS (-188..-190, -155..-161) /
-    (+195..+196, -151..-152); lower arm 18,900-19,900 px).
+    spindle DOST (-199..-195, -162..-160) / (+196..+203, -161..-159), DOSTPLUS (-190..-188, -161..-158) /
+    (+193..+196, -154..-151); lower arm 18,901-19,889 px).
 
