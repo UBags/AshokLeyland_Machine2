@@ -3015,4 +3015,26 @@ First steps towards vision checks that do not depend on the camera staying exact
     should be far quicker. Arm prompts moved +-10 px: 80/80. Measures as with the automatic method (bosses from the
     spindle DOST (-199..-195, -162..-160) / (+196..+203, -161..-159), DOSTPLUS (-190..-188, -161..-158) /
     (+193..+196, -154..-151); lower arm 18,901-19,889 px).
+- **More boss points, more measures per mask (follow-up, user: 16 points per boss; area, centroid, perimeter and what
+  else helps place the later checks):**
+  - **Boss points option** 4 / 8 / 16 (window "Boss points", batch `--boss-points`); 8 / 16 sit evenly on a ring 24 px
+    from the boss centre (it stays 9.8 px or more inside every boss of the 19 pictures; at 30 px only 3.6 px). Tested
+    with every prompt moved +-8 px (266 boss masks each, box kept, best of 3): 4 points (26 px, diagonals) 266/266,
+    lowest fill 0.83, centroid moving median 0.34 / worst 1.39 px; 16 points (24 px) 258/266, 0.73, 0.72 / 1.82 px;
+    8 + 8 (22 / 26 px) 258/266, 0.74, 0.75 / 1.85 px. With more points a shifted prompt puts several on the bore rim or
+    off the boss and SAM tries to cover them all. **Default stays 4.** Unshifted, all three find both bosses on 19/19
+    and the type on 19/19.
+  - **Per mask** (one MASK line each, CSV columns): area, centroid (and from the spindle), perimeter, equivalent
+    diameter, circularity 4 pi A / P^2, enclosing circle (centre, r, fill), fitted ellipse (centre, axes, ratio, angle),
+    holes inside the mask (count, area), box, rotated-box fill, grey, SAM score.
+  - **Per picture:** TYPE from boss area x1000 / distance^2 (limit 34.5; DOST 29.5-31.2, DOSTPLUS 38.0-41.1 - zoom does
+    not change it), cross-checked by boss radius / distance (limit 0.111; DOST 0.104-0.107, DOSTPLUS 0.116-0.122);
+    REFERENCE spindle - the mask when its radius is 46-52 (48.1-49.9 measured), else from the boss midpoint minus the
+    type / side's usual midpoint offset (DOST_LHS_02, bearing on the spindle, mask r 53.9: now 642.9, 358.9 against the
+    usual 643.2, 359.8); SHIFT from the reference spindle 642.2, 359.1 (mean of the user's 27 knuckles without a bearing,
+    13 Nov) and the hub centre it implies (645, 334 + shift); zoom = boss distance / the type and side's usual, rotation
+    = boss angle - its usual (DOST LHS 393.9 px / 0.06 deg, DOST RHS 398.5 / 0.10, DOSTPLUS LHS 383.8 / 1.25,
+    DOSTPLUS RHS 383.7 / 0.63); BOSS_MID. Type 19/19.
+  - Not yet confirmed: that the hub centre stays at a fixed offset from the spindle - needs the knuckle and hub pictures
+    of the same components.
 

@@ -28,6 +28,14 @@ arm's area, box and tip (its lowest point).
 No text is drawn on the picture: masks are coloured, the named parts are outlined (boss green, upper arm yellow,
 lower arm red, spindle cyan) and the values go to the list, the text box and the terminal.
 
+Output per picture (terminal, text box, knuckle_parts.txt): TYPE (DOST / DOSTPLUS from boss area x1000 / distance^2,
+cross-checked by boss radius / distance), side, REFERENCE spindle (the mask when its radius is 46-52, else worked out
+from the boss midpoint - a bearing on the spindle makes the mask too big), SHIFT of the spindle from the reference
+spindle 642.2,359.1 (the mean of 27 knuckles of 13 Nov, with which the present check centres were set) and the hub
+centre it implies, zoom and rotation against the type / side's usual boss distance and angle, BOSS_MID, and one MASK
+line per mask: area, centroid (and from the spindle), perimeter, equivalent diameter, circularity (4 pi A / P^2),
+enclosing circle, fitted ellipse (centre, axes, ratio, angle), holes inside, box, grey, SAM score. The CSV has the same.
+
 Window:
   Folder / picture, points per side (grid of the generator: 16 fast ... 48 fine), "Segment" (one picture), "Segment
   all" (every picture in the folder, one after the other; results are kept, so going back to a picture is instant),
@@ -113,13 +121,36 @@ RULES = dict(
 # diagonals - nearer the centre they fall on the rim of the bore and SAM returns the bore); SAM's 3 candidates, the
 # roundest that passes the boss rule kept. Measured on the 19 pictures with the prompts moved +-8 px: 228/228.
 BOSS_CENTRES = {"BOSS_L": (-198, -161), "BOSS_R": (200, -161)}
+# Boss points: 4 (default) on the diagonals at 26 px; 8 / 16 evenly round a ring at 24 px (the ring 24 px out stays
+# 9.8 px inside every boss of the 19 pictures). Tested with the prompts moved +-8 px (266 boss masks each): 4 points
+# 266/266, centroid moving median 0.34 / worst 1.39 px; 16 points 258/266, 0.72 / 1.82 px.
+BOSS_POINT_CHOICES = (4, 8, 16)
+
+
+def boss_point_offsets(n: int) -> List[Tuple[float, float]]:
+    if n == 4:
+        return [(26 * math.cos(math.radians(a)), 26 * math.sin(math.radians(a))) for a in (45, 135, 225, 315)]
+    return [(24 * math.cos(math.radians(a)), 24 * math.sin(math.radians(a))) for a in np.arange(0, 360, 360.0 / n)]
+
+# Reference values from the user's laptop run (28 knuckles, 13 Nov camera position), per type and side: boss-to-boss
+# distance (px), its angle (deg), the boss midpoint from the spindle, and the spindle. REF_SPINDLE: the mean spindle
+# of the 27 pictures without a bearing on it - the positions the present check centres were tuned with.
+NOMINAL = {
+    ("DOST", "LHS"): dict(distance=393.9, angle=0.06, mid=(0.2, -160.9), spindle=(643.2, 359.8)),
+    ("DOST", "RHS"): dict(distance=398.5, angle=0.10, mid=(3.1, -160.0), spindle=(641.5, 357.1)),
+    ("DOSTPLUS", "LHS"): dict(distance=383.8, angle=1.25, mid=(3.0, -155.9), spindle=(642.1, 359.1)),
+    ("DOSTPLUS", "RHS"): dict(distance=383.7, angle=0.63, mid=(1.6, -156.4), spindle=(642.3, 360.3)),
+}
+REF_SPINDLE = (642.2, 359.1)
+HUB_CENTRE = (645, 334)                 # siemens.vision.hub.segment.center, set with the spindle at REF_SPINDLE
+TYPE_AREA_RATIO = 34.5                  # boss area x 1000 / distance^2: DOST 29.5-31.2, DOSTPLUS 38.0-41.1
+TYPE_RADIUS_RATIO = 0.111               # boss radius / distance: DOST 0.104-0.107, DOSTPLUS 0.116-0.122
+SPINDLE_R_OK = (46.0, 52.0)             # 48.1-49.9 measured; 53.9 with a bearing on the spindle
 BOSS_BOX_HALF = 52
 BOSS_POINT_R = 26
 PROMPTS = {
-    "BOSS_L": [(round(-198 + BOSS_POINT_R * math.cos(math.radians(a))), round(-161 + BOSS_POINT_R * math.sin(math.radians(a))))
-               for a in (45, 135, 225, 315)],
-    "BOSS_R": [(round(200 + BOSS_POINT_R * math.cos(math.radians(a))), round(-161 + BOSS_POINT_R * math.sin(math.radians(a))))
-               for a in (45, 135, 225, 315)],
+    "BOSS_L": [(-198 + dx, -161 + dy) for dx, dy in boss_point_offsets(4)],
+    "BOSS_R": [(200 + dx, -161 + dy) for dx, dy in boss_point_offsets(4)],
     "ARM_L": [(-155, 115), (-165, 182), (-192, 248), (-220, 310)],
     "ARM_R": [(150, 123), (162, 189), (186, 254), (210, 315)],
 }
@@ -162,7 +193,21 @@ def describe(mask: np.ndarray, grey: np.ndarray, idx: int, iou: float = 0.0, sta
     (_, _), (rw, rh), _ = cv2.minAreaRect(c)
     x, y, w, h = cv2.boundingRect(c)
     lowest = c[c[:, 0, 1].argmax(), 0]
+    perimeter = float(cv2.arcLength(c, True))
+    if len(c) >= 5:
+        (ex, ey), (ea, eb), eang = cv2.fitEllipse(c)
+        emaj, emin = max(ea, eb) / 2.0, min(ea, eb) / 2.0
+    else:
+        ex, ey, emaj, emin, eang = float(xs.mean()), float(ys.mean()), 0.0, 0.0, 0.0
+    # holes inside the mask (e.g. a boss's bore when SAM leaves it out)
+    csh, hier = cv2.findContours(m8, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+    holes = [h_ for h_, hh in zip(csh, hier[0]) if hh[3] >= 0] if hier is not None else []
     return dict(id=idx, mask=mask, area=area, cx=float(xs.mean()), cy=float(ys.mean()),
+                perimeter=perimeter, eq_diameter=2.0 * math.sqrt(area / math.pi),
+                circularity=4.0 * math.pi * area / (perimeter * perimeter) if perimeter > 0 else 0.0,
+                ellipse_x=float(ex), ellipse_y=float(ey), ellipse_major=float(emaj), ellipse_minor=float(emin),
+                ellipse_ratio=float(emin / emaj) if emaj > 0 else 0.0, ellipse_angle=float(eang),
+                holes=len(holes), holes_area=int(sum(cv2.contourArea(h_) for h_ in holes)),
                 circle_x=float(ccx), circle_y=float(ccy), radius=float(cr),
                 round_fill=area / (math.pi * cr * cr) if cr > 0 else 0.0,
                 rect_fill=area / (rw * rh) if rw * rh > 0 else 0.0,
@@ -276,9 +321,13 @@ class KnuckleMaskStudy:
         masks = [describe(d["segmentation"], grey, i, d["predicted_iou"], d["stability_score"])
                  for i, d in enumerate(raw)]
         found = name_parts(masks, grey)
+        if "measures" in found:
+            sp = found.get("SPINDLE")
+            self._derive(found, found["measures"], sp, found["measures"]["spindle"][:2])
         return masks, found, time.time() - t0
 
-    def segment_prompted(self, image_rgb: np.ndarray, rules: Dict = RULES) -> Tuple[List[Dict], Dict, float]:
+    def segment_prompted(self, image_rgb: np.ndarray, rules: Dict = RULES, boss_points: int = 4
+                         ) -> Tuple[List[Dict], Dict, float]:
         """Fast method: one image embedding, one point prompt on the spindle, then the 4 parts (4 points each) in one
         batched decoder call, placed relative to the spindle found. Each mask is then judged by the same size / shape
         rules as in the automatic method."""
@@ -297,13 +346,12 @@ class KnuckleMaskStudy:
                     and math.hypot(c["circle_x"] - ex, c["circle_y"] - ey) <= r["spindle_max_shift"]]
             sp = min(spin, key=lambda c: math.hypot(c["circle_x"] - ex, c["circle_y"] - ey)) if spin else None
             sx, sy = (sp["circle_x"], sp["circle_y"]) if sp else (float(ex), float(ey))
-            names = list(PROMPTS)
-            pts = np.array([[(sx + dx, sy + dy) for dx, dy in PROMPTS[n]] for n in names], dtype=np.float32)
             shape = image_rgb.shape[:2]
             tf = self.predictor.transform
-            # bosses: box + 4 points, 3 candidates each (one batched call)
+            # bosses: box + N points, 3 candidates each (one batched call)
             bnames = ["BOSS_L", "BOSS_R"]
-            bpts = np.array([pts[names.index(n)] for n in bnames])
+            bpts = np.array([[(sx + BOSS_CENTRES[n][0] + dx, sy + BOSS_CENTRES[n][1] + dy)
+                              for dx, dy in boss_point_offsets(boss_points)] for n in bnames], dtype=np.float32)
             boxes = np.array([[sx + BOSS_CENTRES[n][0] - BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] - BOSS_BOX_HALF,
                                sx + BOSS_CENTRES[n][0] + BOSS_BOX_HALF, sy + BOSS_CENTRES[n][1] + BOSS_BOX_HALF]
                               for n in bnames], dtype=np.float32)
@@ -315,7 +363,7 @@ class KnuckleMaskStudy:
             boss_q = bq.cpu().numpy()
             # arms: 4 points each, one mask each (one batched call)
             anames = ["ARM_L", "ARM_R"]
-            apts = np.array([pts[names.index(n)] for n in anames])
+            apts = np.array([[(sx + dx, sy + dy) for dx, dy in PROMPTS[n]] for n in anames], dtype=np.float32)
             ac = torch.as_tensor(tf.apply_coords(apts, shape), dtype=torch.float, device=self.device)
             am, aq, _ = self.predictor.predict_torch(ac, torch.ones(ac.shape[:2], dtype=torch.int, device=self.device),
                                                      multimask_output=False)
@@ -396,15 +444,57 @@ class KnuckleMaskStudy:
             meas["lower_area"], meas["lower_bbox"] = lo["area"], lo["bbox"]
             meas["lower_tip"] = (lo["lowest"][0] - round(sx), lo["lowest"][1] - round(sy))
         meas["times"] = (round(t_embed, 2), round(secs - t_embed, 2))
-        meas["prompts"] = [(int(round(x)), int(round(y))) for row in pts for x, y in row]
+        meas["prompts"] = [(int(round(x)), int(round(y))) for row in list(bpts) + list(apts) for x, y in row]
+        meas["boss_points"] = boss_points
+        self._derive(found, meas, sp, (sx, sy))
         meas["boxes"] = [tuple(int(round(v)) for v in b) for b in boxes]
         found["measures"] = meas
         return masks, found, secs
 
-    def run(self, image_rgb: np.ndarray, method: str) -> Tuple[List[Dict], Dict, float]:
+    @staticmethod
+    def _derive(found: Dict, meas: Dict, sp: Optional[Dict], s_xy: Tuple[float, float]) -> None:
+        """Type, spindle (guarded), and the camera shift / zoom / rotation against the reference."""
+        side = found.get("side")
+        bl, br = found.get("BOSS_L"), found.get("BOSS_R")
+        if bl and br:
+            dist = meas["boss_distance"]
+            area_ratio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / (dist * dist)
+            radius_ratio = (bl["radius"] + br["radius"]) / 2.0 / dist
+            t_area = "DOSTPLUS" if area_ratio >= TYPE_AREA_RATIO else "DOST"
+            t_rad = "DOSTPLUS" if radius_ratio >= TYPE_RADIUS_RATIO else "DOST"
+            meas["type_values"] = (round(area_ratio, 2), round(radius_ratio, 4))
+            found["type"] = t_area if t_area == t_rad else f"? (area ratio {t_area}, radius ratio {t_rad})"
+        typ = found.get("type")
+        nom = NOMINAL.get((typ, side))
+        # spindle: the mask if its radius is plausible, else from the boss midpoint (bearing on the spindle, not seen)
+        sx, sy = s_xy
+        src = "mask"
+        if (sp is None or not (SPINDLE_R_OK[0] <= sp["radius"] <= SPINDLE_R_OK[1])) and bl and br and nom:
+            mx = (bl["circle_x"] + br["circle_x"]) / 2.0
+            my = (bl["circle_y"] + br["circle_y"]) / 2.0
+            sx, sy = mx - nom["mid"][0], my - nom["mid"][1]
+            src = ("bosses (spindle mask r %.1f outside %.0f-%.0f)" % (sp["radius"], *SPINDLE_R_OK)) if sp \
+                else "bosses (spindle mask not found)"
+        elif sp is None:
+            src = "expected position (not found)"
+        meas["spindle_used"] = (round(sx, 1), round(sy, 1), src)
+        if bl and br:
+            mx = (bl["circle_x"] + br["circle_x"]) / 2.0
+            my = (bl["circle_y"] + br["circle_y"]) / 2.0
+            meas["boss_mid"] = (round(mx, 1), round(my, 1), round(mx - sx, 1), round(my - sy, 1))
+        if src != "expected position (not found)":
+            dx, dy = sx - REF_SPINDLE[0], sy - REF_SPINDLE[1]
+            meas["shift"] = (round(dx, 1), round(dy, 1))
+            meas["hub_centre"] = (round(HUB_CENTRE[0] + dx, 1), round(HUB_CENTRE[1] + dy, 1))
+            if nom and "boss_distance" in meas:
+                meas["zoom"] = round(meas["boss_distance"] / nom["distance"], 4)
+                meas["rotation"] = round(meas["boss_angle_deg"] - nom["angle"], 2)
+                meas["vs_nominal"] = (round(sx - nom["spindle"][0], 1), round(sy - nom["spindle"][1], 1))
+
+    def run(self, image_rgb: np.ndarray, method: str, boss_points: int = 4) -> Tuple[List[Dict], Dict, float]:
         """method: FAST, or the grid size of the automatic generator ("16" ... "48")."""
         if method == FAST:
-            return self.segment_prompted(image_rgb)
+            return self.segment_prompted(image_rgb, boss_points=boss_points)
         return self.segment(image_rgb, int(method))
 
     def point_prompt(self, image_rgb: np.ndarray, x: int, y: int) -> List[Dict]:
@@ -417,7 +507,7 @@ class KnuckleMaskStudy:
         return sorted(out, key=lambda d: d["area"])
 
 
-def summary_lines(name: str, found: Dict, n: int, secs: float) -> List[str]:
+def summary_lines(name: str, found: Dict, n: int, secs: float, masks: Optional[List[Dict]] = None) -> List[str]:
     meas = found.get("measures", {})
     exp = "LHS" if "LHS" in name.upper() else ("RHS" if "RHS" in name.upper() else "?")
     side = found.get("side", "-")
@@ -425,7 +515,24 @@ def summary_lines(name: str, found: Dict, n: int, secs: float) -> List[str]:
     lines = [f"{name}: {n} masks in {secs:.2f} s; found {', '.join(parts) if parts else 'nothing'}; side {side}"
              + (f" (file name {exp}{'' if exp in ('?', side) else ' - DIFFERENT'})" if exp != "?" else "")]
     if "times" in meas:
-        lines.append(f"    TIME      embedding {meas['times'][0]} s, prompts {meas['times'][1]} s")
+        lines.append(f"    TIME      embedding {meas['times'][0]} s, prompts {meas['times'][1]} s"
+                     f" (boss points {meas.get('boss_points', 4)})")
+    if "type" in found:
+        tv = meas.get("type_values", ("-", "-"))
+        lines.append(f"    TYPE      {found['type']}  (boss area x1000/distance^2 {tv[0]}, limit {TYPE_AREA_RATIO}; "
+                     f"boss radius/distance {tv[1]}, limit {TYPE_RADIUS_RATIO})")
+    if "spindle_used" in meas:
+        su = meas["spindle_used"]
+        lines.append(f"    REFERENCE spindle {su[0]}, {su[1]} from {su[2]}")
+    if "shift" in meas:
+        z = (f"; zoom {meas['zoom']:.4f}, rotation {meas['rotation']:+.2f} deg, spindle vs this type/side's usual "
+             f"{meas['vs_nominal'][0]:+.1f}, {meas['vs_nominal'][1]:+.1f}") if "zoom" in meas else ""
+        lines.append(f"    SHIFT     {meas['shift'][0]:+.1f}, {meas['shift'][1]:+.1f} px from the reference spindle "
+                     f"{REF_SPINDLE[0]}, {REF_SPINDLE[1]} -> hub centre {meas['hub_centre'][0]}, "
+                     f"{meas['hub_centre'][1]} (set {HUB_CENTRE[0]}, {HUB_CENTRE[1]}){z}")
+    if "boss_mid" in meas:
+        bm = meas["boss_mid"]
+        lines.append(f"    BOSS_MID  {bm[0]}, {bm[1]} (from spindle {bm[2]:+.1f}, {bm[3]:+.1f})")
     if "SPINDLE" in found:
         lines.append(f"    SPINDLE   centre {meas['spindle'][0]}, {meas['spindle'][1]}  r {meas['spindle'][2]}")
     elif "spindle" in meas:
@@ -445,7 +552,28 @@ def summary_lines(name: str, found: Dict, n: int, secs: float) -> List[str]:
     if "lower_area" in meas:
         lines.append(f"    LOWER_ARM area {meas['lower_area']}  box {meas['lower_bbox']}  "
                      f"tip from spindle {meas['lower_tip'][0]:+d}, {meas['lower_tip'][1]:+d}")
+    if masks is not None:
+        ref = meas.get("spindle_used", meas.get("spindle", (0, 0)))
+        for m in masks:
+            lines.append("    MASK      " + mask_line(m, ref))
     return lines
+
+
+def named(masks: List[Dict]) -> List[Dict]:
+    """The masks worth a line: all of the fast method's (4-5), only the named ones of the automatic method (~90)."""
+    return [m for m in masks if m["label"]]
+
+
+def mask_line(m: Dict, ref=None) -> str:
+    """Every measure of one mask on one line."""
+    rel = f" (from spindle {m['cx'] - ref[0]:+.1f}, {m['cy'] - ref[1]:+.1f})" if ref else ""
+    return (f"{(m['label'] or str(m['id'])):16s} area {m['area']}, centroid {m['cx']:.1f}, {m['cy']:.1f}{rel}, "
+            f"perimeter {m['perimeter']:.1f}, eq.diameter {m['eq_diameter']:.1f}, circularity {m['circularity']:.3f}, "
+            f"circle {m['circle_x']:.1f}, {m['circle_y']:.1f} r {m['radius']:.1f} (fill {m['round_fill']:.2f}), "
+            f"ellipse {m['ellipse_x']:.1f}, {m['ellipse_y']:.1f} axes {m['ellipse_major']:.1f}/{m['ellipse_minor']:.1f} "
+            f"(ratio {m['ellipse_ratio']:.3f}, {m['ellipse_angle']:.1f} deg), holes {m['holes']} "
+            f"({m['holes_area']} px), box {m['bbox']}, rect fill {m['rect_fill']:.2f}, grey {m['grey']:.0f}, "
+            f"score {m['iou']:.2f}")
 
 
 def draw(image_rgb: np.ndarray, masks: List[Dict], found: Dict, show_all: bool = True,
@@ -489,8 +617,10 @@ def list_pictures(path: str) -> List[str]:
     return sorted(set(files))
 
 
-MASK_FIELDS = ["picture", "id", "label", "area", "cx", "cy", "circle_x", "circle_y", "radius", "round_fill",
-               "rect_fill", "bbox", "grey", "iou", "stability"]
+MASK_FIELDS = ["picture", "id", "label", "area", "cx", "cy", "perimeter", "eq_diameter", "circularity",
+               "circle_x", "circle_y", "radius", "round_fill", "ellipse_x", "ellipse_y", "ellipse_major",
+               "ellipse_minor", "ellipse_ratio", "ellipse_angle", "holes", "holes_area", "rect_fill", "bbox", "grey",
+               "iou", "stability"]
 
 
 def mask_rows(name: str, masks: List[Dict]) -> List[Dict]:
@@ -518,7 +648,7 @@ def save_results(folder: str, results: Dict[str, Tuple], csv_path: Optional[str]
                             cv2.cvtColor(pic, cv2.COLOR_RGB2BGR))
     with open(os.path.join(folder, "knuckle_parts.txt"), "w") as fh:
         for name, (image, masks, found, secs) in results.items():
-            fh.write("\n".join(summary_lines(name, found, len(masks), secs)) + "\n")
+            fh.write("\n".join(summary_lines(name, found, len(masks), secs, named(masks))) + "\n")
     return csv_path
 
 
@@ -527,14 +657,14 @@ def run_batch(args) -> None:
     method = FAST if args.method == "prompted" else str(args.pps)
     print(f"MobileSAM on {study.device}, method {method if method == FAST else 'all masks, grid ' + method}")
     if method == FAST:      # first call pays for CUDA / kernel set-up: not a measure of the method
-        study.run(np.zeros((IMAGE_SIZE[1], IMAGE_SIZE[0], 3), np.uint8), FAST)
+        study.run(np.zeros((IMAGE_SIZE[1], IMAGE_SIZE[0], 3), np.uint8), FAST, args.boss_points)
     results = {}
     for path in list_pictures(args.batch):
         image = load_picture(path)
-        masks, found, secs = study.run(image, method)
+        masks, found, secs = study.run(image, method, args.boss_points)
         name = os.path.basename(path)
         results[name] = (image, masks, found, secs)
-        print("\n".join(summary_lines(name, found, len(masks), secs)), flush=True)
+        print("\n".join(summary_lines(name, found, len(masks), secs, named(masks))), flush=True)
     if args.save or args.csv:
         print("saved", save_results(args.save or os.path.dirname(os.path.abspath(args.csv)), results, args.csv))
 
@@ -561,6 +691,10 @@ def run_window(args) -> None:
     folder_var = tk.StringVar(value=args.folder)
     pic_var = tk.StringVar()
     pps_var = tk.StringVar(value=FAST if args.method == "prompted" else str(args.pps))
+    bp_var = tk.StringVar(value=str(args.boss_points))
+
+    def method_key():
+        return pps_var.get() + ("|%s" % bp_var.get() if pps_var.get() == FAST else "")
     show_var = tk.StringVar(value="All masks")
     ttk.Button(top, text="Folder...", command=lambda: choose_folder()).pack(side="left")
     ttk.Label(top, textvariable=folder_var, width=40).pack(side="left", padx=4)
@@ -570,6 +704,10 @@ def run_window(args) -> None:
     ttk.Label(top, text="Method / grid").pack(side="left")
     ttk.Combobox(top, textvariable=pps_var, values=[FAST, "16", "24", "32", "48"], width=14, state="readonly").pack(
         side="left", padx=4)
+    ttk.Label(top, text="Boss points").pack(side="left")
+    bp_box = ttk.Combobox(top, textvariable=bp_var, values=[str(n) for n in BOSS_POINT_CHOICES], width=3,
+                          state="readonly")
+    bp_box.pack(side="left", padx=4)
     ttk.Button(top, text="Segment", command=lambda: start([pic_var.get()])).pack(side="left", padx=2)
     ttk.Button(top, text="Segment all", command=lambda: start(list(state["files"]))).pack(side="left", padx=2)
     ttk.Button(top, text="Save...", command=lambda: save()).pack(side="left", padx=2)
@@ -582,9 +720,9 @@ def run_window(args) -> None:
     mid.pack(side="top", fill="both", expand=True)
     canvas = tk.Canvas(mid, width=VIEW_W, height=VIEW_H, bg="black")
     canvas.pack(side="left", padx=6)
-    cols = ("id", "label", "area", "centre", "r", "fill", "grey")
+    cols = ("id", "label", "area", "centroid", "perim.", "circ.", "r", "fill", "grey")
     tree = ttk.Treeview(mid, columns=cols, show="headings", height=26)
-    for c, w in zip(cols, (40, 95, 70, 90, 45, 45, 45)):
+    for c, w in zip(cols, (35, 110, 60, 100, 55, 45, 40, 40, 40)):
         tree.heading(c, text=c)
         tree.column(c, width=w, anchor="center")
     tree.pack(side="left", fill="y")
@@ -616,7 +754,7 @@ def run_window(args) -> None:
 
     def current():
         name = pic_var.get()
-        return name, state["results"].get((name, pps_var.get()))
+        return name, state["results"].get((name, method_key()))
 
     def show(*_):
         name, res = current()
@@ -639,8 +777,8 @@ def run_window(args) -> None:
         if res:
             for m in res[1]:
                 tree.insert("", "end", iid=str(m["id"]), values=(
-                    m["id"], m["label"], m["area"], f"{m['cx']:.0f},{m['cy']:.0f}", f"{m['radius']:.0f}",
-                    f"{m['round_fill']:.2f}", f"{m['grey']:.0f}"))
+                    m["id"], m["label"], m["area"], f"{m['cx']:.1f},{m['cy']:.1f}", f"{m['perimeter']:.0f}",
+                    f"{m['circularity']:.2f}", f"{m['radius']:.0f}", f"{m['round_fill']:.2f}", f"{m['grey']:.0f}"))
 
     def on_pick(*_):
         state["highlight"] = None
@@ -654,9 +792,8 @@ def run_window(args) -> None:
             m = next(mm for mm in res[1] if str(mm["id"]) == sel[0])
             state["highlight"] = m["mask"]
             state["prompt"] = None
-            say(f"mask {m['id']} {m['label']}: area {m['area']}, centre {m['cx']:.1f},{m['cy']:.1f}, "
-                f"circle r {m['radius']:.1f} (fill {m['round_fill']:.2f}), rect fill {m['rect_fill']:.2f}, "
-                f"box {m['bbox']}, grey {m['grey']:.0f}, iou {m['iou']:.2f}, stability {m['stability']:.2f}")
+            meas = res[2].get("measures", {})
+            say("mask " + mask_line(m, meas.get("spindle_used", meas.get("spindle"))))
             show()
 
     def on_click(event, prompt=False):
@@ -707,15 +844,17 @@ def run_window(args) -> None:
             return
         state["busy"] = True
         pps = pps_var.get()
+        bp = int(bp_var.get())
+        key = method_key()
 
         def work():
             for n in names:
-                if (n, str(pps)) in state["results"]:
-                    jobs.put(("done", n, str(pps), None))
+                if (n, key) in state["results"]:
+                    jobs.put(("done", n, key, None))
                     continue
                 image = load_picture(os.path.join(state["folder"], n))
-                masks, found, secs = state["study"].run(image, pps)
-                jobs.put(("done", n, str(pps), (image, masks, found, secs)))
+                masks, found, secs = state["study"].run(image, pps, bp)
+                jobs.put(("done", n, key, (image, masks, found, secs)))
             jobs.put(("idle", None, None, None))
 
         say(f"segmenting {len(names)} picture(s), " + (pps if pps == FAST else f"all masks, grid {pps} x {pps}") + " ...")
@@ -729,7 +868,7 @@ def run_window(args) -> None:
                     if payload is not None:
                         state["results"][(name, extra)] = payload
                         image, masks, found, secs = payload
-                        for line in summary_lines(name, found, len(masks), secs):
+                        for line in summary_lines(name, found, len(masks), secs, named(masks)):
                             say(line)
                     pic_var.set(name)
                     state["highlight"] = None
@@ -742,9 +881,7 @@ def run_window(args) -> None:
                     state["busy"] = False
                     out = payload
                     for m in out:
-                        say(f"    prompt mask {m['id']}: area {m['area']}, centre {m['cx']:.1f},{m['cy']:.1f}, "
-                            f"circle r {m['radius']:.1f} (fill {m['round_fill']:.2f}), box {m['bbox']}, "
-                            f"grey {m['grey']:.0f}, score {m['iou']:.2f}")
+                        say("    prompt mask " + mask_line(m))
                     if out:
                         state["prompt"] = out[0]["mask"]
                         state["highlight"] = None
@@ -754,7 +891,7 @@ def run_window(args) -> None:
         root.after(150, poll)
 
     def save():
-        res = {n: v for (n, p), v in state["results"].items() if p == pps_var.get()}
+        res = {n: v for (n, p), v in state["results"].items() if p == method_key()}
         if not res:
             say("nothing segmented yet at this grid")
             return
@@ -764,6 +901,7 @@ def run_window(args) -> None:
 
     pic_box.bind("<<ComboboxSelected>>", on_pick)
     show_box.bind("<<ComboboxSelected>>", show)
+    bp_box.bind("<<ComboboxSelected>>", on_pick)
     tree.bind("<<TreeviewSelect>>", on_tree)
     canvas.bind("<Button-1>", lambda e: on_click(e, False))
     canvas.bind("<Shift-Button-1>", lambda e: on_click(e, True))
@@ -783,6 +921,8 @@ def main():
     ap.add_argument("--method", choices=["prompted", "all"], default="prompted",
                     help="prompted: 4 points per part, about 1 s (default); all: every mask (automatic generator)")
     ap.add_argument("--pps", type=int, default=32, help="all: points per side of the generator grid")
+    ap.add_argument("--boss-points", type=int, choices=BOSS_POINT_CHOICES, default=4,
+                    help="prompted: points per boss (4 default; 8 / 16 tested worse, see BOSS_POINT_CHOICES)")
     ap.add_argument("--sam", default=DEFAULT_SAM, help="MobileSAM weights")
     ap.add_argument("--save", help="batch: folder for the CSV, the marked pictures and knuckle_parts.txt")
     ap.add_argument("--csv", help="batch: CSV file of every mask")
