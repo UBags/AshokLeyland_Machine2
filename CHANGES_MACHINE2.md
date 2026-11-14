@@ -2992,4 +2992,27 @@ First steps towards vision checks that do not depend on the camera staying exact
   on the CPU - a cheap way for a check to find the bosses once the study has settled the rules.
 - Speed: the generator takes about 90 s per picture at 24 x 24 on the sandbox CPU (a few seconds on the laptop GPU);
   16 x 16 is too coarse (misses the spindle and a boss).
+- **Fast method (follow-up, user: the automatic generator took 11 s per picture on the laptop; aim under 2 s):** the
+  generator runs 1,024 point prompts (32 x 32) through the decoder, then filters them. Now the default method,
+  "Prompted (fast)": one image embedding; the spindle by one point at its expected place; then, placed relative to the
+  spindle found, in two batched decoder calls:
+  - each **boss**: a 104 px box round its centre plus 4 points on the machined ring (26 px from the centre, on the
+    diagonals); SAM's 3 candidates, the roundest that passes the boss rule kept;
+  - each possible **lower arm** (ARM_L for an LHS knuckle, ARM_R for an RHS one): 4 points down the arm's centreline,
+    from the knuckle body to the part resting on the bar; one mask each. On a knuckle of the other side that spot is
+    bare plate / bar and the mask fails the arm rule, so the side is the one arm that passes.
+  - The prompt points were picked as the common core of each part's mask over the 19 pictures (each point 20-34 px
+    inside the part on every picture).
+  - **First try failed on 8 bosses:** 4 points 14 px from the boss centre fell on the rim of the boss's bore, and SAM
+    returned the bore or part of the face. Tried on the 19 pictures with every prompt moved +-8 px (114 per boss):
+    points at 26 px 222/228, box 225/228, both with a single mask; with the 3 candidates and the rule picking, box +
+    points 228/228 (lowest fill 0.83 against the 0.70 limit), box alone 228/228 (0.78), points alone 228/228 (0.73).
+  - **YOLO not used:** the project's YOLOv8 (MobileSAMv2's `ObjectAwareModel.pt`) proposes boxes round any object; the
+    parts' places are already known, so it would add a detector pass for nothing. A fallback if the fixed prompts ever
+    prove too fragile.
+  - **Results (sandbox CPU, no GPU):** 19/19 knuckles with spindle, both bosses, the lower arm and the right side; EMPTY_01
+    nothing. 0.99-1.42 s per picture (embedding 0.74-1.01 s, prompts 0.36-0.52 s); on the laptop GPU the embedding
+    should be far quicker. Arm prompts moved +-10 px: 80/80. Measures as with the automatic method (bosses from the
+    spindle DOST (-194..-200, -159..-162) / (+195..+203, -158..-161), DOSTPLUS (-188..-190, -155..-161) /
+    (+195..+196, -151..-152); lower arm 18,900-19,900 px).
 
