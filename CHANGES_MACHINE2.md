@@ -2983,7 +2983,7 @@ First steps towards vision checks that do not depend on the camera staying exact
 - **Results on the 20 knuckle pictures (grid 24 x 24)**: on all 19 knuckles both bosses and the whole lower arm found,
   side right on all 19 (11 LHS / 8 RHS); EMPTY_01: nothing (the fixture's locating pin is not taken for the spindle).
   Upper arm on the side without the long arm sometimes only a part (DOSTPLUS RHS); no rule depends on it.
-  Measures: spindle (641.7-642.4, 359.2-360.1) r about 49 (the hub centre 645,334 is 26 px higher: the hub top is
+  Measures: spindle (641.1-645.4, 357.1-361.0) r 48.6-53.8 (the hub centre 645,334 is 26 px higher: the hub top is
   nearer the camera); bosses from the spindle DOST (-195..-200, -160..-163) and (+195..+203, -158..-161), r 40-42;
   DOSTPLUS (-188..-190, -156..-160) and (+195..+196, -151..-155), r 45-48. Boss-to-boss distance DOST LHS 393.5-395.4,
   DOST RHS 398.7-399.7, DOSTPLUS 383.6-387.7 px; angle +0.04..+1.23 deg. Lower arm about 19,000-20,000 px, tip from
