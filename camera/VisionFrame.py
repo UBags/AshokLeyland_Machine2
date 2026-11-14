@@ -11,8 +11,11 @@ in them, and the lower arm. From them it builds the cycle's FRAME:
         rotation  = pin-line angle - its usual angle for this type / side
         scale     = pin distance / its usual distance for this type / side
         T_cam(p)  = pin midpoint + scale * R(rotation) * (p - usual pin midpoint)
-    anchor S   = the spindle mask's centre, if it agrees with T_cam(usual spindle) within ANCHOR_AGREEMENT_PX;
-                 otherwise T_cam(usual spindle) (spindle hidden, e.g. a bearing on it)
+    anchor S   = T_cam(usual spindle of this type / side): where the pins put the spindle. The spindle mask is the
+                 cross-check (it agrees within +-1 px on the 13 Nov pictures; more than ANCHOR_AGREEMENT_PX apart is
+                 logged). The pins are used, not the mask, because the mask's centre moves 2-3 px with a zoom or a
+                 re-sampled picture, while the two pins' midpoint stays within 0.5 px; the knuckle sits on the pins, so
+                 the part cannot be off them.
     centre of every later check:
         place(P) = S + scale * R(rotation) * (P - REF_SPINDLE)
 
@@ -44,8 +47,8 @@ NOMINAL_PINS: Dict[Tuple[str, str], Dict[str, Any]] = {
     ("DOSTPLUS", "RHS"): dict(distance=394.64, angle=0.77, pin_mid=(643.62, 200.00), spindle=(642.3, 360.3)),
 }
 
-# Spindle mask accepted as the anchor when within this of where the pins put the usual spindle (spread measured:
-# +-1 px); further away the pins' spindle is used.
+# The spindle mask is expected within this of where the pins put the spindle (spread measured: +-1 px); further away
+# it is noted in the frame (spindleCheck) and logged; the pins' spindle is the anchor either way.
 ANCHOR_AGREEMENT_PX = 6.0
 
 # The later checks' centres at the reference camera position (13 Nov 2026), with the spindle at REF_SPINDLE.
@@ -103,20 +106,19 @@ def buildFrame(modelType: str, side: str, pins: Tuple[Tuple[float, float], Tuple
         dx, dy = _rotate(p[0] - nom["pin_mid"][0], p[1] - nom["pin_mid"][1], rotation, scale)
         return mid[0] + dx, mid[1] + dy
 
-    expected = camera(nom["spindle"])
+    anchor = camera(nom["spindle"])
     cameraShift = tuple(a - b for a, b in zip(camera(REF_SPINDLE), REF_SPINDLE))
-    if spindleMask is not None and math.hypot(spindleMask[0] - expected[0],
-                                              spindleMask[1] - expected[1]) <= ANCHOR_AGREEMENT_PX:
-        anchor, source = (float(spindleMask[0]), float(spindleMask[1])), "spindle mask"
+    if spindleMask is None:
+        source, maskOffset = "pins (spindle mask not usable)", None
     else:
-        anchor = expected
-        source = ("pins (spindle mask %.1f px from where the pins put it)" % math.hypot(
-            spindleMask[0] - expected[0], spindleMask[1] - expected[1])) if spindleMask is not None \
-            else "pins (spindle mask not usable)"
+        maskOffset = (round(spindleMask[0] - anchor[0], 2), round(spindleMask[1] - anchor[1], 2))
+        apart = math.hypot(*maskOffset)
+        source = "pins, spindle mask %.1f px away%s" % (apart, "" if apart <= ANCHOR_AGREEMENT_PX
+                                                          else " - MORE THAN %g px: check the part" % ANCHOR_AGREEMENT_PX)
     return dict(type=modelType, side=side, anchor=(round(anchor[0], 2), round(anchor[1], 2)), anchorSource=source,
+                spindleMaskOffset=maskOffset,
                 rotation=round(rotation, 3), scale=round(scale, 5),
                 cameraShift=(round(cameraShift[0], 2), round(cameraShift[1], 2)),
-                partOffset=(round(anchor[0] - expected[0], 2), round(anchor[1] - expected[1], 2)),
                 pinMid=(round(mid[0], 2), round(mid[1], 2)), pinDistance=round(distance, 2),
                 pinAngle=round(angle, 3), refSpindle=REF_SPINDLE)
 
@@ -154,8 +156,8 @@ def describe(frame: Optional[Dict[str, Any]]) -> str:
     centres = placedCentres(frame)
     parts = [f"{name} {xy}" for name, xy in centres.items()]
     return (f"{frame['type']} {frame['side']}: anchor {frame['anchor']} from {frame['anchorSource']}; camera shift "
-            f"{frame['cameraShift']}, rotation {frame['rotation']:+.2f} deg, scale {frame['scale']:.4f}; part offset "
-            f"{frame['partOffset']}; centres: " + ", ".join(parts))
+            f"{frame['cameraShift']}, rotation {frame['rotation']:+.2f} deg, scale {frame['scale']:.4f}; centres: "
+            + ", ".join(parts))
 
 
 # ------------------------------------------------------------------------------------------- applying to the checks

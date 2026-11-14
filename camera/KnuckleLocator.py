@@ -21,7 +21,11 @@ points "grid") and Study_Boss_Grid_Masks.py; same rules and numbers (CHANGES 101
                the spindle; the arm is the dark (< 75), long (reaching 220 px below the spindle) mask that starts 20-150
                px below the spindle, area 8,000-70,000, rect fill < 0.75. Exactly one: the side.
   4. TYPE      boss area x 1000 / pin distance^2 (limit 34.5: DOST 29-31, DOSTPLUS 37-41), cross-checked by boss radius
-               / pin distance (limit 0.1095); both must agree.
+               / pin distance (limit 0.1095): NOT OK if the radius ratio clearly says the other type (beyond 0.1095
+               +- 0.0025; inside that band it does not decide).
+  One boss found and the other not: the other's grid is placed from the found pin by the pin vector (397, 4.8).
+  No mask of a boss passing: its masks are opened with a 21 px disc (removes a strip SAM took in next to the boss) and
+  judged again.
 
 Measured on the 19 knuckle pictures of 13 Nov (+ empty fixture): type 19/19, side 19/19, pins within +-0.4 px per
 type / side; 0.30-0.40 s per picture on the laptop GPU.
@@ -55,8 +59,13 @@ ARM_POINTS = {"ARM_L": [(-155, 115), (-165, 182), (-192, 248), (-220, 310)],
               "ARM_R": [(150, 123), (162, 189), (186, 254), (210, 315)]}
 LOWER = dict(grey_max=75.0, area=(8000, 70000), rect_fill_max=0.75, reach=220, top_dy=(20, 150))
 
-TYPE_AREA_RATIO = 34.5
-TYPE_RADIUS_RATIO = 0.1095
+TYPE_AREA_RATIO = 34.5                   # decides: DOST 29.0-31.2, DOSTPLUS 36.8-41.1
+TYPE_RADIUS_RATIO = 0.1095               # cross-check: DOST 0.102-0.105, DOSTPLUS 0.114-0.124 (enclosing circle: one
+TYPE_RADIUS_BAND = 0.0025                # bump of the mask moves it); it vetoes only when beyond the limit +- this band
+# The right pin from the left one (and back) - for a boss not found where expected while the other was:
+# (397, 4.8) = mean pin vector of the four types / sides (distance 394-400 px, angle 0.65-0.77 deg)
+PIN_VECTOR = (397.0, 4.8)
+OPEN_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
 
 
 # ------------------------------------------------------------------------------------------------------- mask measures
@@ -215,6 +224,7 @@ class KnuckleLocator:
             scores = iou_t.cpu().numpy()
             del masks_t, iou_t
             measured = []
+            kept = []                  # (prompt, mask index) of the masks measured, for the second look below
             for p in range(len(pairs)):
                 for k in range(masks.shape[1]):
                     m = masks[p, k]
@@ -225,6 +235,24 @@ class KnuckleLocator:
                     d["iou"] = float(scores[p, k])
                     d["candidate"] = is_boss(d)
                     measured.append(d)
+                    kept.append((p, k))
+            if not any(r["candidate"] for r in measured):
+                # second look, only when no mask passed: SAM's masks can take in a strip next to the boss (fill
+                # 0.6, radius 51); an opening with a 21 px disc removes such strips and leaves the round boss
+                opened = []
+                for (p, k) in kept:
+                    m = cv2.morphologyEx(masks[p, k].astype(np.uint8), cv2.MORPH_OPEN, OPEN_KERNEL) > 0
+                    if not (AREA_GATE[0] <= int(np.count_nonzero(m)) <= AREA_GATE[1]):
+                        continue
+                    n, lab, stats, _ = cv2.connectedComponentsWithStats(m.astype(np.uint8), connectivity=8)
+                    if n > 2:              # keep the largest piece
+                        m = lab == (1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA])))
+                    d = measure_boss(m, grey)
+                    d["iou"] = float(scores[p, k])
+                    d["candidate"] = is_boss(d)
+                    d["opened"] = True
+                    opened.append(d)
+                measured = opened
             groups: List[List[Dict]] = []
             for r in sorted(measured, key=lambda r: -r["iou"]):
                 for g in groups:
@@ -293,6 +321,15 @@ class KnuckleLocator:
                 retry = self._bosses(predictor, device, shape, grey, fixed)
                 if sum(b is not None for b in retry.values()) > sum(b is not None for b in bosses.values()):
                     bosses, gridAt = retry, "usual place (not found round the spindle)"
+            # one boss found, the other not: look for it where the pin vector puts it from the one found
+            for missing, found, sign in (("BOSS_R", "BOSS_L", 1), ("BOSS_L", "BOSS_R", -1)):
+                if bosses[missing] is None and bosses[found] is not None:
+                    fb = bosses[found]
+                    centre = (fb["core_x"] + sign * PIN_VECTOR[0], fb["core_y"] + sign * PIN_VECTOR[1])
+                    again = self._bosses(predictor, device, shape, grey, {missing: centre})
+                    if again[missing] is not None:
+                        bosses[missing] = again[missing]
+                        gridAt += f"; {missing} from the other boss"
             sx, sy = base
             arms = self._arms(predictor, device, shape, grey, sx, sy)
             if cuda:
@@ -325,7 +362,13 @@ class KnuckleLocator:
             areaRatio = (bl["area"] + br["area"]) / 2.0 * 1000.0 / dist ** 2
             radiusRatio = (bl["radius"] + br["radius"]) / 2.0 / dist
             byArea = "DOSTPLUS" if areaRatio >= TYPE_AREA_RATIO else "DOST"
-            byRadius = "DOSTPLUS" if radiusRatio >= TYPE_RADIUS_RATIO else "DOST"
+            # the radius ratio vetoes only when it clearly says the other type (outside the band round its limit)
+            if radiusRatio >= TYPE_RADIUS_RATIO + TYPE_RADIUS_BAND:
+                byRadius = "DOSTPLUS"
+            elif radiusRatio <= TYPE_RADIUS_RATIO - TYPE_RADIUS_BAND:
+                byRadius = "DOST"
+            else:
+                byRadius = byArea
             result["typeValues"] = dict(areaRatio=round(areaRatio, 2), areaLimit=TYPE_AREA_RATIO,
                                         radiusRatio=round(radiusRatio, 4), radiusLimit=TYPE_RADIUS_RATIO,
                                         pinDistance=round(dist, 2),

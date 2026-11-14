@@ -14,7 +14,8 @@ image coordinates.
 With `siemens.vision.knuckle.method=segmentation` the knuckle check (state 3) finds the spindle, the two machined bosses
 with the fixture pins in them and the lower arm (`camera/KnuckleLocator.py`), and builds the cycle's frame
 (`camera/VisionFrame.py`): camera rotation and zoom from the pin line against its usual angle / length for the type and
-side, and the anchor = the spindle (mask, or from the pins when the spindle is hidden). Every centre in the table below
+side, and the anchor = where the pins put the spindle of that type / side (the spindle mask is the cross-check). Every
+centre in the table below
 is then placed for the cycle as
 
     centre = anchor + zoom * R(rotation) * (reference centre - (642.2, 359.1))

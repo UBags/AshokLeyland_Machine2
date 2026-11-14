@@ -5,8 +5,8 @@ checks, on the knuckle pictures (knuckle_images/<MODEL>_<SIDE>_<n>.jpg, EMPTY_<n
   A. The real CheckKnuckle (vision.knuckle.method = segmentation, Machine 2 settings) with each of the four QR codes:
      OK with its own, NOT OK with the other three; the empty fixture NOT OK with all four. Time per picture.
   B. The frame on the unmoved pictures: camera shift within 1.5 px and rotation within 0.3 deg (the pictures were
-     all taken at the reference camera position), and every later check's centre within 4 px of its value in the
-     properties file.
+     all taken at the reference camera position), every later check's centre within 4 px of its value in the
+     properties file, and the spindle mask (where usable) within 2 px of where the pins put the spindle.
   C. The camera moved (the picture warped: shift, rotation, zoom - see MOVES): still OK with its own QR code, and every
      later check's centre lands where the same move takes the centre found on the unmoved picture (within 2 px).
      A move beyond vision.knuckle.frame.max.* is NOT OK ("camera moved").
@@ -156,6 +156,9 @@ def main():
               f"{frame['scale']:.4f}, anchor {frame['anchor']} ({frame['anchorSource']}); centres within 4 px of the "
               f"properties", math.hypot(*frame["cameraShift"]) <= 1.5 and abs(frame["rotation"]) <= 0.3 and not far,
               far)
+        mo = frame.get("spindleMaskOffset")
+        if mo is not None:
+            check(f"{name}: spindle mask within 2 px of where the pins put the spindle ({mo})", math.hypot(*mo) <= 2.0)
     print(f"time per check: median {np.median(times):.2f} s, max {max(times):.2f} s ({device})")
 
     # ------------------------------------------------------------------------------------------------------ C
@@ -180,9 +183,9 @@ def main():
             e = max(errs.values())
             worst = max(worst, e)
             check(f"{name} moved {mv}: OK; camera shift {frame['cameraShift']}, rotation {frame['rotation']:+.2f}, "
-                  f"scale {frame['scale']:.4f}; centres off by at most {e:.2f} px", e <= 3.0,
+                  f"scale {frame['scale']:.4f}; centres off by at most {e:.2f} px", e <= 2.0,
                   {n: round(v, 2) for n, v in errs.items()})
-    print(f"worst centre error over the moves: {worst:.2f} px (the spindle mask moves +-1 px with the resampling)")
+    print(f"worst centre error over the moves: {worst:.2f} px (the pins move a little with the re-sampling)")
     name = names[0]
     _, ok, _ = K.checkKnuckleBySegmentation(moved(pictures[name], move_matrix(*TOO_FAR)), QR[tuple(name.split('_')[:2])])
     check(f"{name} moved {TOO_FAR} (beyond {K.FRAME_MAX_SHIFT} px): NOT OK, camera moved",

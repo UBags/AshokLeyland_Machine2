@@ -3107,11 +3107,19 @@ all later checks; (d) build that into the later checks instead of the properties
   1000 / pin distance^2 (34.5) cross-checked by boss radius / pin distance (0.1095). Uses the shared predictor
   (ModelManager). Two changes from the study: the grid is placed relative to the spindle mask (the usual picture
   place when there is none; retried at the usual place if a boss is missing), so it follows a moved camera; and the
-  result carries the frame. `draw()`: spindle, bosses (pin dots) and lower arm outlined, green OK / red NOT OK, no text.
+  result carries the frame. Found in the moved-camera runs and added: a boss missing while the other was found is
+  looked for again with its grid placed from the found pin by the pin vector (397, 4.8); when no mask of a boss passes,
+  its masks are opened with a 21 px disc and judged again (DOST_LHS_02 with a bearing, moved 30 px + zoom 0.98: all
+  right-boss masks took in a strip beside the boss - fill 0.61-0.65, radius 51-52 - and the boss was missed; only
+  used when nothing passed, so the other pictures' bosses are unchanged); the type is decided by the area ratio, the radius ratio only vetoes
+  when beyond 0.1095 +- 0.0025 (DOST_RHS_03 moved: radius ratio 0.1097 against DOST's usual 0.102-0.105 - the
+  enclosing circle follows one bump of the mask - while its area ratio 31.0 was clearly DOST). `draw()`: spindle, bosses (pin dots) and lower arm outlined, green OK / red NOT OK, no text.
 - **`camera/VisionFrame.py` (new) - (c):** camera rotation and zoom from the pin line against `NOMINAL_PINS` of the
-  type / side, translation from the pin midpoint (the pins do not move with the part: camera only); anchor = the
-  spindle mask when it lies within 6 px of where the pins put the usual spindle, else that pin-derived spindle (bearing
-  on the spindle). Every later centre: `anchor + zoom * R(rotation) * (reference - (642.2, 359.1))`. Reference centres
+  type / side, translation from the pin midpoint (the pins do not move with the part: camera only); anchor = where
+  the pins put the usual spindle of that type / side. The spindle mask is the cross-check (within +-1 px on the
+  pictures; over 6 px apart is logged). First version anchored on the mask: on the moved pictures its centre moved
+  2-3.5 px with the zoom / re-sampling (one centre 3.46 px off), while the pin midpoint stays within 0.5 px; the
+  knuckle sits on the pins, so it cannot be off them. Every later centre: `anchor + zoom * R(rotation) * (reference - (642.2, 359.1))`. Reference centres
   (`CENTRES`, in the code): hub segmentation (645, 334), hub centre check (644, 340), top bearing (642, 345), nut / washer
   and no-bunk nut (644, 344), bung disc (646, 328), bung seated DOST (646, 325) / DOSTPLUS (647, 330), cap (644, 340) -
   the 13 Nov values (docs/vision_positions_machine2.md, new section with the offsets from the spindle). Radii unchanged.
@@ -3131,7 +3139,19 @@ all later checks; (d) build that into the later checks instead of the properties
   3 deg / `.max.zoom.change` 0.05 (else NOT OK "... - set the camera again"); a missing spindle mask alone does not
   fail it. The grey-level method is kept whole as `checkKnuckleByRegions()` (renamed, not commented out: Machine 1 runs
   the same code and uses it). In the camera server the knuckle state runs once on one picture (no 3-picture vote).
-- **Dry runs:** new `test/machine2_dryrun/DryRun_Knuckle_Frame.py` (results below); `DryRun_Vision_Check_Timeout.py`
+- **Results (`DryRun_Knuckle_Frame.py`, sandbox CPU, 161/161):**
+  - Every knuckle picture OK with its own QR code only (19/19); the empty fixture NOT OK with all four.
+  - Pictures as taken: camera shift 0.0-0.7 px, rotation within 0.12 deg, scale 0.9997-1.0007; every later centre
+    within 4 px of its properties value (DOST RHS knuckles sit 2-3 px higher, their centres with them); spindle mask
+    within 0.98 px of where the pins put the spindle on the 18 pictures without a bearing; DOST_LHS_02 (bearing on
+    the spindle, mask r 53.9) placed from the pins.
+  - Camera moved (all 19 knuckles x 5 moves: (+25, -15), (-20, +20) + 1.5 deg, -1 deg + zoom 1.02, (+30, +10) + 0.8
+    deg + zoom 0.98, (-12, -25) - 2 deg + zoom 1.01): all OK, type and side right, every centre within 1.16 px of where
+    the move takes it. 55 px: NOT OK "camera moved 55.0 px (limit 40) - set the camera again".
+  - The centres in the check modules (hub segmenter instance too), the properties values back without a frame, the
+    frame in the state sent to the worker and applied when restored, dropped at the end of the cycle and at a retake.
+  - Time: 7-9 s per check on the sandbox CPU; on the laptop GPU the same prompts took 0.34-0.41 s (point (a)).
+- **Dry runs:** new `test/machine2_dryrun/DryRun_Knuckle_Frame.py` (above); `DryRun_Vision_Check_Timeout.py`
   part K runs the real pipeline with segmentation when the weights are there (frame kept after OK, dropped at the end
   of the cycle), regions otherwise; `DryRun_CheckKnuckle_Images.py` and `DryRun_Knuckle_Check_UI.py` pin
   `K.METHOD = "regions"` (they test that method: 155/155, Machine 1 copy 30/30).
