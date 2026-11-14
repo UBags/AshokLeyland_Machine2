@@ -3037,4 +3037,31 @@ First steps towards vision checks that do not depend on the camera staying exact
     DOSTPLUS RHS 383.7 / 0.63); BOSS_MID. Type 19/19.
   - Not yet confirmed: that the hub centre stays at a fixed offset from the spindle - needs the knuckle and hub pictures
     of the same components.
+- **Bosses from a 4 x 4 grid of 2-point prompts (follow-up, user: account for small camera movements):** new
+  `test/machine2_dryrun/Study_Boss_Grid_Masks.py`.
+  - Per boss a 4 x 4 grid at the 2 x 2 prompt's spacing (36.8 px), centred on the boss's usual place (444,198) /
+    (842,198) (or from the spindle, `--centre spindle`): it covers about +-55 px. Each of the 24 neighbouring pairs
+    (12 across, 12 down) is one 2-point prompt, 3 masks each: 72 masks per boss, one embedding, one batched decoder call
+    per boss.
+  - **Boss signature** (radial grey profile from a boss centre, DOST_LHS_01): 5-48 inside 14 px (bore with the fixture's
+    pin), 129-140 at 20-32 px (machined ring), about 108 at the boss's edge; the empty fixture has the dark seat and pin
+    but no bright ring. Each mask gets its shape measures plus the DARK CORE (the dark blob inside its outline nearest
+    its centre, darker than min(70, ring - 40)): centre ("pin centre"), area, radius, grey; RING grey (mask outside the
+    core), contrast, concentricity (core to mask centre). Masks with IoU >= 0.85 are one group; votes = group size.
+  - **Candidate:** radius 30-60, circularity >= 0.75, fill >= 0.70, ring grey >= 80, contrast >= 40, core radius 6-22,
+    concentricity <= 8. **Score** = votes x circularity x fill x min(contrast,120)/120 x (1 - concentricity/20); best =
+    highest.
+  - **Results (20 pictures, sandbox CPU):** every knuckle boss found, each as exactly one candidate group (5-9 votes of
+    72); EMPTY_01 none (its masks are the dark seats, ring grey 46-49). Type from area x1000 / pin distance^2: DOST
+    29.0-30.5, DOSTPLUS 36.8-39.4 (limit 34.5): 19/19. **Pin centres are much steadier than mask centres:** DOST LHS L
+    (443.7-444.0, 191.8-192.7) R (844.2-844.4, 197.1-197.3); DOST RHS L (443.7, 190.6) R (843.7-843.9, 195.3); DOSTPLUS
+    LHS L (446.4-446.7, 197.2-197.5) R (840.6-840.9, 202.0-202.1); DOSTPLUS RHS L (446.3-446.4, 197.3-197.5) R
+    (840.8-841.0, 202.6-202.7). Pin-to-pin distance DOST 400.1-400.6, DOSTPLUS 394.2-394.7 px; angle +0.64..+0.79 deg
+    for all four type / side groups (the mask-centre angle varied 0.0-1.3 deg by group) - a rotation reference that does
+    not depend on the type. Where a boss mask leaks along the arm (DOSTPLUS RHS right boss, r 48-51) the pin centre is
+    unaffected.
+  - Output: `boss_grid_masks.csv` (2,880 masks for the 20 pictures, every measure, group, votes, candidate / why not,
+    score, best), `boss_grid_summary.csv`, `boss_grid_masks.xlsx` (xlsxwriter, already in requirements.txt).
+  - Time: 7-8 s per picture on the sandbox CPU, 5.5 s of it MobileSAM's decoder on 48 prompts (embedding 0.7-1.1 s,
+    measuring about 1 s); on the GPU the decoder takes milliseconds.
 
