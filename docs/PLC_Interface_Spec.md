@@ -36,7 +36,7 @@ Out of scope: the vision algorithms, the database, and the frontend. See `HLD.md
 | `PC_PLC_ConnectionStatusTag` | DB500,X0.0 | bool | PC | PC alive. The PC toggles it every 2 s. The PLC should alarm if it does not change for more than 6 s |
 | `PLC_PC_WatchTag` | DB500,I6 | int | PLC | Must read 1234. The PC uses it to confirm it is talking to the right DB |
 | `PLC_PC_EmergencyAbort` | DB500,X3.4 | bool | PLC | Emergency button. The PC polls it every 1 s, so the PLC must hold it True for at least 1.2 s. While it is True, every cycle is aborted (a held button can give several aborts; this is accepted) |
-| `pc.plc.cycle.aborted.tagname` | (none) | bool | PC | Optional. Empty by default. If configured, the PC pulses it when the PC aborts a cycle |
+| `PC_PLC_CycleAborted` (`pc.plc.cycle.aborted.tagname`) | **none yet** (PLC programmer to assign) | bool | PC | Optional tag. True after a PC-side abort (frontend abort request, frontend or heartbeat server down, PLC restart); False when the next QR code is accepted. The frontend's own abort (Ctrl+Alt+Z) aborts the IOServer's cycle only if this tag can be written. Until the PLC has it (Siemens: no address in `IOServerProperties.yaml`; Allen-Bradley: not in the controller's tag list) it is not written (logged once), and the IOServer starts without it |
 
 ### 3.2 Cycle settings (written in state 2 before the QR result)
 
@@ -46,10 +46,10 @@ Out of scope: the vision algorithms, the database, and the frontend. See `HLD.md
 | `PC_PLC_TighteningTorque1Setpoint` | DB101,R200 | float | > 0 and < 20 Nm | Station 2 first tightening |
 | `PC_PLC_TighteningTorque2Setpoint` | DB101,R204 | float | > 0 and < 20 Nm | Station 2 second tightening |
 | `PC_PLC_RotationRPM` | DB101,LR96 | lreal | 20–40 | Rotation speed |
-| `PC_PLC_NoOfRotation1CW` | DB101,LR120 | lreal | 1 or 2 | Clockwise rotations |
-| `PC_PLC_NoOfRotation1CCW` | DB101,LR144 | lreal | 1 or 2 | Counter-clockwise rotations |
+| `PC_PLC_NoOfRotation1CW` | DB101,LR120 | lreal | 1 to 4 | Clockwise rotations |
+| `PC_PLC_NoOfRotation1CCW` | DB101,LR144 | lreal | 1 to 4 | Counter-clockwise rotations |
 
-The settings come from the latest row of `machine_settings`.
+The settings come from the latest `machine_settings` row of the QR code's model (settings are kept per model).
 
 - Each setting is written and then read back (`_settingReadBack`).
 - If a write fails, the settings written in the earlier cycle stay in force. The cycle goes ahead, but the side must still be written.
@@ -172,7 +172,9 @@ Note: states 11 and 18 both use `Station2TorqueValueSet`. The reset in step 3 is
 |---|---|---|
 | Every check trigger | Steps (3) and (7) of §5.1 | Ends the request |
 | `PLC_PC_CheckQRCode` | QR NOT OK; end of cycle; reset for next cycle | Arms the QR read |
-| `Station2/3TorqueValueSet`, `ComponentPressDone`, `Station4CapPressDone` | 0.4 s after reading | Ends the event |
+| `Station2/3TorqueValueSet` (with the value := 0.0; Station 2 also `RotationDuringTighteningDone` := False) | 2.0 s after reading (`plc.handshake.torquevalues.reset.delay.sec`) | Ends the event |
+| `ComponentPressDone`, `Station4CapPressDone` | 1.5 s after reading (`plc.handshake.componentpress.reset.delay.sec`) | Ends the event |
+| `PLC_PC_EmergencyAbort` | On every abort | Clears the emergency request |
 
 These dual writes are why v1 depends on timings. If the PLC writes the same tag in the same scan in which the PC resets it, one of the two writes is lost. Part B removes this.
 
@@ -181,25 +183,29 @@ These dual writes are why v1 depends on timings. If the PLC writes the same tag 
 An abort can come from:
 
 - the emergency tag;
-- the frontend (operator, or frontend closed);
+- the frontend's abort request (Ctrl+Alt+Z, password-protected): only if `PC_PLC_CycleAborted` can be written (§3.1); otherwise it is logged and the cycle goes on;
+- the frontend going down (closed, or its GUI frozen for 60 s);
 - the heartbeat server going down;
-- a restart of the IOServer.
+- a PLC restart detected after a reconnect (§5.6).
+
+A restarted IOServer does not abort the PLC's cycle by itself: it resets its tags, arms CheckQRCode and tells the
+frontend and the camera server that the cycle was aborted (§5.6).
 
 On an abort the PC:
 
 1. Stops any handshake in progress (§5.1, rule 1).
-2. Cancels pending delayed resets.
-3. Resets all per-cycle `PC_PLC_*` tags to 0, and the PLC_PC tags listed in §5.4.
-4. Arms CheckQRCode.
-5. Goes to state 1.
-6. Pulses the optional cycle-aborted tag, if one is configured.
+2. Writes `PLC_PC_EmergencyAbort` := 0.
+3. Goes to state 1.
+4. Cancels pending delayed resets, resets all per-cycle `PC_PLC_*` tags to 0 and the PLC_PC tags listed in §5.4, each read back.
+5. Arms CheckQRCode.
+6. For a PC-side abort (all sources except the emergency tag): `PC_PLC_CycleAborted` := 1 where the PLC has it; it goes back to 0 when the next QR code is accepted.
 
 ### 5.6 Loss of connection and restarts
 
 | Event | PC behaviour | PLC expectation |
 |---|---|---|
 | PLC unreachable | Reads and writes stop. The connection is retried every 1 s. The frontend shows the PLC as disconnected | PLC sees ConnectionStatusTag stop toggling |
-| PLC restart | The PLC resets all its values and sets `PC_PLC_LH_RH_Selection` := 0. After the reconnect the PC reads the side: if it differs from the value the PC wrote in state 2, the PC treats it as a PLC restart, aborts the cycle and resets (§5.5). The same value means the PLC kept its memory, and the cycle carries on | Both vendors do this. On Siemens, DB101 must not be retentive |
+| PLC restart | The PLC resets all its values and sets `PC_PLC_LH_RH_Selection` := 0. While the link is down the PC holds its writes and reads. After the reconnect: if the last PLC_PC tag the PLC raised (and the PC has not cleared) is still 1, the PLC did not restart and the cycle carries on in the same state. If no such tag is known, the PC reads the side: if it differs from the value the PC wrote in state 2, the PC treats it as a PLC restart, aborts the cycle and resets (§5.5); the same value means the PLC kept its memory, and the cycle carries on. At the QR code there is only the reset | Both vendors do this. DB500 and DB101 must not be retentive |
 | PC (IOServer) restart | The `ioserver:started` key exists, so the IOServer sends an abort to the frontend and camera, resets its tags, and starts in state 1 | PLC sees all PC_PLC tags at 0 |
 | WatchTag ≠ 1234 | Treated as wrong DB or not connected | — |
 
@@ -251,7 +257,7 @@ These rules apply only after the PC has seen the heartbeat server at least once.
  PC : sees ValueSet=0; Ack := 0
 ```
 
-This removes the 0.4 s reset of v1 §5.3. It also makes the shared `Station2TorqueValueSet` safe: torque 2 cannot be seen until the PLC has lowered ValueSet and the PC has lowered Ack.
+This removes the timed resets of v1 §5.3 (2.0 s torques, 1.5 s presses). It also makes the shared `Station2TorqueValueSet` safe: torque 2 cannot be seen until the PLC has lowered ValueSet and the PC has lowered Ack.
 
 ### 6.3 Request number (optional, recommended)
 
@@ -269,7 +275,7 @@ With these tags:
 
 - **PLC restart.** As in v1: the PLC resets its values and writes side := 0. The PC treats side = 0 while in a cycle as "PLC restarted": it aborts the cycle and lowers all its tags. No session token is needed.
 - **PC restart.** The PC starts with all its `PC_PLC_*` tags at 0. If the PLC holds Req = 1 on PC start, the PC treats it as a fresh request only for the QR read; for any other check it waits for Req = 0.
-- **PC abort.** The PC lowers its own tags and pulses `PC_PLC_CycleAborted` (this becomes a required tag in v2). The PLC drops its requests and returns to waiting for a QR read.
+- **PC abort.** The PC lowers its own tags and sets `PC_PLC_CycleAborted` (as in v1; it becomes a required tag in v2). The PLC drops its requests and returns to waiting for a QR read.
 
 ### 6.5 Timeouts (both sides)
 

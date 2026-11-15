@@ -1,4 +1,4 @@
-> **Notes of 2026-11-05.** Section numbers 74–80 here are this document's own and are not the same as §74–80 of `../CHANGES_MACHINE2.md`. §79 below (restart detection by the last PLC_PC tag raised) was later replaced by the side-tag fallback: CHANGES §80 and §82, `PLC_Interface_Spec.md` §5.6.
+> **Notes of 2026-11-05.** Section numbers 74–80 here are this document's own and are not the same as §74–80 of `../CHANGES_MACHINE2.md`. §79 below (restart detection by the last PLC_PC tag raised) still holds; when no PLC-raised tag is known to be True, the side written in state 2 is now the fallback reference (CHANGES §80 and §82, `PLC_Interface_Spec.md` §5.6).
 
 # Machine 2 plant PC: set-up and start-up (2026-11-05)
 

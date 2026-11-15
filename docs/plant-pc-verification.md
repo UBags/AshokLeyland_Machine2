@@ -79,7 +79,7 @@ gets the reset); after the frontend is back, the next cycle runs normally.
 Not to be provoked on purpose. If the screen ever freezes for more than a minute, the frontend's heartbeat now
 reports it as down (`Frontend: the GUI thread has not run for N s - heartbeat DEAD` in the console), and the cycle
 in progress is aborted as for a closed frontend. A menu dialog left open (Machine Settings, a report, user accounts,
-the manual-abort confirmation) does not count: the screen waits for the dialog, it is not frozen. The same holds for the work threads of the other servers (camera
+the manual-abort password prompt) does not count: the screen waits for the dialog, it is not frozen. The same holds for the work threads of the other servers (camera
 assessment, DB inserts, IOServer read / write loops, QR code reader): stuck for `heartbeat.work.loop.max.silence.sec`
 (60 s), the server is shown down.
 
@@ -87,6 +87,27 @@ assessment, DB inserts, IOServer read / write loops, QR code reader): stuck for 
 
 Scan five real parts (DOST and DOSTPLUS, LHS and RHS). Each is accepted and the side and model shown match the part.
 A scan that is not accepted with a real code: send the code (from the log line `Invalid QRCode ...`) to the developer.
+
+## 6. Knuckle check by segmentation and the frame (Machine 2, CHANGES 102)
+
+The knuckle check (state 3) runs MobileSAM on one picture and gives the later checks their centres for the cycle.
+
+1. Run 3-4 cycles, DOST and DOSTPLUS, LHS and RHS. For each knuckle check the camera server log has
+   `CheckKnuckle: SUCCESS - <side> <type> matches the QR code; ... frame: ... camera shift (x, y), rotation ..., scale
+   ...; centres: ...`, and before the next checks `Vision centres from the knuckle picture: ...`.
+   - The camera shift should stay within about 1-2 px between cycles, the scale within 0.999-1.001.
+   - "spindle mask N px away - MORE THAN 6 px: check the part" should not appear (except with a bearing on the spindle).
+   - The check time (`READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: check S s in the worker`) about 0.5 s on the GPU.
+2. A knuckle of the wrong model or side, and the empty fixture: NOT OK with the reason in the log.
+3. After a completed and after an aborted cycle the log shows `Vision centres from the properties file (no knuckle
+   frame in this cycle)` before the next knuckle check, or the next knuckle check builds a new frame.
+4. Keep the knuckle, hub and cap pictures of the same components (saved by the DB server) for 3-4 cycles: they show
+   whether the hub follows the spindle 1:1 (the open question of CHANGES 102).
+
+If the knuckle check fails on good parts after the camera was touched ("camera moved N px (limit 40) - set the camera
+again"), set the camera back. If it fails for another reason, `siemens.vision.knuckle.method=regions` brings back the
+grey-level check of CHANGES 95 (its regions are for the camera position of 13 Nov) and the later checks use the
+centres in the properties file.
 
 ## Results
 
@@ -97,3 +118,4 @@ A scan that is not accepted with a real code: send the code (from the log line `
 | 3 Restart: camera / QR / IO / DB / frontend / heartbeat / logging | | | | |
 | 3 Frontend killed during a cycle | | | | |
 | 5 Real QR codes | | | | |
+| 6 Knuckle frame (shift, scale, check time; wrong part NOT OK) | | | | |

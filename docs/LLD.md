@@ -10,14 +10,17 @@
 
 ## 1. MainProgram (`MainProgram.py`)
 
-`main()` runs these steps in order:
+At import, MainProgram connects to Redis (3 attempts, 10 s apart, then exit). It does not flush Redis there: on Windows
+every server process re-imports MainProgram (spawn). `main()` then runs these steps in order:
 
-1. Parse mode, user and role.
-2. Connect to Redis, run `clearQueues`, then run `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
-3. Start P1 (the logging server).
-4. Start P2 camera, P3 QR, P4 IO, P6 FE, P7 HB and P5 DB, each through `startProcess(target, args)`. Every process first calls `setLogProcess(<name>)`, which sets the per-process log levels, crash capture and live configuration.
-5. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`).
-6. Wait for `stopcommandQ`, then send the stop and collect each `stoppedresponseQ`. `monitorStop` then backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
+1. `setLogProcess("mainprogram")`; `clearQueues` (flushes the Redis db, trims the queues), then `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
+2. Start P1 (the logging server).
+3. Start-up screen; `doBackup()` (pg_dump of the production database); ping the camera and PLC addresses (a warning only).
+4. `chooseMode()` (Test / Production); `setDatabaseName` for both databases (creates the database, schema, tables, indexes, default machine settings and users), then for the chosen one.
+5. Login: up to 5 tries.
+6. Start P2 camera, P3 QR, P4 IO, P6 FE, P7 HB and P5 DB, in that order. Every process first calls `setLogProcess(<name>)`, which sets the per-process log levels, crash capture and live configuration.
+7. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`), which restarts a dead process through `startProcess(target, args)`.
+8. `monitorStop` waits for `stopcommandQ`, then sends the stop and collects each `stoppedresponseQ`, ends the processes and backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
 
 **ProcessSupervisor.** Every `supervisor.check.interval.sec` (2 s), `checkOnce()` restarts each registered process that has died. This is enabled by `supervisor.restart.dead.processes`. Restarts are limited to `supervisor.max.restarts.per.hour` (10) for each process; above that the process is left down and logged. Supervision stops once `isStopping()` is true.
 
@@ -27,9 +30,9 @@
 
 | File | Content |
 |---|---|
-| `PLCDataIO.py` | Abstract tag I/O (read/write of bool, int, float, lists of tags) |
+| `PLCDataIO.py` | Abstract tag I/O: `open`, `close`, `connected`, `read`, `write`, `readMany`; a failed read or write raises `PLCIOError`. Implementations `costhetaio/allenbradley/AllenBradleyPLCDataIO.py` (pycomm3) and `costhetaio/siemens/SiemensPLCDataIO.py` (pyS7 through `plc_backend.py`) |
 | `PLCDataIOFactory.py` | Picks the Siemens or Allen-Bradley implementation from `plc.vendor` |
-| `MockPLC.py`, `MockPLCDataIO.py` | In-process PLC used in TEST mode |
+| `MockPLC.py`, `MockPLCDataIO.py` | In-memory PLC for `PLCIOServer(mockInstance=True)` (the Mock-PLC test window); TEST mode uses the real PLC |
 | `PLCIOServer.py` | `PLCIOServer`, `UpdateTagsToDefaultProcessor` and `DelayedJobScheduler` |
 | `../siemens/IOServerProperties.yaml` | Siemens connection and tag addresses |
 
@@ -46,8 +49,9 @@
 | Emergency | `launchEmergencyMonitoringThread` | 1 s | `PLC_PC_EmergencyAbort`, then `abortCycle` |
 | FE abort | `launchFrontendAbortListenerThread` | blocking read | `fe2io.q`: `Abort` -> `abortCycle`; `FrontendAbortRequest` -> `handleFrontendAbortRequest` (writes `PC_PLC_CycleAborted` = True, 3 attempts; aborts only if written, else logs) |
 | Stop | `launchMonitorStopCommandThread` | blocking read | Orderly stop |
-| Tag defaults | `UpdateTagsToDefaultProcessor` | queue | Default writes requested from other threads |
-| Delayed jobs | `DelayedJobScheduler` | timers | Resets 0.4 s after a read (Set/Done tags) and the end of handshakes |
+| Tag dump | `launchTagRequestListenerThread` | blocking read | `publishTags` → every tag's value on `receiveTags` (test windows) |
+| Tag defaults | `UpdateTagsToDefaultProcessor` | queue | Kept; no longer used (the torque and press resets are scheduler jobs) |
+| Delayed jobs | `DelayedJobScheduler` ("PLC Handshake Reset Scheduler") | one thread, time-ordered jobs | Torque Set / Value reset `plc.handshake.torquevalues.reset.delay.sec` (2.0 s) after the read; press Done `plc.handshake.componentpress.reset.delay.sec` (1.5 s) after the read |
 
 The state is held in `MachineState` (`statemachine/StateMachine.py`). A change of state goes through `_onStateChange`, which audits it, records cycle times and sets `log:cycleContext`.
 
@@ -64,18 +68,18 @@ The trigger in each state is the tag read in that state; the write states write 
 | 7/8 | Top bearing | CheckBearing | Same. OK → 9 |
 | 9/10 | Nut and plate washer | CheckNutAndPlateWasher | Same. OK → 11 |
 | 11 | READ_TIGHTENING_TORQUE_1_DONE | Station2TorqueValueSet | → 12 |
-| 12 | READ_TIGHTENING_TORQUE_1 | Station2TorqueValue (float) | Value to FE; Set is reset 0.4 s later → 13. Bypassed (`PC_PLC_Skip_Second_Tightening` True written in state 2): to FE with moveTo = 20 → 20 (13–19 skipped) |
+| 12 | READ_TIGHTENING_TORQUE_1 | Station2TorqueValue (float), RotationDuringTighteningDone | Value to FE; Set, Value and RotationDuringTighteningDone reset 2.0 s later → 13. Bypassed (`PC_PLC_Skip_Second_Tightening` True written in state 2): to FE with moveTo = 20 → 20 (13–19 skipped) |
 | 13/14 | Bunk for component press | CheckBunkForComponentPress | Handshake. OK → 15 |
-| 15 | READ_COMPONENT_PRESS_DONE | ComponentPressDone | To FE; reset after 0.4 s → 16 |
+| 15 | READ_COMPONENT_PRESS_DONE | ComponentPressDone | To FE; reset after 1.5 s → 16 |
 | 16/17 | No bunk | CheckNoBunk | Handshake. OK → 18 |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | Station2TorqueValueSet | → 19 |
-| 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue | To FE; reset → 20 |
+| 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue, RotationDuringTighteningDone | To FE; reset after 2.0 s → 20 |
 | 20/21 | Split pin and washer | CheckSplitPinAndWasher | Handshake. OK → 22 |
 | 22/23 | Cap | CheckCap | Handshake. OK → 24 |
 | 24/25 | Bunk for cap press | CheckBunkForCapPress | Handshake. OK → 26 |
-| 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset → 27 |
+| 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset after 1.5 s → 27 |
 | 27 | READ_FREE_ROTATION_TORQUE_1_DONE | Station3TorqueValueSet | → 28 |
-| 28 | READ_FREE_ROTATION_TORQUE_1 | Station3TorqueValue | To FE with moveTo = 1; `resetForNextCycle("cycle completed")` → 1 |
+| 28 | READ_FREE_ROTATION_TORQUE_1 | Station3TorqueValue | To FE with moveTo = 1; Set and Value reset after 2.0 s; `resetForNextCycle("cycle completed", keepPendingResets=True)` → 1 |
 
 ### 2.4 Key methods
 
@@ -105,7 +109,12 @@ Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_
 
 **PLC restart after a reconnect**
 
-If no PLC-raised tag is known to be True, the PC compares `PC_PLC_LH_RH_Selection` with the side it wrote in state 2. The same value means no restart. Any other value (0 after a restart) means the PLC restarted: abort and reset.
+While the link is down, PLC writes and the read loop are held until the PLC has been checked. The reference is the
+last PLC_PC tag the PLC raised that is still known to be True (the IOServer keeps an ordered list): still True after
+the reconnect means no restart, and the cycle carries on in the same state. If no PLC-raised tag is known to be True,
+the PC compares `PC_PLC_LH_RH_Selection` with the side it wrote in state 2. The same value means no restart. Any other
+value (0 after a restart) means the PLC restarted: `abortCycle(..., pcAbort=True)` during a cycle, only the reset at
+READ_QR_CODE.
 
 **Delayed resets**
 
@@ -113,18 +122,26 @@ If no PLC-raised tag is known to be True, the PC compares `PC_PLC_LH_RH_Selectio
 - `completePendingResultReset` runs a pending reset at once, before the next handshake of the same check.
 - `cancelVisionResultReset` cancels one.
 
-**`abortCycle(reason, …)`**
+**`abortCycle(reason, notifyQRCodeServer, notifyFrontend, clearQueues, pcAbort)`**
 
-1. Cancels delayed jobs and the camera request.
-2. Resets the per-cycle tags (`perCycleTags`, `resetAll`).
-3. Arms CheckQRCode.
-4. Tells the QR server, FE and camera.
-5. Pulses the cycle-aborted tag, if one is configured.
-6. Goes to state 1.
+Holds `_abortLock` throughout. In order:
+
+1. ABORT to the QR code server (scan stopped), if asked; the camera / QR code queues cleared, if asked.
+2. The emergency message to the frontend (abort screen and record), unless the abort came from the frontend.
+3. `PLC_PC_EmergencyAbort` := False.
+4. State := READ_QR_CODE (which sends END_OF_CYCLE "aborted" to the camera server, through `_onStateChange`); the camera request dropped.
+5. `resetForNextCycle(...)`: pending delayed resets cancelled, every per-cycle tag to its default with read-back, CheckQRCode armed.
+6. `pcAbort` (frontend abort request that could write the tag, frontend down, heartbeat server down, PLC restart): `PC_PLC_CycleAborted` := True where the PLC has it (it goes False when the next QR code is accepted), and a frontend notice. The emergency button is not a PC abort.
+
+Callers: the emergency thread, `_applyServerStatuses` (frontend / heartbeat server down), the frontend abort
+listener (`Abort` from the test tools; `FrontendAbortRequest` through `handleFrontendAbortRequest`, which aborts only
+if `PC_PLC_CycleAborted` = True could be written and read back, 3 attempts) and the PLC restart check. A restarted
+IOServer (Redis key `ioserver:started` already set) sends the emergency message to the frontend and END_OF_CYCLE to
+the camera server at start.
 
 **`resetForNextCycle(reason, keepPendingResets)`**
 
-Resets at the end of a cycle. After a completed cycle, the pending resets (for example the free-rotation Set) are left to run at their time.
+The one reset routine: IOServer start, every abort, and the end of a cycle. Writes every per-cycle tag (`perCycleTags()`: bool False, float 0.0) and reads it back (`RESET_WRITE_ATTEMPTS` 5), then arms `PLC_PC_CheckQRCode`. The state-2 settings, the watch tag and the connection toggle are left alone. A reset that cannot be verified is redone after the next reconnect, only while the machine is at the QR code. After a completed cycle (`keepPendingResets=True`) the pending resets (for example the free-rotation Set) are left to run at their time.
 
 **`_applyServerStatuses()`**
 
@@ -146,10 +163,44 @@ Applies the rules of spec §5.7 to the camera, qrcode, db, frontend, heartbeat a
 MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶ ImageProcessor
 ```
 
-1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`.
+1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`. An END_OF_CYCLE message calls `ImageProcessor.endOfCycle()`.
 2. `TakePictures` takes three pictures with `RTSPCam.getFrameAfter`: each a frame that arrived after the request and after the previous picture, waiting at most `camera.frame.max.wait.sec` (1 s). None in time (stalled stream) or camera not connected: the answer carries `noPictureReason` (CHANGES §84).
-3. `ConverterScalerAndProcessor` normalises the image and sends it to the vision check. With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason.
+3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`<vendor>.vision.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check: in the worker process (`<vendor>.vision.check.in.worker.process`, default) or in a thread (`_assessInThread`), within `<vendor>.vision.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
 4. The answer goes to `camera2io.q` with the request id and to `camera2fe.q` with both images and the reason.
+
+**`assessPictures(state, pictures)`** (`CameraProcessorServer.py`): first `VisionFrame.applyToChecks(ImageProcessor.visionFrame)`, then one of:
+
+| State | Pictures | Notes |
+|---|---|---|
+| Knuckle, `vision.knuckle.method=segmentation` | the first | `CheckKnuckle.checkKnuckleBySegmentation` → (picture, OK, frame); `ImageProcessor.setVisionFrame(frame if OK else None)` |
+| Hub, top bearing, nut / washer, both bung checks, no bung | the first | Top bearing: OK saves the ring geometry (`saveBearingProfile`), NOT OK drops it; the nut / washer and bung checks get it with `getBearingProfile()` (current component only) |
+| Knuckle (`regions`), split pin, cap | all six, in a `ThreadPoolExecutor` (6 workers) | 2 of the 3 pictures must pass; a picture not assessed within 5 s counts as NOT OK; the executor is shut down without waiting |
+
+**Cycle state in `ImageProcessor`** (`_STATE_ATTRIBUTES` plus `currentPictures`): QR code, model, side, the top bearing
+ring (`bearingCentreAndRadii`, `bearingProfileQRCode`), the knuckle frame (`visionFrame`) and the earlier pictures. In
+worker mode the camera server sends a snapshot with each job (`snapshotState`); the worker restores it
+(`restoreState`, which applies the frame) and returns what changed (`applyStateChanges`, which applies the frame in the
+camera server too). `endOfCycle()` drops all of it.
+
+**Knuckle frame** (`camera/KnuckleLocator.py`, `camera/VisionFrame.py`; Machine 2):
+
+1. `KnuckleLocator.locate(picture)`: one MobileSAM embedding (the shared predictor of `ModelManager`); the spindle by one point prompt at (642, 360); each boss from a 4 × 4 grid of 24 two-point prompts placed relative to the spindle (3 masks each; a boss = round mask with a bright machined ring round a dark core; the pin = the core's centre); a missing boss looked for again at the usual place or from the other pin; the lower arm by 4 points down each side. Type: mean boss area × 1000 / pin distance² ≥ 34.5 → DOSTPLUS, cross-checked by boss radius / pin distance (0.1095 ± 0.0025). Side: the one lower arm found.
+2. `VisionFrame.buildFrame(type, side, pins, spindleMask)`: rotation and scale from the pin line against `NOMINAL_PINS[type, side]`, translation from the pin midpoint; anchor = where the pins put that type / side's usual spindle (the spindle mask is a cross-check, logged when over 6 px away).
+3. `CheckKnuckle.checkKnuckleBySegmentation`: OK when both pins, the lower arm and a clear type are found, type and side match the QR code, and `VisionFrame.withinLimits` (`vision.knuckle.frame.max.shift` 40 px, `.max.rotation` 3°, `.max.zoom.change` 0.05). The frame is returned only with OK.
+4. `VisionFrame.applyToChecks(frame)`: for each entry of `CENTRES` (hub segmentation, hub centre check, top bearing, nut / washer, no bung, bung disc, bung seated positions, cap) writes `anchor + scale · R(rotation) · (reference[type] − TYPE_SPINDLE[type])` into the check module's constant (and the hub segmenter instance's `annular_center`); with no frame, the properties values (from VisionConfig's registry). Radii are not scaled.
+
+**Bearing-ring guard** (nut / washer, `<vendor>.vision.nutwasher.bearing.ring.guard`): in worker mode the camera
+server runs `CheckTopBearing.findRing` on a copy of the nut picture in its own thread while the worker runs the check
+(`VisionCheckWorker._startBearingRingGuard`), waits at most 5 s after the verdict (`GUARD_MAX_WAIT_SECS`) and makes
+the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.bearingRingVerdict`). If the guard has no
+answer in time or fails, it is not applied (logged). In thread mode, and in the dry-run windows, the check runs the
+guard itself.
+
+**Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
+face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
+the cap centre. Bung (`vision.bunk.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 15 px from
+the model's seated position and the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS). Each uses its own
+`SamPredictor` per thread on the shared model.
 
 **VisionCheckWorker** (`VisionCheckWorker.py`):
 
@@ -159,7 +210,7 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 
 **Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
 
-**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press). The thresholds are in `VisionConfig.py`.
+**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BunkSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` keep theirs in the code. The pictures sent to the frontend carry outlines only, no values (except the hub check's hole count and model-mismatch line, and the camera server's "NOT OK: <reason>").
 
 ## 4. QR code server (`costhetaio/qrcodescanner/QRCodeScanningServer.py`)
 
@@ -224,7 +275,7 @@ At the end of the cycle (state 28), the FE builds the record, adding `cycleSetti
 
 **Other threads**
 
-- `watchForNewDay` (every 1 min) creates the next day's image folder.
+- `watchForNewDay` (every 1 min): when the date has changed, creates the new day's image folders; images saved from then on go there.
 - `sendHeartbeat` sends `db2hb.q`: DEAD while PostgreSQL is not reachable or `doWork` is not running or stuck (60 s).
 
 Every PostgreSQL connection gives up after 5 s if the server does not answer (`PGCONNECT_TIMEOUT`, set in `Persistence.py`).
@@ -246,11 +297,11 @@ One row per component. Primary key `record_id`, a sequence.
 | Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` |
 | Overall | `ok_notok_result`, `username` (FK to `users`), `remarks`, `created_on` |
 
-Indexes: `idx_qr_code`, `idx_model_name`, `idx_created_on`, plus the primary key. The earlier REINDEX after every insert has been removed.
+Indexes: `idx_qr_code`, `idx_model_name`, `idx_created_on`, plus the primary key (older duplicate indexes are dropped at start-up). The earlier REINDEX after every insert has been removed.
 
 ### `machine_settings`
 
-Append-only, per model: the latest `setting_id` of a model (`model_name`; the models of `qrcode.partmapping.N`) is
+Append-only, per model (index `idx_machine_settings_model`): the latest `setting_id` of a model (`model_name`; the models of `qrcode.partmapping.N`) is
 in force for it. Rows without a model (before 2026-11-08) are copied to every model that has none when the database
 is set up; a model with no row falls back to the latest such row.
 
@@ -276,11 +327,13 @@ Every message also carries `timestamp` and `producer`.
 | `qrcode2fe.q` | `qrCode`, `qrCodeDisplay`, `qrCodeStatus` |
 | `qrcode2io.q` | `qrCodeStatus`, `qrCode` |
 | `qrcode2camera.q` | `componentQRCode` |
-| `io2camera.q` | `currentMachineState`, `action`, `requestId` |
+| `io2camera.q` | Take picture: `currentMachineState`, `action`, `requestId`. End of cycle: `currentMachineState` = READ_QR_CODE, `action` = "End Of Cycle", `data` = completed / aborted |
 | `camera2io.q` | `result`, `currentMachineState`, `requestId` |
 | `camera2fe.q` | `originalImage`, `processedImage`, `result`, `currentMachineState`, `requestId`, `reason` |
 | `io2frontend.q` | `currentMachineState`, `moveToState`, `action`, `value`, `result`, `rotationDone` |
 | `fe2io.q` | `action` = FrontendAbortRequest (frontend) or Abort (test tools), `data` = reason |
+| `emergency.q` | `emergencystatus` |
+| `fe2db.q` | The cycle record: every result, image, datetime and torque, the rotation-done bits, `aborted`, `abortReason`, `bypassedPressAndTightening2`, overall result |
 | `hb2io.q` | Per-server status: `camera`, `qrcode`, `db`, `frontend`, `heartbeat`, `redis` |
 | `hb2fe.q` | Per-server lamps, plus `redisstatus` |
 
@@ -291,18 +344,27 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | Key | Default | Section |
 |---|---|---|
 | `plc.vendor` | siemens (Machine 1: allenbradley) | 2 |
-| `plc.ip` | 192.168.1.1 | 2 |
+| `plc.ip` / `siemens.plc.ip` | 192.168.1.1 (Allen-Bradley) / 192.168.1.10 (Siemens) | 2 |
 | `plc.read.interval` / `plc.write.interval` | 0.2 / 0.1 | 2.2 |
 | `plc.sleeptime.between.ok.and.done` | 0.05 | Spec 5.1 |
 | `plc.sleeptime.between.done.and.reset_done` / `…re_read` | 0.4 / 0.3 | Spec 5.1 |
-| `plc.handshake.reset.delay.sec` | 0.4 | Default for delayed resets |
+| `plc.handshake.reset.delay.sec` | 0.4 | Fallback delay of `scheduleTagReset` (every current caller passes its own) |
 | `plc.handshake.torquevalues.reset.delay.sec` | 2.0 | Spec 5.3: torque Set / Value |
 | `plc.handshake.componentpress.reset.delay.sec` | 1.5 | Spec 5.3: press Done |
 | `plc.camera.answer.timeout.sec` | 20 (at least the vision check timeout + 8) | 2.4 |
 | `camera.frame.max.wait.sec` | 1.0 | 3 |
-| `pc.plc.cycle.aborted.tagname` | (empty) | 2.4 |
+| `pc.plc.cycle.aborted.tagname` | `PC_PLC_CycleAborted` (optional tag; no Siemens address yet) | 2.4 |
+| `pc.plc.skip.second.tightening.tagname` | `PC_PLC_Skip_Second_Tightening` (optional tag; no Siemens address yet) | 2.4 |
+| `cycle.settings.source` | database | 2.4 |
 | `supervisor.restart.dead.processes` / `.check.interval.sec` / `.max.restarts.per.hour` | True / 2 / 10 | 1 |
 | `redis.health.check.interval.sec` | 60 | 6 |
+| `heartbeat.work.loop.max.silence.sec` | 60 | 3, 5, 7 |
+| `frontend.free.rotation.torque.display.sec` | 2.0 | 5 |
+| `<vendor>.vision.check.timeout.sec` / `.check.in.worker.process` | 12 / True | 3 |
+| `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
+| `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
+| `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
+| `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bunk.seating.check` | True / True (Machine 1: False / False) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)
@@ -317,6 +379,12 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | Frontend / DB / index and day-folder | FE workers; inserts; indexes; day folder |
 | `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R6 (R6: the check survives a recovery); database backup at shutdown (H10) |
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
-| `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors |
+| `DryRun_Knuckle_Frame.py` | Knuckle by segmentation on every knuckle picture with each QR code; the frame on the pictures as taken and with simulated camera moves; the centres written into the checks, restored, dropped at cycle end and retake (MobileSAM weights) |
+| `DryRun_CheckKnuckle_Images.py` | The `regions` knuckle method (Machine 1; Machine 2 before CHANGES 102) |
+| `DryRun_Bearing_Ring_Guard.py` | The guard in the camera server beside the worker |
+| `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
+| Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
+| `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
+| `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` are not in its manifest) |
 
 `_plc_sim.py` simulates the PLC side of the v1 handshake. A v2 simulator is needed before v2 goes live.

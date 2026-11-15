@@ -3180,3 +3180,33 @@ all later checks; (d) build that into the later checks instead of the properties
     or the hub's own seating; needs knuckle + hub + cap pictures of the same components.
   - `DryRun_Knuckle_Frame.py` (part B now against each type's reference centres, within 2.5 px): 161/161; camera
     moved: every centre within 1.17 px of where the move takes it.
+
+## 103. docs/ brought in line with the code (2026-11-15)
+
+Checked against the code of `b371775` (CHANGES 102); no code changed.
+
+- **HLD:** QR scanner on serial (COM3, 38400), not USB; start-up order (Redis check, backup, mode, login, then the
+  servers); `io2camera.q` END_OF_CYCLE, `alarm.q` from the camera server, `publishTags` / `receiveTags`; bypass in the
+  cycle; new §5a vision checks (method per state, pictures used, the knuckle frame, where the reference values live);
+  failure table: PLC restart rule (last PLC-raised tag, then the side), camera moved, no frame in the cycle, worker not
+  ready; configuration (vision keys through VisionConfig, live reload of vision values not in the exe, the build
+  copies); logs (per-server levels in the properties); tests.
+- **LLD:** MainProgram steps as coded; IOServer threads (tag dump listener, the reset scheduler and its delays,
+  `UpdateTagsToDefaultProcessor` unused); state table reset times (2.0 s torques, 1.5 s presses); PLC restart rule;
+  `abortCycle` as coded (order, `pcAbort`, `PC_PLC_CycleAborted` True / False, callers, restarted IOServer);
+  `resetForNextCycle`; camera server: `prepareForKnuckleCheck`, `assessPictures` per state (single picture / 2-of-3 vote
+  with 6 threads and a 5 s wait), the cycle state sent to the worker, the knuckle frame (KnuckleLocator, VisionFrame),
+  the bearing-ring guard, the seating steps; `PLCDataIO` contract; MockPLC is for the Mock-PLC window, not TEST mode;
+  message fields (END_OF_CYCLE, emergency, fe2db); configuration keys (Siemens PLC address, optional tags, vision
+  switches); tests (knuckle frame, cap, guard, windows, study tools; KnuckleLocator / VisionFrame not in the verifier's
+  manifest).
+- **PLC_Interface_Spec:** `PC_PLC_CycleAborted` (named, optional, no address yet; True after a PC-side abort, False at
+  the next accepted QR code); rotation counts 1 to 4, settings per model; §5.4 reset times and the emergency reset;
+  §5.5 abort sources and order (frontend abort only if the tag can be written; a restarted IOServer does not abort the
+  PLC's cycle); §5.6 restart rule (last PLC-raised tag first, side as the fallback; DB500 and DB101 not retentive).
+- **plant-pc-verification:** new step 6, the knuckle check by segmentation and its frame on the machine.
+- **README (docs/):** `vision_positions_machine2.md` and the figures listed. **machine2-plant-pc-setup:** the note on
+  restart detection corrected (the last-tag rule still holds; the side is the fallback).
+- **test/machine*_dryrun/README.md:** the torque / press reset delays and the frontend abort (F8) described as coded.
+- Checked here (Linux, Python 3.13, CPU, MobileSAM weights): `DryRun_Knuckle_Frame.py --quick` 86/86; vision verifier
+  ALL EQUIVALENT (216 parameters); `DryRun_QRCode_Validation` 9/9; fault scenarios (Siemens) 190/190.
