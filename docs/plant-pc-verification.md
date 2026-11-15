@@ -115,8 +115,8 @@ centres in the properties file.
 
 | Step | Date | Exe build | Result | Notes |
 |---|---|---|---|---|
-| 1 Worker in the exe | | | | |
-| 2a Check times (largest per check) | | | | |
+| 1 Worker in the exe | 2026-11-15 | | Passed | Reported by Uddi: the worker runs inside the exe |
+| 2a Check times (largest per check) | 2026-11-15 | | Passed | Reported by Uddi: response times fast (per-check times not recorded) |
 | 3 Restart: camera / QR / IO / DB / frontend / heartbeat / logging | | | | |
 | 3 Camera server killed during a cycle (state taken back) | | | | |
 | 3 Frontend killed during a cycle | | | | |

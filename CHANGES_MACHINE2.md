@@ -3311,3 +3311,15 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   picture carries its outlines (hub: nothing found without YOLO); the window (Python 3.12 + Tk, camera modules stood
   in) 15/15 at 1366 x 768, 1920 x 1080 and 1280 x 720 - button on screen, window within the screen, checks one after
   the other with the pause, statuses, Show, vote on / off.
+
+## 107. CLAUDE.md; plant PC verification steps 1 and 2a recorded (2026-11-15)
+
+- **Plant PC (user):** the checklist's step 1 (the vision check worker inside the Nuitka exe) and step 2a (check
+  times on the plant PC's GPU against the 12 s timeout) were run on the Machine 2 PC and passed; response times are
+  fast. Recorded in the results table of `docs/plant-pc-verification.md` (no per-check times were given) and in
+  `CLAUDE.md`. Steps 3, 5 and 6 not reported yet.
+- **New `CLAUDE.md`** at the repo root: what the system is, where it runs (laptop / plant PC / sandbox), the
+  processes, configuration (the three properties files, vision keys, reference commits), the rules for changing code
+  (no text on pictures, keep unused methods, dry-run copies in both folders, the reference-commit workflow), docs and
+  history to keep in step, the plant PC verification status, open items, testing (what needs Redis / PostgreSQL /
+  models, sandbox limits) and how the user likes to work.

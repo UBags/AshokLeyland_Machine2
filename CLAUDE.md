@@ -1,0 +1,156 @@
+# CLAUDE.md — AshokLeyland Machine 2 (Hub and Disc Assembly)
+
+Working notes for Claude (and anyone else) on this repository. Read this first; the design is in `docs/HLD.md` and
+`docs/LLD.md`, the PLC interface in `docs/PLC_Interface_Spec.md`, the history in `CHANGES_MACHINE2.md`.
+
+## 1. What this is
+
+PC software for CosTheta's hub-and-disc assembly SPM at Ashok Leyland. The PLC runs the machine; the PC reads the
+component's QR code, writes the cycle settings to the PLC, answers the PLC's vision-check requests from camera
+pictures, records torques and press events, shows everything to the operator and stores one database row per
+component.
+
+- **Machine 2:** Siemens S7-1515 (pyS7). **Machine 1:** Allen-Bradley (pycomm3). One code base; the only build-time
+  difference is `plc.vendor`. Per-machine values live under `siemens.` / `allenbradley.` prefixes in the properties.
+- Repo: `https://github.com/UBags/AshokLeyland_Machine2.git` (use exactly this URL), working branch
+  `machine2-io-fe-db-cam`.
+- The code this repo started from differs slightly from what runs in production.
+
+## 2. Where things run
+
+| Place | What is there |
+|---|---|
+| Laptop (`C:\PythonProjects\AshokLeyland_Machine2`, Windows, PyCharm) | The git repo, the models, the dry runs; builds the exe (`runNuitka.bat siemens` / `allenbradley`) |
+| Machine 2 PC (`D:\AshokLeyland\MainProgram.dist\MainProgram.exe`) | The exe only - no repo, no git. Auto-started at logon by `Start-Hub-And-Disc-application - Production.vbs`; `Startup.bat` on the desktop for manual starts. Redis in WSL Ubuntu-22.04 (started with WSL; a scheduled task starts WSL after boot); PostgreSQL on the PC; NVIDIA GPU |
+| Claude's sandbox (Linux) | A clone for development and synthetic dry runs (see §9) |
+
+So: repo commands (pull, build) are for the laptop; the plant PC gets a copied exe. The Machine 2 PC runs nothing
+else (killing every `cmd.exe` at shutdown is intended) and is not run 24x7.
+
+## 3. Architecture in one screen
+
+`MainProgram.py` checks Redis, backs up the database, asks for the mode and login, then starts seven processes,
+supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
+
+| Process | Module |
+|---|---|
+| Logging | `logutils` |
+| Camera server (+ `VisionCheckWorker` child process for every vision check, 12 s deadline) | `camera/CameraProcessorServer.py` |
+| QR code server | `costhetaio/qrcodescanner/QRCodeScanningServer.py` |
+| IOServer (28-state machine, every PLC read / write) | `costhetaio/commonplc/PLCIOServer.py` |
+| DB server | `persistence/DBServer.py` |
+| Frontend (PySide6) | `frontend/AshokLeylandFrontEnd.py` |
+| Heartbeat and alarm server | `monitorAllConnections/HeartbeatAndAlarmServer.py` |
+
+- **Redis is only for communication between processes** (streams with one producer and one consumer; a few keys).
+  Data used inside one process stays in memory variables. Queue and key list: HLD §4.
+- Send / read functions per queue are in `utils/RedisUtils.py` (`send<What>From<A>To<B>`, `read<What>In<B>From<A>`).
+- The camera server keeps the cycle's vision state in `ImageProcessor` (QR code, earlier pictures, top bearing ring,
+  knuckle frame), sends it to the worker with each job, and writes it to `<root>/Temp/camera_server_state.pkl` so a
+  restarted camera server takes it back.
+
+## 4. Configuration
+
+- One live file, `ApplicationConfiguration.properties`, read by `Configuration.py` (`CosThetaConfigurator`); some
+  keys apply live. `ApplicationConfiguration.Machine1.properties` / `.Machine2.properties` are the build copies
+  (`runNuitka.bat <vendor>` copies one in). **Keep the three in step**: Machine1 and Machine2 differ only in
+  `plc.vendor`; the live file equals Machine2.
+- Vision parameters: `<vendor>.vision.*`, declared in each check module through `camera/VisionConfig.py`
+  (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
+  knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the
+  allenbradley copies hold the Machine 2 values until Machine 1 is measured.
+- `costhetaio/siemens/IOServerProperties.yaml`: Siemens rack / slot / PDU and tag addresses.
+- `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
+- Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
+  Do not flag them or propose moving them.
+
+## 5. Rules for changing code
+
+- **Root-cause fixes, not workarounds.** Diagnose first, say what was found, then fix.
+- **Do not delete well-defined methods because they are unused**; keep them (they may be used later).
+- **No text or values on vision pictures** sent to the frontend or shown in the test windows - outlines only (green
+  OK / red NOT OK); values and reasons go to the log, the terminal or the window's scrollable text box. Test windows
+  show each picture's check time.
+- **Vision logic changes need a reference commit.** `test/machine*_dryrun/Verify_Vision_Config_Equivalence.py` proves
+  that moving values into the properties changed nothing: each vision file is compared (AST) with its reference
+  commit after every `vX(...)` call is replaced by its default, and the allenbradley value must equal the default.
+  So when a vision file's *logic* changes:
+  1. commit the new logic with the values hard-coded (the "reference commit");
+  2. point that file's entry in `baseline_per_file` of **both** `vision_config_manifest.json` files at it;
+  3. make the values configurable; the verifier must say ALL EQUIVALENT on both machines.
+- **Dry-run copies live in both** `test/machine1_dryrun` and `test/machine2_dryrun` (identical apart from paths;
+  each sets `COSTHETA_PLC_VENDOR` from its folder name, except `DryRun_Vision_Check_Timeout.py` on Machine 1, which
+  needs `COSTHETA_PLC_VENDOR=allenbradley` set).
+- PLC tag prefixes `PC_PLC_` / `PLC_PC_` show the main writer, not exclusive ownership (v1 protocol; see §8).
+- Torque OK / NOT OK is the PLC's decision; the PC only records the values.
+- The split pin + washer check stays a placeholder (OK whenever a QR code is known) until production pictures exist.
+- IOServer reset rule: at start, cycle end and every abort one routine resets every per-cycle tag (not the settings)
+  with retries and read-back, then arms `PLC_PC_CheckQRCode`. After a lost PLC connection: the last PLC_PC tag the
+  PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
+  reset. Both PLCs reset all values on restart.
+- The vision check always runs in the worker process (no thread fallback since CHANGES 105).
+
+## 6. Documentation and history
+
+- Every change gets a numbered section at the end of `CHANGES_MACHINE2.md` (`## N. Title (date)`), saying what
+  changed, why, what was measured and what was run.
+- Keep `docs/HLD.md`, `docs/LLD.md`, `docs/PLC_Interface_Spec.md`, `docs/plant-pc-verification.md`,
+  `docs/vision_positions_machine2.md` and the two `test/machine*_dryrun/README.md` in step with the code.
+- The claude.ai Project "Ashok Leyland - Machine 2" holds copies (`claude/HLD.md`, `claude/LLD.md`,
+  `claude/plant-pc-verification.md`, `claude/vision_positions_machine2.md`,
+  `claude/machine2-changes-log-81-onwards.md` = CHANGES from §81 with a two-line header). Refresh them after a push.
+- Commits end with the attribution lines the session asks for; push to `machine2-io-fe-db-cam`.
+
+## 7. Plant PC verification (`docs/plant-pc-verification.md`)
+
+| Step | Status |
+|---|---|
+| 1 Vision check worker inside the exe | **Passed** - run on the Machine 2 PC, reported by Uddi on 2026-11-15: the worker starts and answers inside the Nuitka exe |
+| 2a Check times against the 12 s timeout (GPU) | **Passed** - same run: response times fast, well inside the timeout |
+| 3 Process restart (each server killed), camera / frontend killed during a cycle | Not reported yet |
+| 4 Frozen screen | Not to be provoked |
+| 5 Real QR codes | Not reported yet |
+| 6 Knuckle check by segmentation and the frame | Not reported yet |
+
+No per-check times were recorded with the report; when they are, put them in the results table of the document.
+
+## 8. Open items (as of 2026-11-15)
+
+- **One source of truth for the cycle state** (frontend and IOServer each walk the states): design outlined to the
+  user, not built. Direction: the IOServer is the master and publishes its state; the frontend follows it.
+- **`PLCIOServer.py` (3,227 lines)**: split into modules later (a pure move, checked by the fault scenarios).
+- **PLC handshake v2** (`docs/PLC_Interface_Spec.md` Part B): single-writer tags with request / acknowledge; needs
+  the PLC programmers' agreement and new tags before any PC code is written.
+- **Star imports** (`from X import *`, 234 in 126 production files): replacing them with explicit imports is planned
+  with tool support (each name resolved from the running module, every module checked for undefined names).
+- **Machine 1 vision values for the segmentation knuckle method**: need Machine 1 pictures (knuckles of each type /
+  side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
+- PLC programmer: addresses for `PC_PLC_CycleAborted` and `PC_PLC_Skip_Second_Tightening` (optional tags, not
+  written until they exist).
+- Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
+
+## 9. Testing
+
+- Synthetic dry runs: `test/machine2_dryrun/README.md` (and the Machine 1 copy) lists every script and what it
+  checks. They need Redis on localhost:6379; the DB ones PostgreSQL on 127.0.0.1:5432 (postgres / postgres). Run from
+  the project root unless the README says otherwise (some write image folders relative to the current directory).
+- Model-based vision runs need `models/` (MobileSAM nested clones and weights, about 5.8 GB, not in git): on the
+  laptop. In the sandbox the MobileSAM weights come from `ChaoningZhang/MobileSAM` (`GIT_LFS_SKIP_SMUDGE=1` clone;
+  the weights file is a normal file there); YOLO weights are not available, so the hub check (and bung hole counts)
+  cannot be judged there - say so rather than guessing.
+- Most used: `Verify_Vision_Config_Equivalence.py` (both folders), `DryRun_IOServer_Fault_Scenarios.py`,
+  `DryRun_Knuckle_Frame.py --quick`, `DryRun_Vision_Check_Timeout.py`, `DryRun_Cap_Check.py`,
+  `DryRun_Cap_Production_Path.py`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`,
+  `DryRun_All_Checks_UI.py` (window; `--auto` without one).
+- Sandbox notes: Python 3.13 has torch / OpenCV but no tkinter; Python 3.12 has Tk (and PySide6 under Xvfb) but no
+  torch - windows are driven on 3.12 with the camera modules stood in, the real checks on 3.13 without a window.
+  OpenCV must stay 4.11 (requirements.txt); 5.x changes `HoughLinesP`'s output shape. Redis and PostgreSQL may need
+  starting: `redis-server --daemonize yes --save ""; service postgresql start`.
+
+## 10. How Uddi likes to work
+
+- Terse replies; diagnosis first; honest uncertainty (say what was not run and why); catch and own mistakes.
+- Root causes over workarounds; outline a design before building it when asked.
+- Full git command blocks ready to paste, for the laptop (`git pull origin machine2-io-fe-db-cam`, the dry runs to
+  run, `runNuitka.bat siemens`). Markdown docs need no separate download: `git pull` brings them.
+- Run the relevant dry runs before shipping and report the counts.
