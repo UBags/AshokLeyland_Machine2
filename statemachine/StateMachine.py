@@ -106,6 +106,7 @@ class MachineStateMachine:
         self._pendingChanges: deque = deque()
         self._deliveryLock = threading.Lock()
         self._depth = threading.local()      # this thread's nesting of state-changing calls
+        self._reasonForNextChange = None      # given with setCurrentState(..., reason=); queued with that change
         # Instruction text comes from properties key state.<N>.instruction, N = the state's integer value
         self._instructions: Dict[MachineState, str] = {
             aState: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=aState.value)
@@ -121,8 +122,9 @@ class MachineStateMachine:
     def currentState(self, newState: MachineState) -> None:
         with self._changing():
             old, self._currentState = getattr(self, "_currentState", None), newState
+            reason, self._reasonForNextChange = self._reasonForNextChange, None
             if old != newState:
-                self._pendingChanges.append((old, newState))
+                self._pendingChanges.append((old, newState, reason))
 
     @contextmanager
     def _changing(self):
@@ -150,11 +152,12 @@ class MachineStateMachine:
                     with self._lock:
                         if not self._pendingChanges:
                             break
-                        old, new = self._pendingChanges.popleft()
+                        old, new, reason = self._pendingChanges.popleft()
                     listener = getattr(self, "stateChangeListener", None)
                     if listener is not None:
                         try:
-                            listener(old, new)
+                            # the reason travels with its own change (CHANGES 112); listeners without one get two args
+                            listener(old, new) if reason is None else listener(old, new, reason)
                         except Exception:
                             noteSuppressed()
             finally:
@@ -219,9 +222,10 @@ class MachineStateMachine:
         """Return the current state."""
         return self.currentState
 
-    def setCurrentState(self, newState: Union[int, MachineState]) -> None:
-        """Set the current state, ensuring it's valid."""
+    def setCurrentState(self, newState: Union[int, MachineState], reason: Union[str, None] = None) -> None:
+        """Set the current state, ensuring it's valid. reason: passed to the listener with this change only."""
         with self._changing():
+            self._reasonForNextChange = reason
             if isinstance(newState, MachineState):
                 if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
                     newState = MachineState.READ_QR_CODE

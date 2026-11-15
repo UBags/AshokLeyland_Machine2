@@ -10,6 +10,9 @@ the pattern, "...$1$SPDL ASSY-KNULH$SNPL-MAT$").
   V4 an invalid scan during a read (CHANGES 110): "QR Code not valid" for the frontend (notice "qrcode") and the
      alarm signal (as for a vision NOT OK); the read goes on; the next valid scan is taken and clears the notice.
      Needs Redis on localhost:6379 (skipped, and said so, without it)
+  V5 a scan that arrives across two serial reads (readline returns what it has when its 0.1 s timeout expires;
+     CHANGES 112) is taken whole, with no notice and no alarm: line end LF, line end CR, no line end (taken after
+     0.3 s quiet); a bad scan then a split good one: one notice / alarm, the good code taken
 
 No scanner (a stand-in serial port).   Run from the project root:  python test/machine1_dryrun/DryRun_QRCode_Validation.py
 """
@@ -89,6 +92,31 @@ try:
           result.get("qrCode") if result else None)
     check("V4 ... and the notice is cleared", not r.exists(f"{FRONTEND_NOTICE_PREFIX}qrcode"),
           r.get(f"{FRONTEND_NOTICE_PREFIX}qrcode"))
+    r.delete(alarmq)
+    # V5: split reads (pyserial readline returns the part that arrived before its timeout)
+    def readSplit(chunks):
+        r.delete(alarmq, f"{FRONTEND_NOTICE_PREFIX}qrcode")
+        seen = []
+        reader2 = object.__new__(GetAndValidateQRCode)
+        reader2.regexPatterns = validator.regexPatterns
+        reader2.parent = _Parent(_Serial(chunks))
+        reader2.sleepTime = 0.01; reader2.stopped = False; reader2.abortRead = False; reader2.readInProgress = False
+        reader2.currentQRCodeValue = ""; reader2.redisConnectionForNotices = None
+        res = reader2.processItem({timeKeyString: 1.0, actionKeyString: GetAndValidateQRCodeCommand})
+        return (res.get("qrCode") if res else None), r.xlen(alarmq), \
+            any(INVALID_QR_CODE_NOTICE in n for n in noticesSeen[-200:] if n) or bool(r.exists(f"{FRONTEND_NOTICE_PREFIX}qrcode"))
+    half = len(one) // 2
+    for label, chunks in (("line end LF", [one[:half].encode(), (one[half:] + "\r\n").encode()]),
+                          ("line end CR", [one[:half].encode(), (one[half:] + "\r").encode()]),
+                          ("no line end (taken after 0.3 s quiet)", [one[:half].encode(), one[half:].encode()])):
+        noticesSeen.clear()
+        got, alarms, notice = readSplit(chunks)
+        check(f"V5 split across two reads, {label}: taken whole, no alarm, no notice",
+              got == one and alarms == 0 and not notice, (got == one, alarms, notice))
+    noticesSeen.clear()
+    got, alarms, notice = readSplit([b"HELLO$WORLD\r\n", one[:half].encode(), (one[half:] + "\n").encode()])
+    check("V5 a bad scan, then a split good one: one alarm, the good code taken", got == one and alarms == 1,
+          (got == one, alarms))
     r.delete(alarmq)
 except Exception as e:
     import redis as _redis

@@ -493,7 +493,6 @@ class PLCIOServer:
         # State sync (CHANGES 108): every state change published for the frontend (utils/RedisUtils.publishIOServerState)
         self._stateRedisConnection = None
         self._stateSeq: int = 0
-        self._stateReasonNext: Optional[str] = None   # why the next state change happens (set by abortCycle)
         self._statePublishFailing = False
         # Delayed resets of the torque and press tags (scheduleTagReset): one scheduler thread for all of them.
         # _awaitingTriggerReset: the former "trigger read False first" gate after a NOT OK - kept, no longer set
@@ -1678,8 +1677,9 @@ class PLCIOServer:
                     noteSuppressed()
             self.resetTagToFalse(PLCIOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
-            self._stateReasonNext = f"abort: {reason}"
-            self.machineState.setCurrentState(MachineState.READ_QR_CODE)
+            # the reason goes with this state change itself (CHANGES 112: a shared "next reason" could be taken by
+            # another thread's change, now that the listener runs outside the state lock)
+            self.machineState.setCurrentState(MachineState.READ_QR_CODE, reason=f"abort: {reason}")
             self._dropCameraRequest()
             self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
             if pcAbort and self._optionalTagWritable(PLCIOServer.PC_PLC_CycleAborted):
@@ -2583,8 +2583,6 @@ class PLCIOServer:
         even when the send fails, so the frontend sees the gap ("STATE-SYNC GAP"); a failure is logged once per
         outage."""
         self._stateSeq += 1
-        if reason is None:
-            reason, self._stateReasonNext = self._stateReasonNext, None
         snapshot = {"pid": os.getpid(), "seq": self._stateSeq, "cycleId": self.cycleId,
                     "qr": getattr(self, "currentQRCode", "") or "",
                     "old": None if oldState is None else int(oldState),
@@ -2616,12 +2614,12 @@ class PLCIOServer:
                 noteSuppressed()
         return self._stateSeq, published
 
-    def _onStateChange(self, oldState, newState) -> None:
+    def _onStateChange(self, oldState, newState, reason: Optional[str] = None) -> None:
         """Every state change: audit trail; and when the machine goes back to READ_QR_CODE the cycle is over -
         completed (from the last state) or aborted (emergency button, heartbeat loss, frontend abort, from any other
         state) - so the camera server is told (end-of-cycle message on its queue, sent after an abort has cleared the
         queues) and drops what it kept for the cycle: the top bearing profile for the nut / washer check."""
-        seq, published = self._publishState(oldState, newState)
+        seq, published = self._publishState(oldState, newState, reason)
         self._auditStateChange(oldState, newState, seq, published)
         self._writeStateSince = time.monotonic()     # when the current state began (camera answer timeout)
         if newState == MachineState.READ_QR_CODE and oldState is not None and oldState != MachineState.READ_QR_CODE:

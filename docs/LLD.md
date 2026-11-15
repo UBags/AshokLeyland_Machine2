@@ -166,7 +166,9 @@ Applies the rules of spec §5.7 to the camera, qrcode, db, frontend, heartbeat a
 **State changes and their listener** (`statemachine/StateMachine.py`, CHANGES §110): every state change is queued under
 the state lock and the listener (`_onStateChange`: state publish for the frontend, audit line, END_OF_CYCLE to the
 camera server) is called after the outermost state-changing call of the thread has released the lock, in the order of
-the changes, by one thread at a time. Before, the listener ran under the lock, and its Redis calls (1 s timeouts) held
+the changes, by one thread at a time. A reason given with the change (`setCurrentState(state, reason=...)`, the
+abort's `abort: <reason>`) travels with that change to the listener (CHANGES §112; it was a shared "next reason"
+that another thread's change could take). Before, the listener ran under the lock, and its Redis calls (1 s timeouts) held
 up every other thread that changed the state.
 
 **Audit**
@@ -253,6 +255,10 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 ```
 
 - `evaluateQRCode` checks the format and the side.
+- The serial port is read with a 0.1 s timeout; `readline()` returns what has arrived when it expires, so the bytes
+  are collected across reads (`QRCodeLineAssembler`) and a line is checked only when complete: at a CR or LF, or
+  after 0.3 s with no new byte for a scanner without a line end (CHANGES §112; before, a code split across two reads
+  was refused twice and lost).
 - An invalid scan (CHANGES §110): `feNotice:qrcode` = "QR Code not valid" (10 s) for the frontend and the alarm signal
   on `alarm.q` (as a vision NOT OK: the heartbeat server sounds the siren); the read goes on, and the next valid scan
   clears the notice.
@@ -427,6 +433,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_Picture_Retention.py` | The picture clean-up at start: old pictures deleted in every sub-folder, young ones and other files kept, empty old folders removed, today's kept; the folders and limits from the properties (P1-P6) |
 | `DryRun_Camera_End_Of_Cycle_Order.py` | END_OF_CYCLE passed down the camera server's queues and handled after the check in progress (E1-E4) |
 | `DryRun_Vision_Worker_Backoff.py` | A worker failing at start restarted with a growing pause, checks NOT OK at once meanwhile, the pause reset by a worker that gets ready (B1-B3) |
+| `DryRun_State_Change_Delivery.py` | The state machine's listener outside the lock: another thread not held up by a slow listener, changes delivered once and in order, a reason only with its own change, nested calls (D1-D4) |
 | `DryRun_Stale_Stop_Command.py` | A stop command from an earlier run ignored; a stop during the run honoured, its notice printed once (S1-S2) |
 | `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |

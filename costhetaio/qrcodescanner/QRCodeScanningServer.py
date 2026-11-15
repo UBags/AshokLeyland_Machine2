@@ -34,6 +34,40 @@ from Configuration import CosThetaConfigurator
 qrCodeKey = "qrCode"
 INVALID_QR_CODE_NOTICE = "QR Code not valid"     # shown on the frontend (notice "qrcode") for an invalid scan
 INVALID_QR_CODE_NOTICE_SECS = 10.0
+# The serial port is read with a 0.1 s timeout, and readline() returns what has arrived when it expires: a code still
+# arriving then came back in two pieces, each refused (the scan lost; since CHANGES 110 also the siren and the notice).
+# The bytes are now collected across reads and a line is checked only when complete (CHANGES 112): at a CR or LF, or,
+# for a scanner that sends no line end, once no byte has come for QR_LINE_QUIET_SECS.
+QR_LINE_QUIET_SECS = 0.3
+
+
+class QRCodeLineAssembler:
+    """Joins the serial reads into whole scanned lines."""
+
+    def __init__(self, quietSecs: float = QR_LINE_QUIET_SECS):
+        self.quietSecs = quietSecs
+        self.buffer = b""
+        self.lastByteAt = 0.0
+
+    def clear(self) -> None:
+        self.buffer = b""
+
+    def feed(self, data: bytes, now: float) -> list:
+        """Adds data read from the port (may be empty) and returns the lines now complete (bytes, no line end)."""
+        if data:
+            self.buffer += data
+            self.lastByteAt = now
+        lines = []
+        while True:
+            cut = min((i for i in (self.buffer.find(b"\r"), self.buffer.find(b"\n")) if i >= 0), default=-1)
+            if cut < 0:
+                break
+            lines.append(self.buffer[:cut])
+            self.buffer = self.buffer[cut + 1:]
+        if self.buffer and now - self.lastByteAt >= self.quietSecs:      # no line end: the scanner has finished
+            lines.append(self.buffer)
+            self.buffer = b""
+        return [line for line in lines if line.strip()]
 GetAndValidateQRCodeCommand = "GetAndValidateQRCode"
 
 class MonitorGetQRCodeQueue(GenericQueueProcessor):
@@ -135,6 +169,7 @@ class GetAndValidateQRCode(GenericQueueProcessor):
         self.abortRead: bool = False
         self.readInProgress: bool = False
         self.redisConnectionForNotices: Union[Redis, None] = None
+        self.lineAssembler = QRCodeLineAssembler()
 
     def _noticeConnection(self) -> Redis:
         if self.redisConnectionForNotices is None:
@@ -195,6 +230,9 @@ class GetAndValidateQRCode(GenericQueueProcessor):
     def resetQRCodeValues(self):
         """Resets the current QR code value and clears the serial input buffer."""
         self.currentQRCodeValue = ""
+        if getattr(self, "lineAssembler", None) is None:
+            self.lineAssembler = QRCodeLineAssembler()
+        self.lineAssembler.clear()
         if self.parent.qrCodeSerialConnection:
             try:
                 self.parent.qrCodeSerialConnection.reset_input_buffer()
@@ -234,16 +272,19 @@ class GetAndValidateQRCode(GenericQueueProcessor):
                     data = self.parent.qrCodeSerialConnection.readline()
                     if (data is not None) and len(data) > 0:
                         printLight(f"Got QR Code : {data} ")
-                    if data:
-                        qrCode = data.decode('utf-8').strip()
+                    found = False
+                    for line in self.lineAssembler.feed(data or b"", time.monotonic()):
+                        qrCode = line.decode('utf-8', errors='replace').strip()
                         if self.evaluateQRCode(qrCode):
                             self.currentQRCodeValue = qrCode
                             messageToConsumer = {timeKeyString: timeOfMessage, qrCodeKey: qrCode}
                             self.readInProgress = False
                             self.clearInvalidQRCodeNotice()
+                            found = True
                             break
-                        elif qrCode:
-                            self.reportInvalidQRCode(qrCode)
+                        self.reportInvalidQRCode(qrCode)
+                    if found:
+                        break
                 else:
                     SlaveConsoleLogger.getInstance().logTakeAction(GetAndValidateQRCode.logSource, "Scanner not connected; retrying", Logger.ISSUE)
             except Exception as e:

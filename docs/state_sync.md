@@ -35,7 +35,7 @@ before:
   (the latest snapshot, 24 h expiry), as JSON:
   `{pid, seq, cycleId, qr, old, oldName, new, newName, reason, time}`;
 - `seq` goes up by one per change, also when Redis does not take the message, so a lost message shows as a gap;
-- `reason`: `IOServer start`, `abort: <reason>` (set by `abortCycle`), `cycle completed`, `reset`,
+- `reason`: `IOServer start`, `abort: <reason>` (given by `abortCycle` with its state change), `cycle completed`, `reset`,
   `NOT OK: back to the check (retake)`, `OK: next step`, `PLC request: waiting for the answer`, `next step`;
 - Redis connection with 1 s timeouts: a state change never hangs on Redis; a failure is logged once per outage
   (`STATE-SYNC IOServer could not publish state ...`, then `... publishes states again`);

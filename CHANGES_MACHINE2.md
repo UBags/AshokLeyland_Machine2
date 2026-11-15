@@ -3559,3 +3559,34 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   lines); heartbeat / start-up 28/28 (H10 shutdown); process supervisor 7/7; logging 37/37; DB no record loss (c: a
   stop with 3 records pending - drained, then stopped; b, d, e pass); integrated all-servers cycle (DB row as before,
   state sync in sync); work-thread health 17/17 (one run 16/17, C2 timing; 3/3 again after, 2/2 on the old code).
+
+## 112. Review pass: a QR code split across two serial reads was lost (and since §110 sounded the siren); the abort's state-sync reason travels with its change (2026-11-16)
+
+- **Review (user: make sure there are no outstanding errors):** ruff bug rules over the 154 production files (no
+  undefined names; bare `except`, `== None` and the like only in legacy modules nothing in the application imports;
+  mutable defaults only read, never changed); the supervisor, the live configuration reload and every real stop
+  command against §111; the three properties files in step; no TODO / FIXME left; today's §110 / §111 changes
+  re-read for side effects. Two defects found, both fixed below.
+- **QR code split across two reads (since the original code; made worse by §110):** the scanner port is opened with a
+  0.1 s timeout and `readline()` returns whatever has arrived when it expires. A code still arriving at that moment
+  came back in two pieces, each refused: the scan was lost (the operator had to scan again), and since §110 each piece
+  also sounded the siren and showed "QR Code not valid". Estimated from the timing (86 bytes at 38400 baud, about
+  22 ms; the reader's 0.1 s read + 0.1 s pause): about 11 % of scans, if the scanner sends one burst ending in a line
+  feed - a USB adapter's buffering changes the figure, not the fact. **Fix:** `QRCodeLineAssembler` collects the bytes
+  across reads; a line is checked only when complete - at a CR or LF, or after 0.3 s with no new byte
+  (`QR_LINE_QUIET_SECS`, for a scanner without a line end). Cleared at the start of every read request.
+- **Abort reason in the state sync (a race, wider since §110):** `abortCycle` set a shared `_stateReasonNext` and the
+  next published state change took it; with the listener outside the state lock (§110) a change made by another
+  thread at that moment could take the abort's reason (only the `reason` text of the STATE-SYNC snapshot and audit is
+  affected). Now `setCurrentState(state, reason=...)`: the reason is queued with that change and passed to the
+  listener with it (`_onStateChange(old, new, reason)`); `_stateReasonNext` removed.
+- Looked at and left: `_writeStateSince` (stamped by the listener, so possibly a little late now) is only the fallback
+  when there is no picture request - the camera answer timeout uses the request's own send time; a late stamp only
+  lengthens that fallback wait.
+- **Run:** `DryRun_QRCode_Validation.py` 17/17 both folders (new V5: split across two reads with LF, CR or no line
+  end - taken whole, no alarm, no notice; a bad scan then a split good one - one alarm, the good code taken; the old
+  code never takes the split scan and the run hangs); new `DryRun_State_Change_Delivery.py` 4/4 both folders (D1
+  another thread not held up by a slow listener, D2 every change once and in order, D3 a reason only with its own
+  change, D4 nested calls); fault scenarios Siemens 201/201 (O4: the abort's state change published with its reason),
+  Allen-Bradley 218/218; two full cycles (28 states); state sync monitor 15/15; frontend 145/145; integrated
+  all-servers cycle (DB row as before, state sync in sync); work-thread health 17/17; DB indexes 8/8.
