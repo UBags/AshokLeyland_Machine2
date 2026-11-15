@@ -5,8 +5,8 @@ checks, on the knuckle pictures (knuckle_images/<MODEL>_<SIDE>_<n>.jpg, EMPTY_<n
   A. The real CheckKnuckle (vision.knuckle.method = segmentation, Machine 2 settings) with each of the four QR codes:
      OK with its own, NOT OK with the other three; the empty fixture NOT OK with all four. Time per picture.
   B. The frame on the unmoved pictures: camera shift within 1.5 px and rotation within 0.3 deg (the pictures were
-     all taken at the reference camera position), every later check's centre within 4 px of its value in the
-     properties file, and the spindle mask (where usable) within 2 px of where the pins put the spindle.
+     all taken at the reference camera position), every later check's centre within 2.5 px of its reference
+     centre for the type (VisionFrame.CENTRES; the side's own spindle moves it up to 1.4 px), and the spindle mask (where usable) within 2 px of where the pins put the spindle.
   C. The camera moved (the picture warped: shift, rotation, zoom - see MOVES): still OK with its own QR code, and every
      later check's centre lands where the same move takes the centre found on the unmoved picture (within 2 px).
      A move beyond vision.knuckle.frame.max.* is NOT OK ("camera moved").
@@ -151,10 +151,11 @@ def main():
             continue
         base[name] = frame
         centres = VisionFrame.placedCentres(frame)
-        far = {n: (xy, props(n)) for n, xy in centres.items() if math.hypot(xy[0] - props(n)[0], xy[1] - props(n)[1]) > 4}
+        refs = {n: VisionFrame.reference(n, own[0]) for n in centres}
+        far = {n: (xy, refs[n]) for n, xy in centres.items() if math.hypot(xy[0] - refs[n][0], xy[1] - refs[n][1]) > 2.5}
         check(f"{name}: camera shift {frame['cameraShift']}, rotation {frame['rotation']:+.2f}, scale "
-              f"{frame['scale']:.4f}, anchor {frame['anchor']} ({frame['anchorSource']}); centres within 4 px of the "
-              f"properties", math.hypot(*frame["cameraShift"]) <= 1.5 and abs(frame["rotation"]) <= 0.3 and not far,
+              f"{frame['scale']:.4f}, anchor {frame['anchor']} ({frame['anchorSource']}); centres within 2.5 px of the "
+              f"{own[0]} reference centres", math.hypot(*frame["cameraShift"]) <= 1.5 and abs(frame["rotation"]) <= 0.3 and not far,
               far)
         mo = frame.get("spindleMaskOffset")
         if mo is not None:
@@ -170,15 +171,15 @@ def main():
     for name in (names if "C" in args.parts.upper() else []):
         own = tuple(name.split("_")[:2])
         ref = VisionFrame.placedCentres(base[name])
-        refExact = {n: VisionFrame.place(base[name], VisionFrame.CENTRES[n][3]) for n in VisionFrame.CENTRES}
+        refExact = {n: VisionFrame.placeCentre(base[name], n) for n in VisionFrame.CENTRES}
         for mv in MOVES:
             m = move_matrix(*mv)
             _, ok, frame = K.checkKnuckleBySegmentation(moved(pictures[name], m), QR[own])
             if not ok:
                 check(f"{name} moved {mv}: OK", False, K.lastResult.get("reasons"))
                 continue
-            errs = {n: math.hypot(VisionFrame.place(frame, VisionFrame.CENTRES[n][3])[0] - apply(m, refExact[n])[0],
-                                  VisionFrame.place(frame, VisionFrame.CENTRES[n][3])[1] - apply(m, refExact[n])[1])
+            errs = {n: math.hypot(VisionFrame.placeCentre(frame, n)[0] - apply(m, refExact[n])[0],
+                                  VisionFrame.placeCentre(frame, n)[1] - apply(m, refExact[n])[1])
                     for n in ref}
             e = max(errs.values())
             worst = max(worst, e)

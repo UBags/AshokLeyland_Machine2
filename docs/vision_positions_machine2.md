@@ -18,30 +18,36 @@ side, and the anchor = where the pins put the spindle of that type / side (the s
 centre in the table below
 is then placed for the cycle as
 
-    centre = anchor + zoom * R(rotation) * (reference centre - (642.2, 359.1))
+    centre = anchor + zoom * R(rotation) * (reference centre of the type - mean spindle of the type)
 
-where the reference centres are the values below (held in `VisionFrame.CENTRES`, in the code) and (642.2, 359.1) is
-the spindle position they were set with (mean of the 13 Nov knuckles). The `siemens.vision.*.center` keys below are used
-only when no knuckle frame exists in the cycle (method `regions`, or the camera server restarted during a cycle). The
-frame is dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle
-retake. A camera move beyond `vision.knuckle.frame.max.*` (40 px, 3 deg, 5 %) makes the knuckle check NOT OK.
+where, since the follow-up of CHANGES 102, the reference centre and spindle are per type: DOST and DOSTPLUS each have
+their own reference centre (`VisionFrame.CENTRES`, in the code) and mean spindle (DOST (642.35, 358.45), DOSTPLUS
+(642.2, 359.7)), so each type has its own displacement of every centre from the spindle. The `siemens.vision.*.center`
+keys below are used only when no knuckle frame exists in the cycle (method `regions`, or the camera server restarted
+during a cycle). The frame is dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check
+and at a knuckle retake. A camera move beyond `vision.knuckle.frame.max.*` (40 px, 3 deg, 5 %) makes the knuckle check
+NOT OK.
 
-Offsets of the reference centres from the reference spindle (642.2, 359.1):
+Why per type: on the 13 Nov pictures (the same parts through the stations) the DOST features sit 4-5 px higher than
+the DOSTPLUS ones - hub inner bore DOST (644.0, 335.5) / DOSTPLUS (643.4, 339.4), top bearing ring (641.8, 338.3) /
+(641.6, 343.2), nut ring (644.3, 334.1) / (643.4, 338.5), seated bung face (646, 325) / (647, 330); each type's mean
+over its parts (DOST: two parts, 3-7 px apart themselves; DOSTPLUS: one). Each earlier single centre is split by half
+its feature's type difference.
 
-| Centre | Reference (x, y) | From the spindle (dx, dy) |
-|---|---|---|
-| hub.segment.center | (645, 334) | (+2.8, -25.1) |
-| hub.centre.check | (644, 340) | (+1.8, -19.1) |
-| topbearing.annular.center | (642, 345) | (-0.2, -14.1) |
-| nutwasher.nut.detection.center | (644, 344) | (+1.8, -15.1) |
-| nobunk.nut.detection.center | (644, 344) | (+1.8, -15.1) |
-| bunk.outer.disc.center | (646, 328) | (+3.8, -31.1) |
-| bunk.seating.seated.centre.dost | (646, 325) | (+3.8, -34.1) |
-| bunk.seating.seated.centre.dostplus | (647, 330) | (+4.8, -29.1) |
-| cap.center | (644, 340) | (+1.8, -19.1) |
+| Centre | DOST reference | from DOST spindle | DOSTPLUS reference | from DOSTPLUS spindle |
+|---|---|---|---|---|
+| hub.segment.center | (645.3, 332.0) | (+2.95, -26.40) | (644.7, 336.0) | (+2.50, -23.75) |
+| hub.centre.check | (644.3, 338.0) | (+1.95, -20.40) | (643.7, 342.0) | (+1.50, -17.75) |
+| topbearing.annular.center | (642.1, 342.6) | (-0.25, -15.90) | (641.9, 347.5) | (-0.30, -12.25) |
+| nutwasher / nobunk nut.detection.center | (644.5, 341.8) | (+2.10, -16.65) | (643.5, 346.2) | (+1.35, -13.50) |
+| bunk.outer.disc.center | (645.5, 325.5) | (+3.15, -32.95) | (646.5, 330.5) | (+4.30, -29.20) |
+| bunk.seating.seated.centre.dost / .dostplus | (646, 325) / (647, 330) | | same | |
+| cap.center | (644.3, 338.0) | (+1.95, -20.40) | (643.7, 342.0) | (+1.50, -17.75) |
 
 Still to confirm with paired pictures (knuckle, hub and cap of the same component over a few full cycles): whether
-the hub follows the spindle 1:1 (the DOST RHS knuckles sit 2-3 px higher than the others; their centres move with them).
+the hub follows the spindle 1:1 - the DOST RHS knuckles' spindle sits 2.7 px higher than DOST LHS and their centres
+move with it; the two DOST parts photographed sat 3-7 px apart at every station, and without their knuckle pictures it
+is not known whether that was their spindles (side) or the hub's own seating.
 
 ## Checks on the hub and what is pressed onto it (states 5-24)
 

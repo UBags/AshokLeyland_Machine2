@@ -3158,3 +3158,25 @@ all later checks; (d) build that into the later checks instead of the properties
 - **Verifier:** CheckKnuckle reference commit 6846f37 (the previous reference plus this logic, hard-coded values) in
   `baseline_per_file` of both manifests; `allenbradley.vision.knuckle.method=regions` and the `frame.max.*` keys
   added for Machine 1. Both machines: ALL EQUIVALENT.
+- **Per-type displacement of the later centres (follow-up, user):** the user's view was that the DOST bosses' machined
+  faces sit higher (nearer the camera) than the DOSTPLUS ones and the rest on one plane. The pins agree with the first
+  part: DOST pin distance 1.5 % larger, so about 2.4 px of the DOST pins' 5-7 px higher position is perspective; the
+  per-type `NOMINAL_PINS` already hold it, and with the camera moved the plane difference costs about 0.5 px for a
+  30 px shift. The later pictures (same parts through the stations, user) do not agree with the second part:
+  - Measured here per picture (top bearing and nut by the ring finder, hub inner bore and caps by a MobileSAM point
+    prompt): DOST features 4-5 px higher than DOSTPLUS. Per part: hub inner bore DOSTPLUS y 338.7-340.0; DOST part A
+    333.0-334.3, part B 337.1-337.5. Top bearing DOSTPLUS 342.6-344.0; DOST A 335.2-336.4, B 340.3-341.4. Nut DOSTPLUS
+    337.9-338.7; DOST A 330.6-331.4, B 337.1-337.4. The two DOST parts sat 3-7 px apart at every station.
+  - `VisionFrame.CENTRES` now holds a reference centre per type, and the type's mean spindle (`TYPE_SPINDLE`: DOST
+    (642.35, 358.45), DOSTPLUS (642.2, 359.7)); each centre's displacement from the spindle is per type
+    (`displacement()`), placed as anchor + zoom * R(rotation) * displacement. Type means over parts (each part weighted
+    equally): DOST - DOSTPLUS hub (+0.6, -3.9), bearing (+0.2, -4.9), nut (+0.9, -4.4), bung (-1.0, -5.0). Each earlier
+    single centre is split by half its feature's difference (DOST = centre + diff / 2, DOSTPLUS = centre - diff / 2;
+    hub difference for the hub centre check and the cap); the seated bung positions were already per type. Values and
+    displacements: docs/vision_positions_machine2.md.
+  - Effect on the margins: hub, bearing and nut search centres now about 2 px nearer each type's own features; the
+    DOST silver cap outline 5.8 px from the cap centre (was 7.7; limit 20), the DOSTPLUS brass bore 2.4 px.
+  - Open: whether the 3-7 px between the two DOST parts was their knuckles' spindles (side) - followed by the frame -
+    or the hub's own seating; needs knuckle + hub + cap pictures of the same components.
+  - `DryRun_Knuckle_Frame.py` (part B now against each type's reference centres, within 2.5 px): 161/161; camera
+    moved: every centre within 1.17 px of where the move takes it.
