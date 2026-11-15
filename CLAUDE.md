@@ -80,8 +80,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   2. point that file's entry in `baseline_per_file` of **both** `vision_config_manifest.json` files at it;
   3. make the values configurable; the verifier must say ALL EQUIVALENT on both machines.
 - **Dry-run copies live in both** `test/machine1_dryrun` and `test/machine2_dryrun` (identical apart from paths;
-  each sets `COSTHETA_PLC_VENDOR` from its folder name, except `DryRun_Vision_Check_Timeout.py` on Machine 1, which
-  needs `COSTHETA_PLC_VENDOR=allenbradley` set).
+  most set `COSTHETA_PLC_VENDOR` from their folder name; `DryRun_Vision_Check_Timeout.py` and
+  `DryRun_IOServer_Fault_Scenarios.py` on Machine 1 do not - run them with `COSTHETA_PLC_VENDOR=allenbradley`, else
+  they run as Siemens).
 - PLC tag prefixes `PC_PLC_` / `PLC_PC_` show the main writer, not exclusive ownership. The handshake (`docs/PLC_Interface_Spec.md`) is fixed by
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
