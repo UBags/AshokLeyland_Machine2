@@ -14,7 +14,7 @@ torch, ultralytics, mobile_sam; the models/ weights are NOT needed - the worker'
      at once (before 2026-11-06 the QR code was dropped at every knuckle check: the retake waited 5 s per picture and
      was NOT OK); the answers carry the IOServer's request id; end of cycle -> QR code dropped.
   R  a check that times out in the pipeline: NOT OK to the IOServer and the frontend with the request id, the
-     reason written on the picture and the "check" notice for the frontend.
+     picture marked with a red border (no text; the reason logged) and the "check" notice for the frontend.
 
 Run from the project root:  python test/machine2_dryrun/DryRun_Vision_Check_Timeout.py   (exit code 1 on failure)
 """
@@ -175,8 +175,12 @@ if __name__ == "__main__":
           and a.get(requestIdKeyString) == "7-3" and time.monotonic() - t0 < 2.5, f"{time.monotonic() - t0:.2f} s")
     check("R1 NOT OK to the frontend with the reason", f.get("result") == notok and f.get(reasonKeyString) == "check timed out after 1 s")
     shown = cv2.imdecode(np.frombuffer(f.get("processedImage", b""), np.uint8), 1)
-    check("R1 the reason is written on the picture sent to the frontend (red text, top left)",
-          shown is not None and int(shown[30:70, 20:400, 2].max()) == 255 and int(shown[30:70, 20:400, 0].min()) == 0)
+    # 2026-11-15: no text on the pictures for the frontend; the NOT OK picture has a red border, the reason is logged
+    check("R1 the picture sent to the frontend has a red border and no text (centre band unchanged)",
+          shown is not None and tuple(int(v) for v in shown[6, 640]) == (0, 0, 255)
+          and tuple(int(v) for v in shown[714, 640]) == (0, 0, 255)
+          and float(np.abs(shown[30:70, 20:400].astype(int)
+                           - cv2.resize(pic, (1280, 720))[30:70, 20:400].astype(int)).mean()) < 2.0)
     check("R1 'Picture NOT OK: check timed out ...' notice for the frontend", b"timed out" in (r.get("feNotice:check") or b""))
     cps.assessPictures = realAssess
 

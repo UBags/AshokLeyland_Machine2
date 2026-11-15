@@ -225,5 +225,35 @@ check("H10 stop command in MainProgram's monitorStop thread: processes ended, th
       bool(line) and "'stop sent'" in line[0] and "'backup'" in line[0] and "ALIVE False" in line[0],
       line[0] if line else probe.stderr[-400:])
 
+# ---------------------------------------------------------------- H11 trial picture saving notice at start-up (2026-11-15)
+print("\n=== H11 start-up notice: images ALSO saved in the trial folder ===", flush=True)
+probeCode = r'''
+import sys, types
+stub = types.ModuleType("frontend.SimplePopups")
+for name in ("showApplicationStartingScreen", "chooseMode", "showErrorMessage", "showMessage", "flashSimpleMessage", "login"):
+    setattr(stub, name, lambda *a, **k: None)
+sys.modules["frontend.SimplePopups"] = stub
+import MainProgram as M
+shown = []
+M.flashSimpleMessage = lambda message, auto_close_duration=None, **k: shown.append((message, auto_close_duration))
+C = M.CosThetaConfigurator
+C.getSaveAllPicturesBecauseItsInTrialMode = classmethod(lambda cls: True)
+C.getMainPictureSavingDirForModeTrial = classmethod(lambda cls: "C:/Temp/TrialImages/")
+on = M.showTrialPictureSavingNotice()
+C.getSaveAllPicturesBecauseItsInTrialMode = classmethod(lambda cls: False)
+off = M.showTrialPictureSavingNotice()
+print("SHOWN", on, off, shown)
+src = open("MainProgram.py", encoding="utf-8").read()
+print("CALLED", src.index("showTrialPictureSavingNotice()\n") > src.index('flashSimpleMessage(message, auto_close_duration=2)'))
+'''
+probe = subprocess.run([sys.executable, "-c", probeCode], cwd=str(ROOT), capture_output=True, text=True, timeout=120)
+line = [l for l in probe.stdout.splitlines() if l.startswith("SHOWN")]
+called = [l for l in probe.stdout.splitlines() if l.startswith("CALLED")]
+check("H11 save.all.pictures... True: 'Images will ALSO be saved in <folder>' flashed for 2 s; False: nothing shown",
+      bool(line) and "True False" in line[0] and "Images will ALSO be saved in" in line[0] and "TrialImages" in line[0]
+      and ", 2)" in line[0] and line[0].count("Images will ALSO") == 1, line[0] if line else probe.stderr[-400:])
+check("H11 shown at start-up after the 'Running application in ... mode' message", bool(called) and "True" in called[0],
+      called[0] if called else probe.stderr[-400:])
+
 print(f"\nRESULT {sum(results)}/{len(results)} checks passed", flush=True)
 os._exit(0 if all(results) else 1)

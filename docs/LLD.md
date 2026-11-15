@@ -16,10 +16,11 @@ every server process re-imports MainProgram (spawn). `main()` then runs these st
 1. `setLogProcess("mainprogram")`; `clearQueues` (flushes the Redis db, trims the queues), then `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
 2. Start P1 (the logging server).
 3. Start-up screen; `doBackup()` (pg_dump of the production database); ping the camera and PLC addresses (a warning only).
+   After the login: "Running application in <mode> mode", then, when `save.all.pictures.because.its.in.trial.mode=True`, "Images will ALSO be saved in <picture.saving.dir.for.mode.trial>" for 2 s (`showTrialPictureSavingNotice`).
 4. `chooseMode()` (Test / Production); `setDatabaseName` for both databases (creates the database, schema, tables, indexes, default machine settings and users), then for the chosen one.
 5. Login: up to 5 tries.
 6. Start P2 camera, P3 QR, P4 IO, P6 FE, P7 HB and P5 DB, in that order. Every process first calls `setLogProcess(<name>)`, which sets the per-process log levels, crash capture and live configuration.
-7. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`), which restarts a dead process through `startProcess(target, args)`.
+7. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`), which restarts a dead process through `startProcess(target, args)`; the camera server is started with `stateFile=None` and restarted with the state file (`supervisor.add(..., restartArgs=...)`).
 8. `monitorStop` waits for `stopcommandQ`, then sends the stop and collects each `stoppedresponseQ`, ends the processes and backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
 
 **ProcessSupervisor.** Every `supervisor.check.interval.sec` (2 s), `checkOnce()` restarts each registered process that has died. This is enabled by `supervisor.restart.dead.processes`. Restarts are limited to `supervisor.max.restarts.per.hour` (10) for each process; above that the process is left down and logged. Supervision stops once `isStopping()` is true.
@@ -182,6 +183,13 @@ worker mode the camera server sends a snapshot with each job (`snapshotState`); 
 (`restoreState`, which applies the frame) and returns what changed (`applyStateChanges`, which applies the frame in the
 camera server too). `endOfCycle()` drops all of it.
 
+**State file** (`camera/CameraStateFile.py`): `ImageProcessor.persistState()` writes that state to
+`<project root>/Temp/camera_server_state.pkl` (pictures as PNG, each encoded once; temporary file then rename) after
+every check and at every `endOfCycle()`. `CameraServer(mode, stateFile)`: with a path (the supervisor's restart) it
+first calls `loadPersistedState(path)` (restores the state and applies the frame; a file older than
+`camera.state.file.max.age.sec`, 3600 s, or unreadable is not used); with None (MainProgram's start) it starts empty
+and writes an empty state. Either way it writes to the default file from then on.
+
 **Knuckle frame** (`camera/KnuckleLocator.py`, `camera/VisionFrame.py`; Machine 2):
 
 1. `KnuckleLocator.locate(picture)`: one MobileSAM embedding (the shared predictor of `ModelManager`); the spindle by one point prompt at (642, 360); each boss from a 4 × 4 grid of 24 two-point prompts placed relative to the spindle (3 masks each; a boss = round mask with a bright machined ring round a dark core; the pin = the core's centre); a missing boss looked for again at the usual place or from the other pin; the lower arm by 4 points down each side. Type: mean boss area × 1000 / pin distance² ≥ 34.5 → DOSTPLUS, cross-checked by boss radius / pin distance (0.1095 ± 0.0025). Side: the one lower arm found.
@@ -193,8 +201,9 @@ camera server too). `endOfCycle()` drops all of it.
 server runs `CheckTopBearing.findRing` on a copy of the nut picture in its own thread while the worker runs the check
 (`VisionCheckWorker._startBearingRingGuard`), waits at most 5 s after the verdict (`GUARD_MAX_WAIT_SECS`) and makes
 the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.bearingRingVerdict`). If the guard has no
-answer in time or fails, it is not applied (logged). In thread mode, and in the dry-run windows, the check runs the
-guard itself.
+answer in time or the ring finder fails, the verdict is NOT OK too, with the reason (since 2026-11-15; before, the
+guard was not applied). In thread mode, and in the dry-run windows, the check runs the guard itself (a failing ring
+finder: NOT OK).
 
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
 face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
@@ -210,7 +219,7 @@ the model's seated position and the top-face mask's roundness ≥ 0.952 (DOST) /
 
 **Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
 
-**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BunkSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` keep theirs in the code. The pictures sent to the frontend carry outlines only, no values (except the hub check's hole count and model-mismatch line, and the camera server's "NOT OK: <reason>").
+**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BunkSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` keep theirs in the code. The pictures sent to the frontend carry outlines only, no values or words; a picture NOT OK without a check's verdict (timeout, stalled camera, worker starting) gets a red border (`_withReason`), and the reason goes to the log, the answer's `reason` and the "check" notice.
 
 ## 4. QR code server (`costhetaio/qrcodescanner/QRCodeScanningServer.py`)
 
@@ -241,7 +250,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
 | `TimeDurationUpdateWorker` | — | Cycle timer |
 
-At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. The frontend abort (Ctrl+Alt+Z, password `admin123`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8.
+At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. The frontend abort (Ctrl+Alt+Z, password `frontend.abort.password`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8. Passwords, read from the properties file at each use: `frontend.abort.password` (Ctrl+Alt+Z), `machine.settings.password` (Save in Machine Settings) and, in addition when the bypass switch changes, `machine.settings.bypass.password` (all `admin123` at delivery).
 
 ## 6. Heartbeat and alarm server (`monitorAllConnections/HeartbeatAndAlarmServer.py`)
 
@@ -360,6 +369,9 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `redis.health.check.interval.sec` | 60 | 6 |
 | `heartbeat.work.loop.max.silence.sec` | 60 | 3, 5, 7 |
 | `frontend.free.rotation.torque.display.sec` | 2.0 | 5 |
+| `frontend.abort.password` / `machine.settings.password` / `machine.settings.bypass.password` | admin123 / admin123 / admin123 | 5 |
+| `camera.state.file.max.age.sec` | 3600 | 3 |
+| `save.all.pictures.because.its.in.trial.mode` / `picture.saving.dir.for.mode.trial` | True / C:/Temp/TrialImages/ | 1, 3 |
 | `<vendor>.vision.check.timeout.sec` / `.check.in.worker.process` | 12 / True | 3 |
 | `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
@@ -381,7 +393,9 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
 | `DryRun_Knuckle_Frame.py` | Knuckle by segmentation on every knuckle picture with each QR code; the frame on the pictures as taken and with simulated camera moves; the centres written into the checks, restored, dropped at cycle end and retake (MobileSAM weights) |
 | `DryRun_CheckKnuckle_Images.py` | The `regions` knuckle method (Machine 1; Machine 2 before CHANGES 102) |
-| `DryRun_Bearing_Ring_Guard.py` | The guard in the camera server beside the worker |
+| `DryRun_Bearing_Ring_Guard.py` | The guard in the camera server beside the worker; NOT OK when it cannot decide (G7-G9) |
+| `DryRun_Camera_State_File.py` | The camera server's cycle state across a restart (C1-C5) |
+| `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check, all run in order as in one cycle, the frame's centres listed |
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |

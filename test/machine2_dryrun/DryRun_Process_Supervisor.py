@@ -29,7 +29,9 @@ if __name__ == "__main__":
     def check(name, condition, detail=""):
         RESULTS.append((name, bool(condition)))
         print(f"{'PASS' if condition else 'FAIL'}  {name}" + (f"   [{detail}]" if detail else ""), flush=True)
+    STARTED = []                                     # (target name, args) of every process started
     def factory(target, args):
+        STARTED.append((target.__name__, args))
         p = ctx.Process(target=target, args=args, daemon=True); p.start(); return p
     def wait_for(pred, timeout):
         t0 = time.time()
@@ -44,7 +46,8 @@ if __name__ == "__main__":
     sup.GRACE_SECS = 0.3
     procs = {n: factory(server, (life,)) for n, life in (("Camera server", 0), ("Frontend", 0), ("DB server", 0))}
     for n, p in procs.items():
-        sup.add(n, server, (0,), p); pids.append(p.pid)
+        # the camera server is restarted with other arguments (MainProgram: its cycle state file)
+        sup.add(n, server, (0,), p, restartArgs=(0.0,) if n == "Camera server" else None); pids.append(p.pid)
     sup.start()
 
     old = procs["Camera server"].pid
@@ -53,6 +56,8 @@ if __name__ == "__main__":
     new = sup.process("Camera server").pid
     check("S1 a killed process is restarted (new pid)", ok1, f"{old} -> {new}")
     check("S1 the pid list for shutdown is updated", old not in pids and new in pids, str(pids))
+    check("S6 the camera server is restarted with its restart arguments (MainProgram: the cycle state file)",
+          STARTED[-1] == ("server", (0.0,)), str(STARTED[-1]))
 
     sup.add("QR code server", server, (0.5,), factory(server, (0.5,)))        # exits by itself after 0.5 s, every time
     check("S2 a process that exits by itself is restarted", wait_for(lambda: sup.restarts.get("QR code server", 0) >= 1, 10))

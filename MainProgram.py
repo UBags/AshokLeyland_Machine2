@@ -122,11 +122,13 @@ def startTheIOServer(mode : str):
     from costhetaio.commonplc.PLCIOServer import startIOServer
     startIOServer(mode = mode)
 
-def startTheCameraServer(mode : str):
+def startTheCameraServer(mode : str, stateFile : str | None = None):
+    """stateFile: None at the start of the application; the cycle state file when the supervisor restarts the camera
+    server, so that it carries on with the cycle in progress (camera/CameraStateFile.py)."""
     from logutils.LogSettings import setLogProcess
     setLogProcess("cameraserver")      # per-server logging settings, crash capture, live configuration
     from camera.CameraProcessorServer import startCameraServer
-    startCameraServer(mode=mode)
+    startCameraServer(mode=mode, stateFile=stateFile)
 
 def startTheFrontendServer(mode : str, username : str, role : str):
     from logutils.LogSettings import setLogProcess
@@ -309,6 +311,20 @@ def printRedisQueueLengths(redis_connection):
         printBoldRed(f"Unexpected error: {e}")
         return {}
 
+def showTrialPictureSavingNotice() -> bool:
+    """With save.all.pictures.because.its.in.trial.mode=True the camera server ALSO saves every picture of the 2-of-3
+    checks (knuckle by regions, split pin, cap) under picture.saving.dir.for.mode.trial: say so at start-up for 2 s, in
+    the same style as the other start-up messages (user, 2026-11-15). Returns whether it was shown."""
+    configurator = CosThetaConfigurator.getInstance()
+    if not configurator.getSaveAllPicturesBecauseItsInTrialMode():
+        return False
+    folder = os.path.abspath(configurator.getMainPictureSavingDirForModeTrial())
+    message = f"Images will ALSO be saved in {folder}"
+    printBoldYellow(message)
+    flashSimpleMessage(message, auto_close_duration=2, line_width=70)
+    return True
+
+
 def main():
     # global showSplash
     from logutils.LogSettings import setLogProcess
@@ -437,12 +453,13 @@ def main():
     message: str = f"Running application in {currentMode} mode"
     flashSimpleMessage(message, auto_close_duration=2)
     printBoldBlue(message)
+    showTrialPictureSavingNotice()
 
     # showMessage("Starting cameras, IO module, and other componenets", auto_close_duration=4)
     showApplicationStartingScreen("Starting Camera Servers, IO Server, DB Server, and Logging Server", auto_close_duration=1)
 
     try:
-        P2 = Process(target=startTheCameraServer, args=(currentMode,))
+        P2 = Process(target=startTheCameraServer, args=(currentMode, None))     # None: start with no cycle state
         P2.start()
         time.sleep(1)
         printBoldBlue("Started Camera")
@@ -552,15 +569,18 @@ def main():
                                        maxRestartsPerHour=CosThetaConfigurator.getInstance().getSupervisorMaxRestartsPerHour(),
                                        log=lambda message: printBoldRed(f"Supervisor: {message}"))
         known = locals()
+        from camera.CameraStateFile import defaultPath as cameraStateFile
+        # a restarted camera server is given the cycle state file, so that it carries on with the cycle in progress
+        restartArgs = {"Camera server": (currentMode, cameraStateFile())}
         for name, var, target, args in (("Logging server", "P1", startTheLoggingServer, ()),
-                                        ("Camera server", "P2", startTheCameraServer, (currentMode,)),
+                                        ("Camera server", "P2", startTheCameraServer, (currentMode, None)),
                                         ("QR code server", "P3", startTheQRCodeServer, (currentMode,)),
                                         ("IO server", "P4", startTheIOServer, (currentMode,)),
                                         ("DB server", "P5", startTheDBServer, (currentMode, currentUser,)),
                                         ("Frontend", "P6", startTheFrontendServer, (currentMode, currentUser, currentRole)),
                                         ("Heartbeat server", "P7", startTheHeartbeatServer, ())):
             if known.get(var) is not None:
-                supervisor.add(name, target, args, known[var])
+                supervisor.add(name, target, args, known[var], restartArgs=restartArgs.get(name))
         supervisor.start()
         printBoldBlue("Process supervisor started: a server process that dies is restarted")
 

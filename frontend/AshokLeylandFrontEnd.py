@@ -221,7 +221,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     emergencyButtonPressed : bool = False
     finalDisplayPending : bool = False      # completed cycle: free-rotation torque on screen, record not yet sent
     abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
-    FE_ABORT_PASSWORD : str = "admin123"    # the frontend's abort (Ctrl+Alt+Z): fixed password (user, 2026-11-08)
+    # the frontend's abort (Ctrl+Alt+Z): password frontend.abort.password in the properties file, read at each use
     emergencyAfterCompletion : bool = False # emergency while the completed cycle's torque was on screen
 
     # Variables for determining how much time to show large version of ok and notok images
@@ -1200,13 +1200,13 @@ class AshokLeylandFrontEnd(QMainWindow):
         if AshokLeylandFrontEnd.finalDisplayPending:
             return          # the cycle has completed; its record is about to be sent (see updateEmergencyAbortPressed)
         # The frontend's own abort (2026-11-08): for when the machine's cycle was aborted and the frontend did not follow.
-        # Password-protected (FE_ABORT_PASSWORD). It stays in the frontend: no message to the QR code or camera server,
+        # Password-protected (frontend.abort.password). It stays in the frontend: no message to the QR code or camera server,
         # no queues cleared. The IOServer is only asked to set PC_PLC_CycleAborted on the PLC; it aborts its own cycle
         # only if that write succeeds (no address yet: it logs and carries on).
         entered = self._runDialog(getJustPassword, textToShow="Frontend abort (this screen only).\nEnter the password:")
         if not entered:
             return                                          # cancelled
-        if entered != AshokLeylandFrontEnd.FE_ABORT_PASSWORD:
+        if entered != CosThetaConfigurator.getInstance().getFrontendAbortPassword():
             printYellow("Frontend abort: wrong password, nothing done")
             self._runDialog(showErrorMessage, "Wrong password - nothing aborted", auto_close_duration=3)
             return

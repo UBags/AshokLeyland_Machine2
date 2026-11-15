@@ -71,6 +71,10 @@ What else to expect while the server is down (the rules of `PLC_Interface_Spec.m
 | Heartbeat | the tiles keep their last colour for a few seconds, then show no status; after 8 s the IOServer holds the next cycle ("Heartbeat server down") |
 | Logging | log lines of the next seconds are kept and written when it is back |
 
+Once **during a cycle**, after the top bearing check: kill the camera server. After its restart the console shows
+`Camera server restarted: cycle state taken from ... - QR code ..., pictures [...], bearing ring yes, knuckle frame yes`,
+and the nut / washer and later checks of that component work as before (they use the kept pictures, ring and frame).
+
 Then once **during a cycle** (after the knuckle check): kill the frontend. The IOServer aborts the cycle (the PLC
 gets the reset); after the frontend is back, the next cycle runs normally.
 
@@ -116,6 +120,7 @@ centres in the properties file.
 | 1 Worker in the exe | | | | |
 | 2a Check times (largest per check) | | | | |
 | 3 Restart: camera / QR / IO / DB / frontend / heartbeat / logging | | | | |
+| 3 Camera server killed during a cycle (state taken back) | | | | |
 | 3 Frontend killed during a cycle | | | | |
 | 5 Real QR codes | | | | |
 | 6 Knuckle frame (shift, scale, check time; wrong part NOT OK) | | | | |

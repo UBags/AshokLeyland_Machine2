@@ -48,7 +48,7 @@ The PLC decides machine motion and torque OK or NOT OK. The PC decides vision OK
 | P3 | QR code server | `costhetaio/qrcodescanner/QRCodeScanningServer.py` | Reads the scanner when the IOServer asks. Validates the code (and checks for a duplicate in the database). Sends it to the IOServer, frontend and camera |
 | P4 | IOServer | `costhetaio/commonplc/PLCIOServer.py` | Owns the machine state machine (28 states) and all PLC reads and writes. Writes the settings. Applies the server-down rules |
 | P5 | DB server | `persistence/DBServer.py` | Writes one row per component. Creates the day folders for images |
-| P6 | Frontend | `frontend/AshokLeylandFrontEnd.py` (PySide6) | Operator screen with 15 steps, settings, reports, abort |
+| P6 | Frontend | `frontend/AshokLeylandFrontEnd.py` (PySide6) | Operator screen with 15 steps, settings, reports, abort. Passwords (abort, machine settings, bypass) from the properties file |
 | P7 | Heartbeat and alarm server | `monitorAllConnections/HeartbeatAndAlarmServer.py` | Collects heartbeats. Sends the per-server status to the IOServer and frontend. Sounds the siren. Checks Redis every minute |
 
 All processes are Python `multiprocessing.Process` children of MainProgram. They share nothing in memory. **Redis is used only for communication between processes**; data used inside one process stays in memory variables.
@@ -126,12 +126,13 @@ runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `
 rotation and zoom against the reference position (13 Nov 2026), and places every later check's centre (hub, top
 bearing, nut, no-bung, bung, cap) for this cycle, per type (DOST / DOSTPLUS). A camera movement over
 `vision.knuckle.frame.max.*` (40 px, 3°, 5 %) makes the knuckle check NOT OK ("set the camera again"). Without a frame
-(Machine 1, or the camera server restarted during a cycle) the centres in the properties file are used. The frame is
+(Machine 1, or the regions knuckle method) the centres in the properties file are used. A camera server restarted
+by the supervisor during a cycle takes the frame back from its state file (§6). The frame is
 dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle retake.
 The reference values (`NOMINAL_PINS`, `CENTRES` in `VisionFrame.py`, the rules in `KnuckleLocator.py`) are in the code,
 not in the properties file. Positions and offsets: `vision_positions_machine2.md`.
 
-No values are written on the pictures sent to the frontend (outlines only); the values go to the log.
+No values or words are written on the pictures sent to the frontend (outlines only; a picture NOT OK without a check's verdict - timeout, stalled camera - gets a red border); the values and reasons go to the log.
 
 ## 6. Failure handling (summary)
 
@@ -150,8 +151,9 @@ No values are written on the pictures sent to the frontend (outlines only); the 
 | Redis not storing | Heartbeat server, every 60 s (10 s while failing); MainProgram at start | Siren and console message; hold the next cycle; refuse to start |
 | Settings write fails | Read-back | The earlier settings stay in force; the side (and the skip tag, where the PLC has it) is still required |
 | Camera moved | Knuckle check: camera movement from the pins beyond `vision.knuckle.frame.max.*` | Knuckle NOT OK, "set the camera again" |
-| No knuckle frame in the cycle | Camera server restarted during a cycle | The later checks use the centres in the properties file |
+| Camera server restarted during a cycle | ProcessSupervisor | The new camera server takes the cycle's state (QR code, earlier pictures, top bearing ring, knuckle frame) from `<project root>/Temp/camera_server_state.pkl`, written after every check; a file older than `camera.state.file.max.age.sec` is not used |
 | Vision check worker not ready / stopped | `VisionCheckWorker` | NOT OK ("vision check worker starting") until the new worker is ready |
+| Bearing-ring guard cannot decide (ring finder fails, or no answer 5 s after the check) | Camera server | Nut / washer NOT OK with the reason |
 
 **Limitation of the Redis check.** When Redis stops storing, the status messages that carry "redis down" cannot be delivered either. What the check really gives is:
 

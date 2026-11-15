@@ -9,7 +9,9 @@ The real VisionCheckWorker and its assess(); the worker process here plays the n
   G3 bearing pictures (no nut, no washer): NOT OK with "bearing ring visible ...", no longer than the worker;
   G4 the guard does not run for other states (top bearing picture in the top bearing state: OK);
   G5 guard switched off (<vendor>.vision.nutwasher.bearing.ring.guard=False): OK;
-  G6 in the worker process the check itself leaves the guard to the camera server (GUARD_DONE_BY_CALLER).
+  G6 in the worker process the check itself leaves the guard to the camera server (GUARD_DONE_BY_CALLER);
+  G7 / G8 the guard cannot decide (ring finder fault / no answer in time): NOT OK with the reason (2026-11-15);
+  G9 the same inside the check (thread mode).
 Pictures: nut_washer_images/, top_bearing_images/ next to this script. Settings: this machine's (folder name).
 Needs Redis (the camera server modules connect at import); not the model weights.
 
@@ -61,9 +63,11 @@ if __name__ == "__main__":
         print(f"{'PASS' if ok else 'FAIL'}  {name}" + ("" if ok else f"   [{detail}]"), flush=True)
 
     NUT, TOP = MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING
-    nuts = sorted((HERE / "nut_washer_images").glob("*_nut_*.jpg"))
-    washers = sorted((HERE / "nut_washer_images").glob("*_washer_*.jpg"))
-    bearings = sorted((HERE / "top_bearing_images").glob("*.jpg"))
+    # Machine 1 has no nut / bearing pictures in the repo: the Machine 2 ones are used (with Machine 1's limits)
+    PICS = HERE if (HERE / "nut_washer_images").is_dir() else HERE.parent / "machine2_dryrun"
+    nuts = sorted((PICS / "nut_washer_images").glob("*_nut_*.jpg"))
+    washers = sorted((PICS / "nut_washer_images").glob("*_washer_*.jpg"))
+    bearings = sorted((PICS / "top_bearing_images").glob("*.jpg"))
     print(f"guard {'on' if C.BEARING_RING_GUARD else 'OFF'}; {len(nuts)} nut, {len(washers)} washer-only, {len(bearings)} bearing pictures")
     w = V.VisionCheckWorker(target=playedWorkerMain); w.start()
     check("worker ready", w.waitUntilReady(120))
@@ -90,6 +94,28 @@ if __name__ == "__main__":
     r, _ = run(bearings[0], NUT)
     check("G5 guard switched off: the worker's verdict stands", r[0], r[3])
     C.BEARING_RING_GUARD = True
+    # G7 / G8 (2026-11-15): a guard that cannot decide makes the check NOT OK (before, it was "not applied": OK)
+    realWait = V.GUARD_MAX_WAIT_SECS
+    from camera.CameraProcessorServer import CheckTopBearing as TB
+    _find = TB.findRing
+    TB.findRing = staticmethod(lambda img: (_ for _ in ()).throw(RuntimeError("simulated ring finder fault")))
+    r, _ = run(nuts[0], NUT)
+    check("G7 ring finder fails: NOT OK, reason 'bearing-ring guard: ring finder failed'", (not r[0]) and
+          "ring finder failed" in (r[3] or ""), r[3])
+    V.GUARD_MAX_WAIT_SECS = 0.2
+    TB.findRing = staticmethod(lambda img: (time.sleep(WORK_SECS + 1.5), None)[1])
+    r, _ = run(nuts[0], NUT)
+    check("G8 guard gives no answer in time: NOT OK, reason 'bearing-ring guard: no answer'", (not r[0]) and
+          "no answer" in (r[3] or ""), r[3])
+    TB.findRing, V.GUARD_MAX_WAIT_SECS = _find, realWait
+    time.sleep(WORK_SECS + 1.6)                       # let the slow guard thread end
+    r, _ = run(nuts[0], NUT)
+    check("G8 afterwards a nut + washer picture is OK again", r[0], r[3])
+    # the guard inside the check (thread mode / dry-run windows): a failing ring finder -> NOT OK, without a nut search
+    import camera.CheckNutAndPlateWasher as CN
+    src = __import__("inspect").getsource(CN.CheckNutAndPlateWasher.checkNutAndPlateWasher)
+    check("G9 the guard inside the check returns NOT OK when the ring finder fails",
+          'Ring finder failed ({e}) - NOT OK' in src and "; guard not applied" not in src)
     w.stop()
     import camera.VisionCheckWorker as V2, inspect
     check("G6 the worker process leaves the guard to the camera server (_workerMain sets GUARD_DONE_BY_CALLER)",

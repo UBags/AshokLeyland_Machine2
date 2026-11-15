@@ -53,3 +53,6 @@ rendered.html
 
 # test output written under "C:/..." by dry runs on Linux (a folder literally named C:)
 C:/
+
+# camera server cycle state (camera/CameraStateFile.py)
+Temp/

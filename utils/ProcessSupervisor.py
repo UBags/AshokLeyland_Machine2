@@ -44,9 +44,12 @@ class ProcessSupervisor:
         self._thread: Optional[threading.Thread] = None
         self.restarts: Dict[str, int] = {}
 
-    def add(self, name: str, target: Callable, args: tuple, process) -> None:
+    def add(self, name: str, target: Callable, args: tuple, process, restartArgs: Optional[tuple] = None) -> None:
+        """restartArgs: the arguments for a restart, when not the same as at the start (the camera server is restarted
+        with its cycle state file, started without it)."""
         with self._lock:
             self._entries[name] = {"target": target, "args": args, "process": process,
+                                   "restartArgs": restartArgs if restartArgs is not None else args,
                                    "restarts": deque(), "givenUp": False}
             self.restarts.setdefault(name, 0)
 
@@ -92,7 +95,7 @@ class ProcessSupervisor:
                 continue
             self._log(f"{name} has died (exit code {old.exitcode}); restarting it")
             try:
-                new = self._factory(entry["target"], entry["args"])
+                new = self._factory(entry["target"], entry["restartArgs"])
             except Exception as e:
                 self._log(f"{name} could not be restarted: {e}")
                 entry["restarts"].append(now)

@@ -1784,17 +1784,37 @@ MACHINE_SETTINGS_FIELDS = (
 MACHINE_SETTINGS_FLAG_FIELDS = (
     ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening"),
 )
-MACHINE_SETTINGS_PASSWORD: str = "admin123"     # Save asks for it, then Yes / No (user, 2026-11-13)
+# Passwords (user, 2026-11-13 / 2026-11-15): from the properties file, read at each Save
+#   machine.settings.password         any change
+#   machine.settings.bypass.password  in addition, when "Bypass Component Press and Second Tightening" changes
+
+
+def machineSettingsPassword() -> str:
+    return CosThetaConfigurator.getInstance().getMachineSettingsPassword()
+
+
+def machineSettingsBypassPassword() -> str:
+    return CosThetaConfigurator.getInstance().getMachineSettingsBypassPassword()
 
 
 def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> bool:
-    """Save: the password (MACHINE_SETTINGS_PASSWORD), then a Yes / No confirmation listing what changes."""
+    """Save: the machine settings password; if the bypass switch changes, also the bypass password; then a Yes / No
+    confirmation listing what changes."""
     entered = getJustPassword("Enter the password to change the machine settings")
     if entered is None or entered == "":
         return False
-    if entered != MACHINE_SETTINGS_PASSWORD:
+    if entered != machineSettingsPassword():
         showErrorMessage("Wrong password: machine settings not changed")
         return False
+    bypassChanged = any(bool(current.get(key, False)) != bool(settings.get(key, False))
+                        for key, _ in MACHINE_SETTINGS_FLAG_FIELDS)
+    if bypassChanged:
+        entered = getJustPassword("Enter the password to change\n'Bypass Component Press and Second Tightening'")
+        if entered is None or entered == "":
+            return False
+        if entered != machineSettingsBypassPassword():
+            showErrorMessage("Wrong bypass password: machine settings not changed")
+            return False
     lines = []
     for key, label, kind in MACHINE_SETTINGS_FIELDS:
         old, new = current.get(key), settings.get(key)

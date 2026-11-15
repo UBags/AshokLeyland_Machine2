@@ -581,6 +581,33 @@ def driver():
               and "Bypass Component Press and Second Tightening: Yes" in asked[0][1], str(asked))
         asked.clear(); SP.sg.popup_yes_no = lambda text, **k: "No"
         check("F12 admin123 + No -> not saved", SP.confirmMachineSettingsChange("DOST", new, old) is False)
+        # 2026-11-15: passwords from the properties file; the bypass switch has its own password, asked in addition
+        _ms, _bp = SP.machineSettingsPassword, SP.machineSettingsBypassPassword
+        SP.machineSettingsPassword, SP.machineSettingsBypassPassword = (lambda: "set-pw"), (lambda: "bypass-pw")
+        SP.sg.popup_yes_no = lambda text, **k: asked.append(("yesno", text)) or "Yes"
+        answers = []
+        SP.getJustPassword = lambda *a, **k: answers.pop(0) if answers else ""
+        asked.clear(); answers[:] = ["set-pw", "bypass-pw"]
+        check("F12b bypass changed: settings password then bypass password -> saved",
+              SP.confirmMachineSettingsChange("DOST", new, old) is True and [k for k, _ in asked] == ["yesno"], str(asked))
+        asked.clear(); answers[:] = ["set-pw", "set-pw"]
+        check("F12b bypass changed, wrong bypass password -> not saved, 'Wrong bypass password' shown",
+              SP.confirmMachineSettingsChange("DOST", new, old) is False and asked
+              and asked[0][0] == "error" and "bypass" in asked[0][1].lower(), str(asked))
+        asked.clear(); answers[:] = ["set-pw"]
+        same = dict(old, rotation_rpm=float(old["rotation_rpm"]) + 1.0)
+        check("F12b bypass unchanged: only the settings password asked -> saved",
+              SP.confirmMachineSettingsChange("DOST", same, old) is True and answers == [], str(asked))
+        asked.clear(); answers[:] = ["admin123"]
+        check("F12b the properties' machine.settings.password applies (admin123 refused when it is set-pw)",
+              SP.confirmMachineSettingsChange("DOST", same, old) is False, str(asked))
+        SP.machineSettingsPassword, SP.machineSettingsBypassPassword = _ms, _bp
+        from Configuration import CosThetaConfigurator as _CC
+        _c = _CC.getInstance()
+        check("F12b passwords in the properties file: frontend abort / machine settings / bypass",
+              all(isinstance(v, str) and v for v in (_c.getFrontendAbortPassword(), _c.getMachineSettingsPassword(),
+                                                    _c.getMachineSettingsBypassPassword())),
+              f"{_c.getFrontendAbortPassword()!r} {_c.getMachineSettingsPassword()!r} {_c.getMachineSettingsBypassPassword()!r}")
         SP.getJustPassword, SP.sg.popup_yes_no, SP.showErrorMessage = _pw, _yn, _err
 
         # ---------------- F13 (2026-11-13) ----------------

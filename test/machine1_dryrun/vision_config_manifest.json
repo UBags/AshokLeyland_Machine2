@@ -2,12 +2,13 @@
   "_baseline": "5728def",
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "6846f37",
-    "camera/CheckHubAndBottomBearing.py": "88d3a0d",
+    "camera/CheckHubAndBottomBearing.py": "3d91a76",
     "camera/CheckTopBearing.py": "8d7cdd5",
-    "camera/CheckNutAndPlateWasher.py": "9e2812a",
+    "camera/CheckNutAndPlateWasher.py": "3d91a76",
     "camera/HexagonNutDetector.py": "4e04121",
     "camera/CheckCap.py": "15bb871",
-    "camera/BunkSegmenter.py": "04e5e6e"
+    "camera/BunkSegmenter.py": "04e5e6e",
+    "camera/HubAndBearingSegmenter.py": "3d91a76"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {

@@ -582,6 +582,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
                     ImageProcessor.prepareForKnuckleCheck()
                 allok, chosenProcessedImage, chosenOriginalImage, reason = self.runAssessment(currentMachineState,
                                                                                               imagesToBeProcessed)
+                ImageProcessor.persistState()        # a restarted camera server carries on from here
             if allok:
                 logBoth('logInfo', ConverterScalerAndProcessor.logSource, f"Final result: OK", Logger.SUCCESS)
             else:
@@ -978,12 +979,15 @@ def _assessInThread(currentMachineState: MachineState, imagesToBeProcessed: list
 
 
 def _withReason(anImage, reason: str):
-    """A copy of the picture with the reason of a NOT OK written on it (red), for the frontend."""
+    """A copy of the picture marked NOT OK for the frontend: a red border, no text (user, 2026-11-15: no values or
+    words on the pictures). The reason goes to the log here, and to the frontend as the answer's reason / notice."""
+    logBoth('logError', logSource, f"Picture NOT OK: {reason}", Logger.ISSUE)
     try:
         if not isinstance(anImage, np.ndarray):
             anImage = np.full((720, 1280, 3), 255, dtype=np.uint8)
         marked = anImage.copy()
-        cv2.putText(marked, f"NOT OK: {reason}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 1.4, (0, 0, 255), 3, cv2.LINE_AA)
+        h, w = marked.shape[:2]
+        cv2.rectangle(marked, (4, 4), (w - 5, h - 5), (0, 0, 255), 8)
         return marked
     except Exception:
         return anImage
@@ -1065,6 +1069,43 @@ class ImageProcessor():
         ImageProcessor.visionFrame = frame
         VisionFrame.applyToChecks(frame)
 
+    # The cycle's state kept in a file (camera/CameraStateFile.py), so that a camera server restarted during a cycle
+    # carries on with it (user, 2026-11-15). Written after every check and at the end of every cycle; read only when
+    # the camera server is started with the file's path (MainProgram's supervisor restart).
+    stateFile: str | None = None
+
+    @classmethod
+    def persistState(cls) -> bool:
+        if not ImageProcessor.stateFile:
+            return False
+        from camera import CameraStateFile
+        attributes = {name: getattr(ImageProcessor, name) for name in ImageProcessor._STATE_ATTRIBUTES}
+        written = CameraStateFile.save(ImageProcessor.stateFile, attributes, dict(ImageProcessor.currentPictures))
+        if not written:
+            logBoth('logWarning', ImageProcessor.logSource, f"Could not write the cycle state to {ImageProcessor.stateFile}",
+                    Logger.RISK)
+        return written
+
+    @classmethod
+    def loadPersistedState(cls, path: str | None) -> bool:
+        """At a restart: the cycle's state from the file (QR code, model, side, bearing ring, knuckle frame, earlier
+        pictures); True if one was taken."""
+        from camera import CameraStateFile
+        attributes, pictures, why = CameraStateFile.load(path, CosThetaConfigurator.getInstance().getCameraStateFileMaxAge())
+        if attributes is None:
+            logBoth('logInfo', ImageProcessor.logSource, f"Camera server restarted: no cycle state taken ({why})",
+                    Logger.GENERAL)
+            return False
+        state = {name: attributes.get(name) for name in ImageProcessor._STATE_ATTRIBUTES}
+        state["currentPictures"] = {key: pictures.get(key) for key in ImageProcessor.currentPictures}
+        ImageProcessor.restoreState(state)          # applies the knuckle frame to the checks too
+        kept = [key for key, picture in state["currentPictures"].items() if picture is not None]
+        logBoth('logCritical', ImageProcessor.logSource,
+                f"Camera server restarted: cycle state taken from {why} - QR code {ImageProcessor.currentComponentQRCodeValue}, "
+                f"pictures {kept}, bearing ring {'yes' if ImageProcessor.bearingCentreAndRadii else 'no'}, knuckle frame "
+                f"{'yes' if ImageProcessor.visionFrame else 'no'}", Logger.SUCCESS)
+        return True
+
     @classmethod
     def endOfCycle(cls) -> None:
         """The IOServer's end of cycle (completed or aborted): nothing of the cycle is kept."""
@@ -1074,6 +1115,7 @@ class ImageProcessor():
         ImageProcessor.clearCurrentPictures()
         ImageProcessor.clearBearingCentreAndRadii()
         ImageProcessor.setVisionFrame(None)
+        ImageProcessor.persistState()
 
     @classmethod
     def prepareForKnuckleCheck(cls) -> None:
@@ -1513,7 +1555,16 @@ def verifyVisionDependencies(loadModels: bool = True) -> list:
     return problems
 
 
-def CameraServer(mode : str = "Test"):
+def CameraServer(mode : str = "Test", stateFile: str | None = None):
+    """stateFile: None at MainProgram's start (a new run starts with no cycle state); the state file's path when
+    MainProgram's supervisor restarts the camera server (it carries on with the cycle in progress). Either way the
+    camera server writes its cycle state to the default file (camera/CameraStateFile.py) from now on."""
+    from camera import CameraStateFile
+    if stateFile:
+        ImageProcessor.loadPersistedState(stateFile)
+    ImageProcessor.stateFile = CameraStateFile.defaultPath()
+    if not stateFile:
+        ImageProcessor.persistState()               # a new run: the file of an earlier run is replaced by an empty state
     inWorker = CosThetaConfigurator.getInstance().getVisionCheckInWorkerProcess()
     problems = verifyVisionDependencies(loadModels=not inWorker)
     if problems:
@@ -1576,7 +1627,7 @@ def CameraServer(mode : str = "Test"):
 
 # **************************************************************************************************
 
-def startCameraServer(mode: str = "Test"):
-    CameraServer(mode=mode)
+def startCameraServer(mode: str = "Test", stateFile: str | None = None):
+    CameraServer(mode=mode, stateFile=stateFile)
 
 # startCameraServer()

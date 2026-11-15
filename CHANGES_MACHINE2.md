@@ -3210,3 +3210,48 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **test/machine*_dryrun/README.md:** the torque / press reset delays and the frontend abort (F8) described as coded.
 - Checked here (Linux, Python 3.13, CPU, MobileSAM weights): `DryRun_Knuckle_Frame.py --quick` 86/86; vision verifier
   ALL EQUIVALENT (216 parameters); `DryRun_QRCode_Validation` 9/9; fault scenarios (Siemens) 190/190.
+
+## 104. Passwords in the properties; bearing-ring guard NOT OK when it cannot decide; trial-picture notice; no text on pictures; camera server state across a restart; all-checks window (2026-11-15)
+
+- **Passwords (user):** `frontend.abort.password` (Ctrl+Alt+Z), `machine.settings.password` (Save in Machine
+  Settings) and `machine.settings.bypass.password` (asked in addition when "Bypass Component Press and Second Tightening"
+  changes; wrong: "Wrong bypass password: machine settings not changed", nothing saved). All three `admin123`, in all
+  three properties files; read at each use (`getFrontendAbortPassword`, `getMachineSettingsPassword`,
+  `getMachineSettingsBypassPassword`). The fixed `FE_ABORT_PASSWORD` / `MACHINE_SETTINGS_PASSWORD` constants are gone.
+- **Bearing-ring guard:** when it cannot decide - the ring finder fails, or no answer `GUARD_MAX_WAIT_SECS` (5 s) after
+  the worker's verdict - the nut / washer check is NOT OK with the reason ("bearing-ring guard: ring finder failed
+  (...)" / "... no answer in 5 s after the check"), logged as an error. Before, the guard was not applied and the
+  verdict stood. Same inside the check (thread mode, dry-run windows): a failing ring finder returns NOT OK.
+- **Start-up notice (user):** with `save.all.pictures.because.its.in.trial.mode=True`, after "Running application in
+  <mode> mode", "Images will ALSO be saved in <absolute picture.saving.dir.for.mode.trial>" for 2 s
+  (`flashSimpleMessage`, the DarkBlue15 style of the other start-up messages); also printed.
+- **No text on the frontend's pictures (user):** the hub check's "COUNT: n" (now a log line "Hub check: n holes in the
+  winning group") and "MISMATCH: Expected ..., Got ..." (already logged) removed; the camera server's NOT OK picture
+  for a check without a verdict (timeout, stalled camera, worker starting) has a red border instead of "NOT OK:
+  <reason>"; the reason is logged ("Picture NOT OK: ..."), sent as the answer's reason and shown as the "check" notice.
+- **Camera server state across a restart (user's design):** new `camera/CameraStateFile.py`.
+  `ImageProcessor.persistState()` writes the cycle's state (QR code, model, side, top bearing ring, knuckle frame, the
+  earlier pictures as PNG - each encoded once) to `<project root>/Temp/camera_server_state.pkl` after every check and
+  at every end of cycle (then empty); temporary file + rename. `startCameraServer(mode, stateFile=None)` /
+  `CameraServer(mode, stateFile)`: MainProgram starts the camera server with None (a new run starts empty and writes an
+  empty state); `ProcessSupervisor.add(..., restartArgs=)` restarts it with the file's path, and it takes the state back
+  (`loadPersistedState`, which applies the frame to the checks) before it starts its threads. A file older than
+  `camera.state.file.max.age.sec` (new, 3600; 0 = any age) or unreadable is not used. `Temp/` in .gitignore.
+  Measured here: 0.12 s and 5.5 MB for two pictures the first time, 0.002 s for a write with no new picture.
+- **New `test/machine*_dryrun/DryRun_All_Checks_UI.py` (user):** a Load button per vision check; Run All takes the
+  component through every loaded check in the machine's order with the production code (`assessPictures`, the cycle's
+  state in `ImageProcessor`, the knuckle frame), listing per check OK / NOT OK, time, the centre it used and its log
+  lines, with the check's picture; cap / split pin as in production (2-of-3 vote) or once; "Fill from dry-run
+  folders"; Save results; `--auto` without a window.
+- **Verifier:** reference commit 3d91a76 (the three vision files with these logic changes, values hard-coded) for
+  CheckNutAndPlateWasher, CheckHubAndBottomBearing and HubAndBearingSegmenter (now in `baseline_per_file`); both
+  copies ALL EQUIVALENT.
+- **Dry runs, both folders:** FE 130/130 (F12b: the bypass password, the properties' passwords); Bearing ring guard
+  13/13 (G7 ring finder fault, G8 no answer, G9 inside the check; the Machine 1 copy now uses the Machine 2 pictures:
+  it had none and stopped at the first picture); Process supervisor 7/7 (S6 restart arguments); Camera state file
+  19/19 (new); Heartbeat / start-up 28/28 (H11 the notice); Vision check timeout 23/23 and 22/22 (R1: red border, no
+  text); Camera stale frames 23/23; all-checks window: driven under Xvfb 10/10 (camera modules stood in: no torch for
+  that Python), and `--auto` with the production code and real MobileSAM (no YOLO weights here: hub NOT OK as expected;
+  knuckle, top bearing, nut, no bung, cap OK, with the frame's centres).
+- Found while testing: `test/machine1_dryrun/DryRun_Vision_Check_Timeout.py` does not set `COSTHETA_PLC_VENDOR` itself;
+  without it the live properties' vendor (siemens in the repo) is used. Run it with `COSTHETA_PLC_VENDOR=allenbradley`.

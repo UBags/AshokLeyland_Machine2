@@ -282,9 +282,9 @@ class VisionCheckWorker:
             _log('logCritical', f"{getattr(state, 'name', state)}: the check raised {error}")
             return False, fallback, fallback, f"check failed ({error})"
         if guard is not None:
-            bearingVisible, annotated, reason = self._finishBearingRingGuard(guard, images[0])
-            if bearingVisible:
-                return False, annotated, original, reason
+            notOk, annotated, reason = self._finishBearingRingGuard(guard, images[0])
+            if notOk:                       # a bearing-sized ring, or the guard could not decide
+                return False, (annotated if annotated is not None else processed), original, reason
         return allok, processed, original, None
 
     # ------------------------------------------------------------------------------------------------ guard
@@ -315,18 +315,23 @@ class VisionCheckWorker:
 
     @staticmethod
     def _finishBearingRingGuard(guard, picture) -> Tuple[bool, Any, str]:
-        """Wait for the guard (it normally finished while the worker ran the check) and decide."""
+        """Wait for the guard (it normally finished while the worker ran the check) and decide: (NOT OK, marked picture
+        or None, reason). NOT OK when the ring is bearing-sized, and when the guard did not answer in time or failed."""
         from camera.CameraProcessorServer import CheckNutAndPlateWasher
         thread, box = guard
         waitedFrom = time.monotonic()
         thread.join(GUARD_MAX_WAIT_SECS)
         waited = time.monotonic() - waitedFrom
+        # The guard could not decide: NOT OK (user, 2026-11-15) - an uncovered bearing must not pass because the guard
+        # was slow or failed. The picture is returned unmarked; the reason goes to the frontend notice and the log.
         if thread.is_alive():
-            _log('logWarning', f"Bearing-ring guard: no answer in {GUARD_MAX_WAIT_SECS:g} s after the check; not applied")
-            return False, None, ""
+            reason = f"bearing-ring guard: no answer in {GUARD_MAX_WAIT_SECS:g} s after the check"
+            _log('logError', f"Bearing-ring guard: no answer in {GUARD_MAX_WAIT_SECS:g} s after the check - NOT OK")
+            return True, None, reason
         if "error" in box:
-            _log('logWarning', f"Bearing-ring guard: ring finder failed ({box['error']}); not applied")
-            return False, None, ""
+            reason = f"bearing-ring guard: ring finder failed ({box['error']})"
+            _log('logError', f"Bearing-ring guard: ring finder failed ({box['error']}) - NOT OK")
+            return True, None, reason
         visible, annotated, reason = CheckNutAndPlateWasher.bearingRingVerdict(picture, box.get("ring"))
         _log('logError' if visible else 'logInfo',
              f"Bearing-ring guard (camera server): {reason or 'no ring in the picture'} - ring finder {box['secs']:.2f} s, "

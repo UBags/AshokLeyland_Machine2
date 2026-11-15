@@ -542,6 +542,23 @@ class CosThetaConfigurator():
     def getSaveAllPicturesBecauseItsInTrialMode(cls) -> bool:
         return cls._getBool(cls.SAVE_ALL_PICTURES_BECAUSE_ITS_IN_TRIAL_MODE, False)
 
+    # Passwords asked by the frontend (read at each use, so a change in the properties file applies at once)
+    FRONTEND_ABORT_PASSWORD_KEY = "frontend.abort.password"
+    MACHINE_SETTINGS_PASSWORD_KEY = "machine.settings.password"
+    MACHINE_SETTINGS_BYPASS_PASSWORD_KEY = "machine.settings.bypass.password"
+
+    @classmethod
+    def getFrontendAbortPassword(cls) -> str:
+        return cls._getString(cls.FRONTEND_ABORT_PASSWORD_KEY, "admin123")
+
+    @classmethod
+    def getMachineSettingsPassword(cls) -> str:
+        return cls._getString(cls.MACHINE_SETTINGS_PASSWORD_KEY, "admin123")
+
+    @classmethod
+    def getMachineSettingsBypassPassword(cls) -> str:
+        return cls._getString(cls.MACHINE_SETTINGS_BYPASS_PASSWORD_KEY, "admin123")
+
     # ***********************************
 
     # Picture Reduction parameters
@@ -3184,6 +3201,13 @@ class CosThetaConfigurator():
     @classmethod
     def getSupervisorCheckInterval(cls) -> float:
         return cls._floatValue(cls.SUPERVISOR_CHECK_INTERVAL_KEY, 2.0, minimum=0.5)
+
+    CAMERA_STATE_FILE_MAX_AGE_KEY = "camera.state.file.max.age.sec"
+
+    @classmethod
+    def getCameraStateFileMaxAge(cls) -> float:
+        """A restarted camera server uses the cycle state file only if it is not older than this (3600 s; 0 = any)."""
+        return cls._floatValue(cls.CAMERA_STATE_FILE_MAX_AGE_KEY, 3600.0, minimum=0.0)
 
     @classmethod
     def getSupervisorMaxRestartsPerHour(cls) -> int:
