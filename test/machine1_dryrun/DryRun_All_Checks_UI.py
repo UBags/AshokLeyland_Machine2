@@ -1,10 +1,10 @@
 """
 DryRun_All_Checks_UI - one component through every vision check, as the camera server runs them: one picture per
-check, loaded with a button per check (Load Knuckle Picture, Load Hub Picture, ...), then Run All.
+check, loaded with a button per check (Load Knuckle Picture, Load Hub Picture, ...), then Process Images.
 
 What it does (the production code, this machine's settings):
   1. The component type (DOST / DOSTPLUS, LHS / RHS) gives the QR code of the cycle.
-  2. Run All goes through the checks in the machine's order - knuckle, hub, top bearing, nut and washer, bung for the
+  2. Process Images (top of the window) goes through the checks in the machine's order - knuckle, hub, top bearing, nut and washer, bung for the
      component press, no bung, split pin, cap, bung for the cap press - each through the camera server's
      assessPictures() with the cycle's state kept in ImageProcessor, exactly as in a cycle:
        - the knuckle check (Machine 2: by segmentation) builds the cycle's frame; every later check's centre is then
@@ -16,9 +16,13 @@ What it does (the production code, this machine's settings):
      "Cap and split pin as in production": on = as the camera server runs them on its three pictures (here the loaded
      picture three times) - cap: steps 1-3 on each, then the whole check with the seating step once; split pin: the
      2-of-3 vote; off = one check of the picture.
-  3. Each check's line: OK / NOT OK and its time. Clicking a line shows the check's own picture (outlines only, no
-     values: exactly what the frontend gets) and, below, every log line the check wrote (values, reasons). The same
-     lines go to the terminal.
+  3. As each check finishes, its own marked picture is shown - the parts it found outlined (knuckle: spindle, bosses
+     with the pins, lower arm; hub: the holes; top bearing: the ring; nut: the nut; cap: the cap circles and seating
+     outlines; bung: disc and holes) in green (OK) or red (NOT OK), no values: exactly what the frontend gets - with
+     every log line the check wrote (values, reasons) below it, and it stays on screen for "Seconds between checks"
+     (1 - 10, 3 at start; changeable during the run) before the next check starts. The check running is marked "...".
+     Each check's row then shows OK / NOT OK and its time; Show brings its picture back. The same lines go to the
+     terminal.
   4. "Fill from dry-run folders" loads, for the chosen type, the first picture of each check that has one in this
      folder's picture sets (the no-bung check gets a nut picture; the bung pictures are not labelled by model: load
      them by hand). "Save results" writes each check's picture and a results.txt to a folder you choose.
@@ -28,7 +32,7 @@ are collected by this window, not sent to the logging server).
 
 Run from the project root:      python test/machine1_dryrun/DryRun_All_Checks_UI.py
 Without a window (the same run, results printed; exit 1 if a loaded check is NOT OK):
-    python test/machine1_dryrun/DryRun_All_Checks_UI.py --auto --type DOST_LHS [--single] [--<station> <picture> ...]
+    python test/machine1_dryrun/DryRun_All_Checks_UI.py --auto --type DOST_LHS [--single] [--gap 0] [--<station> <picture> ...]
     stations: --knuckle --hub --top --nut --bung1 --nobung --splitpin --cap --bung2 (default: the dry-run folders)
 """
 import argparse
@@ -123,16 +127,19 @@ def _singleCheck(state, img):
     return bool(ok), processed, img
 
 
-def runChecks(pictures, modelType, side, vote=True, onResult=None, stopFlag=None):
+def runChecks(pictures, modelType, side, vote=True, onResult=None, stopFlag=None, onStart=None, gapSecs=None):
     """Every loaded picture through its check, in the machine's order, as in one cycle. pictures: station key -> path
-    or BGR array. Returns a list of dicts (key, name, loaded, ok, secs, processed, centre, lines, frame)."""
+    or BGR array. onStart(key) before a check, onResult(result) after it; gapSecs() = seconds to wait after a check
+    before the next one (read each time; Stop ends the wait). Returns a list of dicts (key, name, loaded, ok, secs,
+    processed, centre, lines, frame)."""
+    lastLoaded = max((i for i, st in enumerate(STATIONS) if pictures.get(st[0]) is not None), default=-1)
     IP = cps.ImageProcessor
     IP.stateFile = None                       # nothing written to the camera server's state file
     IP.fetchQRCodeInChecks = False
     IP.endOfCycle()
     IP.setCurrentComponentName(qrCodeValue=QR[(modelType, side)])
     results = []
-    for key, name, state, centreNames, _ in STATIONS:
+    for index, (key, name, state, centreNames, _) in enumerate(STATIONS):
         if stopFlag is not None and stopFlag.is_set():
             break
         source = pictures.get(key)
@@ -144,6 +151,8 @@ def runChecks(pictures, modelType, side, vote=True, onResult=None, stopFlag=None
                 onResult(result)
             continue
         img = readPicture(source) if isinstance(source, (str, pathlib.Path)) else source
+        if onStart:
+            onStart(key)
         _CURRENT["station"] = key
         with _LOG_LOCK:
             start = len(_LOG)
@@ -172,6 +181,12 @@ def runChecks(pictures, modelType, side, vote=True, onResult=None, stopFlag=None
         results.append(result)
         if onResult:
             onResult(result)
+        gap = float(gapSecs()) if gapSecs and index < lastLoaded else 0.0
+        if gap > 0:
+            if stopFlag is not None:
+                stopFlag.wait(gap)
+            else:
+                time.sleep(gap)
     return results
 
 
@@ -187,7 +202,6 @@ def runWindow():
     from tkinter import filedialog, messagebox, ttk
     from PIL import Image, ImageTk
 
-    VIEW_W, VIEW_H = 960, 540
     root = tk.Tk()
     root.title(f"All vision checks - {os.environ['COSTHETA_PLC_VENDOR']} settings")
     paths = {}
@@ -204,8 +218,22 @@ def runWindow():
                  values=["DOST LHS", "DOST RHS", "DOSTPLUS LHS", "DOSTPLUS RHS"]).pack(side="left", padx=4)
     voteVar = tk.BooleanVar(value=True)
     ttk.Checkbutton(top, text="Cap and split pin as in production (three pictures)", variable=voteVar).pack(side="left", padx=10)
-    status = tk.StringVar(value="Load the pictures, then Run All")
+    status = tk.StringVar(value="Load the pictures (or Fill from dry-run folders), then Process Images")
+    gapVar = tk.IntVar(value=3)
+    gap = {"secs": 3}                       # read by the check thread; Tk variables only on the window's thread
 
+    def gapChanged(*_):
+        try:
+            gap["secs"] = min(10, max(1, int(gapVar.get())))
+        except (tk.TclError, ValueError):
+            pass
+    gapVar.trace_add("write", gapChanged)
+
+    def gapSecs():
+        return gap["secs"]
+
+    actions = ttk.Frame(root); actions.pack(fill="x", padx=8, pady=(0, 6))
+    statusBar = ttk.Frame(root); statusBar.pack(fill="x", padx=8)
     body = ttk.Frame(root); body.pack(fill="both", expand=True, padx=8)
     left = ttk.Frame(body); left.pack(side="left", fill="y")
     right = ttk.Frame(body); right.pack(side="left", fill="both", expand=True, padx=8)
@@ -225,18 +253,26 @@ def runWindow():
 
     for i, (key, name, _, _, _) in enumerate(STATIONS):
         fileVar, verdictVar = tk.StringVar(value="(none)"), tk.StringVar(value="")
-        ttk.Button(left, text=f"Load {name} Picture", width=34, command=lambda k=key, n=name: load(k, n)).grid(row=i, column=0, sticky="w", pady=2)
-        ttk.Label(left, textvariable=fileVar, width=26).grid(row=i, column=1, sticky="w")
+        ttk.Button(left, text=f"Load {name} Picture", width=28, command=lambda k=key, n=name: load(k, n)).grid(row=i, column=0, sticky="w", pady=2)
+        ttk.Label(left, textvariable=fileVar, width=22).grid(row=i, column=1, sticky="w")
         ttk.Button(left, text="x", width=2, command=lambda k=key: clear(k)).grid(row=i, column=2)
-        verdictLabel = ttk.Label(left, textvariable=verdictVar, width=20)
+        verdictLabel = ttk.Label(left, textvariable=verdictVar, width=16)
         verdictLabel.grid(row=i, column=3, sticky="w")
         ttk.Button(left, text="Show", width=6, command=lambda k=key: show(k)).grid(row=i, column=4, padx=2)
         rows[key] = dict(file=fileVar, verdict=verdictVar, label=verdictLabel)
 
-    canvas = tk.Label(right, background="#202020", width=VIEW_W, height=VIEW_H)
+    # The picture sized to what the screen leaves beside the rows and above the log, so that the whole window fits.
+    root.update_idletasks()
+    VIEW_W = max(400, min(960, root.winfo_screenwidth() - left.winfo_reqwidth() - 60))
+    VIEW_H = max(225, min(540, root.winfo_screenheight() - 400, VIEW_W * 9 // 16))
+    VIEW_W = VIEW_H * 16 // 9
+    # A Label's width / height count characters until it holds a picture (960 x 540 characters made the window
+    # thousands of pixels tall, the controls off screen): a blank picture of the view's size from the start.
+    state["blank"] = tk.PhotoImage(width=VIEW_W, height=VIEW_H)
+    canvas = tk.Label(right, background="#202020", image=state["blank"], borderwidth=0)
     canvas.pack(fill="both", expand=False)
     textFrame = ttk.Frame(right); textFrame.pack(fill="both", expand=True, pady=4)
-    text = tk.Text(textFrame, height=14, wrap="none", font=("Consolas", 9))
+    text = tk.Text(textFrame, height=10, width=40, wrap="none", font=("Consolas", 9))   # widens with the picture
     ys = ttk.Scrollbar(textFrame, orient="vertical", command=text.yview)
     xs = ttk.Scrollbar(textFrame, orient="horizontal", command=text.xview)
     text.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)
@@ -274,17 +310,22 @@ def runWindow():
     def runAll():
         if state["running"]:
             return
+        if not paths:
+            status.set("No pictures loaded: load them first (or Fill from dry-run folders)")
+            return
         t, s = typeVar.get().split()
         results.clear()
         for k in rows:
-            rows[k]["verdict"].set("..." if k in paths else "")
+            rows[k]["verdict"].set("waiting" if k in paths else "")
+            rows[k]["label"].configure(foreground="#606060")
         stopFlag.clear(); state["running"] = True
         status.set(f"Running {t} {s} ... (the first check loads the models)")
         snapshot, vote = dict(paths), voteVar.get()
 
         def work():
             try:
-                runChecks(snapshot, t, s, vote=vote, onResult=lambda r: events.put(("result", r)), stopFlag=stopFlag)
+                runChecks(snapshot, t, s, vote=vote, onResult=lambda r: events.put(("result", r)), stopFlag=stopFlag,
+                          onStart=lambda k: events.put(("start", k)), gapSecs=gapSecs)
             except Exception as e:
                 events.put(("error", f"{type(e).__name__}: {e}"))
             events.put(("done", None))
@@ -294,19 +335,27 @@ def runWindow():
         try:
             while True:
                 kind, payload = events.get_nowait()
-                if kind == "result":
+                if kind == "start":
+                    rows[payload]["verdict"].set("... checking")
+                    rows[payload]["label"].configure(foreground="#0050c0")
+                    name = next(n for k, n, *_ in STATIONS if k == payload)
+                    status.set(f"Checking: {name} (the first check loads the models)")
+                elif kind == "result":
                     r = payload; results[r["key"]] = r
                     if r["loaded"]:
                         rows[r["key"]]["verdict"].set(f"{'OK' if r['ok'] else 'NOT OK'}  {r['secs']:.2f} s")
                         rows[r["key"]]["label"].configure(foreground="#007000" if r["ok"] else "#c00000")
                         show(r["key"])
+                        status.set(f"{r['name']}: {'OK' if r['ok'] else 'NOT OK'} in {r['secs']:.2f} s - next check in "
+                                   f"{gapSecs()} s")
                     print(summaryLine(r), flush=True)
                 elif kind == "error":
                     messagebox.showerror("All checks", payload)
                 elif kind == "done":
                     state["running"] = False
                     loaded = [r for r in results.values() if r["loaded"]]
-                    status.set(f"Done: {sum(1 for r in loaded if r['ok'])} of {len(loaded)} checks OK - click Show for a check")
+                    status.set(f"{'Stopped' if stopFlag.is_set() else 'Done'}: {sum(1 for r in loaded if r['ok'])} of "
+                               f"{len(loaded)} checks OK - Show brings a check's picture back")
                     setText([summaryLine(r) for r in sorted(results.values(), key=lambda r: [s[0] for s in STATIONS].index(r["key"]))])
         except queue.Empty:
             pass
@@ -329,14 +378,16 @@ def runWindow():
         pathlib.Path(folder, "results.txt").write_text("\n".join(lines), encoding="utf-8")
         status.set(f"Saved to {folder}")
 
-    buttons = ttk.Frame(root); buttons.pack(fill="x", padx=8, pady=6)
-    ttk.Button(buttons, text="Fill from dry-run folders", command=fill).pack(side="left")
-    ttk.Button(buttons, text="Run All", command=runAll).pack(side="left", padx=6)
-    ttk.Button(buttons, text="Stop", command=stopFlag.set).pack(side="left")
-    ttk.Button(buttons, text="Save results", command=save).pack(side="left", padx=6)
-    ttk.Label(buttons, textvariable=status).pack(side="left", padx=10)
+    ttk.Button(actions, text="Fill from dry-run folders", command=fill).pack(side="left")
+    ttk.Button(actions, text="Process Images", command=runAll).pack(side="left", padx=6)
+    ttk.Label(actions, text="Seconds between checks:").pack(side="left", padx=(10, 2))
+    ttk.Spinbox(actions, from_=1, to=10, increment=1, width=4, textvariable=gapVar).pack(side="left")
+    ttk.Button(actions, text="Stop", command=stopFlag.set).pack(side="left", padx=6)
+    ttk.Button(actions, text="Save results", command=save).pack(side="left")
+    ttk.Label(statusBar, textvariable=status).pack(side="left")
     root._dryrun = dict(paths=paths, results=results, rows=rows, typeVar=typeVar, voteVar=voteVar, fill=fill,
-                        runAll=runAll, status=status, state=state, show=show, text=text)   # for the automatic test
+                        runAll=runAll, status=status, state=state, show=show, text=text, gapVar=gapVar,
+                        processImages=runAll)   # for the automatic test
     poll()
     return root
 
@@ -346,6 +397,7 @@ def main():
     ap.add_argument("--auto", action="store_true", help="no window: run once and print the results")
     ap.add_argument("--type", default="DOST_LHS", choices=[f"{t}_{s}" for t, s in QR])
     ap.add_argument("--single", action="store_true", help="cap and split pin: one check, not as the camera server runs them")
+    ap.add_argument("--gap", type=float, default=0.0, help="--auto: seconds between checks (default 0)")
     for key, *_ in STATIONS:
         ap.add_argument(f"--{key}", default=None)
     args = ap.parse_args()
@@ -355,7 +407,7 @@ def main():
     t, s = args.type.split("_")
     pictures = defaultPictures(t, s)
     pictures.update({key: getattr(args, key) for key, *_ in STATIONS if getattr(args, key)})
-    results = runChecks(pictures, t, s, vote=not args.single)
+    results = runChecks(pictures, t, s, vote=not args.single, gapSecs=(lambda: args.gap) if args.gap > 0 else None)
     print("\n" + "\n".join(summaryLine(r) for r in results))
     frame = next((r["frame"] for r in results if r["key"] == "knuckle"), None)
     print("\nFrame: " + VisionFrame.describe(frame))

@@ -3288,3 +3288,26 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   `DryRun_Vision_Check_Timeout.py`: thread-mode section replaced by T1 (worker always used, no getter, no key);
   23/23 (Machine 2), 22/22 (Machine 1). `DryRun_All_Checks_UI.py`: "as in production" relabelled (three pictures).
   Guard 13/13, state file 19/19 (both); `DryRun_Knuckle_Frame.py --quick` unchanged results.
+
+## 106. All-checks window: Process Images at the top, a pause between checks, window fits the screen (2026-11-15)
+
+- **User:** after loading the pictures there was no button to process them. There was one ("Run All"), in a bar at the
+  bottom, never on screen: the picture area was a `tk.Label` with `width=960, height=540`, which Tk counts in
+  characters until the label holds a picture - the window opened 6305 x 6392 px (measured under Xvfb). Now the label
+  holds a blank picture of the view's size from the start, the view is sized to what the screen leaves beside the rows
+  (at most 960 x 540), and the log box takes the view's width (its default 80 characters made the window 1400 px wide
+  on a 1366 px screen). Measured: 1336 x 604 on 1366 x 768, 1251 x 556 on 1280 x 720, 1699 x 808 on 1920 x 1080.
+- **Controls at the top:** Fill from dry-run folders, **Process Images** (was Run All), **Seconds between checks**
+  (1 - 10, 3 at start; read before each pause, so a change applies during the run), Stop (also ends a pause), Save
+  results; the status line below them.
+- **During the run:** loaded rows show "waiting", the running check "... checking"; when a check finishes its marked
+  picture (the check's own outlines of what it found, green OK / red NOT OK, no values - what the frontend gets) and
+  log lines are shown with "<check>: OK / NOT OK in n s - next check in 3 s", and stay for the pause; no pause after
+  the last check. Nothing loaded: said so, nothing run.
+- `runChecks(..., onStart=, gapSecs=)`; `--auto --gap <s>` (default 0). The pause is kept in a plain value updated on
+  the window's thread (a Tk variable read from the check thread can hang Tk).
+- **Checked:** the real checks (MobileSAM; YOLO stubbed here) with a 2 s pause: the machine's order, 2.00-2.01 s between
+  a check's end and the next start, Stop during a 10 s pause ends it in 0.3 s and runs no further check, every check's
+  picture carries its outlines (hub: nothing found without YOLO); the window (Python 3.12 + Tk, camera modules stood
+  in) 15/15 at 1366 x 768, 1920 x 1080 and 1280 x 720 - button on screen, window within the screen, checks one after
+  the other with the pause, statuses, Show, vote on / off.

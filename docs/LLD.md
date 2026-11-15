@@ -396,7 +396,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_CheckKnuckle_Images.py` | The `regions` knuckle method (Machine 1; Machine 2 before CHANGES 102) |
 | `DryRun_Bearing_Ring_Guard.py` | The guard in the camera server beside the worker; NOT OK when it cannot decide (G7-G9) |
 | `DryRun_Camera_State_File.py` | The camera server's cycle state across a restart (C1-C5) |
-| `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check, all run in order as in one cycle, the frame's centres listed |
+| `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check; Process Images runs them in order as in one cycle, a configurable pause (3 s) between checks, each check's marked picture and log lines shown; the frame's centres listed |
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
