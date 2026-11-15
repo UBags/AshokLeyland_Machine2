@@ -477,6 +477,11 @@ class PLCIOServer:
         self.machineState = MachineStateMachine()  # Instance of MachineStateMachine
         self.machineState.stateChangeListener = self._onStateChange
         self._cycleEndRedisConnection = None  # end-of-cycle message to the camera server (_onStateChange)
+        # State sync (CHANGES 108): every state change published for the frontend (utils/RedisUtils.publishIOServerState)
+        self._stateRedisConnection = None
+        self._stateSeq: int = 0
+        self._stateReasonNext: Optional[str] = None   # why the next state change happens (set by abortCycle)
+        self._statePublishFailing = False
         # Delayed resets of the torque and press tags (scheduleTagReset): one scheduler thread for all of them.
         # _awaitingTriggerReset: the former "trigger read False first" gate after a NOT OK - kept, no longer set
         self._resultResetScheduler = DelayedJobScheduler("PLC Handshake Reset Scheduler")
@@ -629,6 +634,10 @@ class PLCIOServer:
             setActiveCameraRequest(r, None)
         except Exception:
             noteSuppressed()
+        # State sync: the state at start (the frontend learns this IOServer's pid and where it is)
+        seq, published = self._publishState(None, self.machineState.getCurrentState(), reason="IOServer start")
+        self._audit(f"STATE at start {self.machineState.getCurrentState().name}  (seq {seq}, "
+                    f"{'published' if published else 'NOT published'})")
 
         time.sleep(3)
         # no cycle yet: clear the log context left by a previous run (until the first QR code is accepted)
@@ -1656,6 +1665,7 @@ class PLCIOServer:
                     noteSuppressed()
             self.resetTagToFalse(PLCIOServer.PLC_PC_EmergencyAbort)
             # The state first, so that nothing of the aborted cycle is acted on any more, then the tags
+            self._stateReasonNext = f"abort: {reason}"
             self.machineState.setCurrentState(MachineState.READ_QR_CODE)
             self._dropCameraRequest()
             self.resetForNextCycle(f"cycle aborted in state {stateBefore.name}: {reason}")
@@ -2524,15 +2534,73 @@ class PLCIOServer:
         self._lastAuditedRead = key
         self._audit(f"PLC->PC {' & '.join(tags or ())} = {value!r}  (state {key[0].name})")
 
-    def _auditStateChange(self, oldState, newState) -> None:
-        self._audit(f"STATE {getattr(oldState, 'name', oldState)} -> {getattr(newState, 'name', newState)}")
+    def _auditStateChange(self, oldState, newState, seq: Optional[int] = None, published: Optional[bool] = None) -> None:
+        extra = "" if seq is None else f"  (seq {seq}, {'published' if published else 'NOT published'})"
+        self._audit(f"STATE {getattr(oldState, 'name', oldState)} -> {getattr(newState, 'name', newState)}{extra}")
+
+    @staticmethod
+    def _stateChangeReason(oldState, newState) -> str:
+        """A short reason for the frontend's sync log (CHANGES 108), from the two states alone."""
+        try:
+            old, new = MachineState(int(oldState)), MachineState(int(newState))
+        except Exception:
+            return "IOServer start"
+        if new == MachineState.READ_QR_CODE:
+            return "cycle completed" if old == MachineState.READ_FREE_ROTATION_TORQUE_1 else "reset"
+        if old.name.startswith("WRITE_") and int(new) == int(old) - 1:
+            return "NOT OK: back to the check (retake)"
+        if old.name.startswith("WRITE_"):
+            return "OK: next step"
+        if new.name.startswith("WRITE_"):
+            return "PLC request: waiting for the answer"
+        return "next step"
+
+    def _publishState(self, oldState, newState, reason: Optional[str] = None) -> Tuple[int, bool]:
+        """State sync (CHANGES 108): the state change on io2festate.q and in io:state, for the frontend to compare
+        with its own state. Short Redis timeouts: a state change must never hang on Redis. The sequence number goes up
+        even when the send fails, so the frontend sees the gap ("STATE-SYNC GAP"); a failure is logged once per
+        outage."""
+        self._stateSeq += 1
+        if reason is None:
+            reason, self._stateReasonNext = self._stateReasonNext, None
+        snapshot = {"pid": os.getpid(), "seq": self._stateSeq, "cycleId": self.cycleId,
+                    "qr": getattr(self, "currentQRCode", "") or "",
+                    "old": None if oldState is None else int(oldState),
+                    "oldName": getattr(oldState, "name", None), "new": int(newState),
+                    "newName": getattr(newState, "name", str(newState)),
+                    "reason": reason or self._stateChangeReason(oldState, newState), "time": time.time()}
+        published = False
+        try:
+            if self._stateRedisConnection is None:
+                self._stateRedisConnection = Redis(redisHostname, redisPort, socket_timeout=1.0,
+                                                   socket_connect_timeout=1.0, retry_on_timeout=True)
+            published = publishIOServerState(self._stateRedisConnection, snapshot)
+        except Exception:
+            noteSuppressed()
+        if not published:
+            self._stateRedisConnection = None
+            if not self._statePublishFailing:
+                self._statePublishFailing = True
+                try:
+                    self.logger.error(f"STATE-SYNC IOServer could not publish state {snapshot['newName']} "
+                                      f"(seq {self._stateSeq}): Redis not reachable")
+                except Exception:
+                    noteSuppressed()
+        elif self._statePublishFailing:
+            self._statePublishFailing = False
+            try:
+                self.logger.info(f"STATE-SYNC IOServer publishes states again (seq {self._stateSeq})")
+            except Exception:
+                noteSuppressed()
+        return self._stateSeq, published
 
     def _onStateChange(self, oldState, newState) -> None:
         """Every state change: audit trail; and when the machine goes back to READ_QR_CODE the cycle is over -
         completed (from the last state) or aborted (emergency button, heartbeat loss, frontend abort, from any other
         state) - so the camera server is told (end-of-cycle message on its queue, sent after an abort has cleared the
         queues) and drops what it kept for the cycle: the top bearing profile for the nut / washer check."""
-        self._auditStateChange(oldState, newState)
+        seq, published = self._publishState(oldState, newState)
+        self._auditStateChange(oldState, newState, seq, published)
         self._writeStateSince = time.monotonic()     # when the current state began (camera answer timeout)
         if newState == MachineState.READ_QR_CODE and oldState is not None and oldState != MachineState.READ_QR_CODE:
             completed = oldState == MachineState.READ_FREE_ROTATION_TORQUE_1

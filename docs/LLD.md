@@ -54,7 +54,7 @@ every server process re-imports MainProgram (spawn). `main()` then runs these st
 | Tag defaults | `UpdateTagsToDefaultProcessor` | queue | Kept; no longer used (the torque and press resets are scheduler jobs) |
 | Delayed jobs | `DelayedJobScheduler` ("PLC Handshake Reset Scheduler") | one thread, time-ordered jobs | Torque Set / Value reset `plc.handshake.torquevalues.reset.delay.sec` (2.0 s) after the read; press Done `plc.handshake.componentpress.reset.delay.sec` (1.5 s) after the read |
 
-The state is held in `MachineState` (`statemachine/StateMachine.py`). A change of state goes through `_onStateChange`, which audits it, records cycle times and sets `log:cycleContext`.
+The state is held in `MachineState` (`statemachine/StateMachine.py`). A change of state goes through `_onStateChange`, which first publishes it for the frontend (`_publishState`: `io2festate.q` and `io:state`, sequence number per change, reason; `docs/state_sync.md`), then audits it (`STATE A -> B  (seq N, published)`), records cycle times and sets `log:cycleContext`. The state at start is published too (reason `IOServer start`).
 
 ### 2.3 State table
 
@@ -96,7 +96,7 @@ The trigger in each state is the tag read in that state; the write states write 
 
 **`perform_write_state_action(tags, result)`**
 
-Writes the v1 handshake of spec §5.1 (steps 1–8). Each write is retried by `_writeBoolUntilWritten`, and the sequence stops if the state changes because of an abort. Each attempt checks the state and writes while holding `_abortLock`, which `abortCycle` holds for the whole abort, so a write of the old cycle cannot land after the abort's reset (CHANGES §84). The lock is released between attempts. The caller changes state only after it returns True.
+Writes the handshake of spec §5.1 (steps 1–8). Each write is retried by `_writeBoolUntilWritten`, and the sequence stops if the state changes because of an abort. Each attempt checks the state and writes while holding `_abortLock`, which `abortCycle` holds for the whole abort, so a write of the old cycle cannot land after the abort's reset (CHANGES §84). The lock is released between attempts. The caller changes state only after it returns True.
 
 **Picture handling**
 
@@ -247,6 +247,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `EmergencyStatusMonitoringWorker` | `emergency.q` | Abort display; abort record (`aborted`, `abort_reason`) if a cycle was in process; at the QR code: display only |
 | `ConnectionStatusUpdateWorker` | timer; the slot reads `hb2fe.q` without blocking | Connection lamps; Redis notice (`lastReportedRedisStatus`) |
 | `FrontendNoticeWorker` | `feNotice:*` plus local notices | Notices at the top right |
+| `StateSyncWorker` | `io:state` at start, then `io2festate.q` (every 250 ms) | Nothing: compares the frontend's state with the IOServer's (`utils/StateSync.StateSyncMonitor`) and logs `STATE-SYNC MISMATCH / RESOLVED / GAP / IOSERVER-RESTART / CYCLE` lines (state sync phase A, `docs/state_sync.md`) |
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
 | `TimeDurationUpdateWorker` | — | Cycle timer |
 
@@ -342,6 +343,7 @@ Every message also carries `timestamp` and `producer`.
 | `io2frontend.q` | `currentMachineState`, `moveToState`, `action`, `value`, `result`, `rotationDone` |
 | `fe2io.q` | `action` = FrontendAbortRequest (frontend) or Abort (test tools), `data` = reason |
 | `emergency.q` | `emergencystatus` |
+| `io2festate.q` (and key `io:state`) | `snapshot`: JSON `{pid, seq, cycleId, qr, old, oldName, new, newName, reason, time}` |
 | `fe2db.q` | The cycle record: every result, image, datetime and torque, the rotation-done bits, `aborted`, `abortReason`, `bypassedPressAndTightening2`, overall result |
 | `hb2io.q` | Per-server status: `camera`, `qrcode`, `db`, `frontend`, `heartbeat`, `redis` |
 | `hb2fe.q` | Per-server lamps, plus `redisstatus` |
@@ -369,6 +371,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `redis.health.check.interval.sec` | 60 | 6 |
 | `heartbeat.work.loop.max.silence.sec` | 60 | 3, 5, 7 |
 | `frontend.free.rotation.torque.display.sec` | 2.0 | 5 |
+| `frontend.state.sync.grace.sec` | 5.0 (a state difference lasting longer is logged; logging only) | 5 |
 | `frontend.abort.password` / `machine.settings.password` / `machine.settings.bypass.password` | admin123 / admin123 / admin123 | 5 |
 | `camera.state.file.max.age.sec` | 3600 | 3 |
 | `save.all.pictures.because.its.in.trial.mode` / `picture.saving.dir.for.mode.trial` | True / C:/Temp/TrialImages/ | 1, 3 |
@@ -396,6 +399,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_CheckKnuckle_Images.py` | The `regions` knuckle method (Machine 1; Machine 2 before CHANGES 102) |
 | `DryRun_Bearing_Ring_Guard.py` | The guard in the camera server beside the worker; NOT OK when it cannot decide (G7-G9) |
 | `DryRun_Camera_State_File.py` | The camera server's cycle state across a restart (C1-C5) |
+| `DryRun_State_Sync_Monitor.py`; fault scenarios O; frontend dry run F14 | State sync phase A: the comparison and its log lines (M1-M6); every IOServer state change published (O); the frontend's worker on real messages, behaviour unchanged (F14) |
 | `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check; Process Images runs them in order as in one cycle, a configurable pause (3 s) between checks, each check's marked picture and log lines shown; the frame's centres listed |
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
@@ -403,4 +407,4 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |
 
-`_plc_sim.py` simulates the PLC side of the v1 handshake. A v2 simulator is needed before v2 goes live.
+`_plc_sim.py` simulates the PLC side of the handshake.

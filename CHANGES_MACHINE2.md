@@ -3323,3 +3323,45 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   (no text on pictures, keep unused methods, dry-run copies in both folders, the reference-commit workflow), docs and
   history to keep in step, the plant PC verification status, open items, testing (what needs Redis / PostgreSQL /
   models, sandbox limits) and how the user likes to work.
+
+## 108. State sync Plan A: the IOServer publishes its state, the frontend compares and logs; Plan B documented; PLC handshake v2 dropped (2026-11-15)
+
+- **Plan A (user), `docs/state_sync.md`.** The IOServer is the master; the frontend keeps walking its own states as
+  before and only logs where they differ, so that a few weeks of production show whether (and when) the two drift.
+  - **IOServer:** `_onStateChange` first calls `_publishState`: the change on the new stream `io2festate.q` (one
+    producer, one consumer, capped at about 500) and in the key `io:state` (latest snapshot), JSON `{pid, seq, cycleId,
+    qr, old, oldName, new, newName, reason, time}`. `seq` goes up per change, also when Redis refuses it (a lost
+    message shows as a gap). Reasons: `IOServer start`, `abort: <reason>` (set by `abortCycle`), `cycle completed`,
+    `reset`, `NOT OK: back to the check (retake)`, `OK: next step`, `PLC request: waiting for the answer`, `next step`.
+    Redis with 1 s timeouts; a failure logged once per outage. The audit line now reads
+    `STATE A -> B  (seq N, published | NOT published)`; the state at start is published and audited too.
+  - **Frontend:** new `StateSyncWorker` (own thread, every 250 ms): `io:state` once at start, then the stream, compared
+    by the new `utils/StateSync.StateSyncMonitor` with the frontend's state. For each IOServer state the frontend
+    states that agree with it (`FRONTEND_STATES_FOR`: the frontend is one step ahead while the IOServer finishes a
+    handshake, and after value / press events); a difference must last longer than the new
+    `frontend.state.sync.grace.sec` (5.0, all three properties files) - plus the free-rotation display time + 1 s at
+    the end of a cycle. Nothing in the frontend's behaviour changes.
+  - **Log lines** (all start with `STATE-SYNC`, one search finds them): `START`, `MISMATCH #n` (both states, the
+    frontend states expected, cycle, QR, IOServer seq and pid, since when each side is in its state, the IOServer's
+    reason), `RESOLVED #n after x s`, `GAP` (k missing), `IOSERVER-RESTART` (pid a -> b), `CYCLE <id> completed |
+    aborted in <state>: in sync | n MISMATCH(ES), longest x s`, `BAD-MESSAGE`. How to read them on the plant PC:
+    `docs/state_sync.md` §2 and plant-pc-verification step 7.
+- **Plan B (designed, not built):** `docs/state_sync.md` §3 - the frontend takes its state from the IOServer, results
+  filed by the state in their message, resync from `io:state`; decided after the Plan A logs.
+- **PLC handshake v2 dropped (user):** the PLC design is fixed around the present reads, writes and timings. Part B
+  removed from `docs/PLC_Interface_Spec.md` (status line, ownership note, §5.4 note and sign-off table adjusted), and
+  from HLD §10, LLD, docs/README and CLAUDE.md.
+- **Found while testing:** `DryRun_All_Servers_Integrated_Cycle.py` (both folders) had produced no DB row since CHANGES
+  89: its stand-in for `doFinalProcessing` did not take the new `delayMsec` argument, so the record was never sent.
+  Fixed (`*args, **kwargs`); it now also prints the frontend's state-sync result.
+- **Checked:**
+  - new `DryRun_State_Sync_Monitor.py` (both folders) 15/15: a realistic cycle and a bypassed one in sync; short
+    difference nothing, long one MISMATCH once then RESOLVED; end-of-cycle allowance; GAP / RESTART; open mismatch in
+    the cycle summary; table complete;
+  - fault scenarios O (new, IOServer side) 11/11 Siemens and Allen-Bradley; full fault scenarios Siemens 200/201 and
+    Allen-Bradley 217/218 before O1 was made independent of the stream cap (it read seq 1 from a stream that ~350 state
+    changes had trimmed by then; now taken right after start), O re-run 11/11 both;
+  - frontend dry run 141/141 both folders (new F14: the real frontend's worker on published states - a whole cycle in
+    sync, MISMATCH / RESOLVED / CYCLE / GAP / RESTART lines, behaviour unchanged);
+  - two full cycles both vendors as before; integrated all-servers cycle both vendors: DB row as in CHANGES 81 and
+    `STATE-SYNC CYCLE 1 completed: in sync` with the real IOServer and frontend.

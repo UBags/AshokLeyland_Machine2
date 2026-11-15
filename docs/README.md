@@ -4,9 +4,10 @@
 |---|---|
 | `HLD.md` | High-level design: processes, queues, Redis keys, the cycle, failure handling, configuration |
 | `LLD.md` | Low-level design: IOServer threads and state table, each server's internals, database schema, message fields, tests |
-| `PLC_Interface_Spec.md` | PC–PLC tags, addresses, handshakes and timings. Part A is the protocol as built (v1); Part B is the v2 proposal, with a sign-off table |
+| `PLC_Interface_Spec.md` | PC–PLC tags, addresses, handshakes and timings: the protocol as built (fixed by the PLC design), with a sign-off table |
 | `machine2-sequence.md` | The 28 Machine 2 states against Machine 1's 29 (snapshot of 2026-10-30; the state-2 settings have changed since) |
 | `vision_positions_machine2.md` | Every Machine 2 vision position and size after the camera move of 13 Nov 2026, as picture coordinates and as offsets from the hub centre; since CHANGES 102 also the per-type reference centres the knuckle frame places (`camera/VisionFrame.py`) |
+| `state_sync.md` | One source of truth for the cycle state: Plan A as built (the IOServer publishes its state, the frontend compares and logs `STATE-SYNC` lines), how to read those logs, and Plan B (the frontend follows the IOServer) as designed |
 | `plant-pc-verification.md` | Checks to run on the plant PC before production: the vision worker inside the exe, check times against the timeout, process restart, frozen screen, real QR codes, the knuckle frame; with a results table |
 | `machine2-plant-pc-setup.md` | Plant PC set-up notes: Windows updates, restore points, start at logon, Redis on WSL, first start (2026-11-05) |
 | `architecture.md` | Baseline review of the Machine 1 code at commit `5633458` (2026-10-30), with findings R1–R17 |

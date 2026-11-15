@@ -66,6 +66,7 @@ Each queue has one producer and one consumer.
 | `io2camera.q` | IO → camera | Take picture for state N, with request id; END_OF_CYCLE (completed / aborted) when the machine returns to READ_QR_CODE |
 | `camera2io.q`, `camera2fe.q` | Camera → IO / FE | Result (and images, to FE), with request id |
 | `io2frontend.q` | IO → FE | State, move-to state, torque values, results |
+| `io2festate.q` | IO → FE | Every IOServer state change (state sync, `docs/state_sync.md`): the frontend compares it with its own state and logs differences (`STATE-SYNC ...`) |
 | `fe2io.q` | FE → IO | Frontend abort request (password-protected Ctrl+Alt+Z): the IOServer aborts only if it can set `PC_PLC_CycleAborted`; `Abort` (test tools): abort at once |
 | `fe2db.q` | FE → DB | Completed component record |
 | `*2hb.q` | Each server → heartbeat server | Heartbeats (ALIVE / DEAD) |
@@ -82,6 +83,7 @@ Each queue has one producer and one consumer.
 | `cycleSettings:<QR>` | FE/IO | Settings written for that component (2-day expiry) |
 | `log:cycleContext` | IO → loggers | Cycle context in log lines (6 h expiry) |
 | `camera:activeRequest` | IO → camera, FE | The one picture request that is current |
+| `io:state` | IO → FE | The IOServer's latest state snapshot (state sync; read by a frontend that starts mid-cycle) |
 | `feNotice:<name>` | IO → FE | Top-right notices such as "Continue till end of cycle" |
 | `ioserver:started` | IO | Lets a restarted IOServer know it is a restart |
 | `redis.healthcheck.q` | Heartbeat server, MainProgram | Write and read-back check. Not used by anything else |
@@ -191,9 +193,12 @@ No values or words are written on the pictures sent to the frontend (outlines on
 
 ## 10. Planned architecture work
 
-These items are under discussion; see the reply on the architecture review.
+These items are under discussion. The PLC handshake is fixed by the PLC design (a request / acknowledge redesign was
+considered and dropped on 2026-11-15).
 
-1. **PLC protocol v2.** Single-owner tags with request and acknowledge (`PLC_Interface_Spec.md` Part B).
-2. **One source of truth for the cycle state.** The IOServer publishes `io:state` on every state change. The frontend maps the 28 states to its 15 steps and resyncs if it drifts.
-3. **Correlation ids.** Limited to IOServer, frontend and camera: a cycle id plus the existing picture request id.
-4. **Split PLCIOServer** (3 000 lines) into mixin modules under `costhetaio/commonplc/ioserver/`. This is a pure move, checked by the fault scenarios and a comparison of the write traces.
+1. **One source of truth for the cycle state** (`docs/state_sync.md`). Plan A is built (CHANGES 108): the IOServer
+   publishes every state change, the frontend compares it with its own state and logs differences (`STATE-SYNC`).
+   Plan B (the frontend follows the IOServer's state) is designed and will be decided from a few weeks of Plan A logs.
+2. **Correlation ids.** Limited to IOServer, frontend and camera: a cycle id plus the existing picture request id
+   (the state snapshots already carry the cycle id and the QR code).
+3. **Split PLCIOServer** (3 000 lines) into mixin modules under `costhetaio/commonplc/ioserver/`. This is a pure move, checked by the fault scenarios and a comparison of the write traces.

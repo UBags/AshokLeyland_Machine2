@@ -112,12 +112,16 @@ threading.Thread(target=lambda: IOServer(mode="Production"), daemon=True).start(
 from frontend.AshokLeylandFrontEnd import AshokLeylandFrontEnd, app
 from PySide6.QtCore import QTimer
 orig_final = AshokLeylandFrontEnd.doFinalProcessing
-def patched_final(self):
+def patched_final(self, *args, **kwargs):     # doFinalProcessing(delayMsec=...) since CHANGES 89
     if self.largeImageWindow.isVisible(): self.largeImageWindow.hide()
     self.grab().save(str(HERE / "integrated_end_of_cycle.png"))
-    orig_final(self)
+    orig_final(self, *args, **kwargs)
     QTimer.singleShot(14000, app.quit)        # DB server polls every 5 s
 AshokLeylandFrontEnd.doFinalProcessing = patched_final
+# state sync (CHANGES 108): the frontend's STATE-SYNC lines (no logging server in this run), checked at the end
+import frontend.AshokLeylandFrontEnd as _feModule
+SYNC = []
+_feModule.StateSyncWorker._log = staticmethod(lambda level, text: SYNC.append(text))
 gfe = AshokLeylandFrontEnd(mode="Production", username="admin", role="Administrator")
 threading.Thread(target=plc, daemon=True).start()
 QTimer.singleShot(150000, app.quit)
@@ -134,4 +138,6 @@ cur.execute("""select model_name, lhs_rhs, model_tonnage, nut_tightening_torque_
 print("RESULT plc sequence completed:", RESULT.get('plc_done'))
 print("RESULT state-2 settings written:", RESULT.get('settings'))
 print("RESULT DB row:", cur.fetchone())
+print("RESULT state sync (real IOServer and frontend):", [t for t in SYNC if "MISMATCH" in t or "CYCLE" in t or "GAP" in t]
+      or "no CYCLE line", "| START seen:", any(t.startswith("STATE-SYNC START") for t in SYNC))
 import os; os._exit(0)

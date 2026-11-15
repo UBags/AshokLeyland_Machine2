@@ -111,6 +111,18 @@ again"), set the camera back. If it fails for another reason, `siemens.vision.kn
 grey-level check of CHANGES 95 (its regions are for the camera position of 13 Nov) and the later checks use the
 centres in the properties file.
 
+## 7. Frontend and IOServer in step (state sync, CHANGES 108)
+
+Nothing to do during the run: the frontend logs by itself whenever its state and the IOServer's differ for more than
+`frontend.state.sync.grace.sec` (5 s). After a few weeks of production, in the logs folder:
+
+    findstr /C:"STATE-SYNC MISMATCH" /C:"STATE-SYNC GAP" /C:"STATE-SYNC IOSERVER-RESTART" logs\*.log
+    findstr /C:"STATE-SYNC CYCLE" logs\*.log | find /c "in sync"
+    findstr /C:"STATE-SYNC CYCLE" logs\*.log | find /c "MISMATCH"
+
+Send the lines found (and the IOServer audit lines around each `seq N` they name) to the developer: they decide
+whether Plan B (`docs/state_sync.md` §3) is needed.
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -122,3 +134,4 @@ centres in the properties file.
 | 3 Frontend killed during a cycle | | | | |
 | 5 Real QR codes | | | | |
 | 6 Knuckle frame (shift, scale, check time; wrong part NOT OK) | | | | |
+| 7 State sync after a few weeks (MISMATCH / GAP lines, cycles in sync) | | | | |

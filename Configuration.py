@@ -741,6 +741,7 @@ class CosThetaConfigurator():
     COMBINED_HEARTBEAT_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = "combinedheartbeat.connectionstatus.sleepinterval.sec"
     FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.emergency.status.sleepinterval.sec'
     FRONTEND_FREE_ROTATION_TORQUE_DISPLAY_KEY = 'frontend.free.rotation.torque.display.sec'
+    FRONTEND_STATE_SYNC_GRACE_KEY = 'frontend.state.sync.grace.sec'
     OLD_FRONTEND_EMERGENCY_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'frontend.connectionstatus.sleepinterval.sec'
     FRONTEND_HEARTBEAT_SLEEP_INTERVAL_KEY = 'frontend.status.sleepinterval.sec'
     CAMERA_CONNECTION_STATUS_SLEEP_INTERVAL_KEY = 'camera.connectionstatus.sleepinterval.sec'
@@ -790,6 +791,16 @@ class CosThetaConfigurator():
                                                                 default="2.0")))
         except Exception:
             return 2.0
+
+    @classmethod
+    def getFrontEndStateSyncGraceSecs(cls) -> float:
+        """State sync (CHANGES 108): how long the frontend's state may differ from the IOServer's before the
+        difference is logged as a STATE-SYNC MISMATCH (frontend.state.sync.grace.sec, 5.0). Read at each use."""
+        try:
+            return max(0.5, float(CosThetaConfigurator.getValue(CosThetaConfigurator.FRONTEND_STATE_SYNC_GRACE_KEY,
+                                                                default="5.0")))
+        except Exception:
+            return 5.0
 
     @classmethod
     def getFrontEndEmergencyConnectionStatusSleepInterval(cls) -> float:

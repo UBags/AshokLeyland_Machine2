@@ -81,7 +81,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 - **Dry-run copies live in both** `test/machine1_dryrun` and `test/machine2_dryrun` (identical apart from paths;
   each sets `COSTHETA_PLC_VENDOR` from its folder name, except `DryRun_Vision_Check_Timeout.py` on Machine 1, which
   needs `COSTHETA_PLC_VENDOR=allenbradley` set).
-- PLC tag prefixes `PC_PLC_` / `PLC_PC_` show the main writer, not exclusive ownership (v1 protocol; see §8).
+- PLC tag prefixes `PC_PLC_` / `PLC_PC_` show the main writer, not exclusive ownership. The handshake (`docs/PLC_Interface_Spec.md`) is fixed by
+  the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
+  request / acknowledge "v2" was dropped on 2026-11-15).
 - Torque OK / NOT OK is the PLC's decision; the PC only records the values.
 - The split pin + washer check stays a placeholder (OK whenever a QR code is known) until production pictures exist.
 - IOServer reset rule: at start, cycle end and every abort one routine resets every per-cycle tag (not the settings)
@@ -111,16 +113,18 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 4 Frozen screen | Not to be provoked |
 | 5 Real QR codes | Not reported yet |
 | 6 Knuckle check by segmentation and the frame | Not reported yet |
+| 7 State sync logs (after a few weeks of production) | Pending - Plan A went in on 2026-11-15 |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
 ## 8. Open items (as of 2026-11-15)
 
-- **One source of truth for the cycle state** (frontend and IOServer each walk the states): design outlined to the
-  user, not built. Direction: the IOServer is the master and publishes its state; the frontend follows it.
+- **One source of truth for the cycle state** (`docs/state_sync.md`): **Plan A built** (CHANGES 108, 2026-11-15) -
+  the IOServer publishes every state change (`io2festate.q`, `io:state`), the frontend compares it with its own state
+  and only logs (`STATE-SYNC MISMATCH / RESOLVED / GAP / IOSERVER-RESTART / CYCLE`). Uddi runs it for a few weeks,
+  then sends the STATE-SYNC lines; **Plan B** (the frontend follows the IOServer) is designed in the same document
+  and is built only if he decides so.
 - **`PLCIOServer.py` (3,227 lines)**: split into modules later (a pure move, checked by the fault scenarios).
-- **PLC handshake v2** (`docs/PLC_Interface_Spec.md` Part B): single-writer tags with request / acknowledge; needs
-  the PLC programmers' agreement and new tags before any PC code is written.
 - **Star imports** (`from X import *`, 234 in 126 production files): replacing them with explicit imports is planned
   with tool support (each name resolved from the running module, every module checked for undefined names).
 - **Machine 1 vision values for the segmentation knuckle method**: need Machine 1 pictures (knuckles of each type /

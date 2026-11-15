@@ -96,6 +96,10 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
          Torque 1 the frontend is told moveToState = split pin picture and states 13-19 are skipped; the cycle ends OK.
      N3: a model without the bypass: False written, full run.
      N4: the tag cannot be written (PLC ignores it): QR code NOT OK, nothing moves on; re-scan once fixed -> bypass.
+  O. State sync phase A (CHANGES 108; see run_state_sync): the IOServer publishes every state change on io2festate.q
+     and io:state. O1 published at start; O2 a cycle with a cap retake: consecutive sequence numbers, one pid,
+     chained old -> new, the IOServer's path, reasons, cycle id and QR code; O3 the key holds the latest; O4 an
+     abort's reason; O5 one publish refused by Redis: its number skipped (the frontend logs a GAP), then published.
 
 COSTHETA_DRYRUN_SCENARIOS=G (or F,G ...) runs only those groups (A-E together).
 Run from the project root with Redis running:  python test/machine1_dryrun/DryRun_IOServer_Fault_Scenarios.py
@@ -273,6 +277,8 @@ def writes_of(tags, since):
 
 time.sleep(6)          # IOServer __init__ sleeps 5 s before starting its threads
 WRITES_AT_START = list(WRITES)
+# state sync (O1): the IOServer's first published states, taken now (the stream is capped at about 500 entries)
+START_STATE_SNAPSHOTS = r.xrange(IO_STATE_STREAM, "-", "+", count=5)
 
 # =====================================================================================================
 def run_scenarios():
@@ -1450,6 +1456,90 @@ def run_bypass():
 
 
 _ONLY = {x.strip().upper() for x in (_os.environ.get("COSTHETA_DRYRUN_SCENARIOS") or "").split(",") if x.strip()}
+def run_state_sync():
+    """O (CHANGES 108). State sync phase A: the IOServer publishes every state change (io2festate.q, io:state)."""
+    print("\n=== O. State sync: every IOServer state change published for the frontend ===", flush=True)
+    import json, os as _os
+    import costhetaio.commonplc.PLCIOServer as PIO
+    def subsequence(short, long_):         # the tracer polls every 5 ms and can miss a state; the stream cannot
+        it = iter(long_)
+        return all(x in it for x in short)
+    def published_since(seq):
+        out = []
+        for _, f in r.xrange(IO_STATE_STREAM, "-", "+"):
+            snap = json.loads(f[b"snapshot"])
+            if snap["seq"] > seq:
+                out.append(snap)
+        return out
+    first = [json.loads(f[b"snapshot"]) for _, f in START_STATE_SNAPSHOTS]
+    start = [s for s in first if s.get("reason") == "IOServer start"]
+    check("O1 the IOServer published its state at start (seq 1, READ_QR_CODE, its pid, reason 'IOServer start')",
+          start and start[0]["seq"] == 1 and start[0]["new"] == int(MS.READ_QR_CODE) and start[0]["pid"] == _os.getpid(),
+          str(first[:2]))
+    # O2: a cycle with one NOT OK (cap): every state change published, in order, nothing missing
+    time.sleep(0.5); TRACE.clear()
+    mark = io._stateSeq
+    CAMERA_PLAN[MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP].append(notok)
+    plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+    run_steps(retry_on_notok=("CAP",))
+    check("O2 cycle completes", wrapped(), f"trace {TRACE}")
+    time.sleep(0.5)
+    snaps = published_since(mark)
+    seqs = [s["seq"] for s in snaps]
+    chained = all(b["old"] == a["new"] for a, b in zip(snaps, snaps[1:]))
+    check("O2 sequence numbers consecutive (nothing missing), one pid, each change starts where the last ended",
+          seqs == list(range(mark + 1, mark + 1 + len(snaps))) and len({s["pid"] for s in snaps}) == 1 and chained,
+          f"{seqs[:6]}... chained={chained}")
+    path = [s["new"] for s in snaps]
+    # the simulated PLC raises CheckQRCode again at once, so the IOServer is at 2 before this cycle's knuckle and again
+    # right after the cycle: the path is 3 ... 28, 1 (2 for the next one); TRACE samples the same states
+    end = path.index(int(MS.READ_QR_CODE)) if int(MS.READ_QR_CODE) in path else len(path)
+    check("O2 the published path is the IOServer's path (knuckle 3 ... 28, back to 1; cap retaken: 22 23 22 23)",
+          path[0] == int(MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE) and path[end - 1] == int(MS.READ_FREE_ROTATION_TORQUE_1)
+          and [22, 23, 22, 23] == [p for p in path[:end] if p in (22, 23)] and subsequence(TRACE[:-1], path),
+          f"{path} / trace {TRACE}")
+    reasons = {s["reason"] for s in snaps}
+    check("O2 reasons: 'NOT OK: back to the check (retake)' for the cap, 'cycle completed' at the end",
+          "NOT OK: back to the check (retake)" in reasons and snaps[end]["reason"] == "cycle completed", str(sorted(reasons)))
+    cyc = {s["cycleId"] for s in snaps if s["new"] not in (int(MS.READ_QR_CODE), int(MS.WRITE_QR_CODE))}
+    check("O2 cycle id and QR code carried (one cycle id from the knuckle on; the QR code of the cycle)",
+          len(cyc) == 1 and any(s["qr"] == QR_DOST_LHS for s in snaps), f"{cyc} {[s['qr'][:12] for s in snaps[-3:]]}")
+    key = readIOServerStateSnapshot(r)
+    check("O3 io:state holds the latest snapshot (for a frontend that starts mid-cycle)",
+          key is not None and key == published_since(0)[-1], str(key))
+    # O4: abort -> reason carried
+    time.sleep(0.5); TRACE.clear(); mark = io._stateSeq
+    plc_start_cycle(QR_DOSTPLUS_RHS); SCAN.set(); finish_qr_handshake()
+    run_steps(last="HUB")
+    aborts0 = io.abortCount
+    sendAbortFromFEServerToIOServer(r, reason="dry run O4")
+    check("O4 abort handled", wait_for(lambda: io.abortCount > aborts0, 3))
+    time.sleep(0.5)
+    toQR = [s for s in published_since(mark) if s["new"] == int(MS.READ_QR_CODE)]
+    last = toQR[-1] if toQR else {}
+    check("O4 the abort's state change (to READ_QR_CODE) published with its reason ('abort: ...')",
+          str(last.get("reason")).startswith("abort:") and "dry run O4" in last.get("reason", ""), str(last))
+    # O5: Redis does not take one state change -> the sequence number still goes up (the frontend sees the gap), the
+    # failure is logged once and the audit line says NOT published; the next change is published again
+    original = PIO.publishIOServerState
+    calls = {"n": 0}
+    def failOnce(conn, snap):
+        calls["n"] += 1
+        return False if calls["n"] == 1 else original(conn, snap)
+    PIO.publishIOServerState = failOnce
+    try:
+        time.sleep(0.5); TRACE.clear(); mark = io._stateSeq
+        plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
+        run_steps(last="KNUCKLE")
+        time.sleep(0.5)
+        got = [s["seq"] for s in published_since(mark)]
+        check("O5 one state change not published: its sequence number skipped, the next ones published",
+              got and got[0] == mark + 2 and not io._statePublishFailing, f"mark {mark}, got {got[:5]}")
+    finally:
+        PIO.publishIOServerState = original
+    run_steps(first="HUB")
+    check("O5 the cycle completes as usual", wrapped(), f"trace {TRACE}")
+
 def _wanted(*letters):
     return not _ONLY or bool(_ONLY & set(letters))
 
@@ -1464,6 +1554,7 @@ try:
     if _wanted("L"): run_loop_health()
     if _wanted("M"): run_frontend_abort_request()
     if _wanted("N"): run_bypass()
+    if _wanted("O"): run_state_sync()
 except AssertionError as e:
     check(f"scenario aborted: {e}", False)
 

@@ -81,7 +81,7 @@ from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageCont
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
 # From utils.RedisUtils
-from utils.RedisUtils import (readCycleSettingsForQRCode, readFrontendNotices, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, sendFrontendAbortRequestFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
+from utils.RedisUtils import (readCycleSettingsForQRCode, readFrontendNotices, readIOServerStates, readIOServerStateSnapshot, lastReportedRedisStatus, ok, notok, ALIVE, DEAD, sendHeartbeatFromFEServerToHeartbeatServer, sendDataFromFEServerToDatabaseServer, readDataInFEServerFromQRCodeServer, readDataInFEServerFromCameraServer, readDataInFEServerFromIOServer, readEmergencyAbortInFEServerFromIOServer, clearKeyCommunicationQueuesOnAbort, sendAbortFromFEServerToIOServer, sendFrontendAbortRequestFromFEServerToIOServer, getPostgresDatetimeFromString, sendAbortFromIOServerToQRCodeServer, blankWhiteImage, readHeartbeatsInFEServerFromHeartbeatServer)
 
 # From persistence (setDatabaseName is defined here, not in RedisUtils)
 from persistence.Persistence import (
@@ -93,6 +93,8 @@ from persistence.Persistence import (
 )
 
 # From utils.CosThetaPrintUtils
+from utils.StateSync import StateSyncMonitor     # state sync phase A (CHANGES 108): logging only
+from logutils.SlaveLoggers import logBoth
 from utils.CosThetaPrintUtils import (printBoldBlue, printBlue, printBoldRed, printBoldGreen, printYellow, printGreen, printRed, getCurrentTime)
 
 from frontend.frontendutils.CosThetaImageUtils import (
@@ -1003,8 +1005,17 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.createEmergencyAbortUpdateWorker()
         self.createHeartbeatWorker()
         self.createFrontendNoticeWorker()
+        self.createStateSyncWorker()
 
     # ********************************************
+
+    def createStateSyncWorker(self):
+        """State sync phase A (CHANGES 108): compares this frontend's state with the IOServer's, logs only."""
+        self.stateSyncWorker = StateSyncWorker()
+        self.stateSyncThread = QThread()
+        self.stateSyncWorker.moveToThread(self.stateSyncThread)
+        self.stateSyncThread.started.connect(self.stateSyncWorker.start)
+        self.stateSyncThread.start()
 
     def createFrontendNoticeWorker(self):
         self.frontendNoticeWorker = FrontendNoticeWorker()
@@ -2113,6 +2124,60 @@ class FrontendNoticeWorker(QObject):
         if notices != self.last:
             self.last = notices
             self.gotNotices.emit(notices)
+
+
+class StateSyncWorker(QObject):
+    """State sync phase A (CHANGES 108). The IOServer publishes every state change (io2festate.q, io:state); this
+    worker reads them 4 times a second, in its own thread, and compares them with the frontend's own state
+    (utils/StateSync.StateSyncMonitor). It changes nothing: a difference lasting longer than
+    frontend.state.sync.grace.sec (5 s) is logged as "STATE-SYNC MISMATCH", its end as "STATE-SYNC RESOLVED"; missing
+    messages, an IOServer restart and a per-cycle summary are logged too (all lines start with "STATE-SYNC")."""
+    INTERVAL_MS = 250
+
+    def __init__(self):
+        super().__init__()
+        self.timer = None
+        self.connection = None
+        self.startedFromKey = False
+        self.monitor = StateSyncMonitor(log=StateSyncWorker._log,
+                                        graceSecs=CosThetaConfigurator.getFrontEndStateSyncGraceSecs,
+                                        endOfCycleDisplaySecs=CosThetaConfigurator.getFrontEndFreeRotationTorqueDisplaySecs)
+
+    @staticmethod
+    def _log(level: str, text: str) -> None:
+        try:
+            logBoth(level, "AshokLeylandFrontEnd.StateSync", text)
+        except Exception:
+            noteSuppressed()
+
+    def start(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.check)
+        self.timer.start(StateSyncWorker.INTERVAL_MS)
+
+    def check(self):
+        if AshokLeylandFrontEnd.shutdownThreads:
+            self.timer.stop()
+            return
+        try:
+            if self.connection is None:
+                self.connection = Redis(CosThetaConfigurator.getInstance().getRedisHost(),
+                                        CosThetaConfigurator.getInstance().getRedisPort(),
+                                        socket_timeout=0.5, socket_connect_timeout=0.5)
+            if not self.startedFromKey:
+                snapshot = readIOServerStateSnapshot(self.connection)
+                if snapshot is not None:
+                    self.monitor.onIOServerStates([snapshot], fromKey=True)
+                self.startedFromKey = True
+            snapshots = readIOServerStates(self.connection)
+            if snapshots is None:
+                self.connection = None
+                return
+            self.monitor.onIOServerStates(snapshots)
+            self.monitor.check(AshokLeylandFrontEnd.machineState.getCurrentState())
+        except Exception:
+            self.connection = None
+            noteSuppressed()
 
 
 class HeartbeatSenderWorker(QObject):

@@ -29,6 +29,9 @@ Test_FEServer_Mock_With_Image_Files_UI.py and Test_FEServer_With_Live_Camera_UI.
   F13. The Tk windows that play the servers, with "Bypass ..." ticked (needs a display: xvfb-run): the simulated-inputs
       window drives a whole bypassed cycle (11 messages, record OK and bypassed); the image-files window publishes the
       bypass with the QR code and sends Torque 1 with moveToState = split pin (both move there; 4 steps 'Bypassed').
+  F14. State sync phase A (CHANGES 108): IOServer states published as the IOServer does -> no mismatch over a
+      whole cycle; a difference longer than the grace period -> one MISMATCH line, then RESOLVED, cycle summary;
+      missing messages -> GAP; new IOServer pid -> IOSERVER-RESTART; the frontend's behaviour unchanged.
   F6. Machine Settings menu: present and enabled for an Administrator; only Administrator and Supervisor may change
       the settings (an Operator is refused before the dialog opens, nothing saved); the dialog's entry checks
       (RPM whole number 20-40, torques 0.01-19.99 with at most 2 decimals, rotation counts 1 or 2).
@@ -674,6 +677,80 @@ def driver():
             sendEmergencyAbortFromIOServerToFEServer(r)
             assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
             _root.destroy()
+
+        # ---------------- F14 (CHANGES 108): state sync phase A - logging only ----------------
+        print("\n=== F14. State sync: the frontend compares its state with the IOServer's and only logs ===", flush=True)
+        time.sleep(1.5)
+        r.xtrim(qrcode2feq, 0)                       # a QR message an earlier part (F13's windows) may have left
+        if state() != MS.READ_QR_CODE:
+            sendEmergencyAbortFromIOServerToFEServer(r)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        take_record(2)
+        SYNC.clear()
+        seqBox = {"pid": 4242, "seq": 0}
+        def io_state(new, old=None, cycle=7, pid=None, seq=None, reason=None):
+            if pid is not None and pid != seqBox["pid"]:
+                seqBox["pid"], seqBox["seq"] = pid, 0
+            seqBox["seq"] = seq if seq is not None else seqBox["seq"] + 1
+            publishIOServerState(r, {"pid": seqBox["pid"], "seq": seqBox["seq"], "cycleId": cycle, "qr": "F14-QR",
+                                     "old": None if old is None else int(old), "new": int(new),
+                                     "newName": MS(int(new)).name, "reason": reason, "time": time.time()})
+            time.sleep(0.4)
+        def lines(word): return [t for _, t in SYNC if word in t]
+        io_state(MS.READ_QR_CODE, reason="IOServer start")
+        check("F14 first IOServer state: 'STATE-SYNC START' logged", wait_for(lambda: lines("STATE-SYNC START"), 3), SYNC)
+        # a whole cycle with the IOServer's states published as the IOServer would (read state, write state while the
+        # answer is awaited, value states), the frontend driven as before: no mismatch
+        io_state(MS.WRITE_QR_CODE, MS.READ_QR_CODE)
+        scan(QR1, "F14")
+        io_state(MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, MS.WRITE_QR_CODE)
+        prev = MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE
+        for i, (st, kind, value) in enumerate(SEQUENCE):
+            if kind == "picture":
+                if prev != st: io_state(st, prev)
+                io_state(MS(int(st) + 1), st)                       # the IOServer waits for the camera's answer
+                prev = MS(int(st) + 1)
+            else:
+                if st in (MS.READ_TIGHTENING_TORQUE_1, MS.READ_TIGHTENING_TORQUE_2, MS.READ_FREE_ROTATION_TORQUE_1):
+                    io_state(MS(int(st) - 1), prev); io_state(st, MS(int(st) - 1))
+                else:
+                    io_state(st, prev)
+                prev = st
+            send_step(st, kind, value, seed=700 + i, expect_next=(st != MS.READ_FREE_ROTATION_TORQUE_1))
+        io_state(MS.READ_QR_CODE, MS.READ_FREE_ROTATION_TORQUE_1, reason="cycle completed")
+        take_record()
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        time.sleep(2.5)
+        check("F14 a whole cycle with the IOServer's states as it publishes them: no MISMATCH, summary 'in sync'",
+              not lines("MISMATCH") and any("STATE-SYNC CYCLE 7 completed: in sync" in t for t in lines("CYCLE")),
+              [t for _, t in SYNC][-6:])
+        # the IOServer somewhere the frontend is not (as if the frontend had missed it): logged after the grace period
+        n0 = len(SYNC)
+        io_state(MS.WRITE_RESULT_OF_CHECKING_KNUCKLE, MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, cycle=8)
+        time.sleep(0.6)
+        check("F14 a difference shorter than the grace period (1.5 s here) is not logged", not lines("MISMATCH"))
+        mm = wait_for(lambda: lines("MISMATCH #"), 4)
+        text = (lines("MISMATCH #") or [""])[0]
+        check("F14 ... longer: 'STATE-SYNC MISMATCH #1' with both states, the expected ones, cycle, QR, seq and pid",
+              mm and "frontend READ_QR_CODE(1) vs IOServer WRITE_RESULT_OF_CHECKING_KNUCKLE(4)" in text
+              and "READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE(3)" in text and "cycle 8" in text and "QR F14-QR" in text
+              and "pid 4242" in text, text)
+        time.sleep(2.0)
+        check("F14 ... logged once, not again while it lasts", len(lines("MISMATCH #")) == 1, len(lines("MISMATCH #")))
+        check("F14 ... and the frontend changed nothing (still at the QR code)", state() == MS.READ_QR_CODE, state().name)
+        io_state(MS.READ_QR_CODE, MS.WRITE_RESULT_OF_CHECKING_KNUCKLE, cycle=8, reason="abort: test")
+        check("F14 in step again: 'STATE-SYNC RESOLVED #1 after n s'", wait_for(lambda: lines("RESOLVED #1"), 3), SYNC[n0:])
+        check("F14 cycle summary: 'STATE-SYNC CYCLE 8 aborted in ...: 1 MISMATCH(ES)'",
+              wait_for(lambda: any("CYCLE 8 aborted in WRITE_RESULT_OF_CHECKING_KNUCKLE(4): 1 MISMATCH" in t
+                                   for t in lines("CYCLE")), 3), lines("CYCLE"))
+        io_state(MS.READ_QR_CODE, seq=seqBox["seq"] + 3)
+        check("F14 IOServer state messages missing: 'STATE-SYNC GAP ... 2 missing'",
+              wait_for(lambda: any("2 missing" in t for t in lines("STATE-SYNC GAP")), 3), lines("GAP"))
+        io_state(MS.READ_QR_CODE, pid=4343, reason="IOServer start")
+        check("F14 IOServer restarted (new pid): 'STATE-SYNC IOSERVER-RESTART pid 4242 -> 4343'",
+              wait_for(lambda: any("pid 4242 -> 4343" in t for t in lines("IOSERVER-RESTART")), 3), lines("RESTART"))
+        check("F14 every line starts with 'STATE-SYNC' (one search finds them all)",
+              SYNC and all(t.startswith("STATE-SYNC ") for _, t in SYNC), [t for _, t in SYNC if not t.startswith("STATE-SYNC ")])
     except AssertionError as e:
         check(f"scenario aborted: {e}", False)
     except Exception as e:
@@ -694,6 +771,16 @@ def _guiTick():
     now = time.monotonic()
     GUI_GAPS["max"] = max(GUI_GAPS["max"], now - GUI_GAPS["last"]); GUI_GAPS["last"] = now
 _guiProbe = _QTimer(); _guiProbe.timeout.connect(_guiTick); _guiProbe.start(20)
+
+# State sync (F14): the frontend's STATE-SYNC log lines captured; grace 1.5 s for the test
+import frontend.AshokLeylandFrontEnd as _feModule
+from Configuration import CosThetaConfigurator as _CC
+_CC.getFrontEndStateSyncGraceSecs = classmethod(lambda cls: 1.5)
+SYNC = []
+_origSyncLog = _feModule.StateSyncWorker._log
+def _syncLog(level, text):
+    SYNC.append((level, text)); print(f"  [{level}] {text}", flush=True); _origSyncLog(level, text)
+_feModule.StateSyncWorker._log = staticmethod(_syncLog)
 
 fe = FE(mode="Test", username="admin", role="Administrator")
 FE_WINDOW.append(fe)

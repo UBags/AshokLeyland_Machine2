@@ -122,6 +122,12 @@ reasonKeyString : str = "reason"                       # camera2fe: why a result
 feServerStatusKeyString : str = "festatus"             # hb2io: the frontend's status
 ACTIVE_CAMERA_REQUEST_KEY : str = "camera:activeRequest"   # the request whose answer the frontend is to show
 FRONTEND_NOTICE_PREFIX : str = "feNotice:"             # IOServer -> frontend: messages shown flashing, top right
+# IOServer -> frontend: every IOServer state change (CHANGES 108, state sync phase A). A stream with one producer (the
+# IOServer) and one consumer (the frontend), capped, plus a key holding the latest snapshot for a frontend that starts
+# (or restarts) in the middle of a cycle.
+IO_STATE_STREAM : str = "io2festate.q"
+IO_STATE_KEY : str = "io:state"
+IO_STATE_STREAM_MAXLEN : int = 500
 
 
 def encodeOptionalBool(value) -> str:
@@ -1078,6 +1084,48 @@ def readFrontendNotices(redisConnection: redis.client.Redis) -> Optional[list]:
     except Exception:
         return None
     return [v.decode("utf-8") for v in values if v]
+
+
+def publishIOServerState(redisConnection: redis.client.Redis, snapshot: dict) -> bool:
+    """IOServer: one state change (snapshot: pid, seq, cycleId, qr, old / new state as int and name, reason, time) on
+    IO_STATE_STREAM, and the same snapshot in IO_STATE_KEY. Never raises; False when Redis did not take it."""
+    try:
+        text = json.dumps(snapshot)
+        redisConnection.xadd(IO_STATE_STREAM, {"snapshot": text}, maxlen=IO_STATE_STREAM_MAXLEN, approximate=True)
+        redisConnection.set(IO_STATE_KEY, text, ex=24 * 3600)
+        return True
+    except Exception:
+        noteSuppressed()
+        return False
+
+
+def readIOServerStates(redisConnection: redis.client.Redis, maxCount: int = 200) -> Optional[list]:
+    """Frontend: the IOServer state snapshots waiting on IO_STATE_STREAM, oldest first, deleted once read (one
+    consumer). None if Redis could not be read; an entry that cannot be decoded is skipped."""
+    try:
+        entries = redisConnection.xrange(IO_STATE_STREAM, "-", "+", count=maxCount)
+        if not entries:
+            return []
+        redisConnection.xdel(IO_STATE_STREAM, *[entryId for entryId, _ in entries])
+    except Exception:
+        return None
+    snapshots = []
+    for _, fields in entries:
+        try:
+            raw = fields.get(b"snapshot", fields.get("snapshot"))
+            snapshots.append(json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw))
+        except Exception:
+            noteSuppressed()
+    return snapshots
+
+
+def readIOServerStateSnapshot(redisConnection: redis.client.Redis) -> Optional[dict]:
+    """The IOServer's latest state snapshot (IO_STATE_KEY), or None (none yet, or Redis not readable)."""
+    try:
+        raw = redisConnection.get(IO_STATE_KEY)
+        return json.loads(raw.decode("utf-8")) if raw else None
+    except Exception:
+        return None
 
 
 # ********************************** COMMUNICATION OUTWARD FROM FE SERVER *************************
@@ -2634,7 +2682,7 @@ def sendHeartbeatFromDBServerToHeartbeatServer(redisConnection : redis.client.Re
 def clearQueues(redisConnection: redis.client.Redis, reportCounts : bool = False):
     queues = [io2feq, io2cameraq, io2qrcodeq, io2qrcodeabortq, io2hbq, qrcode2ioq, qrcode2feq, qrcode2hbq, qrcode2cameraq,
               fe2ioq, fe2dbq, fe2hbq, camera2ioq, camera2feq, camera2hbq, db2hbq, hb2feq, hb2ioq,
-              alarmq, emergencyq, stopQ, stoppedResponseQ]
+              alarmq, emergencyq, stopQ, stoppedResponseQ, IO_STATE_STREAM]
     try:
         redisConnection.flushdb()
     except Exception as e:

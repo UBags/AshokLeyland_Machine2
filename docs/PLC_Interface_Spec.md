@@ -6,7 +6,7 @@
 | Applies to | Machine 2. Siemens S7-1515 (pyS7) and Allen-Bradley (pycomm3) |
 | PC side | `costhetaio/commonplc/PLCIOServer.py` through `PLCDataIO` |
 | Tag source | `costhetaio/siemens/IOServerProperties.yaml` (Siemens addresses); tag names in `ApplicationConfiguration.properties` (`*.tagname`) |
-| Status | Part A (protocol v1) describes the protocol as built and as running. Part B (protocol v2) is a proposal and needs PLC programmer sign-off |
+| Status | The protocol as built and as running. It is fixed: the PLC programmes are designed around these reads, writes and timings (a single-writer request / acknowledge redesign was considered and dropped on 2026-11-15) |
 
 ---
 
@@ -21,7 +21,7 @@ Out of scope: the vision algorithms, the database, and the frontend. See `HLD.md
 - **Tag prefix shows the main writer.**
   - `PLC_PC_*` is written by the PLC and read by the PC.
   - `PC_PLC_*` is written by the PC and read by the PLC.
-- **v1 exceptions to ownership.** In v1 the PC also writes some `PLC_PC_*` tags to reset or re-arm them (§5.4). v2 removes these exceptions.
+- **Exceptions to ownership.** The PC also writes some `PLC_PC_*` tags to reset or re-arm them (§5.4). This is part of the PLC design.
 - **Types.** bool; int (Siemens INT, 16-bit); float (Siemens REAL, 32-bit); lreal (Siemens LREAL, 64-bit).
 - **Addresses.** Siemens addresses are written `DBn,<type><byte>.<bit>`, for example `DB500,X2.5` is DB500 byte 2 bit 5. On Allen-Bradley the same tag names are controller tags.
 - **Times.** All times are in seconds. The property that sets each time is named next to it, so a time can be changed without changing code.
@@ -105,7 +105,7 @@ All of these tags are in DB500. The split pin check is on hold until production 
 
 ---
 
-# Part A — Protocol v1 (as built)
+# Protocol (as built)
 
 ## 4. Timing properties
 
@@ -166,7 +166,7 @@ Before step (1) of the QR handshake, the PC:
 
 Note: states 11 and 18 both use `Station2TorqueValueSet`. The reset in step 3 is what stops torque 1 from triggering state 18 straight away.
 
-### 5.4 PC writes to PLC-owned tags in v1
+### 5.4 PC writes to PLC-owned tags
 
 | Tag | When the PC writes it | Why |
 |---|---|---|
@@ -176,7 +176,7 @@ Note: states 11 and 18 both use `Station2TorqueValueSet`. The reset in step 3 is
 | `ComponentPressDone`, `Station4CapPressDone` | 1.5 s after reading (`plc.handshake.componentpress.reset.delay.sec`) | Ends the event |
 | `PLC_PC_EmergencyAbort` | On every abort | Clears the emergency request |
 
-These dual writes are why v1 depends on timings. If the PLC writes the same tag in the same scan in which the PC resets it, one of the two writes is lost. Part B removes this.
+Because of these dual writes the timings matter: the PLC must not write such a tag in the scan in which the PC resets it. The PLC programmes are designed around this (each event is raised once and left to the PC's reset; §5.1 rule 3, §5.3 step 4).
 
 ### 5.5 Abort
 
@@ -223,100 +223,11 @@ These rules apply only after the PC has seen the heartbeat server at least once.
 
 ---
 
-# Part B — Protocol v2 (proposal: single-owner tags with request/acknowledge)
+## 6. Sign-off
 
-## 6. Goals
-
-1. Every tag has exactly one writer. The PC never writes a `PLC_PC_*` tag, and the PLC never writes a `PC_PLC_*` tag. The one exception is the side reset to 0 on PLC restart, which is kept as the restart signal (§6.4).
-2. No correctness depends on a time. Each side moves on only after it **sees** the other side's acknowledgement. Times are used only for timeouts.
-3. Every request can be traced. A request number lets both sides, and the logs, tell one request from the next.
-
-### 6.1 Four-phase handshake (for checks)
-
-```
-          PLC                                     PC
- (idle)   Req=0                                   Done=0, OK=0
- 1        Req := 1   ───────────────────────▶
- 2                                                 OK := result; then Done := 1
- 3        sees Done=1, latches OK; Req := 0 ───▶
- 4                                                 sees Req=0: Done := 0, OK := 0
- 5        sees Done=0 → may raise Req again (a retake) or go on
-```
-
-- The PC writes OK before Done, in a separate write. A write of both in the same S7 request is also acceptable, because both tags are in DB500 and the order within a request is kept. A separate write is simpler to reason about.
-- **Retake after NOT OK.** The PLC lowers Req (phase 3), waits for Done = 0 (phase 5), then raises Req again. Because the PC answers only a rising edge of Req that follows Done = 0, a held Req can never be answered twice.
-- **The PC never lowers Req.** v1 steps (3), (7) and (8) are removed.
-- **QR NOT OK.** The PLC re-arms CheckQRCode after phase 5. The PC no longer arms it.
-
-### 6.2 Value and event handshake
-
-```
- PLC: Value := v; ValueSet := 1
- PC : reads v; Ack := 1
- PLC: sees Ack=1; ValueSet := 0
- PC : sees ValueSet=0; Ack := 0
-```
-
-This removes the timed resets of v1 §5.3 (2.0 s torques, 1.5 s presses). It also makes the shared `Station2TorqueValueSet` safe: torque 2 cannot be seen until the PLC has lowered ValueSet and the PC has lowered Ack.
-
-### 6.3 Request number (optional, recommended)
-
-| Tag | Type | Writer | Meaning |
+| Role | Name | Date | Signature |
 |---|---|---|---|
-| `PLC_PC_RequestNo` | int | PLC | PLC adds 1 (wrapping at 32767) each time it raises any Req or ValueSet, before raising it |
-| `PC_PLC_AckNo` | int | PC | PC copies RequestNo in phase 2, before Done or Ack |
-
-With these tags:
-
-- The PLC accepts Done or Ack only if AckNo = RequestNo.
-- The PC logs RequestNo with each picture, so PLC and PC logs can be matched.
-
-### 6.4 Restart and abort in v2
-
-- **PLC restart.** As in v1: the PLC resets its values and writes side := 0. The PC treats side = 0 while in a cycle as "PLC restarted": it aborts the cycle and lowers all its tags. No session token is needed.
-- **PC restart.** The PC starts with all its `PC_PLC_*` tags at 0. If the PLC holds Req = 1 on PC start, the PC treats it as a fresh request only for the QR read; for any other check it waits for Req = 0.
-- **PC abort.** The PC lowers its own tags and sets `PC_PLC_CycleAborted` (as in v1; it becomes a required tag in v2). The PLC drops its requests and returns to waiting for a QR read.
-
-### 6.5 Timeouts (both sides)
-
-| Side | Waits for | Timeout | Action |
-|---|---|---|---|
-| PC | Camera answer | 20 s (existing) | OK := 0, Done := 1 (NOT OK) |
-| PLC | Done after Req | 30 s (proposed) | Alarm; drop Req; treat as NOT OK |
-| PLC | Done = 0 after Req = 0 | 5 s (proposed) | Alarm. The PC is not following; stop the cycle |
-| PC | Req = 0 after Done = 1 | 5 s | Log warning; hold Done |
-| PLC | ConnectionStatusTag toggle | 6 s (recommended; confirm what the PLC programme does today) | PC lost |
-
-### 6.6 New tags needed
-
-Addresses are a proposal: the free bits after the last used DB500 bit. **The PLC programmer must confirm them.**
-
-| Tag | Proposed address | Type | Writer |
-|---|---|---|---|
-| `PC_PLC_Station2TorqueValueAck` | DB500,X4.6 | bool | PC |
-| `PC_PLC_Station3TorqueValueAck` | DB500,X4.7 | bool | PC |
-| `PC_PLC_ComponentPressDoneAck` | DB500,X5.0 | bool | PC |
-| `PC_PLC_CapPressDoneAck` | DB500,X5.1 | bool | PC |
-| `PC_PLC_CycleAborted` | DB500,X5.2 | bool | PC |
-| `PLC_PC_RequestNo` | DB500,I14 | int | PLC |
-| `PC_PLC_AckNo` | DB500,I16 | int | PC |
-
-All existing check tags keep their addresses; only who writes them changes.
-
-### 6.7 Migration
-
-1. A property selects the protocol: `plc.handshake.protocol=v1|v2`. The default stays v1 until the PLC programme supports v2.
-2. In v2 the PC code removes the PC writes listed in §5.4 and the timed resets, and adds the acknowledge waits.
-3. Before going live:
-   - Dry runs with the PLC simulator for both protocols, both vendors.
-   - A trial on the machine with the PLC in single-step mode.
-4. Machine 1 (Allen-Bradley) can move to v2 later with the same PC code, once its PLC programme is changed.
-
-## 7. Sign-off
-
-| Role | Name | Protocol | Date | Signature |
-|---|---|---|---|---|
-| PLC programmer (Siemens, Machine 2) | | v1 / v2 | | |
-| PLC programmer (Allen-Bradley, Machine 1) | | v1 / v2 | | |
-| PC software | | v1 / v2 | | |
-| Customer (Ashok Leyland) | | v1 / v2 | | |
+| PLC programmer (Siemens, Machine 2) | | | |
+| PLC programmer (Allen-Bradley, Machine 1) | | | |
+| PC software | | | |
+| Customer (Ashok Leyland) | | | |
