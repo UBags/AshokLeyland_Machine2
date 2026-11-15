@@ -6,9 +6,11 @@
     "camera/CheckTopBearing.py": "8d7cdd5",
     "camera/CheckNutAndPlateWasher.py": "3d91a76",
     "camera/HexagonNutDetector.py": "4e04121",
-    "camera/CheckCap.py": "15bb871",
+    "camera/CheckCap.py": "f3aa0ed",
     "camera/BunkSegmenter.py": "04e5e6e",
-    "camera/HubAndBearingSegmenter.py": "3d91a76"
+    "camera/HubAndBearingSegmenter.py": "3d91a76",
+    "camera/KnuckleLocator.py": "f3aa0ed",
+    "camera/VisionFrame.py": "f3aa0ed"
   },
   "extracted": {
     "vision.bunk.dostplus.hole.pair.distance.max": {

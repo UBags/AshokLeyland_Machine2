@@ -40,51 +40,52 @@ import numpy as np
 
 from camera import VisionFrame
 
+from camera.VisionConfig import vFloat, vInt, vPoints, vTuple
 
 # --------------------------------------------------------------------------------------------------- reference values
 # Per machine: <vendor>.vision.knuckle.locator.* in ApplicationConfiguration.properties (2026-11-15; before, in this
 # file). Machine 2 values from the 13 Nov 2026 pictures; Machine 1 (regions method, does not use them) has the Machine 2
 # values until they are measured on Machine 1 pictures. Read where they are used, so a live reload applies.
-SPINDLE_EXPECTED = (642, 360)      # point prompt for the spindle
-SPINDLE_MAX_SHIFT = 80.0
-SPINDLE_R = (35.0, 65.0)
+SPINDLE_EXPECTED = vTuple("vision.knuckle.locator.spindle.expected", (642, 360))      # point prompt for the spindle
+SPINDLE_MAX_SHIFT = vFloat("vision.knuckle.locator.spindle.max.shift", 80.0)
+SPINDLE_R = vTuple("vision.knuckle.locator.spindle.radius", (35.0, 65.0))
 # usable as the anchor: 48.1-49.9 measured; 53.9 with a bearing on the spindle
-SPINDLE_R_OK = (46.0, 52.0)
-SPINDLE_FILL_MIN = 0.75
+SPINDLE_R_OK = vTuple("vision.knuckle.locator.spindle.radius.usable", (46.0, 52.0))
+SPINDLE_FILL_MIN = vFloat("vision.knuckle.locator.spindle.fill.min", 0.75)
 
 # Each boss's usual place from the spindle, and the 4 x 4 prompt grid round it
-BOSS_L_FROM_SPINDLE = (-198.0, -161.0)
-BOSS_R_FROM_SPINDLE = (200.0, -161.0)
-SPACING = 36.76955262170047    # 2 x 26 / sqrt(2) px
+BOSS_L_FROM_SPINDLE = vTuple("vision.knuckle.locator.boss.left.from.spindle", (-198.0, -161.0))
+BOSS_R_FROM_SPINDLE = vTuple("vision.knuckle.locator.boss.right.from.spindle", (200.0, -161.0))
+SPACING = vFloat("vision.knuckle.locator.grid.spacing", 36.76955262170047)    # 2 x 26 / sqrt(2) px
 GRID_N = 4
-DEDUPE_IOU = 0.85
+DEDUPE_IOU = vFloat("vision.knuckle.locator.dedupe.iou", 0.85)
 # A boss: radius, circularity, fill, bright ring round a dark core (bore + pin), concentricity
-BOSS_RADIUS = (30.0, 60.0)
-BOSS_CIRCULARITY_MIN = 0.75
-BOSS_FILL_MIN = 0.70
-BOSS_RING_MIN = 80.0
-BOSS_CONTRAST_MIN = 40.0
-BOSS_CORE_RADIUS = (6.0, 22.0)
-BOSS_CONCENTRICITY_MAX = 8.0
+BOSS_RADIUS = vTuple("vision.knuckle.locator.boss.radius", (30.0, 60.0))
+BOSS_CIRCULARITY_MIN = vFloat("vision.knuckle.locator.boss.circularity.min", 0.75)
+BOSS_FILL_MIN = vFloat("vision.knuckle.locator.boss.fill.min", 0.70)
+BOSS_RING_MIN = vFloat("vision.knuckle.locator.boss.ring.grey.min", 80.0)
+BOSS_CONTRAST_MIN = vFloat("vision.knuckle.locator.boss.contrast.min", 40.0)
+BOSS_CORE_RADIUS = vTuple("vision.knuckle.locator.boss.core.radius", (6.0, 22.0))
+BOSS_CONCENTRICITY_MAX = vFloat("vision.knuckle.locator.boss.concentricity.max", 8.0)
 
 # Lower arm: 4 prompt points down each possible arm (from the spindle), and what the arm's mask must be
-ARM_L_POINTS = [(-155, 115), (-165, 182), (-192, 248), (-220, 310)]
-ARM_R_POINTS = [(150, 123), (162, 189), (186, 254), (210, 315)]
-LOWER_GREY_MAX = 75.0
-LOWER_AREA = (8000, 70000)
-LOWER_RECT_FILL_MAX = 0.75
-LOWER_REACH = 220                    # px below the spindle
-LOWER_TOP_DY = (20, 150)           # top of the arm below the spindle
+ARM_L_POINTS = vPoints("vision.knuckle.locator.arm.left.points", [(-155, 115), (-165, 182), (-192, 248), (-220, 310)])
+ARM_R_POINTS = vPoints("vision.knuckle.locator.arm.right.points", [(150, 123), (162, 189), (186, 254), (210, 315)])
+LOWER_GREY_MAX = vFloat("vision.knuckle.locator.arm.grey.max", 75.0)
+LOWER_AREA = vTuple("vision.knuckle.locator.arm.area", (8000, 70000))
+LOWER_RECT_FILL_MAX = vFloat("vision.knuckle.locator.arm.rect.fill.max", 0.75)
+LOWER_REACH = vInt("vision.knuckle.locator.arm.reach", 220)                    # px below the spindle
+LOWER_TOP_DY = vTuple("vision.knuckle.locator.arm.top.dy", (20, 150))           # top of the arm below the spindle
 
-TYPE_AREA_RATIO = 34.5        # decides: DOST 29.0-31.2, DOSTPLUS 36.8-41.1
+TYPE_AREA_RATIO = vFloat("vision.knuckle.locator.type.area.ratio", 34.5)        # decides: DOST 29.0-31.2, DOSTPLUS 36.8-41.1
 # cross-check: DOST 0.102-0.105, DOSTPLUS 0.114-0.124 (enclosing circle: one bump of the mask moves it); it vetoes only
 # when beyond the limit +- the band
-TYPE_RADIUS_RATIO = 0.1095
-TYPE_RADIUS_BAND = 0.0025
+TYPE_RADIUS_RATIO = vFloat("vision.knuckle.locator.type.radius.ratio", 0.1095)
+TYPE_RADIUS_BAND = vFloat("vision.knuckle.locator.type.radius.band", 0.0025)
 # The right pin from the left one (and back) - for a boss not found where expected while the other was:
 # (397, 4.8) = mean pin vector of the four types / sides (distance 394-400 px, angle 0.65-0.77 deg)
-PIN_VECTOR = (397.0, 4.8)
-OPEN_KERNEL_SIZE = 21              # opening of masks when no boss passed
+PIN_VECTOR = vTuple("vision.knuckle.locator.pin.vector", (397.0, 4.8))
+OPEN_KERNEL_SIZE = vInt("vision.knuckle.locator.open.kernel", 21)              # opening of masks when no boss passed
 
 
 def bossFromSpindle() -> Dict[str, Tuple[float, float]]:

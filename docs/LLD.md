@@ -166,7 +166,7 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 
 1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`. An END_OF_CYCLE message calls `ImageProcessor.endOfCycle()`.
 2. `TakePictures` takes three pictures with `RTSPCam.getFrameAfter`: each a frame that arrived after the request and after the previous picture, waiting at most `camera.frame.max.wait.sec` (1 s). None in time (stalled stream) or camera not connected: the answer carries `noPictureReason` (CHANGES §84).
-3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`<vendor>.vision.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check: in the worker process (`<vendor>.vision.check.in.worker.process`, default) or in a thread (`_assessInThread`), within `<vendor>.vision.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
+3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`<vendor>.vision.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check in the worker process (`VisionCheckWorker`; the only mode since 2026-11-15, CHANGES §105), within `<vendor>.vision.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
 4. The answer goes to `camera2io.q` with the request id and to `camera2fe.q` with both images and the reason.
 
 **`assessPictures(state, pictures)`** (`CameraProcessorServer.py`): first `VisionFrame.applyToChecks(ImageProcessor.visionFrame)`, then one of:
@@ -175,7 +175,8 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 |---|---|---|
 | Knuckle, `vision.knuckle.method=segmentation` | the first | `CheckKnuckle.checkKnuckleBySegmentation` → (picture, OK, frame); `ImageProcessor.setVisionFrame(frame if OK else None)` |
 | Hub, top bearing, nut / washer, both bung checks, no bung | the first | Top bearing: OK saves the ring geometry (`saveBearingProfile`), NOT OK drops it; the nut / washer and bung checks get it with `getBearingProfile()` (current component only) |
-| Knuckle (`regions`), split pin, cap | all six, in a `ThreadPoolExecutor` (6 workers) | 2 of the 3 pictures must pass; a picture not assessed within 5 s counts as NOT OK; the executor is shut down without waiting |
+| Cap (`_assessCap`, CHANGES §105) | the three different ones (`[0::2]`) | `CheckCap.checkCap(..., runSeating=False)` (which cap, right cap, brightening) on each; at least 2 of 3 must pass, else NOT OK with no MobileSAM run; then the whole check with the seating step once, on the first picture that passed, decides. One MobileSAM run per cap check (about 1.2-1.5 s on CPU) |
+| Knuckle (`regions`), split pin | all six, in a `ThreadPoolExecutor` (6 workers) | 2 of the 3 pictures must pass; a picture not assessed within 5 s counts as NOT OK; the executor is shut down without waiting |
 
 **Cycle state in `ImageProcessor`** (`_STATE_ATTRIBUTES` plus `currentPictures`): QR code, model, side, the top bearing
 ring (`bearingCentreAndRadii`, `bearingProfileQRCode`), the knuckle frame (`visionFrame`) and the earlier pictures. In
@@ -202,8 +203,7 @@ server runs `CheckTopBearing.findRing` on a copy of the nut picture in its own t
 (`VisionCheckWorker._startBearingRingGuard`), waits at most 5 s after the verdict (`GUARD_MAX_WAIT_SECS`) and makes
 the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.bearingRingVerdict`). If the guard has no
 answer in time or the ring finder fails, the verdict is NOT OK too, with the reason (since 2026-11-15; before, the
-guard was not applied). In thread mode, and in the dry-run windows, the check runs the guard itself (a failing ring
-finder: NOT OK).
+guard was not applied). In the dry-run windows the check runs the guard itself (a failing ring finder: NOT OK).
 
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
 face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
@@ -372,7 +372,8 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `frontend.abort.password` / `machine.settings.password` / `machine.settings.bypass.password` | admin123 / admin123 / admin123 | 5 |
 | `camera.state.file.max.age.sec` | 3600 | 3 |
 | `save.all.pictures.because.its.in.trial.mode` / `picture.saving.dir.for.mode.trial` | True / C:/Temp/TrialImages/ | 1, 3 |
-| `<vendor>.vision.check.timeout.sec` / `.check.in.worker.process` | 12 / True | 3 |
+| `<vendor>.vision.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
+| `<vendor>.vision.frame.*` (reference spindle, type spindles, nominal pins per type and side, 18 centres per type), `<vendor>.vision.knuckle.locator.*` (spindle, bosses, lower arm, type rule) | Machine 2 values, measured 13 Nov 2026 (allenbradley: the same, not measured for Machine 1) | 3 |
 | `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
@@ -397,6 +398,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_Camera_State_File.py` | The camera server's cycle state across a restart (C1-C5) |
 | `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check, all run in order as in one cycle, the frame's centres listed |
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
+| `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` are not in its manifest) |

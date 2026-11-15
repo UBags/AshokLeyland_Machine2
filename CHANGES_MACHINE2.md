@@ -3255,3 +3255,36 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   knuckle, top bearing, nut, no bung, cap OK, with the frame's centres).
 - Found while testing: `test/machine1_dryrun/DryRun_Vision_Check_Timeout.py` does not set `COSTHETA_PLC_VENDOR` itself;
   without it the live properties' vendor (siemens in the repo) is used. Run it with `COSTHETA_PLC_VENDOR=allenbradley`.
+
+## 105. Cap check: one MobileSAM run; frame and locator reference values in the properties; vision check in the worker process only (2026-11-15)
+
+- **Cap check (user, option a):** new `_assessCap` in `CameraProcessorServer.assessPictures` for
+  `READ_TAKE_PICTURE_FOR_CHECKING_CAP`, in place of the 2-of-3 vote (6 threads, 5 s wait). Steps 1-3 (which cap, right
+  cap, brightening against the hub / top bearing / nut pictures; no MobileSAM) on each of the three pictures
+  (`CheckCap.checkCap(..., runSeating=False)`, new parameter, default True); at least 2 of 3 must pass (all, with fewer
+  than 3 pictures), else NOT OK with no MobileSAM run. Then the whole check with the seating step once, on the first
+  picture that passed; its verdict is the result. Logged: "CheckCap: steps 1-3 passed on n of m" and the picture the
+  seating ran on. Why: through the vote, six MobileSAM runs in parallel took 5.02 s on CPU and the cap came out NOT OK
+  on the 5 s wait; one run takes 1.2-1.5 s. Split pin and the regions knuckle keep the vote.
+- **Frame and locator reference values in the properties (user):** 52 keys per vendor after
+  `<vendor>.vision.knuckle.frame.max.zoom.change`:
+  - `vision.frame.reference.spindle`, `vision.frame.type.spindle.<dost|dostplus>`,
+    `vision.frame.nominal.pins.<type>.<lhs|rhs>` (distance, angle, midpoint, spindle), `vision.frame.spindle.mask.agreement.px`,
+    `vision.frame.centre.<hub.segment|hub.check|top.bearing|nut.washer|no.bunk|bunk.disc|bunk.seated|cap|...>.<dost|dostplus>`;
+  - `vision.knuckle.locator.*`: spindle (expected, max shift, radii, fill), boss offsets and shape limits, grid
+    spacing, lower-arm points and limits, the type rule (area ratio, radius ratio and band), pin vector, open kernel.
+  `VisionFrame` reads them at use (`nominalPins()`, `typeSpindle()`, `centres()`); the module's `NOMINAL_PINS`,
+  `TYPE_SPINDLE`, `CENTRES` stay as the values at import. Values unchanged (Machine 2, 13 Nov 2026).
+  **allenbradley carries the same values, not measured for Machine 1:** on the Machine 1 knuckle pictures in the repo
+  the pins are ~362 px apart (Machine 2: ~400), the spindle is not found and the DOSTPLUS bosses are missed. Measure
+  before setting `allenbradley.vision.knuckle.method=segmentation`.
+- **Reference commit** f3aa0ed (CheckCap, KnuckleLocator, VisionFrame with literal values); both manifests point to
+  it; `Verify_Vision_Config_Equivalence`: ALL EQUIVALENT, 268 parameters in 11 files (both machines).
+- **Vision check in the worker process only (user):** `_assessInThread`, `getVisionCheckInWorkerProcess` and
+  `<vendor>.vision.check.in.worker.process` removed; `runAssessment` always uses `VisionCheckWorker`. A check stuck in
+  torch is always stoppable. plant-pc-verification step 1 no longer offers the thread fallback.
+- **Dry runs:** new `DryRun_Cap_Production_Path.py` (both folders; Machine 1 skips, seating off): 12/12 on Machine 2,
+  1.23-1.52 s per cap check on CPU, one seating run per check, none when the cap is wrong or missing.
+  `DryRun_Vision_Check_Timeout.py`: thread-mode section replaced by T1 (worker always used, no getter, no key);
+  23/23 (Machine 2), 22/22 (Machine 1). `DryRun_All_Checks_UI.py`: "as in production" relabelled (three pictures).
+  Guard 13/13, state file 19/19 (both); `DryRun_Knuckle_Frame.py --quick` unchanged results.

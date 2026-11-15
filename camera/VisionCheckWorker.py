@@ -17,7 +17,7 @@ where no flag can stop it) can be stopped by stopping the process.
   starting"). The worker process dying is handled the same way. The cycle's state stays in the camera server, so a
   stopped check loses nothing of the cycle: the retake of the same check has the earlier pictures and the bearing ring.
 
-Started from CameraServer() when <vendor>.vision.check.in.worker.process = True. The process is started with
+Started from CameraServer() (the only way the vision checks run since 2026-11-15). The process is started with
 multiprocessing "spawn" (as MainProgram starts the servers), daemon: it ends with the camera server.
 """
 

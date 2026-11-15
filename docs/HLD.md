@@ -120,7 +120,7 @@ runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `
 | 13, 24 | Bung for component press / cap press (`CheckNoCapBunk`, `CheckBunk`) | YOLO + MobileSAM holes: DOST 4 in a square, DOSTPLUS 2 at the configured spacing; then (Machine 2) seating: hole-pattern centre at the seated position and a round top-face mask | one |
 | 16 | No bung (`CheckNoBunk`) | Nut found by the hexagon nut detector | one |
 | 20 | Split pin and washer | Placeholder: OK whenever a QR code is known (on hold until production pictures exist) | 2 of 3 |
-| 22 | Cap (`CheckCap`) | Which cap (brass / silver / none) by colour and brightness; must be the model's; brightening against the hub, top bearing and nut pictures; then (Machine 2) seating by MobileSAM | 2 of 3 |
+| 22 | Cap (`CheckCap`) | Which cap (brass / silver / none) by colour and brightness; must be the model's; brightening against the hub, top bearing and nut pictures; then (Machine 2) seating by MobileSAM | steps before seating on 3, 2 must pass; seating once |
 
 **Frame (Machine 2, `camera/VisionFrame.py`).** From the two pins the knuckle check works out the camera's shift,
 rotation and zoom against the reference position (13 Nov 2026), and places every later check's centre (hub, top
@@ -129,8 +129,9 @@ bearing, nut, no-bung, bung, cap) for this cycle, per type (DOST / DOSTPLUS). A 
 (Machine 1, or the regions knuckle method) the centres in the properties file are used. A camera server restarted
 by the supervisor during a cycle takes the frame back from its state file (§6). The frame is
 dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle retake.
-The reference values (`NOMINAL_PINS`, `CENTRES` in `VisionFrame.py`, the rules in `KnuckleLocator.py`) are in the code,
-not in the properties file. Positions and offsets: `vision_positions_machine2.md`.
+The reference values (pins, spindles and centres per type: `<vendor>.vision.frame.*`; the locator's rules:
+`<vendor>.vision.knuckle.locator.*`) are in the properties file since CHANGES §105 (allenbradley carries the Machine 2
+values until Machine 1 is measured). Positions and offsets: `vision_positions_machine2.md`.
 
 No values or words are written on the pictures sent to the frontend (outlines only; a picture NOT OK without a check's verdict - timeout, stalled camera - gets a red border); the values and reasons go to the log.
 

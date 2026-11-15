@@ -7,8 +7,7 @@ torch, ultralytics, mobile_sam; the models/ weights are NOT needed - the worker'
      worker is stopped and a new one started (new pid); while it starts, a check is NOT OK at once ("vision check
      worker starting"); a stopped check changes nothing of the cycle's state; the worker process killed from outside
      -> NOT OK, restarted.
-  T  the in-thread mode (<vendor>.vision.check.in.worker.process = False): over the timeout -> NOT OK, the state
-     the stuck check changes afterwards is not kept.
+  T  the in-thread mode is gone (2026-11-15): the camera server always runs the checks in the worker process.
   K  the real camera pipeline (ConverterScalerAndProcessor.processItem) with the real CheckKnuckle on a Machine 2
      knuckle picture: QR code from the QR code server -> OK; a retake of the knuckle (no new QR code) -> OK again,
      at once (before 2026-11-06 the QR code was dropped at every knuckle check: the retake waited 5 s per picture and
@@ -106,31 +105,30 @@ if __name__ == "__main__":
     w.stop()
 
     # ------------------------------------------------------------------------------------------------ T
-    print("\n=== T. In-thread mode ===", flush=True)
+    print("\n=== T. No in-thread mode (process only) ===", flush=True)
+    import inspect
+    srcRun = inspect.getsource(cps.ConverterScalerAndProcessor.runAssessment)
+    check("T1 runAssessment always uses the vision check worker process; no in-thread path",
+          "getVisionCheckWorker().assess(" in srcRun and not hasattr(cps, "_assessInThread")
+          and not hasattr(C, "getVisionCheckInWorkerProcess"))
+    props = (ROOT / "ApplicationConfiguration.properties").read_text(encoding="utf-8")
+    check("T1 no vision.check.in.worker.process key left in the properties file", "check.in.worker.process" not in props)
     realAssess = cps.assessPictures
-    def slow(state, images):
-        time.sleep(3.0)
-        IP.currentModelName = "SET-AFTER-THE-TIMEOUT"
-        return True, images[0], images[0]
-    cps.assessPictures = slow
-    before = IP.snapshotState()
-    t0 = time.monotonic()
-    allok, proc, orig, reason = cps._assessInThread(MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, [img] * 6, 1.0)
-    check("T1 over the timeout -> NOT OK 'check timed out after 1 s' after 1 s",
-          allok is False and reason == "check timed out after 1 s" and 0.9 < time.monotonic() - t0 < 1.6)
-    check("T1 at the timeout the cycle's state is as before the check", IP.currentModelName == before["currentModelName"])
-    time.sleep(2.5)
-    print(f"INFO  T1 in-thread mode cannot stop the stuck thread: it finished later and set currentModelName = "
-          f"{IP.currentModelName!r} (the worker process mode exists for this)", flush=True)
-    cps.assessPictures = realAssess
-    IP.restoreState(before)
 
     # ------------------------------------------------------------------------------------------------ K
     print("\n=== K. Knuckle check in the real pipeline: QR code kept for a retake ===", flush=True)
     r = Redis("localhost", 6379)
     for q in (camera2ioq, camera2feq, qrcode2cameraq, io2cameraq):
         r.delete(q)
-    C.getVisionCheckInWorkerProcess = classmethod(lambda cls: False)     # the pipeline's in-thread mode here
+    # The pipeline under test is the real one; only the worker process is stood in for by the same call in this process
+    # (dry run: the models are loaded here) - camera/VisionCheckWorker.assess has its own tests (W above)
+    import camera.VisionCheckWorker as VCW
+    class InProcessWorker:
+        def assess(self, state, images, timeout):
+            allok, proc, orig = cps.assessPictures(state, images)
+            return allok, proc, orig, None
+    inProcess = InProcessWorker()
+    VCW.getVisionCheckWorker = lambda: inProcess
     IP.fetchQRCodeInChecks = False
     conv = cps.ConverterScalerAndProcessor(name="dry run", consumer=None)     # not started: processItem called here
     QR = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"   # DOSTPLUS RHS
@@ -185,9 +183,10 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------------------------------ R
     print("\n=== R. A check that times out in the pipeline ===", flush=True)
     C.getVisionCheckTimeout = classmethod(lambda cls: 1.0)
-    def stuck(state, images):
-        time.sleep(3.0); return True, images[0], images[0]
-    cps.assessPictures = stuck
+    def timedOut(state, images, timeout):      # as VisionCheckWorker.assess answers a check over the timeout
+        time.sleep(timeout); return False, images[0], images[0], f"check timed out after {timeout:g} s"
+    realWorkerAssess = inProcess.assess
+    inProcess.assess = timedOut
     r.delete("feNotice:check")
     IP.setCurrentComponentName(QR)
     t0 = time.monotonic()
@@ -204,7 +203,7 @@ if __name__ == "__main__":
           and float(np.abs(shown[30:70, 20:400].astype(int)
                            - cv2.resize(pic, (1280, 720))[30:70, 20:400].astype(int)).mean()) < 2.0)
     check("R1 'Picture NOT OK: check timed out ...' notice for the frontend", b"timed out" in (r.get("feNotice:check") or b""))
-    cps.assessPictures = realAssess
+    inProcess.assess = realWorkerAssess
 
     failed = [n for n, ok_ in RESULTS if not ok_]
     print(f"\nRESULT {len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed" + (f"; FAILED: {failed}" if failed else ""), flush=True)

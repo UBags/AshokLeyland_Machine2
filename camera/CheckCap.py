@@ -37,6 +37,7 @@ import glob
 import os
 import threading
 # from HandDetector import HandDetector
+from camera.VisionConfig import vInt, vFloat, vTuple, vBool
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -82,40 +83,40 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = (635, 360)               # centre of the circle the check looks at
-    RADIUS_DOST = 100
-    RADIUS_DOSTPLUS = 70
-    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
+    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
+    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
+    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
+    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = 30.0
-    DELTA_THRESHOLD_TOP_DOST = 30.0
-    DELTA_THRESHOLD_NUT_DOST = 35.0
+    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
+    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
+    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
-    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
-    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
+    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
+    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = 25
-    SILVER_BRIGHTNESS_MIN = 0.0
+    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
+    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
 
     # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
-    SEATING_CHECK = False
-    SEATING_BRASS_RADIUS_MIN = 75.0    # brass cap face mask
-    SEATING_BRASS_RADIUS_MAX = 95.0
-    SEATING_BORE_RADIUS_MIN = 104.0     # bore round a brass cap
-    SEATING_BORE_RADIUS_MAX = 120.0
-    SEATING_SILVER_RADIUS_MIN = 95.0  # silver cap outline mask
-    SEATING_SILVER_RADIUS_MAX = 112.0
-    SEATING_BRASS_OFFSET_MAX = 9.0     # cap centre to bore centre
-    SEATING_SILVER_FACE_OFFSET_MAX = 9.0  # face to outline
-    SEATING_FACE_BOX_SCALE = 0.8
+    SEATING_CHECK = vBool("vision.cap.seating.check", False)
+    SEATING_BRASS_RADIUS_MIN = vFloat("vision.cap.seating.brass.radius.min", 75.0)    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = vFloat("vision.cap.seating.brass.radius.max", 95.0)
+    SEATING_BORE_RADIUS_MIN = vFloat("vision.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = vFloat("vision.cap.seating.bore.radius.max", 120.0)
+    SEATING_SILVER_RADIUS_MIN = vFloat("vision.cap.seating.silver.radius.min", 95.0)  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = vFloat("vision.cap.seating.silver.radius.max", 112.0)
+    SEATING_BRASS_OFFSET_MAX = vFloat("vision.cap.seating.brass.offset.max", 9.0)     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.cap.seating.silver.face.offset.max", 9.0)  # face to outline
+    SEATING_FACE_BOX_SCALE = vFloat("vision.cap.seating.face.box.scale", 0.8)
     # silver: the cap outline centre within this of CENTER (a cap pushed right off the bore); 0 = not checked
-    SEATING_SILVER_OUTLINE_OFFSET_MAX = 0.0
+    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.cap.seating.silver.outline.offset.max", 0.0)
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}

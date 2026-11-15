@@ -22,9 +22,7 @@ multiprocessing "spawn", like the servers themselves, but it has not been run in
    `READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: check 3.10 s in the worker, transfer 0.01 s` for each.
 
 **If the worker does not get ready** (no "ready" line, or every check NOT OK with "vision check worker starting"):
-set `siemens.vision.check.in.worker.process=False` in `ApplicationConfiguration.properties` and restart. The checks
-then run in a thread of the camera server, as before; the 12 s timeout still gives NOT OK, but a check stuck inside
-torch cannot be stopped. Tell the developer what the console showed.
+there is no fallback (the thread mode was removed, CHANGES §105): stop, and tell the developer what the console showed.
 
 ## 2. Vision check times against the 12 s timeout
 

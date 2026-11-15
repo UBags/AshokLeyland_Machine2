@@ -13,8 +13,9 @@ What it does (the production code, this machine's settings):
        - the top bearing ring is kept for the nut / washer and bung checks; the hub, top bearing and nut pictures for
          the cap check;
        - a check with no picture loaded is skipped (a later check that needs its picture then says so).
-     "Cap and split pin as in production (2-of-3 vote)": on = the picture checked six times in parallel threads with
-     the 5 s wait (as the camera server does); off = one check of the picture.
+     "Cap and split pin as in production": on = as the camera server runs them on its three pictures (here the loaded
+     picture three times) - cap: steps 1-3 on each, then the whole check with the seating step once; split pin: the
+     2-of-3 vote; off = one check of the picture.
   3. Each check's line: OK / NOT OK and its time. Clicking a line shows the check's own picture (outlines only, no
      values: exactly what the frontend gets) and, below, every log line the check wrote (values, reasons). The same
      lines go to the terminal.
@@ -202,7 +203,7 @@ def runWindow():
     ttk.Combobox(top, textvariable=typeVar, width=14, state="readonly",
                  values=["DOST LHS", "DOST RHS", "DOSTPLUS LHS", "DOSTPLUS RHS"]).pack(side="left", padx=4)
     voteVar = tk.BooleanVar(value=True)
-    ttk.Checkbutton(top, text="Cap and split pin as in production (2-of-3 vote)", variable=voteVar).pack(side="left", padx=10)
+    ttk.Checkbutton(top, text="Cap and split pin as in production (three pictures)", variable=voteVar).pack(side="left", padx=10)
     status = tk.StringVar(value="Load the pictures, then Run All")
 
     body = ttk.Frame(root); body.pack(fill="both", expand=True, padx=8)
@@ -344,7 +345,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--auto", action="store_true", help="no window: run once and print the results")
     ap.add_argument("--type", default="DOST_LHS", choices=[f"{t}_{s}" for t, s in QR])
-    ap.add_argument("--single", action="store_true", help="cap and split pin: one check, not the 2-of-3 vote")
+    ap.add_argument("--single", action="store_true", help="cap and split pin: one check, not as the camera server runs them")
     for key, *_ in STATIONS:
         ap.add_argument(f"--{key}", default=None)
     args = ap.parse_args()

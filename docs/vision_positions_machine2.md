@@ -21,7 +21,8 @@ is then placed for the cycle as
     centre = anchor + zoom * R(rotation) * (reference centre of the type - mean spindle of the type)
 
 where, since the follow-up of CHANGES 102, the reference centre and spindle are per type: DOST and DOSTPLUS each have
-their own reference centre (`VisionFrame.CENTRES`, in the code) and mean spindle (DOST (642.35, 358.45), DOSTPLUS
+their own reference centre (`siemens.vision.frame.centre.<name>.<dost|dostplus>`, since CHANGES §105; type spindles
+`siemens.vision.frame.type.spindle.*`, pins `siemens.vision.frame.nominal.pins.*`) and mean spindle (DOST (642.35, 358.45), DOSTPLUS
 (642.2, 359.7)), so each type has its own displacement of every centre from the spindle. The `siemens.vision.*.center`
 keys below are used only when no knuckle frame exists in the cycle (method `regions`; a camera server restarted during a cycle takes the frame back from its state file, camera/CameraStateFile.py; or one restarted
 during a cycle). The frame is dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check

@@ -468,15 +468,12 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
         """assessPictures with a deadline (<vendor>.vision.check.timeout.sec, read at each check):
         (allok, processed image, original image, reason). reason is None when the check itself gave the verdict, else
         why the result is NOT OK without one (check timed out, worker not ready, ...).
-        <vendor>.vision.check.in.worker.process = True: the check runs in the vision check worker process (models
-        loaded there); one that times out is stopped with the process, which is started again. Else it runs in a
-        thread here; one that times out is NOT OK, but its thread cannot be stopped and keeps running."""
-        config = CosThetaConfigurator.getInstance()
-        timeout = config.getVisionCheckTimeout()
-        if config.getVisionCheckInWorkerProcess():
-            from camera.VisionCheckWorker import getVisionCheckWorker
-            return getVisionCheckWorker().assess(currentMachineState, imagesToBeProcessed, timeout)
-        return _assessInThread(currentMachineState, imagesToBeProcessed, timeout)
+        The check runs in the vision check worker process (models loaded there); one that times out is stopped with
+        the process, which is started again. (The in-thread mode, whose stuck threads could not be stopped, was removed
+        on 2026-11-15: process only.)"""
+        timeout = CosThetaConfigurator.getInstance().getVisionCheckTimeout()
+        from camera.VisionCheckWorker import getVisionCheckWorker
+        return getVisionCheckWorker().assess(currentMachineState, imagesToBeProcessed, timeout)
 
     def getTargetWidthAndHeight(self, currentMachineState : MachineState):
         currentMachineStateAsInt : int = MachineState.getMachineStateAsInt(currentMachineState)
@@ -891,6 +888,13 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                     chosenProcessedImage = imagesToBeProcessed[0]
                     chosenOriginalImage = imagesToBeProcessed[0]
 
+            elif currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP:
+                # Cap (user, 2026-11-15): steps 1-3 (which cap, right cap, brightening; no MobileSAM) on each of the
+                # three pictures; with 2 of 3 passing, the whole check including the seating step (MobileSAM) once, on
+                # the first picture that passed - its verdict is the result. One MobileSAM run per cap check (it was
+                # six in parallel threads, which did not finish in the 5 s vote time without a GPU).
+                allok, chosenProcessedImage, chosenOriginalImage = _assessCap(imagesToBeProcessed)
+
             else:
                 # Original threading logic for other checks (non-hub-bearing)
                 # not "with ThreadPoolExecutor(...)": leaving that block waits for every thread, so a stuck one would
@@ -927,7 +931,8 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                     Logger.PROBLEM)
             pass
 
-    if not is_knuckle_segmentation and not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
+    is_cap = currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP
+    if not is_cap and not is_knuckle_segmentation and not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
         allok = False
         # Original voting mechanism
         okcount: int = 0
@@ -948,34 +953,43 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
     return allok, chosenProcessedImage, chosenOriginalImage
 
 
-def _assessInThread(currentMachineState: MachineState, imagesToBeProcessed: list, timeout: float):
-    """assessPictures in a thread of the camera server, waited for at most `timeout` s. A check over the timeout is
-    NOT OK; its thread cannot be stopped and finishes (or not) on its own - its result and any state it changes are
-    then discarded (the cycle's state is restored from before the check)."""
-    snapshot = ImageProcessor.snapshotState()
-    box = {}
-
-    def run():
+def _assessCap(imagesToBeProcessed: list):
+    """The cap check on the camera server's three pictures (each sent twice: index 0, 2, 4): steps 1-3 on each; when at
+    least 2 of 3 pass, the whole check (with the seating step) once on the first that passed, and its verdict decides.
+    Returns (allok, processed image, original image)."""
+    pictures = [p for p in imagesToBeProcessed[0::2] if p is not None] or [p for p in imagesToBeProcessed if p is not None]
+    if not pictures:
+        return False, None, None
+    IP = ImageProcessor
+    if IP.saveTrialPictures:                  # as the 2-of-3 checks do (save.all.pictures.because.its.in.trial.mode)
         try:
-            box["result"] = assessPictures(currentMachineState, imagesToBeProcessed)
+            savingDir = f"{IP.mainDirForSavingPictures}Cap/"
+            for index, picture in enumerate(pictures):
+                saveFileWithFullPath(picture, f"{savingDir}{getFileNameForSaving(useExtension=False, useNanoSec=True)}-{index * 2}.png")
         except Exception as e:
-            box["error"] = e
-
-    worker = threading.Thread(target=run, name=f"Vision check {getattr(currentMachineState, 'name', currentMachineState)}",
-                              daemon=True)
-    worker.start()
-    worker.join(timeout)
-    if worker.is_alive():
-        ImageProcessor.restoreState(snapshot)
-        reason = f"check timed out after {timeout:g} s"
-        logBoth('logCritical', logSource, f"{getattr(currentMachineState, 'name', currentMachineState)}: {reason} "
-                f"(the check's thread keeps running)", Logger.PROBLEM)
-        return False, imagesToBeProcessed[0], imagesToBeProcessed[0], reason
-    if "error" in box:
-        logBoth('logCritical', logSource, f"Vision check raised {box['error']}", Logger.PROBLEM)
-        return False, imagesToBeProcessed[0], imagesToBeProcessed[0], f"check failed ({box['error']})"
-    allok, processed, original = box["result"]
-    return allok, processed, original, None
+            logBoth('logWarning', logSource, f"Could not save the trial cap pictures: {e}", Logger.RISK)
+    IP.currentPictures[capPictureKeyString] = pictures[0]
+    passed, firstFailed = [], None
+    for index, picture in enumerate(pictures):
+        processed, ok = CheckCap.checkCap(anImage=picture, currentPictures=IP.currentPictures,
+                                          componentQRCode=IP.currentComponentQRCodeValue, runSeating=False)
+        if ok:
+            passed.append(index)
+        elif firstFailed is None:
+            firstFailed = (processed, picture)
+    needed = 2 if len(pictures) >= 3 else len(pictures)
+    logBoth('logInfo', logSource, f"CheckCap: steps 1-3 passed on {len(passed)} of {len(pictures)} pictures "
+            f"({needed} needed)", Logger.SUCCESS if len(passed) >= needed else Logger.ISSUE)
+    if len(passed) < needed:
+        processed, picture = firstFailed if firstFailed is not None else (pictures[0], pictures[0])
+        return False, processed if processed is not None else picture, picture
+    picture = pictures[passed[0]]
+    IP.currentPictures[capPictureKeyString] = picture
+    processed, ok = CheckCap.checkCap(anImage=picture, currentPictures=IP.currentPictures,
+                                      componentQRCode=IP.currentComponentQRCodeValue, runSeating=True)
+    logBoth('logInfo', logSource, f"CheckCap: whole check (with seating) on picture {passed[0] + 1}: "
+            f"{'OK' if ok else 'NOT OK'}", Logger.SUCCESS if ok else Logger.ISSUE)
+    return bool(ok), processed if processed is not None else picture, picture
 
 
 def _withReason(anImage, reason: str):
@@ -1565,8 +1579,8 @@ def CameraServer(mode : str = "Test", stateFile: str | None = None):
     ImageProcessor.stateFile = CameraStateFile.defaultPath()
     if not stateFile:
         ImageProcessor.persistState()               # a new run: the file of an earlier run is replaced by an empty state
-    inWorker = CosThetaConfigurator.getInstance().getVisionCheckInWorkerProcess()
-    problems = verifyVisionDependencies(loadModels=not inWorker)
+    # the models are loaded in the vision check worker process, not here
+    problems = verifyVisionDependencies(loadModels=False)
     if problems:
         message = "Camera server NOT started - missing vision dependencies:\n  - " + "\n  - ".join(problems)
         logBoth('logCritical', logSource, message, MessageType.PROBLEM)
@@ -1574,11 +1588,10 @@ def CameraServer(mode : str = "Test", stateFile: str | None = None):
         sys.exit(1)
     # the camera server fetches the QR code before the knuckle check itself (ImageProcessor.prepareForKnuckleCheck)
     ImageProcessor.fetchQRCodeInChecks = False
-    if inWorker:
-        # the vision checks run in their own process (models loaded there), stopped and started again when a check
-        # takes longer than <vendor>.vision.check.timeout.sec; started now so that the models are ready for cycle 1
-        from camera.VisionCheckWorker import getVisionCheckWorker
-        getVisionCheckWorker()
+    # the vision checks run in their own process (models loaded there), stopped and started again when a check
+    # takes longer than <vendor>.vision.check.timeout.sec; started now so that the models are ready for cycle 1
+    from camera.VisionCheckWorker import getVisionCheckWorker
+    getVisionCheckWorker()
 
     # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.

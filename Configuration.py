@@ -346,7 +346,7 @@ class CosThetaConfigurator():
     PER_MACHINE_CAMERA_AND_IMAGE_KEYS = frozenset(
         ["camera.id", "camera.ip", "camera.port", "camera.uid", "camera.pwd",
          "time.between.pictures.ms", "max.allowed.none.frame.counts.in.camera", "sleeptime.monitor.takepic",
-         "check.timeout.sec", "check.in.worker.process"]
+         "check.timeout.sec"]
         + [f"machine.state.{n}.target.{d}" for n in (3, 5, 7, 9, 13, 16, 20, 22, 24) for d in ("width", "height")])
 
     @classmethod
@@ -3087,7 +3087,6 @@ class CosThetaConfigurator():
     PC_PLC_CYCLE_ABORTED_KEY = "pc.plc.cycle.aborted.tagname"
     PC_PLC_SKIP_SECOND_TIGHTENING_KEY = "pc.plc.skip.second.tightening.tagname"
     VISION_CHECK_TIMEOUT_KEY = "check.timeout.sec"                      # per machine: <vendor>.vision.check.timeout.sec
-    VISION_CHECK_IN_WORKER_PROCESS_KEY = "check.in.worker.process"      # per machine
     SUPERVISOR_RESTART_KEY = "supervisor.restart.dead.processes"
     SUPERVISOR_CHECK_INTERVAL_KEY = "supervisor.check.interval.sec"
     SUPERVISOR_MAX_RESTARTS_PER_HOUR_KEY = "supervisor.max.restarts.per.hour"
@@ -3178,13 +3177,6 @@ class CosThetaConfigurator():
         """Seconds a vision check may take (<vendor>.vision.check.timeout.sec, 12); after that the check is NOT OK.
         Read at each check."""
         return cls._floatValue(cls.VISION_CHECK_TIMEOUT_KEY, 12.0, minimum=1.0)
-
-    @classmethod
-    def getVisionCheckInWorkerProcess(cls) -> bool:
-        """True: the vision checks run in a separate worker process, which is stopped and restarted when a check
-        takes longer than the timeout (<vendor>.vision.check.in.worker.process, True). False: they run in a thread
-        of the camera server; a check over the timeout is still NOT OK, but its thread cannot be stopped."""
-        return cls._boolValue(cls.VISION_CHECK_IN_WORKER_PROCESS_KEY, True)
 
     REDIS_HEALTH_CHECK_INTERVAL_KEY = "redis.health.check.interval.sec"
 
