@@ -3365,3 +3365,64 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
     sync, MISMATCH / RESOLVED / CYCLE / GAP / RESTART lines, behaviour unchanged);
   - two full cycles both vendors as before; integrated all-servers cycle both vendors: DB row as in CHANGES 81 and
     `STATE-SYNC CYCLE 1 completed: in sync` with the real IOServer and frontend.
+
+## 109. Star imports replaced by explicit imports in 44 production files, each name proven by identity (2026-11-15)
+
+- **User:** "go through with a fine tooth comb and try it; when in doubt, keep the * imports."
+- **Tool:** `test/star_imports/startool.py` (+ `dumpmod.py`), run on a copy of the repo:
+  1. *before*: every production module imported (Python 3.13, else 3.12 - the same one afterwards), each global name's
+     object recorded, and for each `from S import *` which names it provided, proven by identity
+     (`vars(S)[n] is vars(M)[n]`), and all star sources giving that very object, in order;
+  2. a static scan of production code and tests: every name each module reads (functions, classes, decorators,
+     defaults, f-strings, quoted annotations, `global`), what other files take from it (`from M import x`, `M.x`
+     including assignments such as tests' patches, `patch("M.x")`), and who star-imports whom;
+  3. the rewrite, at the star import's own line: each name from the first star import that gave that very object;
+     standard-library / third-party names from their own module (`import os`, `from redis import Redis`; identity
+     checked); project classes and functions from the module that defines them, on a line after the star source's
+     (modules imported in the same order as before); a name already imported explicitly from the same module is not
+     repeated; a star import that provided nothing used becomes `import X  # noqa: F401 - ...` (its import-time effects
+     kept);
+  4. kept (doubt): a file another file still star-imports, a star import inside a block, a vision file in the
+     verifier's manifest, a package `__init__`, a module that cannot be imported here, any name read at import time
+     while an earlier star import gave a different object, any name exported by a star source but rebound outside
+     module level;
+  5. rounds: a file whose only star importers were converted is converted in the next round; three rounds, the
+     fourth converted nothing.
+- **Converted (44):** round 1 - MainProgram, OtherServices, camera/CameraProcessorServer, CheckBunk, CheckNoCapBunk,
+  CheckSplitPinAndWasher, HandDetector, ModelManager, costhetaio/commonplc/PLCIOServer, qrcodescanner/
+  QRCodeScanningServer, endpoints/ShowScreen, frontend/frontendutils/FrontEndLogger, 2 frontend/newwidgets and 15
+  frontend/widgets modules, logutils/CentralLoggers, CosThetaLogger, StartMasterLoggers,
+  monitorAllConnections/HeartbeatAndAlarmServer, statemachine/StateMachine, utils/ClearQueues; round 2 - camera/RTSPCam,
+  frontend/CosThetaMonitorDimensions, frontend/newwidgets/CosThetaOutcomeContainer, frontend/widgets/
+  CosThetaResultsContainer, CosThetaRoundButtonWithColorGradient, persistence/PostgresBackupUtility,
+  utils/QRCodeHelper; round 3 - frontend/widgets/CosThetaOutcomeContainer, logutils/AbstractSlaveLogger.
+- **Kept (32):** 17 still star-imported by other files (Configuration, logutils/SlaveLoggers and Logger,
+  processors/GenericQueueProcessor and four processors/image modules, the frontend image / label utilities and three
+  frontend widgets, camera/PhotoCamera and VideoCamera, VerifyIntegrity, frontend/SimplePopups, video/
+  AssessmentResults); 4 with star imports inside `try` blocks (CheckCap, CheckNoBunk, CheckNutAndPlateWasher,
+  CheckTopBearing); 2 vision files in the verifier's manifest (CheckHubAndBottomBearing, CheckKnuckle); 9 that cannot
+  be imported here (legacy modules that call configuration getters which no longer exist, Windows-only, scripts that
+  open windows - see CHANGES 85).
+- **Caught on the way:** MainProgram uses `CosThetaConfigurator` at import (line 45) right after
+  `from Configuration import *`; a later star import re-exports the same object. Taking each name from the LAST star
+  import that gave it (the final value) left line 45 without it - ruff F821 found it. Rule changed to the FIRST star
+  import giving that object (the later ones give the same object), with the different-object case as a doubt.
+- **Found, not changed (a behaviour change, for a separate decision):** MainProgram's `printBoldRed` /
+  `printBoldGreen` were, through the star chain, `utils.CosThetaFileUtils`'s plain console printers, not
+  `utils.CosThetaPrintUtils`'s, which also write to the log file. So MainProgram's red / green messages - including the
+  supervisor's "has died; restarting it" lines - have only ever gone to the console. The explicit imports keep that
+  (`from utils.CosThetaFileUtils import printBoldGreen, printBoldRed`), now visible.
+- **Checked:**
+  - after the rewrite all 132 importable production modules import, and the 2,653 global names they read (plus every
+    name other files take from them) are the same objects as before (fingerprints: module / function / class by
+    module and qualified name, values by repr, instances by type and the modules holding the same object);
+    ruff F821: no undefined name in production code or tests;
+  - Siemens / Allen-Bradley: fault scenarios 201/201 and 218/218; frontend 141/141 both; integrated all-servers cycle
+    both (DB row as in CHANGES 81, state sync "in sync"); two full cycles; heartbeat / start-up 28/28; logging 37/37;
+    PLCDataIO 38/38; process supervisor 7/7; camera stale frames 23/23; camera state file 19/19; bearing-ring guard
+    13/13; vision check timeout 23/23 and 22/22; QR validation 9/9; work-thread health 17/17; camera heartbeat 4/4;
+    DB server 62/62; no record loss; DB indexes 8/8; FE -> DB pipeline (row and picture stored); endpoints 91/91;
+    Mock-PLC window 17/17; Real-PLC window 13/13 and 15/15; state sync monitor 15/15; cap production path 12/12
+    (Machine 1: skipped, seating off); vision verifier ALL EQUIVALENT both;
+  - all-checks `--auto` with real MobileSAM (YOLO stubbed - no weights here): as before (knuckle, top bearing, nut, no
+    bung, cap OK; hub NOT OK without YOLO); both bung checks: the same verdicts and log lines as the unconverted code.

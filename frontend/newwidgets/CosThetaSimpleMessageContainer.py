@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel, QFrame
 
-from frontend.CosThetaMonitorDimensions import *
+import frontend.CosThetaMonitorDimensions  # noqa: F401 - was "from frontend.CosThetaMonitorDimensions import *"; nothing used from it, imported for its import-time effects
 
 class SimpleMessageContainer(QWidget):
 

@@ -2,7 +2,7 @@ from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QLabel
 
-from frontend.CosThetaMonitorDimensions import *
+from frontend.CosThetaMonitorDimensions import getMonitorHeight, getMonitorWidth
 
 class PictureDisplayWindow(QWidget):
     """

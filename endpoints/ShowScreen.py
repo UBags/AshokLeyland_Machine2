@@ -1,6 +1,6 @@
 import asyncio
 import websockets
-from websockets.asyncio.server import *
+from websockets import ServerConnection
 from aiohttp import web
 from PIL import ImageGrab
 import io

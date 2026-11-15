@@ -1,5 +1,5 @@
 import numpy as np
-from BaseUtils import *
+from BaseUtils import get_project_root
 
 class HandDetector:
     """

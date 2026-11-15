@@ -3,8 +3,8 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QLinearGradient, QPainter
 from PySide6.QtWidgets import QPushButton
 
-from frontend.CosThetaStylesheets import *
-from utils.CosThetaFileUtils import *
+import frontend.CosThetaStylesheets  # noqa: F401 - was "from frontend.CosThetaStylesheets import *"; nothing used from it, imported for its import-time effects
+import utils.CosThetaFileUtils  # noqa: F401 - was "from utils.CosThetaFileUtils import *"; nothing used from it, imported for its import-time effects
 
 # def tearDown():
 #     del app

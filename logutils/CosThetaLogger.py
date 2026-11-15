@@ -13,7 +13,7 @@ import regex as re
 from utils.CosThetaPrintUtils import printBoldBlue, printBoldGreen, printBoldRed
 from BaseUtils import get_project_root
 
-from Configuration import *
+from Configuration import CosThetaConfigurator
 
 CosThetaConfigurator.getInstance()
 

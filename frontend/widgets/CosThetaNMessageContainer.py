@@ -5,8 +5,8 @@ from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QWidget, QLabel, QFrame
 from pythonlangutil.overload import Overload, signature
 
-from frontend.frontendutils.CosThetaImageUtils import *
-from utils.CosThetaFileUtils import *
+from PySide6.QtGui import Qt
+import utils.CosThetaFileUtils  # noqa: F401 - was "from utils.CosThetaFileUtils import *"; nothing used from it, imported for its import-time effects
 
 
 class CosTheta_N_MessageContainer(QWidget):

@@ -17,7 +17,8 @@ from utils.CosThetaPrintUtils import printBoldRed, getCurrentTime, printInColor,
 
 warnings.filterwarnings('ignore')
 
-from Configuration import *
+from Configuration import CosThetaConfigurator
+from BaseUtils import getCurrentTime, getFullyQualifiedName, get_project_root
 
 CosThetaConfigurator.getInstance()
 

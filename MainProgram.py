@@ -6,7 +6,13 @@ import typing
 from frontend.SimplePopups import showApplicationStartingScreen, chooseMode, showErrorMessage, showMessage, \
     flashSimpleMessage, login
 from persistence.Persistence import setDatabaseName, makeFoldersForImages, getDataSubFolder
-from utils.RedisUtils import *
+import os
+import redis
+import time
+from redis import Redis
+from utils.RedisUtils import checkRedisHealth, clearQueues, getStopCommandFromQueue, sendStopCommand
+from Configuration import CosThetaConfigurator
+from utils.CosThetaPrintUtils import printBoldBlue
 
 
 # # Python 3.10 compatibility patch
@@ -37,11 +43,14 @@ if "win32" in sys.platform:
 else:
     multiprocessing.set_start_method('fork', force=True)
 
-from Configuration import *
+import psutil
+import threading
+from datetime import datetime
 CosThetaConfigurator.getInstance()
 
-from utils.CosThetaPrintUtils import *
-from persistence.PostgresBackupUtility import *
+from utils.CosThetaPrintUtils import printBoldYellow
+from persistence.PostgresBackupUtility import doBackup
+from utils.CosThetaFileUtils import printBoldGreen, printBoldRed
 # from VerifyIntegrity import *
 
 hostname = CosThetaConfigurator.getInstance().getRedisHost()

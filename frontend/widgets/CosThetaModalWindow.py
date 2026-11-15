@@ -1,10 +1,10 @@
 # from multidispatch import dispatch
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget, QLineEdit
 from PySide6.QtGui import Qt
-from utils.CosThetaPrintUtils import *
+import utils.CosThetaPrintUtils  # noqa: F401 - was "from utils.CosThetaPrintUtils import *"; nothing used from it, imported for its import-time effects
 
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
-from frontend.widgets.CosThetaRoundButtonWithColorGradient import *
+from frontend.widgets.CosThetaRoundButtonWithColorGradient import CosThetaRoundButtonWithColorGradient
 
 app = getAppInstance()
 populateMonitorDimensions() # needs to be called to ensure that a QtGui context is there for some calls to work

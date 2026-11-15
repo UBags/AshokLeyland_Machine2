@@ -4,8 +4,8 @@ from PySide6.QtGui import QLinearGradient
 from PySide6.QtWidgets import QWidget, QHBoxLayout
 
 from frontend.widgets.CosThetaRoundButtonWithColorGradient import CosThetaRoundButtonWithColorGradient
-from frontend.frontendutils.CosThetaImageUtils import *
-from Configuration import *
+from PySide6.QtGui import QPainter
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 
 # def tearDown():
 #     del app

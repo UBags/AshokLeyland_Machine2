@@ -1,8 +1,8 @@
 import threading
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from enum import IntEnum
-from typing import *
-from Configuration import *
+from typing import Dict, Union
+from Configuration import CosThetaConfigurator
 
 class MachineState(IntEnum):
 

@@ -1,22 +1,40 @@
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 import time
 from threading import Thread
-from queue import *
+import queue  # noqa: F401 - was "from queue import *"; nothing used from it, imported for its import-time effects
 import cv2
 import numpy as np
 import sys
 
 import logutils.SlaveLoggers
-from camera.RTSPCam import *
-from processors.GenericQueueProcessor import *
-from utils.CosThetaFileUtils import *
-from utils.RedisUtils import *
-from BaseUtils import *
+import inspect
+import os
+import threading
+from redis import Redis
+from typing import Any, Dict, List, Optional, Tuple, Union
+from camera.RTSPCam import (
+    ALIVE, DEAD, RTSPCam, actionKeyString, capPictureKeyString, capPressBunkPictureKeyString,
+    componentPressBunkPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
+    knucklePictureKeyString, noBunkPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
+    requestIdKeyString, splitPinAndWasherPictureKeyString, takePictureCommand, timeKeyString,
+    topBearingPictureKeyString)
+from BaseUtils import getFullyQualifiedName, profile
+from Configuration import CosThetaConfigurator
+from logutils.Logger import Logger
+from statemachine.StateMachine import MachineState
+from utils.RedisUtils import (
+    readComponentQRCodeInCameraServerFromQRCodeServer, readDataInCameraServerFromIOServer,
+    sendAlarmSignalToHeartbeatServer, sendDataFromCameraServerToFEServer, sendDataFromCameraServerToIOServer,
+    sendHeartbeatFromCameraServerToHeartbeatServer, sendStoppedResponse, setFrontendNotice)
+from processors.GenericQueueProcessor import GenericQueueProcessor
+from utils.CosThetaFileUtils import getFileNameForSaving, saveFileWithFullPath
+import utils.RedisUtils  # noqa: F401 - was "from utils.RedisUtils import *"; nothing used from it, imported for its import-time effects
+import BaseUtils  # noqa: F401 - was "from BaseUtils import *"; nothing used from it, imported for its import-time effects
 from logutils import SlaveLoggers
 from logutils.SlaveLoggers import *
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
-from utils.QRCodeHelper import *
+from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 # from processors.image.ImageSaver import *
 from concurrent.futures import ThreadPoolExecutor, wait
 
@@ -34,7 +52,7 @@ from camera import VisionFrame
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
-from Configuration import *
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 CosThetaConfigurator.getInstance()
 
 # CONSTANTS

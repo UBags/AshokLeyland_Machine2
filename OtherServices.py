@@ -11,9 +11,11 @@ if "win32" in sys.platform:
 else:
     multiprocessing.set_start_method('fork', force=True)
 
-from Configuration import *
+import threading
+import time
+from Configuration import CosThetaConfigurator
 CosThetaConfigurator.getInstance()
-from utils.CosThetaPrintUtils import *
+from utils.CosThetaPrintUtils import printBoldBlue, printBoldRed
 
 def startTheWebServiceEndpoints():
     from endpoints.AshokLeylandWebService import startWebService

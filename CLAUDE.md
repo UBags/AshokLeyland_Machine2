@@ -125,8 +125,13 @@ No per-check times were recorded with the report; when they are, put them in the
   then sends the STATE-SYNC lines; **Plan B** (the frontend follows the IOServer) is designed in the same document
   and is built only if he decides so.
 - **`PLCIOServer.py` (3,227 lines)**: split into modules later (a pure move, checked by the fault scenarios).
-- **Star imports** (`from X import *`, 234 in 126 production files): replacing them with explicit imports is planned
-  with tool support (each name resolved from the running module, every module checked for undefined names).
+- **Star imports:** 44 of the 76 production files that had them now import explicitly (CHANGES 109, done with
+  `test/star_imports/startool.py`, which proves every name by object identity). The other 32 keep them on purpose:
+  17 are still star-imported by other files (hubs such as `Configuration`, `logutils/SlaveLoggers`,
+  `processors/GenericQueueProcessor`, the frontend image / label utilities), 4 have them inside `try` blocks (cap,
+  no-bung, nut / washer, top bearing checks), 2 are vision files in the verifier's manifest (hub, knuckle), and 9
+  cannot be imported in the sandbox (legacy or Windows-only modules). Do not hand-edit imports of the converted files back to
+  `*`; to convert more later, re-run the tool on a copy (its docstring has the steps).
 - **Machine 1 vision values for the segmentation knuckle method**: need Machine 1 pictures (knuckles of each type /
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
 - PLC programmer: addresses for `PC_PLC_CycleAborted` and `PC_PLC_Skip_Second_Tightening` (optional tags, not

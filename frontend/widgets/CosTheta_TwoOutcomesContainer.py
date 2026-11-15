@@ -1,13 +1,19 @@
 from PySide6.QtWidgets import QWidget, QLabel, QFrame, QVBoxLayout
-from PySide6.QtGui import *
+from PySide6.QtGui import QColor, QFont, QImage, QPixmap, Qt
 from multimethod import multimethod
 # from multidispatch import dispatch
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
 from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet, noResultLabelStylesheet, \
     outcomeLabelStylesheet
-from frontend.frontendutils.CosThetaLabelUtils import *
-from frontend.frontendutils.CosThetaImageUtils import *
-from Configuration import *
+from PySide6.QtCore import QSize
+from numpy import ndarray
+from frontend.frontendutils.CosThetaLabelUtils import (
+    createResultLabel, noResultLabelStylesheet, notokLabelStylesheet, okLabelStylesheet)
+from Configuration import CosThetaConfigurator
+from frontend.frontendutils.CosThetaImageUtils import (
+    createBlueImage, createGreenImage, createImage, createRedImage, getPixmapImage)
+import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 from typing import Union
 
 app = getAppInstance()

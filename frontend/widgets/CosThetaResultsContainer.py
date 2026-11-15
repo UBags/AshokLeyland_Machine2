@@ -3,8 +3,15 @@ from PySide6.QtWidgets import QHBoxLayout
 
 from frontend.CosThetaMonitorDimensions import getMonitorWidth, getMonitorHeight
 from frontend.CosThetaStylesheets import modeLabelStylesheet, actionAwaitedStylesheet, instructionAwaitedStylesheet
-from frontend.widgets.CosThetaOutcomeContainer import *
-from frontend.frontendutils.CosThetaLabelUtils import *
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPixmap, Qt
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from numpy import ndarray
+from frontend.widgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer, app, monitorHeight, monitorWidth
+from Configuration import CosThetaConfigurator
+from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
+from frontend.frontendutils.CosThetaImageUtils import createImage
+import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaLabelUtils import *"; nothing used from it, imported for its import-time effects
 from frontend.widgets.CosTheta_TwoOutcomesContainer import CosTheta_TwoOutcomesContainer
 # from frontend.frontendutils.CosThetaImageUtils import createImage
 from typing import Union, get_origin, get_args

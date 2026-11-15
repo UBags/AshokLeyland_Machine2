@@ -2,8 +2,14 @@
 
 from frontend.CosThetaMonitorDimensions import getMonitorWidth, getMonitorHeight
 from frontend.CosThetaStylesheets import instructionAwaitedStylesheet
-from frontend.newwidgets.CosThetaOutcomeContainer import *
-from frontend.frontendutils.CosThetaLabelUtils import *
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPixmap, Qt
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QSizePolicy, QSpacerItem
+from numpy import ndarray
+from frontend.newwidgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer
+from Configuration import CosThetaConfigurator
+from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
+from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
+import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaLabelUtils import *"; nothing used from it, imported for its import-time effects
 # from frontend.frontendutils.CosThetaImageUtils import createImage
 from typing import Union, get_args
 

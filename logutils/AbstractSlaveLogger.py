@@ -21,7 +21,8 @@ from logutils.Logger import Logger
 
 warnings.filterwarnings('ignore', '.*h264.*')
 
-from Configuration import *
+from Configuration import CosThetaConfigurator
+from BaseUtils import getFullyQualifiedName
 
 CosThetaConfigurator.getInstance()
 

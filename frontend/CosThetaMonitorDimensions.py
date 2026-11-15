@@ -8,9 +8,9 @@ import utils
 
 import Xlib.display
 from PySide6.QtWidgets import QApplication
-from utils.CosThetaFileUtils import *
+from utils.CosThetaFileUtils import is_in_path
 # from frontendutils.CosThetaPrintUtils import *
-from Configuration import *
+from Configuration import CosThetaConfigurator
 
 PYTHON_V3 = sys.version_info >= (3,0,0) and sys.version_info < (4,0,0)
 

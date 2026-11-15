@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QSplashScreen, QProgressBar
 from PySide6.QtCore import Qt
 
-from frontend.frontendutils.CosThetaImageUtils import *
-from frontend.CosThetaMonitorDimensions import *
+from PySide6.QtGui import QPixmap, Qt
+from frontend.CosThetaMonitorDimensions import app, getAppInstance
 import time
 
 app = getAppInstance()

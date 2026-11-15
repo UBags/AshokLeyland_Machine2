@@ -4,7 +4,7 @@ QR Code parsing utilities for extracting model and tonnage information.
 import copy
 from typing import Tuple, Dict, Optional
 
-from Configuration import *
+from Configuration import CosThetaConfigurator
 
 CosThetaConfigurator.getInstance()
 

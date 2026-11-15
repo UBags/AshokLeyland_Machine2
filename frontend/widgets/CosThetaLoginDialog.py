@@ -4,9 +4,9 @@ import sys
 from PySide6.QtWidgets import QDialog
 from PySide6.QtGui import Qt
 
-from Configuration import *
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
-from frontend.CosThetaStylesheets import *
+import frontend.CosThetaStylesheets  # noqa: F401 - was "from frontend.CosThetaStylesheets import *"; nothing used from it, imported for its import-time effects
 
 app = getAppInstance()
 populateMonitorDimensions() # needs to be called to ensure that a QtGui context is there for some calls to work

@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QSizePolicy, QFrame
-from frontend.frontendutils.CosThetaImageUtils import *
+import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
 
 class CosThetaQHLine(QFrame):
     def __init__(self):

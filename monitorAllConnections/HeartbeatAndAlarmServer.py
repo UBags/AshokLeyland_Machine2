@@ -2,21 +2,26 @@ from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that a
 import threading
 import os
 import winsound
-from logutils.SlaveLoggers import *
+from typing import Any, Union
+from logutils.SlaveLoggers import logBoth
+from BaseUtils import getFullyQualifiedName, get_project_root
+from Configuration import CosThetaConfigurator
+from logutils.Logger import Logger
 import time
-from BaseUtils import *
+import BaseUtils  # noqa: F401 - was "from BaseUtils import *"; nothing used from it, imported for its import-time effects
 # printBoldGreen is used by the Redis health check ("storing data again"); it came from no star import, so the
 # check thread died with NameError the first time Redis recovered (CHANGES 85)
 from utils.CosThetaPrintUtils import printBoldGreen, printBoldRed
 import sys
 
-from Configuration import *
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 
 from utils.RedisUtils import (readAlarmInHeartbeatServer, sendCombinedHeartbeatFromHeartbeatServerToIOServer, sendHeartbeatsFromHeartbeatServerToFEServer, ALIVE, DEAD, readAllHeartbeatsInHeartbeatServer, checkRedisHealth)
 
 CosThetaConfigurator.getInstance()
 
-from processors.GenericQueueProcessor import *
+from redis import Redis
+from processors.GenericQueueProcessor import GenericQueueProcessor
 
 class HeartbeatAndAlarmServer(GenericQueueProcessor):
 

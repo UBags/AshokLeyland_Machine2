@@ -7,7 +7,7 @@ from typing import List, Optional
 from redis import Redis
 
 from utils.RedisUtils import getMessageCount
-from Configuration import *
+from Configuration import CosThetaConfigurator
 
 CosThetaConfigurator.getInstance()
 

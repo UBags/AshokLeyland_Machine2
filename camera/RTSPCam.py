@@ -24,20 +24,29 @@ import sys
 from queue import Queue
 import time
 from operator import not_
-from collections.abc import *
-from typing import *
+import collections.abc  # noqa: F401 - was "from collections.abc import *"; nothing used from it, imported for its import-time effects
+from typing import Tuple, Union
 import copy
 
-from logutils.SlaveLoggers import *
-from logutils.Logger import *
-from logutils.AbstractSlaveLogger import *
-from utils.RedisUtils import *
-from utils.IPUtils import *
+import json
+from logutils.SlaveLoggers import logBoth
+from BaseUtils import getFullyQualifiedName
+from Configuration import CosThetaConfigurator
+from logutils.Logger import Logger
+import logutils.Logger  # noqa: F401 - was "from logutils.Logger import *"; nothing used from it, imported for its import-time effects
+import logutils.AbstractSlaveLogger  # noqa: F401 - was "from logutils.AbstractSlaveLogger import *"; nothing used from it, imported for its import-time effects
+from utils.RedisUtils import (
+    ALIVE, DEAD, actionKeyString, capPictureKeyString, capPressBunkPictureKeyString,
+    componentPressBunkPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
+    knucklePictureKeyString, noBunkPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
+    requestIdKeyString, splitPinAndWasherPictureKeyString, takePictureCommand, timeKeyString,
+    topBearingPictureKeyString)
+from utils.IPUtils import checkIP
 
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
 
-from Configuration import *
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 CosThetaConfigurator.getInstance()
 
 '''

@@ -1,7 +1,9 @@
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (QSizePolicy, QLabel)
 
-from frontend.frontendutils.CosThetaImageUtils import *
+from PySide6.QtCore import QSize
+from PySide6.QtGui import QPixmap, Qt
+from frontend.frontendutils.CosThetaImageUtils import getPixmapImage
 
 
 # def tearDown():

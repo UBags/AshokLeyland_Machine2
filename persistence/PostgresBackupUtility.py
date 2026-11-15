@@ -617,8 +617,8 @@ except ImportError:
     BOTO3_AVAILABLE = False
 
 from Configuration import CosThetaConfigurator
-from utils.CosThetaPrintUtils import *
-from utils.CosThetaFileUtils import *
+from utils.CosThetaPrintUtils import printBoldBlue, printBoldYellow
+from utils.CosThetaFileUtils import createDirectory, printBoldGreen, printBoldRed
 
 
 # ============================================================================

@@ -6,7 +6,8 @@ from all application components.
 """
 from logutils.CentralLoggers import MasterConsoleLogger, MasterFileLogger
 
-from Configuration import *
+import sys
+from Configuration import CosThetaConfigurator
 
 CosThetaConfigurator.getInstance()
 

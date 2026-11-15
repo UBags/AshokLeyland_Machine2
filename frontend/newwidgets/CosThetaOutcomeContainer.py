@@ -2,16 +2,20 @@ from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that a
 from PySide6 import QtCore
 from PySide6.QtWidgets import QWidget, QLabel, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QSpacerItem, QSizePolicy, \
     QApplication, QMainWindow
-from PySide6.QtGui import *
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPixmap, Qt
 from multimethod import multimethod
 # from multidispatch import dispatch
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
 from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet, noResultLabelStylesheet, \
     outcomeLabelStylesheet, titleLabelStylesheet, emptyImageStylesheet, numberDisplayStylesheet, \
     bypassedLabelStylesheet, BYPASSED_TEXT
-from frontend.frontendutils.CosThetaLabelUtils import *
-from frontend.frontendutils.CosThetaImageUtils import *
-from Configuration import *
+from numpy import ndarray
+from typing import Union
+from frontend.frontendutils.CosThetaLabelUtils import noResultLabelStylesheet, notokLabelStylesheet, okLabelStylesheet
+from Configuration import CosThetaConfigurator
+from frontend.frontendutils.CosThetaImageUtils import convertNDArrayToPixmap, getPixmapImage, resize_pixmap
+import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
 import cv2
 
 app = getAppInstance()

@@ -138,9 +138,11 @@ from typing import Optional
 
 from BaseUtils import get_project_root
 
-from logutils.SlaveLoggers import *
-from logutils.Logger import *
-from logutils.AbstractSlaveLogger import *
+from logutils.SlaveLoggers import logBoth
+from BaseUtils import getFullyQualifiedName
+from logutils.Logger import Logger
+import logutils.Logger  # noqa: F401 - was "from logutils.Logger import *"; nothing used from it, imported for its import-time effects
+import logutils.AbstractSlaveLogger  # noqa: F401 - was "from logutils.AbstractSlaveLogger import *"; nothing used from it, imported for its import-time effects
 
 # --- Add MobileSAM to path ---
 _PROJECT_ROOT = get_project_root()

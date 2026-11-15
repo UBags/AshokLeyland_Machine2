@@ -1,7 +1,10 @@
 from datetime import datetime
-from logutils.Logger import *
-from Configuration import *
-from utils.RedisUtils import *
+import inspect
+from logutils.Logger import Logger
+from BaseUtils import getFullyQualifiedName
+from Configuration import CosThetaConfigurator
+import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
+from utils.RedisUtils import genericdataKeyString, sendData, sendStopCommand
 from redis import Redis
 
 CONSOLE : int = 1
