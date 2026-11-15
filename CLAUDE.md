@@ -96,10 +96,11 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 
 - Every change gets a numbered section at the end of `CHANGES_MACHINE2.md` (`## N. Title (date)`), saying what
   changed, why, what was measured and what was run.
-- Keep `docs/HLD.md`, `docs/LLD.md`, `docs/PLC_Interface_Spec.md`, `docs/plant-pc-verification.md`,
+- Keep `docs/HLD.md`, `docs/LLD.md`, `docs/PLC_Interface_Spec.md`, `docs/state_sync.md`, `docs/plant-pc-verification.md`,
   `docs/vision_positions_machine2.md` and the two `test/machine*_dryrun/README.md` in step with the code.
 - The claude.ai Project "Ashok Leyland - Machine 2" holds copies (`claude/HLD.md`, `claude/LLD.md`,
-  `claude/plant-pc-verification.md`, `claude/vision_positions_machine2.md`,
+  `claude/PLC_Interface_Spec.md`, `claude/state_sync.md`, `claude/plant-pc-verification.md`,
+  `claude/vision_positions_machine2.md`,
   `claude/machine2-changes-log-81-onwards.md` = CHANGES from §81 with a two-line header). Refresh them after a push.
 - Commits end with the attribution lines the session asks for; push to `machine2-io-fe-db-cam`.
 
