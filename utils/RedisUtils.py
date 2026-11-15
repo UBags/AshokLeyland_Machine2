@@ -1058,7 +1058,8 @@ def setActiveCameraRequest(redisConnection: redis.client.Redis, requestId: Optio
 # Frontend notices: short messages the IOServer (or the camera server) shows on the frontend, flashing, top right.
 # One Redis key per notice (FRONTEND_NOTICE_PREFIX + name), with an expiry; the frontend shows the ones present, in
 # FRONTEND_NOTICE_ORDER. Redis is the inter-process link here, as for every other IOServer -> frontend message.
-FRONTEND_NOTICE_ORDER = ("abort", "heartbeat", "db", "camera", "check", "settings")
+# "qrcode": the QR code server, a scanned code that is not valid (CHANGES 110)
+FRONTEND_NOTICE_ORDER = ("abort", "heartbeat", "db", "camera", "qrcode", "check", "settings")
 
 
 def setFrontendNotice(redisConnection: redis.client.Redis, name: str, text: str, ttlSecs: float = 3600) -> bool:

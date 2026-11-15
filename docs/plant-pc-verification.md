@@ -123,6 +123,22 @@ Nothing to do during the run: the frontend logs by itself whenever its state and
 Send the lines found (and the IOServer audit lines around each `seq N` they name) to the developer: they decide
 whether Plan B (`docs/state_sync.md` §3) is needed.
 
+## 8. Picture clean-up, invalid QR code, DB retries (CHANGES 110)
+
+1. **Picture clean-up.** At start, the console and the log have three lines `Picture clean-up: N trial pictures older
+   than 30 days deleted from C:/Temp/TrialImages/ (X MB freed, ...)`, then the same for `Test pictures` and
+   `Production pictures` under `C:/AshokLeylandImages/`. The first start after this exe may take a while on a full
+   disk (it runs in the background; the application starts normally meanwhile). `C:\AshokLeylandImages\Production\
+   FailedRecords\` keeps its files.
+2. **Invalid QR code.** At the QR code step, scan a code that is not a component's (any other barcode): the screen
+   shows "QR Code not valid" (top right, about 10 s) and the siren sounds as for a NOT OK picture; then scan the
+   component's code: the cycle starts and the notice goes.
+3. **MainProgram's lines in the log.** MainProgram's red and green console lines (for example `Connected successfully
+   to Redis in MainProgram`, a supervisor's "has died; restarting it") are now in the log file too.
+4. **DB retries (optional).** With a cycle running, stop the PostgreSQL service for about 5 s and start it again
+   before the cycle ends: the record is stored (the DB server's log has `Insert attempt 1 failed ...; will retry in 5 s`
+   and then the insert), with its pictures once in the day folder.
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -135,3 +151,4 @@ whether Plan B (`docs/state_sync.md` §3) is needed.
 | 5 Real QR codes | | | | |
 | 6 Knuckle frame (shift, scale, check time; wrong part NOT OK) | | | | |
 | 7 State sync after a few weeks (MISMATCH / GAP lines, cycles in sync) | | | | |
+| 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |

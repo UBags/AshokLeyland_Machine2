@@ -30,7 +30,7 @@ import json
 import os
 from redis import Redis
 from utils.RedisUtils import (
-    ALIVE, DEAD, clearFrontendNotice, clearKeyCommunicationQueuesOnAbort, clearQueues, getStopCommandFromQueue,
+    ALIVE, DEAD, clearFrontendNotice, clearKeyCommunicationQueuesOnAbort, getStopCommandFromQueue,
     io2cameraq, moveAheadToNextComponent, notok, publishCycleSettingsForQRCode, publishIOServerState,
     readAbortInIOServerFromFEServer, readDataInIOServerFromCameraServer, readDataInIOServerFromQRCodeServer,
     readServerStatusesInIOServerFromHeartbeatServer, redisHostname, redisPort, requestIdKeyString,
@@ -2117,6 +2117,7 @@ class PLCIOServer:
 
         # printBoldGreen(f"Read value {valueRead}")
         returnValue: bool = False
+        abortsBefore = self.abortCount          # an abort meanwhile does its own reset (see the end)
         currentState = self.machineState.getCurrentState()
 
         if type(valueRead) == bool:
@@ -2302,14 +2303,22 @@ class PLCIOServer:
                 returnValue = successfullySent
 
         if currentState != MachineState.READ_QR_CODE and self.machineState.getCurrentState() == MachineState.READ_QR_CODE:
-            # Cycle just completed (or was aborted meanwhile): log machine times, then reset for the next cycle
-            if self._cycleInProgress:
-                self._computeAndLogCycleTimes()
-                self._resetOpTimestamps()
-            completed = currentState == MachineState.READ_FREE_ROTATION_TORQUE_1
-            # a completed cycle leaves the resets still pending (e.g. the free rotation torque's) to run at their time
-            self.resetForNextCycle("cycle completed" if completed else f"back at READ_QR_CODE from {currentState.name}",
-                                   keepPendingResets=completed)
+            # Cycle just completed: log machine times, then reset for the next cycle. Under _abortLock, as an abort's
+            # reset is (CHANGES 110): the two resets never run at the same time, and if an abort came in meanwhile
+            # (it has reset everything and armed CheckQRCode itself) this reset is not done a second time.
+            with self._abortLock:
+                if self.abortCount != abortsBefore:
+                    self._audit(f"Reset after {currentState.name} skipped: the cycle was aborted meanwhile (reset by the abort)")
+                elif self.machineState.getCurrentState() == MachineState.READ_QR_CODE:
+                    if self._cycleInProgress:
+                        self._computeAndLogCycleTimes()
+                        self._resetOpTimestamps()
+                    completed = currentState == MachineState.READ_FREE_ROTATION_TORQUE_1
+                    # a completed cycle leaves the resets still pending (e.g. the free rotation torque's) to run at
+                    # their time
+                    self.resetForNextCycle("cycle completed" if completed else
+                                           f"back at READ_QR_CODE from {currentState.name}",
+                                           keepPendingResets=completed)
 
         return returnValue
 
@@ -3243,7 +3252,6 @@ class PLCIOServer:
 
     def launchTagRequestListenerThread(self):
         """Launch thread that listens for tag publish requests on Redis queue."""
-        import json
         objRef = self
 
         PUBLISH_TAGS_QUEUE = "publishTags"

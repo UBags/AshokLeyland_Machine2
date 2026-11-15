@@ -12,17 +12,13 @@ import numpy as np
 import socket
 from urllib.parse import urlparse, parse_qs
 import time
-from datetime import datetime
-import time
 import redis
 
 import argparse
 import imutils
-import cv2
 from threading import Thread, ThreadError
 import sys
 from queue import Queue
-import time
 from operator import not_
 import collections.abc  # noqa: F401 - was "from collections.abc import *"; nothing used from it, imported for its import-time effects
 from typing import Tuple, Union
@@ -344,7 +340,6 @@ class RTSPCam():
             # Use subprocess with timeout for ffprobe instead of ffmpeg.probe()
             # This prevents hanging indefinitely on unresponsive cameras
             import subprocess
-            import json
 
             ffprobe_cmd = [
                 'ffprobe',
@@ -415,7 +410,6 @@ class RTSPCam():
         objRef = self
 
         def updateFrame():
-            import sys
             import queue
 
             # Detect platform
@@ -424,14 +418,15 @@ class RTSPCam():
             READ_TIMEOUT = 5.0  # seconds - timeout for reading a frame
             PROCESS_CHECK_INTERVAL = 1.0  # Check if FFMPEG process is alive every N seconds
             WATCHDOG_TIMEOUT = 15.0  # If no successful frame for this many seconds, force disconnect
+            # all these timings use time.monotonic() (CHANGES 110): a clock change cannot fire or hide the watchdog
             STARTUP_GRACE_PERIOD = 20.0  # Don't trigger watchdog for first N seconds after connection
 
             consecutiveCount = 0
             frameCount = 0
-            last_process_check = time.time()
-            last_successful_frame_time = time.time()  # Watchdog timer
+            last_process_check = time.monotonic()
+            last_successful_frame_time = time.monotonic()  # Watchdog timer
             first_frame_received = False  # Track if we've ever received a frame
-            thread_start_time = time.time()  # Track when this thread started
+            thread_start_time = time.monotonic()  # Track when this thread started
 
             # For Windows: use a threaded reader with queue since select() doesn't work on pipes
             read_queue = queue.Queue() if is_windows else None
@@ -482,7 +477,7 @@ class RTSPCam():
                             break
 
                         # Periodically check if FFMPEG process is still alive
-                        current_time = time.time()
+                        current_time = time.monotonic()
                         if current_time - last_process_check >= PROCESS_CHECK_INTERVAL:
                             last_process_check = current_time
                             poll_result = objRef.camProcess.poll()
@@ -586,7 +581,7 @@ class RTSPCam():
                             # Good frame received!
                             consecutiveCount = 0
                             frameCount += 1
-                            last_successful_frame_time = time.time()  # Reset watchdog
+                            last_successful_frame_time = time.monotonic()  # Reset watchdog
                             first_frame_received = True  # Mark that we've received at least one frame
 
                             frame = (
@@ -658,7 +653,7 @@ class RTSPCam():
 
         def monitorAndReEstablishConnection():
             while not objRef.stopped:
-                startTime = time.time()
+                startTime = time.monotonic()
                 try:
                     if not objRef.connectionInProgress:
                         if not objRef.connected:
@@ -685,7 +680,7 @@ class RTSPCam():
                     # Reset state to allow recovery
                     objRef.connectionInProgress = False
 
-                endTime = time.time()
+                endTime = time.monotonic()
                 sleepTime = 1.0 - (endTime - startTime)
                 if sleepTime > 0:
                     try:

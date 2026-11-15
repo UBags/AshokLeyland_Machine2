@@ -10,7 +10,7 @@ from PySide6.QtCore import QSize
 from numpy import ndarray
 from typing import Union
 from frontend.frontendutils.CosThetaLabelUtils import (
-    createResultLabel, monitorHeight, monitorWidth, noResultLabelStylesheet, notokLabelStylesheet, okLabelStylesheet)
+    createResultLabel, monitorHeight, monitorWidth)
 from Configuration import CosThetaConfigurator
 from frontend.frontendutils.CosThetaImageUtils import (
     convertNDArrayToPixmap, createBlueImage, createGreenImage, createImage, createRedImage, getPixmapImage,
@@ -129,14 +129,14 @@ class CosThetaOutcomeContainer(QWidget):
         return getPixmapImage(result_image)
 
     @multimethod
-    def getResultImage(self, result : float):
+    def getResultImage(self, result : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         # CosThetaOutcomeContainer.logger.debug(f"Creating blue startingImage with value {result}")
         result = str(result)
         result_image = createBlueImage(result, imageDimensions=(self.width, self.labelHeight))
         return getPixmapImage(result_image)
 
     @multimethod
-    def getResultImage(self, result : str, width : float, height : float):
+    def getResultImage(self, result : str, width : float, height : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         if result.upper() == 'OK':
             # CosThetaOutcomeContainer.logger.debug(f"Creating OK result startingImage")
             result_image = createGreenImage(result, imageDimensions=(width, height))
@@ -149,7 +149,7 @@ class CosThetaOutcomeContainer(QWidget):
         return getPixmapImage(result_image)
 
     @multimethod
-    def getResultImage(self, result : int, width : float, height : float):
+    def getResultImage(self, result : int, width : float, height : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         # CosThetaOutcomeContainer.logger.debug(f"Creating blue startingImage with {result}")
         result = str(result)
         result_image = createBlueImage(result, imageDimensions=(width, height))
@@ -253,13 +253,8 @@ class CosThetaOutcomeContainer(QWidget):
         self.setImageAndResult(image, result)
 
     def setBackgroundAndResult(self, ndarrayimage, result : str, alpha = 0.8):
-        if result.upper() == "OK":
-            backgroundcolor = QColor(225, 220, 245)
-        elif (result.upper() == "NOT OK") or (result.upper() == "NOTOK"):
-            backgroundcolor = QColor(255, 185, 185)
-            result = "Not OK"
-        else:
-            backgroundcolor = QColor(206, 206, 206)
+        if (result.upper() == "NOT OK") or (result.upper() == "NOTOK"):
+            result = "Not OK"            # (a background colour was also chosen here but never used)
         if ndarrayimage is not None:
             width = self.imageWidth
             height = self.imageHeight

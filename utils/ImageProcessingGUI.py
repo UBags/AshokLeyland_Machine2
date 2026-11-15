@@ -3282,7 +3282,7 @@ class ImageProcessingGUI:
 
 def main():
     root = tk.Tk()
-    app = ImageProcessingGUI(root)
+    app = ImageProcessingGUI(root)   # noqa: F841 - the name keeps the window alive
     root.mainloop()
 
 

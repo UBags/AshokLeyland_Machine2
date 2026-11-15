@@ -14,7 +14,7 @@ from redis import Redis
 
 # From persistence package
 import persistence
-from persistence.Persistence import (setDatabaseName, makeFoldersForImages, getDatabaseName, getSchemaName, getDataSubFolder, checkConnection, checkIfDatabaseExists, checkIfQRCodeExists, insertData, getFolderForKnuckleImages, getFolderForHubAndBottomBearingImages, getFolderForTopBearingImages, getFolderForNutAndPlateWasherImages, getFolderForSplitPinAndWasherImages, getFolderForCapImages, getFolderForBunkAndNoBunkImages)
+from persistence.Persistence import (setDatabaseName, makeFoldersForImages, getDatabaseName, getSchemaName, getDataSubFolder, checkConnection, PersistentDBConnection, checkIfDatabaseExists, checkIfQRCodeExists, insertData, getFolderForKnuckleImages, getFolderForHubAndBottomBearingImages, getFolderForTopBearingImages, getFolderForNutAndPlateWasherImages, getFolderForSplitPinAndWasherImages, getFolderForCapImages, getFolderForBunkAndNoBunkImages)
 
 # From utils package
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
@@ -55,10 +55,15 @@ from logutils.SlaveLoggers import (
 from Configuration import CosThetaConfigurator
 CosThetaConfigurator.getInstance()  # needs to be called to ensure that configurations are properly loaded
 
+class _RecordSkipped(Exception):
+    """This record's attempt ended early and was already counted (handleFailedInsert)."""
+
+
 class DataPersistence():
     logSource = getFullyQualifiedName(__file__)
     IDLE_POLL_SECS : float = 1.0          # was a fixed 5 s sleep between single reads
     MAX_INSERT_ATTEMPTS : int = 3         # after this, the record is written to disk (FailedRecords/) and removed from the queue
+    INSERT_RETRY_GAP_SECS : float = 5.0   # gap between two attempts at the same record (CHANGES 110; was back to back)
 
     def __init__(self, mode: str, username: str | None, **kwargs) -> None:
         super().__init__()
@@ -75,6 +80,8 @@ class DataPersistence():
         self.stopped : bool = False
         self.stopRequested : bool = False
         self.failedAttempts : dict = {}
+        self.savedPictureFiles : dict = {}    # messageId -> {column: picture file}: saved once, reused on a retry
+        self.heartbeatDbConnection = None     # the heartbeat thread's kept-open connection, made there (CHANGES 110)
         self.hostname : str = CosThetaConfigurator.getInstance().getRedisHost()
         self.port : int = CosThetaConfigurator.getInstance().getRedisPort()
         # printBoldYellow(f"Reached 1 in DataPersistence")
@@ -333,18 +340,40 @@ class DataPersistence():
                     model, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(qrCode)
                     self.currentModelName = model
                     # printBoldGreen(f"Successfully fetched data from the queue in doWork()")
-                    knucklePictureFile : str = self.saveKnuckleImage(knucklePicture)
-                    hubAndBottomBearingPictureFile : str  = self.saveHubAndBottomBearingImage(hubAndBottomBearingPicture)
-                    topBearingPictureFile : str  = self.saveTopBearingImage(topBearingPicture)
-                    nutAndPlateWasherPictureFile : str  = self.saveNutAndPlateWasherImage(nutAndPlateWasherPicture)
-                    bunkForComponentPressFile : str  = self.saveBunkAndNoBunkImage(componentPressBunkPicture)
-                    noBunkFile : str  = self.saveBunkAndNoBunkImage(noBunkPicture)
-                    splitPinAndWasherFile : str = self.saveSplitPinAndWasherImages(splitPinAndWasherPicture)
-                    capPictureFile = self.saveCapImage(capPicture)
-                    bunkCapPressFile : str  = self.saveBunkAndNoBunkImage(capPressBunkPicture)
-                    SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
-                                                          "Finished savings images",
-                                                          Logger.SUCCESS)
+                    # The pictures are saved once per record: a retried insert reuses the files (before, every attempt
+                    # saved them again). A save that fails (disk full) counts as a failed attempt, with the retry gap.
+                    pictureFiles = self.savedPictureFiles.get(messageId)
+                    if pictureFiles is None:
+                        try:
+                            pictureFiles = {
+                                "check_knuckle_imagefile": self.saveKnuckleImage(knucklePicture),
+                                "check_hub_and_bottom_bearing_imagefile": self.saveHubAndBottomBearingImage(hubAndBottomBearingPicture),
+                                "check_top_bearing_imagefile": self.saveTopBearingImage(topBearingPicture),
+                                "check_nut_and_platewasher_imagefile": self.saveNutAndPlateWasherImage(nutAndPlateWasherPicture),
+                                "check_bunk_for_component_press_imagefile": self.saveBunkAndNoBunkImage(componentPressBunkPicture),
+                                "check_no_bunk_imagefile": self.saveBunkAndNoBunkImage(noBunkPicture),
+                                "check_splitpin_and_washer_imagefile": self.saveSplitPinAndWasherImages(splitPinAndWasherPicture),
+                                "check_cap_imagefile": self.saveCapImage(capPicture),
+                                "check_bunk_cap_press_imagefile": self.saveBunkAndNoBunkImage(capPressBunkPicture),
+                            }
+                        except Exception as saveError:
+                            self.currentModelName = None
+                            self.handleFailedInsert(messageId, qrCode, f"pictures could not be saved ({saveError!r})")
+                            raise _RecordSkipped() from saveError
+                        if messageId is not None:
+                            self.savedPictureFiles[messageId] = pictureFiles
+                        SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
+                                                              "Finished savings images",
+                                                              Logger.SUCCESS)
+                    knucklePictureFile : str = pictureFiles["check_knuckle_imagefile"]
+                    hubAndBottomBearingPictureFile : str = pictureFiles["check_hub_and_bottom_bearing_imagefile"]
+                    topBearingPictureFile : str = pictureFiles["check_top_bearing_imagefile"]
+                    nutAndPlateWasherPictureFile : str = pictureFiles["check_nut_and_platewasher_imagefile"]
+                    bunkForComponentPressFile : str = pictureFiles["check_bunk_for_component_press_imagefile"]
+                    noBunkFile : str = pictureFiles["check_no_bunk_imagefile"]
+                    splitPinAndWasherFile : str = pictureFiles["check_splitpin_and_washer_imagefile"]
+                    capPictureFile = pictureFiles["check_cap_imagefile"]
+                    bunkCapPressFile : str = pictureFiles["check_bunk_cap_press_imagefile"]
                     # tStamp = getYMDHMSmFormatFromTimeDotTime(timeOfMessage)[:-4]
                     tStamp = datetime.fromtimestamp(float(timeOfMessage)).strftime('%Y-%m-%d %H:%M:%S')
                     from logutils.LogSettings import setLocalCycleContext
@@ -426,6 +455,7 @@ class DataPersistence():
                         if success:
                             acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
                             self.failedAttempts.pop(messageId, None)
+                            self.savedPictureFiles.pop(messageId, None)
                             savedRecords += 1
                             printBoldGreen(f"Inserted record number {savedRecords} successfully in database")
                             SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
@@ -439,14 +469,15 @@ class DataPersistence():
                             self.handleFailedInsert(messageId, qrCode, "insertData() returned False")
                         self.currentModelName = None
                     except (Exception, Error) as error:
-                        self.handleFailedInsert(messageId, qrCode, f"{error}")
-                        printBoldRed(f"Error {error} while inserting data in data_table {id} in scheme {getSchemaName()} in database {getDatabaseName()} due to {error}")
+                        printBoldRed(f"Error {error} while inserting data for QR code {qrCode} in schema {getSchemaName()} in database {getDatabaseName()} due to {error}")
                         SlaveFileLogger.getInstance().logTakeNote(DataPersistence.logSource,
-                                                                  f"Error {error} while inserting data in data_table {id} in scheme {getSchemaName()} in database {getDatabaseName()} due to {error}",
+                                                                  f"Error {error} while inserting data for QR code {qrCode} in schema {getSchemaName()} in database {getDatabaseName()} due to {error}",
                                                                   Logger.RISK)
                         SlaveConsoleLogger.getInstance().logTakeNote(DataPersistence.logSource,
-                                                                     f"Error {error} while inserting data in data_table {id} in schema {getSchemaName()} in database {getDatabaseName()} due to {error}",
+                                                                     f"Error {error} while inserting data for QR code {qrCode} in schema {getSchemaName()} in database {getDatabaseName()} due to {error}",
                                                                      Logger.RISK)
+                        self.currentModelName = None
+                        self.handleFailedInsert(messageId, qrCode, f"{error}")
                 else:
                     # printBoldYellow(f"No data received in doWork() - waiting...")
                     pass
@@ -459,6 +490,8 @@ class DataPersistence():
                     # print(f"Got None in {id}")
                     pass
 
+            except _RecordSkipped:
+                pass                                    # already counted as a failed attempt (handleFailedInsert)
             except (Exception, Error) as error1:
                 printBoldRed(f"Error in DBServer in process {os.getpid()} due to {error1}")
                 SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource,
@@ -486,7 +519,9 @@ class DataPersistence():
         attempts = self.failedAttempts.get(messageId, 0) + 1
         self.failedAttempts[messageId] = attempts
         if attempts < DataPersistence.MAX_INSERT_ATTEMPTS:
-            printBoldYellow(f"Insert attempt {attempts} failed for QR {qrCode}; will retry ({reason})")
+            printBoldYellow(f"Insert attempt {attempts} failed for QR {qrCode}; will retry in "
+                            f"{DataPersistence.INSERT_RETRY_GAP_SECS:g} s ({reason})")
+            self._waitBeforeRetry()
             return
         try:
             import json
@@ -498,29 +533,44 @@ class DataPersistence():
                 for k, v in entries[0][1].items():
                     key = k.decode("utf-8") if isinstance(k, bytes) else str(k)
                     if isinstance(v, bytes) and v[:4] == b"\x89PNG":
-                        record[key] = f"<png image, {len(v)} bytes - saved with the cycle images>"
+                        record[key] = f"<png image, {len(v)} bytes - file in _pictureFiles>"
                     else:
                         record[key] = v.decode("utf-8", errors="replace") if isinstance(v, bytes) else str(v)
             record["_failureReason"] = reason
             record["_attempts"] = attempts
+            # where this record's pictures were saved (column -> file; "" = no picture), so the record can be
+            # entered later with its pictures
+            record["_pictureFiles"] = dict(self.savedPictureFiles.get(messageId) or {})
             safeQR = "".join(ch if ch.isalnum() else "_" for ch in (qrCode or "noQR"))[:60]
             fileName = f"{folder}{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}_{safeQR}.json"
             with open(fileName, "w", encoding="utf-8") as f:
                 json.dump(record, f, indent=2)
             acknowledgeRecordInDatabaseServer(self.redisConnection, messageId)
             self.failedAttempts.pop(messageId, None)
+            self.savedPictureFiles.pop(messageId, None)
             msg = f"Record for QR {qrCode} could not be stored after {attempts} attempts; written to {fileName}"
             printBoldRed(msg)
             SlaveFileLogger.getInstance().logTakeAction(DataPersistence.logSource, msg, Logger.PROBLEM)
             SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource, msg, Logger.PROBLEM)
         except Exception as e:
             printBoldRed(f"Could not write failed record for QR {qrCode} to disk: {e}; it stays on {fe2dbq}")
+            self._waitBeforeRetry()                     # e.g. disk full: do not spin on the same record
+
+    def _waitBeforeRetry(self) -> None:
+        """The gap before the next attempt at a failed record (stops early if the server is stopped)."""
+        end = time.monotonic() + DataPersistence.INSERT_RETRY_GAP_SECS
+        while not self.stopped and time.monotonic() < end:
+            self.lastWorkLoopAt = time.monotonic()      # waiting on purpose: not a stuck work thread
+            time.sleep(0.1)
 
     def sendHeartbeat(self) -> None:
         sleepTime = CosThetaConfigurator.getInstance().getDatabaseConnectionStatusSleepInterval()
+        if getattr(self, "heartbeatDbConnection", None) is None:
+            self.heartbeatDbConnection = PersistentDBConnection()     # this thread's own connection
         while not self.stopped:
             try:
-                connected = checkConnection(db_name=getDatabaseName())
+                # one kept-open connection, checked with SELECT 1 (was a new connection every interval; CHANGES 110)
+                connected = self.heartbeatDbConnection.check(getDatabaseName())
                 if connected and self.workers.problemsLogged(log=lambda m: printBoldRed(m)):
                     connected = False            # the thread that saves the records died or is stuck
                 if connected:

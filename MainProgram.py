@@ -50,7 +50,8 @@ CosThetaConfigurator.getInstance()
 
 from utils.CosThetaPrintUtils import printBoldYellow
 from persistence.PostgresBackupUtility import doBackup
-from utils.CosThetaFileUtils import printBoldGreen, printBoldRed
+from utils.CosThetaPrintUtils import printBoldGreen, printBoldRed   # also mirrored to the log file (CHANGES 110)
+from utils.PictureRetention import startPictureRetentionThread
 # from VerifyIntegrity import *
 
 hostname = CosThetaConfigurator.getInstance().getRedisHost()
@@ -203,7 +204,6 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
 
 def monitorStop(redisConnectionForMonitoringStop: redis.client.Redis, currentProcesses: list, startingTime: float):
     global houLimit, mouLimit
-    lastUpdateOfStartingTime: float = startingTime
     while True:
         try:
             _, shallStop = getStopCommandFromQueue(redisConnectionForMonitoringStop)
@@ -369,6 +369,9 @@ def main():
     currentProcessPIDs.append(P1.pid)
 
     printBoldBlue(f"Logger process is {P1.pid}")
+
+    # old pictures are deleted in the background (trial > 1 month, Test / Production > 2 months; CHANGES 110)
+    startPictureRetentionThread()
 
     printBoldBlue("Verifying Integrity...")
     # verifyIntegrity(processPIDs = currentProcessPIDs)

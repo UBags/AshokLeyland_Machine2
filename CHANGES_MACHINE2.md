@@ -3426,3 +3426,116 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
     (Machine 1: skipped, seating off); vision verifier ALL EQUIVALENT both;
   - all-checks `--auto` with real MobileSAM (YOLO stubbed - no weights here): as before (knuckle, top bearing, nut, no
     bung, cap OK; hub NOT OK without YOLO); both bung checks: the same verdicts and log lines as the unconverted code.
+
+## 110. Code review fixes: picture clean-up, DB retries and heartbeat, frontend counts off the GUI thread, camera end of cycle, worker back-off, state-change listener outside the lock, invalid QR notice, tidy-up (2026-11-16)
+
+- **Review (fine-tooth comb, 2026-11-16) and Uddi's decisions.** Two findings were dropped as not possible: a QR code
+  rejected by the IOServer after the frontend took it (the QR code server, IOServer, frontend and camera server use
+  the same validation; the only path left is the side / skip tag write failing on the PLC, which validation does not
+  cause) and an UNKNOWN model reaching the checks (`isValidQRCode` refuses UNKNOWN model, side and tonnage, so the QR
+  code server never sends such a code). Everything below was asked for.
+- **Picture clean-up** (`utils/PictureRetention.py`, new): MainProgram starts it in a background thread right after the
+  logging server. Picture files (png, jpg, jpeg, bmp, tif, tiff, webp; any case) older than
+  `picture.retention.days.trial` (30) under `picture.saving.dir.for.mode.trial` (`C:/Temp/TrialImages/`) and older than
+  `picture.retention.days.main` (60) under `basefolder.for.images` `Test/` and `Production/`
+  (`C:/AshokLeylandImages/...`) are deleted, all sub-folders; other files (FailedRecords JSON) stay. Age = file
+  modification time. An empty folder is removed only if it was already older than the limit before the run:
+  `makeFoldersForImages` makes today's empty date folder at the same time, and removing it would have broken that
+  day's picture saves (found while testing the first version, which removed every empty folder). 0 turns a clean-up
+  off; one "Picture clean-up:" line per folder. Keys added to the three properties files (in step).
+- **DB server** (`persistence/DBServer.py`):
+  - a failed insert is retried after `INSERT_RETRY_GAP_SECS` (5 s; was back to back, so a PostgreSQL blip of a second
+    or two sent the record to FailedRecords);
+  - the pictures are saved once per record (`savedPictureFiles`), a retry reuses the files (each attempt saved them
+    again before); a picture save that fails (disk full) counts as a failed attempt, with the gap (it used to go to the
+    outer handler and spin on the same record with no gap); if the FailedRecords file cannot be written either, the
+    record stays and is tried again after the gap (no spin);
+  - the FailedRecords JSON has `_pictureFiles` (column -> file);
+  - the insert error messages said `data_table {id}` (the built-in `id` function); now the QR code;
+  - heartbeat: `SELECT 1` on one kept-open connection (`Persistence.PersistentDBConnection`: reconnects once when the
+    connection broke, `statement_timeout` 5 s, TCP keepalives), made by the heartbeat thread itself; was a new
+    connection every 0.5 s (about 170,000 a day).
+- **Frontend production counts** (`AshokLeylandFrontEnd`): `TimeDurationUpdateWorker` reads today / week / month in its
+  own thread, in one query (`Persistence.getProductionCounts`, same filters as the three `getComponentsProduced*`
+  functions, which stay) on a kept-open connection, and sends them with the signal. Before, the slot ran three queries
+  in the GUI thread, each on a new connection: a slow PostgreSQL froze the screen up to 3 x 5 s. On a database error the
+  last counts stay shown (they used to drop to 0), logged once until the counts can be read again.
+- **Camera end of cycle** (`camera/CameraProcessorServer.py`): `MonitorGetPicQueue` passes the IOServer's END_OF_CYCLE
+  down the same queues (`endOfCycleCommand` item; `TakePictures` passes it on without pictures) and
+  `ConverterScalerAndProcessor` drops the cycle state when it reaches it - after any check queued or running. Before,
+  `MonitorGetPicQueue` dropped it at once on its own thread, and a check still running then wrote the old cycle's state
+  back (`applyStateChanges`) and into the state file.
+- **Vision check worker back-off** (`camera/VisionCheckWorker.py`): a worker that dies before it reports ready is
+  started again after 1, 2, 4 ... at most 60 s (`RESTART_BACKOFF_*`, on a timer thread, never on the check thread);
+  checks meanwhile NOT OK at once ("vision check worker starting"); `failedStarts` reset when a worker gets ready; a
+  restart after a worker that had been ready (timeout, crash during a check) stays immediate. Measured with a stand-in
+  worker that exits at start: 178 starts in 8 s before, 4 with the pause.
+- **State-change listener outside the lock** (`statemachine/StateMachine.py`): the listener (`PLCIOServer._onStateChange`:
+  state publish, audit line, END_OF_CYCLE to the camera; Redis calls with 1 s timeouts plus a retry) ran inside the
+  state machine's lock, so a slow Redis held up every IOServer thread changing the state. Changes are now queued under
+  the lock and delivered after the thread's outermost state-changing call has released it, in order, by one thread at a
+  time (a thread finding another delivering returns at once; that thread delivers its change too). Published order and
+  `seq` unchanged.
+- **Completed-cycle reset under `_abortLock`** (`PLCIOServer.process_current_read_state`): as the abort's reset is; and
+  skipped (audited) when an abort happened while that read was being processed (`abortCount` changed - the abort has
+  reset and armed CheckQRCode itself). Before, the two resets could run at the same time and CheckQRCode was armed
+  twice.
+- **RTSPCam**: watchdog, FFmpeg process check and reconnect-loop pacing on `time.monotonic()` (a clock change could fire
+  or hide the 15 s watchdog). The manual test functions at the end of the file keep wall-clock times (reports).
+- **Invalid QR code** (`QRCodeScanningServer.GetAndValidateQRCode`): an invalid scan sets `feNotice:qrcode` = "QR Code not
+  valid" (10 s; `FRONTEND_NOTICE_ORDER` has `qrcode`, shown by the existing `FrontendNoticeWorker`) and sends the alarm
+  signal on `alarm.q` as a vision NOT OK does (`sendAlarmSignalToHeartbeatServer`, producer QRCodeServer: the heartbeat
+  server sounds the siren). The read goes on; the next valid scan clears the notice. `alarm.q` now has two producers
+  (HLD and CLAUDE.md say so); only the newest message is kept, and every message means the same.
+- **MainProgram printers**: `printBoldGreen` / `printBoldRed` from `utils/CosThetaPrintUtils` (were `CosThetaFileUtils`'s
+  console-only printers; CHANGES 109 "found, not changed"), so MainProgram's red / green lines - supervisor restarts
+  included - also reach the log file. No import loop: `CosThetaPrintUtils` imports the logger lazily inside `_mirror`,
+  behind a re-entry guard; checked by importing MainProgram, `setLogProcess("mainprogram")`, printing red and green:
+  both returned at once and both lines were on the `filelogging` stream.
+- **Tidy-up** (pyflakes F811 / F841, 120 findings in production code; 64 left, all on purpose):
+  - removed: duplicate imports (RTSPCam `datetime`, `time` x2, `cv2`, local `json` / `sys`; CheckBunk / CheckNoCapBunk
+    local `time` / `Path`; VerifyIntegrity's 8 local `from Crypto import Cipher`; CosThetaImageUtils `cv2`; SendMail
+    `MIMEText`; test-numba `random`; PLCIOServer local `json` and the never-called `clearQueues` import, which
+    `abortCycle`'s parameter of that name shadowed); where the two imports gave different objects, the earlier, unused
+    one was removed so the binding in use stays (`QtCore.Qt` vs `QtGui.Qt` in 5 widgets; `getCurrentTime` in
+    CentralLoggers; `app` / `monitorWidth` / `monitorHeight` imported and set again); stylesheet names imported twice
+    (checked: the same objects); dead locals (MainProgram `lastUpdateOfStartingTime`, ModelManager `head_index`,
+    CosThetaImageUtils `max_line_width`, CosThetaLogger `timeTuple` / `t`, Persistence `record` / `done`, an unused
+    colour choice in `CosThetaOutcomeContainer.setBackgroundAndResult`, three in the legacy Hikvision module);
+    the camera server's local `profile`, which shadowed the imported `profile` decorator, renamed `ringProfile`;
+  - fixed on the way: `video/ImageProcessingFunctions.showNDArray` never showed the picture (`cv2.imshow` missing);
+  - kept on purpose: the four `getResultImage` / `getImage` definitions in the outcome containers are `@multimethod`
+    overloads, not duplicates (marked `noqa`); `gfe = AshokLeylandFrontEnd(...)` and `app = ImageProcessingGUI(root)`
+    keep their windows alive (marked); RedisUtils' 24 (`timeOfMessage = newData[...]` before the `xdel` acts as a check
+    that the message has a time; `timeTaken` feeds commented timing prints); values read only by commented-out debug
+    lines (Persistence `rows`, `indexes`; MainProgram `value`; Hikvision `tz` / `year` / `hour`, `streamSetup1`);
+    GenericImageProcessor's second star import (it may rebind names two other star imports overwrote - when in
+    doubt, keep); the 4 vision files in the verifier's manifest (CheckTopBearing, HexagonNutDetector,
+    HubAndBearingSegmenter, CheckNutAndPlateWasher: 22 dead locals, mostly `*_text` left from when values were drawn
+    on pictures) - changing them needs the reference-commit procedure for no effect.
+  - checked: every touched module imports (Python 3.13; frontend on 3.12; MainProgram on 3.12 with Tk), except those
+    that never import in this sandbox (VerifyIntegrity: winreg; ImageProcessingGUI, SendMail, test-numba,
+    non_PTZ_Hikvision: modules not installed here) - compiled; pyflakes undefined names unchanged in every touched file.
+- **Dry runs added / extended** (both folders): `DryRun_Picture_Retention.py` (P1-P6), `DryRun_Camera_End_Of_Cycle_Order.py`
+  (E1-E4), `DryRun_Vision_Worker_Backoff.py` (B1-B3); `DryRun_DBServer_No_Record_Loss.py` (b: gaps, pictures once,
+  picture files in the JSON; d: one failure then success; e: heartbeat connection); `DryRun_FEServer_Cycles.py` F7b
+  (counts in the worker thread; a 3 s database read stalls the GUI thread 0.02 s; last counts kept);
+  `DryRun_QRCode_Validation.py` V4.
+- **Caught while testing**: `DryRun_Work_Thread_Health` D1-D3 failed - it builds `DataPersistence` without `__init__`,
+  so the heartbeat connection attribute did not exist and `sendHeartbeat` sent nothing; the connection is now made by
+  the heartbeat thread itself (it owns it), 17/17 again.
+- **Run** (sandbox, Redis + PostgreSQL; Siemens unless said):
+  - new / extended: picture retention 10/10 (both folders); QR validation 13/13 (both); camera end-of-cycle order 6/6
+    (both); worker back-off 6/6 (both); DB no record loss: a, b, c, d, e all pass (both; gaps 5.0-5.1 s, 3 attempts,
+    9 picture files in the JSON, all on disk, one save per record); frontend 145/145 (both; F7b: longest GUI-thread
+    stall 0.021 s during a 3 s database read);
+  - fault scenarios 201/201, Allen-Bradley 218/218 (`COSTHETA_PLC_VENDOR=allenbradley`; the Machine 1 copy runs
+    Siemens without it); two full cycles (28 states each); integrated all-servers cycle both vendors (DB row as before,
+    state sync "in sync"); PLCDataIO 38/38; state sync monitor 15/15; camera state file 19/19; camera stale frames
+    23/23; vision check timeout 23/23, Allen-Bradley 22/22; bearing-ring guard 13/13; cap production path 12/12;
+    knuckle frame `--quick` 86/86 (run again after a run that overlapped a 15 s `git stash` of the working tree);
+    work-thread health 17/17 (both, after the fix above); process supervisor 7/7; heartbeat / start-up 28/28; camera
+    heartbeat 4/4; logging 37/37; DB server 62/62; DB indexes 8/8; FE -> DB pipeline (row and picture stored);
+    Mock-PLC window 17/17; endpoints 91/91; vision verifier ALL EQUIVALENT both;
+  - not run: `DryRun_Cap_Check.py` stops at `ModelManager.load_models` without the YOLO weights (the same on the code
+    before this change); all-checks `--auto` and the windows (no vision logic changed).

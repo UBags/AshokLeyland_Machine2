@@ -388,6 +388,34 @@ def driver():
         check("F7 emergency abort shown within about 1 s", ok_ and time.monotonic() - t0 < 2.0,
               f"{time.monotonic() - t0:.2f} s, {SCREENS}")
 
+        # ---------------- F7b ----------------
+        print("\n=== F7b. Production counts read off the GUI thread (database hanging 3 s) ===", flush=True)
+        import frontend.AshokLeylandFrontEnd as _feCounts
+        _origCounts = _feCounts.getProductionCounts
+        _countThreads = []
+        def _slowCounts(connection, dbName):
+            _countThreads.append(threading.current_thread() is threading.main_thread())
+            time.sleep(3)                                   # a hung PostgreSQL (statement timeout 5 s)
+            return (7, 41, 123)
+        _feCounts.getProductionCounts = _slowCounts
+        GUI_GAPS["max"] = 0.0; GUI_GAPS["last"] = time.monotonic()
+        ok_ = wait_for(lambda: getattr(fe, "productionCounts", None) == (7, 41, 123), 15)
+        check("F7b counts read in the worker thread, never in the GUI thread", _countThreads and not any(_countThreads),
+              _countThreads)
+        check("F7b a 3 s database read does not stall the GUI thread (> 0.25 s)", GUI_GAPS["max"] < 0.25,
+              f"longest GUI-thread stall {GUI_GAPS['max']:.3f} s")
+        wait_for(lambda: "123" in str(fe.dateTimeStatus.getText()), 5)
+        _shownText = fe.dateTimeStatus.getText()
+        check("F7b counts shown on screen", ok_ and "123" in str(_shownText) and "41" in str(_shownText),
+              str(_shownText)[:160])
+        def _failCounts(connection, dbName):
+            raise RuntimeError("database down (simulated)")
+        _feCounts.getProductionCounts = _failCounts
+        time.sleep(6)
+        check("F7b database down: the last counts stay shown", getattr(fe, "productionCounts", None) == (7, 41, 123),
+              getattr(fe, "productionCounts", None))
+        _feCounts.getProductionCounts = _origCounts
+
         # ---------------- F8 ----------------
         print("\n=== F8. Frontend abort (Ctrl+Alt+Z): password, frontend only, PLC-flag request to the IOServer ===", flush=True)
         import frontend.AshokLeylandFrontEnd as _feModule

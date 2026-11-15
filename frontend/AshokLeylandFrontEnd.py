@@ -87,6 +87,8 @@ from utils.RedisUtils import (readCycleSettingsForQRCode, readFrontendNotices, r
 from persistence.Persistence import (
     setDatabaseName,
     getComponentsProducedToday,
+    PersistentDBConnection,
+    getProductionCounts,
     getComponentsProducedThisWeek,
     getComponentsProducedThisMonth,
     getDatabaseName,
@@ -1081,24 +1083,14 @@ class AshokLeylandFrontEnd(QMainWindow):
         end = self.currentComponentEndTime or datetime.now()
         return (':'.join(str(end - self.currentComponentStartTime).split(':')[:3])).split('.')[0]
 
-    @Slot()
-    def updateTimeDurationStatus(self):
-        # Fetch production counts safely — a DB hiccup must never crash the status update loop
-        try:
-            _db = getDatabaseName()
-            _countToday = getComponentsProducedToday(_db)
-        except Exception:
-            _countToday = 0
-        try:
-            _db = getDatabaseName()
-            _countWeek = getComponentsProducedThisWeek(_db)
-        except Exception:
-            _countWeek = 0
-        try:
-            _db = getDatabaseName()
-            _countMonth = getComponentsProducedThisMonth(_db)
-        except Exception:
-            _countMonth = 0
+    @Slot(object)
+    def updateTimeDurationStatus(self, counts=None):
+        # The production counts (today, week, month) are read by TimeDurationUpdateWorker in its own thread and come
+        # with the signal (CHANGES 110): before, three database queries ran here, in the GUI thread, each on a new
+        # connection - a slow or hung PostgreSQL froze the screen. None (not read) keeps the counts last shown.
+        if counts is not None:
+            self.productionCounts = counts
+        _countToday, _countWeek, _countMonth = getattr(self, "productionCounts", (0, 0, 0))
         currentDatetimeText = self.dateTimeText.format(
             datetime.now().strftime('%d-%m-%Y %a'),
             self.timeStartedAsString,
@@ -1755,10 +1747,13 @@ class GetQRCodeWorker(QObject):
 # ****************************************************
 
 class TimeDurationUpdateWorker(QObject):
-    doTimeDurationUpdate = Signal()
+    # (today, this week, this month) OK components, or None if they could not be read (CHANGES 110)
+    doTimeDurationUpdate = Signal(object)
 
     def __init__(self):
         super(TimeDurationUpdateWorker, self).__init__()
+        self.dbConnection = None          # kept open, made in the worker's thread at the first read
+        self.countsUnavailableSince = None
         self.updateTimer = QTimer(self)
         self.updateTimer.timeout.connect(self.emitUpdateSignal)
         self.updateTimer.start(self._getIntervalMs())
@@ -1771,11 +1766,28 @@ class TimeDurationUpdateWorker(QObject):
             print(f"[TimeDurationUpdateWorker] Failed to get interval, defaulting to 1000ms: {e}")
             return 1000  # Fallback to 1 second
 
+    def _readCounts(self):
+        """The production counts, read here in the worker's thread on one kept-open connection; None on a database
+        error (logged once until the counts can be read again)."""
+        try:
+            if self.dbConnection is None:
+                self.dbConnection = PersistentDBConnection()
+            counts = getProductionCounts(self.dbConnection, getDatabaseName())
+            if self.countsUnavailableSince is not None:
+                printBoldGreen("Production counts read again from the database")
+                self.countsUnavailableSince = None
+            return counts
+        except Exception as e:
+            if self.countsUnavailableSince is None:
+                self.countsUnavailableSince = time.monotonic()
+                printBoldRed(f"Production counts could not be read from the database ({e}); the last counts stay shown")
+            return None
+
     @Slot()
     def emitUpdateSignal(self):
         if not AshokLeylandFrontEnd.shutdownThreads:
             # printBoldGreen("Emitting doTimeDurationUpdate()")
-            self.doTimeDurationUpdate.emit()
+            self.doTimeDurationUpdate.emit(self._readCounts())
         else:
             self.updateTimer.stop()
             # printBoldRed("Stopped TimeDurationUpdateWorker due to shutdown.")
@@ -2302,7 +2314,7 @@ class LargeImageWindow(QWidget):
 
 
 def startFrontEnd(mode : str, username : str, role : str):
-    gfe = AshokLeylandFrontEnd(mode=mode, username=username, role=role)
+    gfe = AshokLeylandFrontEnd(mode=mode, username=username, role=role)   # noqa: F841 - the name keeps the window alive
     app.exec()
     app.quit()
 

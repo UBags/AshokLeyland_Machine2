@@ -1,5 +1,4 @@
 from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QLabel
 from PySide6.QtGui import QColor, Qt
 from frontend.frontendutils.CosThetaImageUtils import createImage, getPixmapImage

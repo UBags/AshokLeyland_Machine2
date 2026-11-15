@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QSplashScreen, QProgressBar
 
 from PySide6.QtGui import QPixmap, Qt
-from frontend.widgets.CosThetaResultsContainer import app
+import frontend.widgets.CosThetaResultsContainer  # noqa: F401 - imported for its import-time effects (app, monitor dimensions); app is set below
 from frontend.CosThetaMonitorDimensions import getAppInstance
 import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
 import frontend.CosThetaMonitorDimensions  # noqa: F401 - was "from frontend.CosThetaMonitorDimensions import *"; nothing used from it, imported for its import-time effects

@@ -357,8 +357,6 @@ class CheckBunk:
 
 def test_checkBunk():
     """Test function for CheckBunk v2.0."""
-    import time
-    from pathlib import Path
 
     print("CheckBunk v2.0 Test - V0.7 PIPELINE WITH FIXED GAMMA SEQUENCE")
     print("=" * 80)

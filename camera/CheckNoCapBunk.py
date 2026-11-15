@@ -361,8 +361,6 @@ class CheckNoCapBunk:
 
 def test_checkNoCapBunk():
     """Test function for CheckNoCapBunk v2.0."""
-    import time
-    from pathlib import Path
 
     print("CheckNoCapBunk v2.0 Test - V0.7 PIPELINE WITH FIXED GAMMA SEQUENCE")
     print("=" * 80)

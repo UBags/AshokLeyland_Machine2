@@ -1413,7 +1413,6 @@ def restore_gamma_suppress_express(
 
     # For dark pixels: apply power of 1/gamma_dark to make them darker
     # gamma_dark < 1 means 1/gamma_dark > 1, so values decrease
-    epsilon = 1e-10
     result[dark_mask] = normalized[dark_mask] ** (1.0 / gamma_dark)
 
     # Step 5: Apply final restoration

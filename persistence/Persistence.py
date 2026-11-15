@@ -310,8 +310,7 @@ def checkConnection(db_name: str) -> bool:
         aCursor = aConnection.cursor()
         # aCursor.execute(enable_pgcrypto)
         aCursor.execute("SELECT version();")
-        # Fetch result
-        record = aCursor.fetchone()
+        aCursor.fetchone()
         aConnection.commit()
         aCursor.close()
         aConnection.close()
@@ -811,7 +810,6 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
     # True == executed; 1 == at least one record found
     if nUsers > 0:
         return False, 1
-    done = False
     aConnection = None
     insertStatement = ''
     try:
@@ -843,7 +841,6 @@ def insertNewUser(db_name: str, username: str, password: str, first_name: str, m
         aConnection.commit()
         aCursor.close()
         aConnection.close()
-        done = True
     except psycopg2.OperationalError as error:
         printBoldRed(f"Connection error while inserting role {role_name}: {error}")
         if aConnection is not None:
@@ -2095,6 +2092,77 @@ def getDataOfTodayByModelNumber(modelName: str, db_name: str, debug: bool = Fals
                                            debug=debug)
 
 
+# ************************************ PERSISTENT CONNECTION (CHANGES 110) *******************************
+
+class PersistentDBConnection:
+    """One connection kept open for a caller that queries often (the DB server's heartbeat every 0.5 s, the frontend's
+    production counts every few seconds), instead of a new connection per query. A query that fails (PostgreSQL
+    restarted, the connection broken) closes the connection, opens a new one and tries once more; only if that fails
+    too is the error raised. Each statement is limited to STATEMENT_TIMEOUT_MS, so a hung server cannot block the
+    caller for ever. Not shared between threads: each thread keeps its own instance."""
+
+    STATEMENT_TIMEOUT_MS: int = 5000
+
+    def __init__(self):
+        self._connection = None
+        self._dbName: Optional[str] = None
+
+    def _open(self, db_name: str):
+        self.close()
+        self._connection = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", port="5432",
+                                            database=db_name,
+                                            options=f"-c statement_timeout={PersistentDBConnection.STATEMENT_TIMEOUT_MS}",
+                                            keepalives=1, keepalives_idle=10, keepalives_interval=5, keepalives_count=2)
+        self._connection.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        self._dbName = db_name
+
+    def close(self) -> None:
+        if self._connection is not None:
+            try:
+                self._connection.close()
+            except Exception:
+                noteSuppressed()
+        self._connection = None
+        self._dbName = None
+
+    def fetchone(self, db_name: str, query, params=None):
+        """Runs query and returns its first row (reconnecting once if the connection is broken)."""
+        for attempt in (1, 2):
+            try:
+                if self._connection is None or self._connection.closed or self._dbName != db_name:
+                    self._open(db_name)
+                with self._connection.cursor() as cursor:
+                    cursor.execute(query, params)
+                    return cursor.fetchone()
+            except Exception:
+                self.close()
+                if attempt == 2:
+                    raise
+
+    def check(self, db_name: str) -> bool:
+        """True if the database answers (SELECT 1)."""
+        try:
+            return self.fetchone(db_name, "SELECT 1;") is not None
+        except Exception as error:
+            printBoldRed(f"Database {db_name} not reachable: {error}")
+            return False
+
+
+def getProductionCounts(connection: PersistentDBConnection, db_name: str) -> tuple:
+    """(today, this week, this month) counts of OK components in one query on a kept-open connection; the same counts
+    as getComponentsProducedToday / ThisWeek / ThisMonth. Raises on a database error (the caller keeps its last counts)."""
+    query = sql.SQL(
+        "SELECT COUNT(*) FILTER (WHERE created_on::date = CURRENT_DATE), "
+        "COUNT(*) FILTER (WHERE created_on >= date_trunc('week', CURRENT_DATE)), "
+        "COUNT(*) FILTER (WHERE created_on >= date_trunc('month', CURRENT_DATE)) "
+        "FROM {schema}.hub_and_disc_assembly_data "
+        "WHERE ok_notok_result = 'OK' "
+        "AND created_on >= LEAST(date_trunc('week', CURRENT_DATE), date_trunc('month', CURRENT_DATE));"
+    ).format(schema=sql.Identifier(schema_name))
+    row = connection.fetchone(db_name, query)
+    return tuple(int(v or 0) for v in row) if row else (0, 0, 0)
+
+
 # ************************************ PRODUCTION COUNT QUERIES ****************************************
 
 def getComponentsProducedToday(db_name: str, debug: bool = False) -> int:
@@ -2545,7 +2613,7 @@ def reindexHubAndDiscAssemblyData(db_name: str, verbose: bool = True) -> bool:
         schema = getSchemaName()
 
         # List of indexes to rebuild (add more if you create additional indexes)
-        indexes = [
+        indexes = [         # noqa: F841 - for the per-index loop below (commented out)
             f"{schema}_hub_and_disc_assembly_data_qr_code_idx",
             f"{schema}_hub_and_disc_assembly_data_model_name_idx",
             f"{schema}_hub_and_disc_assembly_data_created_on_idx",

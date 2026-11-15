@@ -13,7 +13,7 @@ from redis import Redis
 from logutils.SlaveLoggers import SlaveConsoleLogger, SlaveFileLogger
 from logutils.Logger import Logger
 from utils.CosThetaFileUtils import createDirectory
-from utils.CosThetaPrintUtils import printBoldRed, getCurrentTime, printInColor, printBoldBlue
+from utils.CosThetaPrintUtils import printBoldRed, printInColor, printBoldBlue
 
 warnings.filterwarnings('ignore')
 

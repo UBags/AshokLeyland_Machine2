@@ -42,7 +42,8 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | Frontend (PySide6) | `frontend/AshokLeylandFrontEnd.py` |
 | Heartbeat and alarm server | `monitorAllConnections/HeartbeatAndAlarmServer.py` |
 
-- **Redis is only for communication between processes** (streams with one producer and one consumer; a few keys).
+- **Redis is only for communication between processes** (streams with one producer and one consumer - except
+  `alarm.q`, written by the camera and QR code servers; a few keys).
   Data used inside one process stays in memory variables. Queue and key list: HLD §4.
 - Send / read functions per queue are in `utils/RedisUtils.py` (`send<What>From<A>To<B>`, `read<What>In<B>From<A>`).
 - The camera server keeps the cycle's vision state in `ImageProcessor` (QR code, earlier pictures, top bearing ring,
@@ -115,6 +116,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 5 Real QR codes | Not reported yet |
 | 6 Knuckle check by segmentation and the frame | Not reported yet |
 | 7 State sync logs (after a few weeks of production) | Pending - Plan A went in on 2026-11-15 |
+| 8 Picture clean-up lines, invalid QR notice + siren, MainProgram lines in the log, DB retry (CHANGES 110) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

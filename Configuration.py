@@ -689,6 +689,19 @@ class CosThetaConfigurator():
     IMAGES_OK_FOLDER_KEY = 'images.ok.folder'
     IMAGES_NOTOK_FOLDER_KEY = 'images.notok.folder'
 
+    # Picture clean-up at start-up (utils/PictureRetention.py): pictures older than this many days are deleted;
+    # 0 or less turns the clean-up off
+    PICTURE_RETENTION_DAYS_TRIAL_KEY = 'picture.retention.days.trial'
+    PICTURE_RETENTION_DAYS_MAIN_KEY = 'picture.retention.days.main'
+
+    @classmethod
+    def getPictureRetentionDaysTrial(cls) -> float:
+        return cls._getFloat(cls.PICTURE_RETENTION_DAYS_TRIAL_KEY, 30.0)
+
+    @classmethod
+    def getPictureRetentionDaysMain(cls) -> float:
+        return cls._getFloat(cls.PICTURE_RETENTION_DAYS_MAIN_KEY, 60.0)
+
     @classmethod
     def getBaseFolderForImages(cls) -> str:
         return CosThetaConfigurator.getValue(CosThetaConfigurator.BASE_FOLDER_FOR_IMAGES_KEY, default="")

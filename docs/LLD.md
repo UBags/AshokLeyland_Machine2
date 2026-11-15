@@ -14,13 +14,22 @@ At import, MainProgram connects to Redis (3 attempts, 10 s apart, then exit). It
 every server process re-imports MainProgram (spawn). `main()` then runs these steps in order:
 
 1. `setLogProcess("mainprogram")`; `clearQueues` (flushes the Redis db, trims the queues), then `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
-2. Start P1 (the logging server).
+2. Start P1 (the logging server), then the picture clean-up in a background thread (`utils/PictureRetention.py`,
+   CHANGES §110): picture files older than `picture.retention.days.trial` (30) under `picture.saving.dir.for.mode.trial`
+   and older than `picture.retention.days.main` (60) under `basefolder.for.images` `Test/` and `Production/` are
+   deleted, with every sub-folder; other files (FailedRecords JSON) are left; an empty folder is removed only if it
+   was already older than the limit (today's folder, made at the same time, stays). One "Picture clean-up:" line per
+   folder (count, MB, time). 0 turns a clean-up off.
 3. Start-up screen; `doBackup()` (pg_dump of the production database); ping the camera and PLC addresses (a warning only).
    After the login: "Running application in <mode> mode", then, when `save.all.pictures.because.its.in.trial.mode=True`, "Images will ALSO be saved in <picture.saving.dir.for.mode.trial>" for 2 s (`showTrialPictureSavingNotice`).
 4. `chooseMode()` (Test / Production); `setDatabaseName` for both databases (creates the database, schema, tables, indexes, default machine settings and users), then for the chosen one.
 5. Login: up to 5 tries.
 6. Start P2 camera, P3 QR, P4 IO, P6 FE, P7 HB and P5 DB, in that order. Every process first calls `setLogProcess(<name>)`, which sets the per-process log levels, crash capture and live configuration.
 7. Start `ProcessSupervisor` (`utils/ProcessSupervisor.py`), which restarts a dead process through `startProcess(target, args)`; the camera server is started with `stateFile=None` and restarted with the state file (`supervisor.add(..., restartArgs=...)`).
+MainProgram's red / green / blue / yellow printers are `utils/CosThetaPrintUtils`'s (since CHANGES §110; red and
+green were `CosThetaFileUtils`'s console-only printers before), so its lines also go to the log file once
+`setLogProcess` has run.
+
 8. `monitorStop` waits for `stopcommandQ`, then sends the stop and collects each `stoppedresponseQ`, ends the processes and backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
 
 **ProcessSupervisor.** Every `supervisor.check.interval.sec` (2 s), `checkOnce()` restarts each registered process that has died. This is enabled by `supervisor.restart.dead.processes`. Restarts are limited to `supervisor.max.restarts.per.hour` (10) for each process; above that the process is left down and logged. Supervision stops once `isStopping()` is true.
@@ -142,7 +151,9 @@ the camera server at start.
 
 **`resetForNextCycle(reason, keepPendingResets)`**
 
-The one reset routine: IOServer start, every abort, and the end of a cycle. Writes every per-cycle tag (`perCycleTags()`: bool False, float 0.0) and reads it back (`RESET_WRITE_ATTEMPTS` 5), then arms `PLC_PC_CheckQRCode`. The state-2 settings, the watch tag and the connection toggle are left alone. A reset that cannot be verified is redone after the next reconnect, only while the machine is at the QR code. After a completed cycle (`keepPendingResets=True`) the pending resets (for example the free-rotation Set) are left to run at their time.
+The one reset routine: IOServer start, every abort, and the end of a cycle. The end-of-cycle reset (in
+`process_current_read_state`) holds `_abortLock`, as the abort's does, and is skipped when an abort happened while that
+read was being processed (`abortCount` changed: the abort has reset and armed CheckQRCode already; CHANGES §110). Writes every per-cycle tag (`perCycleTags()`: bool False, float 0.0) and reads it back (`RESET_WRITE_ATTEMPTS` 5), then arms `PLC_PC_CheckQRCode`. The state-2 settings, the watch tag and the connection toggle are left alone. A reset that cannot be verified is redone after the next reconnect, only while the machine is at the QR code. After a completed cycle (`keepPendingResets=True`) the pending resets (for example the free-rotation Set) are left to run at their time.
 
 **`_applyServerStatuses()`**
 
@@ -151,6 +162,12 @@ Applies the rules of spec §5.7 to the camera, qrcode, db, frontend, heartbeat a
 - It keeps `_dbDown`, `_redisDown`, and so on.
 - `newCycleHoldReason()` returns the first reason that holds the next cycle.
 - On a change, it logs and audits, and sets `feNotice:*` through `_notice`.
+
+**State changes and their listener** (`statemachine/StateMachine.py`, CHANGES §110): every state change is queued under
+the state lock and the listener (`_onStateChange`: state publish for the frontend, audit line, END_OF_CYCLE to the
+camera server) is called after the outermost state-changing call of the thread has released the lock, in the order of
+the changes, by one thread at a time. Before, the listener ran under the lock, and its Redis calls (1 s timeouts) held
+up every other thread that changed the state.
 
 **Audit**
 
@@ -164,7 +181,7 @@ Applies the rules of spec §5.7 to the camera, qrcode, db, frontend, heartbeat a
 MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶ ImageProcessor
 ```
 
-1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`. An END_OF_CYCLE message calls `ImageProcessor.endOfCycle()`.
+1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`. An END_OF_CYCLE message is passed down the same queues as an item (`endOfCycleCommand`); `ConverterScalerAndProcessor` calls `ImageProcessor.endOfCycle()` when it reaches it, so after any check queued or running (CHANGES §110; before, `MonitorGetPicQueue` dropped the state at once and a check still running wrote the old cycle's state back).
 2. `TakePictures` takes three pictures with `RTSPCam.getFrameAfter`: each a frame that arrived after the request and after the previous picture, waiting at most `camera.frame.max.wait.sec` (1 s). None in time (stalled stream) or camera not connected: the answer carries `noPictureReason` (CHANGES §84).
 3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`<vendor>.vision.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check in the worker process (`VisionCheckWorker`; the only mode since 2026-11-15, CHANGES §105), within `<vendor>.vision.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
 4. The answer goes to `camera2io.q` with the request id and to `camera2fe.q` with both images and the reason.
@@ -215,7 +232,13 @@ the model's seated position and the top-face mask's roundness ≥ 0.952 (DOST) /
 
 - A child process that loads the models once (`ModelManager`, MobileSAM, segmenters) and runs one check per request.
 - If a check does not finish in 12 s, the parent kills the child and starts a new one. The check counts as NOT OK. From the 3rd timeout in a row the reason says the checks are too slow on this PC (check the GPU); a check in time resets the count.
+- A worker that dies before it reports ready is started again after a pause of 1, 2, 4 ... at most 60 s
+  (`RESTART_BACKOFF_*`, on a timer thread; `failedStarts`, reset when a worker gets ready); checks meanwhile are NOT
+  OK at once ("vision check worker starting"). A restart after a worker that had been ready stays immediate
+  (CHANGES §110; before, a worker failing at start was respawned in a tight loop - 178 starts in 8 s measured).
 - The worker warms up at start.
+
+**RTSPCam** timings (watchdog, process check, reconnect loop) use `time.monotonic()` (CHANGES §110).
 
 **Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
 
@@ -230,6 +253,9 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 ```
 
 - `evaluateQRCode` checks the format and the side.
+- An invalid scan (CHANGES §110): `feNotice:qrcode` = "QR Code not valid" (10 s) for the frontend and the alarm signal
+  on `alarm.q` (as a vision NOT OK: the heartbeat server sounds the siren); the read goes on, and the next valid scan
+  clears the notice.
 - `QRCodeDispatcher` sends to `qrcode2io.q`, `qrcode2fe.q` and `qrcode2camera.q`.
 - The `lookForAbort` thread listens on `io2qrcodeabort.q` and calls `abortQRCodeRead`.
 - The scanner keeps only the newest message. This is intended.
@@ -249,7 +275,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `FrontendNoticeWorker` | `feNotice:*` plus local notices | Notices at the top right |
 | `StateSyncWorker` | `io:state` at start, then `io2festate.q` (every 250 ms) | Nothing: compares the frontend's state with the IOServer's (`utils/StateSync.StateSyncMonitor`) and logs `STATE-SYNC MISMATCH / RESOLVED / GAP / IOSERVER-RESTART / CYCLE` lines (state sync phase A, `docs/state_sync.md`) |
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
-| `TimeDurationUpdateWorker` | — | Cycle timer |
+| `TimeDurationUpdateWorker` | PostgreSQL, one kept-open connection (`PersistentDBConnection`), in its own thread | Cycle timer and the production counts (today / week / month OK, one query, `getProductionCounts`), sent with the signal; a database error keeps the counts shown (CHANGES §110; before, three queries ran in the GUI thread, each on a new connection) |
 
 At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. The frontend abort (Ctrl+Alt+Z, password `frontend.abort.password`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8. Passwords, read from the properties file at each use: `frontend.abort.password` (Ctrl+Alt+Z), `machine.settings.password` (Save in Machine Settings) and, in addition when the bypass switch changes, `machine.settings.bypass.password` (all `admin123` at delivery).
 
@@ -278,15 +304,22 @@ At the end of the cycle (state 28), the FE builds the record, adding `cycleSetti
 
 **`DataPersistence.doWork`**
 
-1. Reads `fe2db.q`.
-2. Saves the images in the day folder (`save*Image`).
-3. Inserts one row.
-4. On failure, `handleFailedInsert` keeps the message and logs it.
+1. Reads `fe2db.q` (without deleting).
+2. Saves the images in the day folder (`save*Image`), once per record (`savedPictureFiles`): a retry reuses the files.
+3. Inserts one row; on success the message is deleted.
+4. On failure (insert, or the pictures could not be saved), `handleFailedInsert` keeps the message and waits
+   `INSERT_RETRY_GAP_SECS` (5 s) before the next attempt; after `MAX_INSERT_ATTEMPTS` (3) the record goes to
+   `<basefolder><Test|Production>/FailedRecords/<time>_<QR>.json` with `_pictureFiles` (column -> picture file) and is
+   removed from the queue. If that file cannot be written either, the record stays and is tried again after the gap.
+   (CHANGES §110: before, the attempts ran back to back, the pictures were saved again at each, and the JSON had no
+   picture paths.)
 
 **Other threads**
 
 - `watchForNewDay` (every 1 min): when the date has changed, creates the new day's image folders; images saved from then on go there.
 - `sendHeartbeat` sends `db2hb.q`: DEAD while PostgreSQL is not reachable or `doWork` is not running or stuck (60 s).
+  PostgreSQL is checked with `SELECT 1` on one kept-open connection (`PersistentDBConnection`: reconnects once when
+  the connection broke; each statement limited to 5 s; CHANGES §110 - before, a new connection every 0.5 s).
 
 Every PostgreSQL connection gives up after 5 s if the server does not answer (`PGCONNECT_TIMEOUT`, set in `Persistence.py`).
 
@@ -375,6 +408,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `frontend.abort.password` / `machine.settings.password` / `machine.settings.bypass.password` | admin123 / admin123 / admin123 | 5 |
 | `camera.state.file.max.age.sec` | 3600 | 3 |
 | `save.all.pictures.because.its.in.trial.mode` / `picture.saving.dir.for.mode.trial` | True / C:/Temp/TrialImages/ | 1, 3 |
+| `picture.retention.days.trial` / `picture.retention.days.main` | 30 / 60 (0 = no clean-up) | 1 |
 | `<vendor>.vision.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
 | `<vendor>.vision.frame.*` (reference spindle, type spindles, nominal pins per type and side, 18 centres per type), `<vendor>.vision.knuckle.locator.*` (spindle, bosses, lower arm, type rule) | Machine 2 values, measured 13 Nov 2026 (allenbradley: the same, not measured for Machine 1) | 3 |
 | `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
@@ -389,10 +423,13 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 |---|---|
 | `DryRun_IOServer_Fault_Scenarios.py` | Handshakes, retakes, aborts, PLC loss, server-down rules (J1–J8, including redis), abort during a handshake write and the toggle during an abort (K1–K2), IOServer heartbeat DEAD while a loop is stuck (L), both vendors |
 | `DryRun_Work_Thread_Health.py` | Heartbeats follow the work threads: `WorkerWatch`, the GenericQueueProcessor tick, camera / QR / DB heartbeats (frontend: FE dry run F11) |
-| `DryRun_QRCode_Validation.py` | Every QR code in the tests (real format) accepted, side and model read; wrong codes refused |
+| `DryRun_QRCode_Validation.py` | Every QR code in the tests (real format) accepted, side and model read; wrong codes refused; an invalid scan gives the "QR Code not valid" notice and the alarm, the next valid scan clears it (V4) |
+| `DryRun_Picture_Retention.py` | The picture clean-up at start: old pictures deleted in every sub-folder, young ones and other files kept, empty old folders removed, today's kept; the folders and limits from the properties (P1-P6) |
+| `DryRun_Camera_End_Of_Cycle_Order.py` | END_OF_CYCLE passed down the camera server's queues and handled after the check in progress (E1-E4) |
+| `DryRun_Vision_Worker_Backoff.py` | A worker failing at start restarted with a growing pause, checks NOT OK at once meanwhile, the pause reset by a worker that gets ready (B1-B3) |
 | `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |
-| Frontend / DB / index and day-folder | FE workers; inserts; indexes; day folder |
+| Frontend / DB / index and day-folder | FE workers (F7b: production counts read off the GUI thread, a 3 s database read does not stall it, the last counts kept when the database is down); inserts; record loss (b: 3 attempts 5 s apart, pictures saved once, the picture files in the FailedRecords JSON; d: one failure then success; e: the heartbeat's one kept-open connection, replaced when broken); indexes; day folder |
 | `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R6 (R6: the check survives a recovery); database backup at shutdown (H10) |
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
 | `DryRun_Knuckle_Frame.py` | Knuckle by segmentation on every knuckle picture with each QR code; the frame on the pictures as taken and with simulated camera moves; the centres written into the checks, restored, dropped at cycle end and retake (MobileSAM weights) |

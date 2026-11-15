@@ -39,7 +39,7 @@ The PLC decides machine motion and torque OK or NOT OK. The PC decides vision OK
 
 ## 3. Process architecture
 
-`MainProgram.py` checks the environment, clears the Redis queues, checks that Redis stores data (§6), backs up the production database, asks for the mode and the login, and then starts seven processes. The ProcessSupervisor restarts any that die, up to `supervisor.max.restarts.per.hour`.
+`MainProgram.py` checks the environment, clears the Redis queues, checks that Redis stores data (§6), starts the logging server and the picture clean-up (pictures older than 30 days in the trial folder and 60 days in the Test / Production folders deleted, in a background thread), backs up the production database, asks for the mode and the login, and then starts seven processes. The ProcessSupervisor restarts any that die, up to `supervisor.max.restarts.per.hour`.
 
 | # | Process | Module | Responsibility |
 |---|---|---|---|
@@ -57,7 +57,7 @@ All processes are Python `multiprocessing.Process` children of MainProgram. They
 
 ### 4.1 Redis streams (queues)
 
-Each queue has one producer and one consumer.
+Each queue has one producer and one consumer, except `alarm.q` (camera server and QR code server; every message there means "sound the siren", so keeping only the newest loses nothing).
 
 | Queue | From → to | Carries |
 |---|---|---|
@@ -72,7 +72,7 @@ Each queue has one producer and one consumer.
 | `*2hb.q` | Each server → heartbeat server | Heartbeats (ALIVE / DEAD) |
 | `hb2fe.q`, `hb2io.q` | Heartbeat server → FE / IO | Per-server status, including redis |
 | `emergency.q` | IO → FE | Emergency abort (also sent by a restarted IOServer) |
-| `alarm.q` | Camera → heartbeat server | Bad component: the siren / bad-component sound |
+| `alarm.q` | Camera, QR → heartbeat server | Bad component (camera) or invalid QR code scanned (QR code server): the siren / bad-component sound. Only the newest message is kept (every message means the same) |
 | `stopcommandQ`, `stoppedresponseQ` | MainProgram ↔ all | Orderly stop |
 | `publishTags`, `receiveTags` | Test windows ↔ IO | Dump of every PLC tag's value (diagnostics) |
 
@@ -84,7 +84,7 @@ Each queue has one producer and one consumer.
 | `log:cycleContext` | IO → loggers | Cycle context in log lines (6 h expiry) |
 | `camera:activeRequest` | IO → camera, FE | The one picture request that is current |
 | `io:state` | IO → FE | The IOServer's latest state snapshot (state sync; read by a frontend that starts mid-cycle) |
-| `feNotice:<name>` | IO → FE | Top-right notices such as "Continue till end of cycle" |
+| `feNotice:<name>` | IO, camera, QR → FE | Top-right notices such as "Continue till end of cycle"; "QR Code not valid" (QR code server, `feNotice:qrcode`) |
 | `ioserver:started` | IO | Lets a restarted IOServer know it is a restart |
 | `redis.healthcheck.q` | Heartbeat server, MainProgram | Write and read-back check. Not used by anything else |
 
@@ -148,6 +148,8 @@ No values or words are written on the pictures sent to the frontend (outlines on
 | Camera stream stalled | No frame newer than the picture request within `camera.frame.max.wait.sec` (1 s) | NOT OK, "camera stream stalled"; the check is not run on the old frame |
 | QR server down | Heartbeat | Nothing is done to the PLC |
 | DB server down | Heartbeat | Finish the cycle; hold the next one, with a notice |
+| Insert fails (PostgreSQL brief outage) | DB server | Retried 5 s apart, pictures saved once; after 3 attempts the record goes to `FailedRecords/` JSON with its picture files |
+| Invalid QR code scanned | QR code server | "QR Code not valid" on the screen and the alarm sound; the scan goes on |
 | Frontend or heartbeat server down | Heartbeat / combined heartbeat | Abort and hold |
 | A process dies | ProcessSupervisor | Restart it (rate limited). A restarted IOServer aborts the frontend and camera |
 | A work thread dies or is stuck (camera assessment, DB inserts, IOServer loops, frontend GUI, QR reader) | That server's heartbeat: DEAD after `heartbeat.work.loop.max.silence.sec` (60 s) | As for that server down |
@@ -155,7 +157,7 @@ No values or words are written on the pictures sent to the frontend (outlines on
 | Settings write fails | Read-back | The earlier settings stay in force; the side (and the skip tag, where the PLC has it) is still required |
 | Camera moved | Knuckle check: camera movement from the pins beyond `vision.knuckle.frame.max.*` | Knuckle NOT OK, "set the camera again" |
 | Camera server restarted during a cycle | ProcessSupervisor | The new camera server takes the cycle's state (QR code, earlier pictures, top bearing ring, knuckle frame) from `<project root>/Temp/camera_server_state.pkl`, written after every check; a file older than `camera.state.file.max.age.sec` is not used |
-| Vision check worker not ready / stopped | `VisionCheckWorker` | NOT OK ("vision check worker starting") until the new worker is ready |
+| Vision check worker not ready / stopped | `VisionCheckWorker` | NOT OK ("vision check worker starting") until the new worker is ready; a worker that fails while starting is started again after a growing pause (1 s ... 60 s) |
 | Bearing-ring guard cannot decide (ring finder fails, or no answer 5 s after the check) | Camera server | Nut / washer NOT OK with the reason |
 
 **Limitation of the Redis check.** When Redis stops storing, the status messages that carry "redis down" cannot be delivered either. What the check really gives is:

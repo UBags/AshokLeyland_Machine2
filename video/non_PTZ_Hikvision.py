@@ -85,7 +85,6 @@ def getIP_Path_Params_Query_Fragments(url):
     # print(parsed)
     params = parse_qs(parsed.query)
     # print(params)
-    path_components = list(filter(bool, parsed.path.split('/')))
     IP = parsed.scheme + '://' + parsed.netloc
     Path = parsed.path
     Query = parsed.query
@@ -739,9 +738,7 @@ def media_profile_configuration():
     consecutive_SUBS_Trigger_For_SUBS1_Renew = 1500
     consecutive_SUBS_Multiple_For_SUBS2_Renew = 600
     consecutive_SUBS2_Trigger = 1000
-    voluntarySwitchTrigger = 30
     voluntarySwitch = False
-    voluntarySwitchReps = 3
     previousStream = "SUB1"
     for actualCount in range(counter):
         start_time = time.time()

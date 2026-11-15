@@ -6,7 +6,6 @@ from PIL import Image
 from PIL.ImageQt import ImageQt
 from PySide6.QtCore import QSize, QRectF, QRect, QDir
 from PySide6.QtGui import QFontMetrics, QPainterPath, QColor, QPixmap, QImage, QPainter, QBrush, Qt, QPen, QFont
-import cv2
 import numpy as np
 from numpy import ndarray
 import qimage2ndarray
@@ -294,7 +293,6 @@ def createImageAlternateViaCV2(
         line_widths.append(w)
         line_heights.append(h)
     total_text_height = sum(line_heights) + (n_lines - 1) * 10
-    max_line_width = max(line_widths)
 
     # Starting positions with margins
     start_y = margin + (inner_height - total_text_height) // 2

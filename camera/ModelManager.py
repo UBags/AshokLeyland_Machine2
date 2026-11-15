@@ -327,13 +327,11 @@ class ModelManager:
                 model_layers = yolo_model.model.model
 
                 head = None
-                head_index = None
                 for i, layer in enumerate(model_layers):
                     if hasattr(layer, '__class__'):
                         class_name = layer.__class__.__name__
                         if 'Segment' in class_name or 'Detect' in class_name:
                             head = layer
-                            head_index = i
                             break
 
                 if head and 'Segment' in head.__class__.__name__ and not hasattr(head, 'proto'):

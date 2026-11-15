@@ -7,8 +7,7 @@ from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet
     outcomeLabelStylesheet
 from PySide6.QtCore import QSize
 from numpy import ndarray
-from frontend.frontendutils.CosThetaLabelUtils import (
-    createResultLabel, noResultLabelStylesheet, notokLabelStylesheet, okLabelStylesheet)
+from frontend.frontendutils.CosThetaLabelUtils import createResultLabel
 from Configuration import CosThetaConfigurator
 from frontend.frontendutils.CosThetaImageUtils import (
     createBlueImage, createGreenImage, createImage, createRedImage, getPixmapImage)
@@ -133,14 +132,14 @@ class CosTheta_TwoOutcomesContainer(QWidget):
         return getPixmapImage(result_image)
 
     @multimethod
-    def getImage(self, result : float):
+    def getImage(self, result : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         # CosTheta_TwoOutcomesContainer.logger.debug(f"Creating blue startingImage with value {result}")
         result = str(result)
         result_image = createBlueImage(result, imageDimensions=(self.width, self.labelHeight))
         return getPixmapImage(result_image)
 
     @multimethod
-    def getImage(self, result : str, width : float, height : float):
+    def getImage(self, result : str, width : float, height : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         if result.upper() == 'OK':
             # CosTheta_TwoOutcomesContainer.logger.debug(f"Creating OK result startingImage")
             result_image = createGreenImage(result, imageDimensions=(width, height))
@@ -153,7 +152,7 @@ class CosTheta_TwoOutcomesContainer(QWidget):
         return getPixmapImage(result_image)
 
     @multimethod
-    def getImage(self, result : int, width : float, height : float):
+    def getImage(self, result : int, width : float, height : float):  # noqa: F811 - a multimethod overload (dispatched by argument types), not a duplicate
         # CosTheta_TwoOutcomesContainer.logger.debug(f"Creating blue startingImage with {result}")
         result = str(result)
         result_image = createBlueImage(result, imageDimensions=(width, height))

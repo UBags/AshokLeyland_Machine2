@@ -1,5 +1,4 @@
 from PySide6.QtWidgets import QVBoxLayout
-from PySide6.QtCore import Qt
 # from PySide6.QtCore.Qt import *
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import QWidget, QLabel, QFrame

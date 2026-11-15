@@ -214,6 +214,7 @@ def getCVImageFromNdarray(ndarr):
 
 def showNDArray(array, title='img', wait : bool = False):
     image = getCVImageFromNdarray(array)
+    cv2.imshow(title, image)          # was missing: the helper showed nothing (CHANGES 110)
     if wait:
         cv2.waitKey(0)
 

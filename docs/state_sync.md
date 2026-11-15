@@ -26,7 +26,10 @@ copy what the IOServer tells it (one more process, one more Redis hop, one more 
 ## 2. Plan A (built): publish, compare, log
 
 **IOServer.** Every state change (`MachineStateMachine` calls `PLCIOServer._onStateChange`) is published first, by
-`_publishState`:
+`_publishState`. Since CHANGES 110 the state machine calls `_onStateChange` after it has released its lock, in the
+order of the changes and from one thread at a time (a change made while another thread is delivering is delivered by
+that thread), so a slow Redis no longer holds up the other IOServer threads; the published order and `seq` are as
+before:
 
 - on the stream `io2festate.q` (one producer, one consumer; capped at about 500 entries) and in the key `io:state`
   (the latest snapshot, 24 h expiry), as JSON:

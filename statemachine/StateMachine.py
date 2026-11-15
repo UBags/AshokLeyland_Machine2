@@ -1,4 +1,6 @@
 import threading
+from collections import deque
+from contextlib import contextmanager
 from utils.SuppressedExceptions import noteSuppressed   # logs exceptions that are caught and ignored
 from enum import IntEnum
 from typing import Dict, Union
@@ -97,6 +99,13 @@ class MachineStateMachine:
         self._lock = threading.RLock()        # state changes from several IOServer threads (loops, abort)
         self._currentState: MachineState = MachineState.READ_QR_CODE
         self.stateChangeListener = None      # listener(oldState, newState), e.g. the IOServer's audit trail
+        # The listener is called after the state lock is released (CHANGES 110): before, it ran under the lock, and
+        # the IOServer's listener (state publish, end of cycle to the camera: Redis calls with 1 s timeouts) held up
+        # every other thread changing the state. Changes are queued in order under the lock and delivered by one
+        # thread at a time, in that order.
+        self._pendingChanges: deque = deque()
+        self._deliveryLock = threading.Lock()
+        self._depth = threading.local()      # this thread's nesting of state-changing calls
         # Instruction text comes from properties key state.<N>.instruction, N = the state's integer value
         self._instructions: Dict[MachineState, str] = {
             aState: CosThetaConfigurator.getInstance().getInstructionForState(stateNumber=aState.value)
@@ -110,13 +119,49 @@ class MachineStateMachine:
 
     @currentState.setter
     def currentState(self, newState: MachineState) -> None:
-        old, self._currentState = getattr(self, "_currentState", None), newState
-        listener = getattr(self, "stateChangeListener", None)
-        if listener is not None and old != newState:
+        with self._changing():
+            old, self._currentState = getattr(self, "_currentState", None), newState
+            if old != newState:
+                self._pendingChanges.append((old, newState))
+
+    @contextmanager
+    def _changing(self):
+        """The state lock for a state-changing call; when the outermost one of this thread ends, the queued changes are
+        delivered to the listener outside the lock."""
+        self._lock.acquire()
+        self._depth.value = getattr(self._depth, "value", 0) + 1
+        try:
+            yield
+        finally:
+            self._depth.value -= 1
+            outermost = self._depth.value == 0
+            self._lock.release()
+            if outermost:
+                self._deliverChanges()
+
+    def _deliverChanges(self) -> None:
+        """Calls the listener for each queued change, in order, outside the state lock. One thread delivers at a time;
+        a thread that finds another delivering returns at once (that thread delivers its change too)."""
+        while True:
+            if not self._deliveryLock.acquire(blocking=False):
+                return
             try:
-                listener(old, newState)
-            except Exception:
-                noteSuppressed()
+                while True:
+                    with self._lock:
+                        if not self._pendingChanges:
+                            break
+                        old, new = self._pendingChanges.popleft()
+                    listener = getattr(self, "stateChangeListener", None)
+                    if listener is not None:
+                        try:
+                            listener(old, new)
+                        except Exception:
+                            noteSuppressed()
+            finally:
+                self._deliveryLock.release()
+            with self._lock:
+                if not self._pendingChanges:
+                    return
 
     def _refreshInstructions(self, changedKeys=None) -> None:
         """Instruction texts are re-read when the properties file changes (state.<N>.instruction)."""
@@ -133,7 +178,7 @@ class MachineStateMachine:
         #     self.currentState = MachineState(self.currentState + 2)
         # else:
         #     self.currentState = MachineState(self.currentState + 1)
-        with self._lock:
+        with self._changing():
             newState = self.currentState + stateJumps
             if newState > MachineState.READ_FREE_ROTATION_TORQUE_1:
                 self.currentState = MachineState.READ_QR_CODE
@@ -146,7 +191,7 @@ class MachineStateMachine:
         #     self.currentState = MachineState(self.currentState + 2)
         # else:
         #     self.currentState = MachineState(self.currentState + 1)
-        with self._lock:
+        with self._changing():
             newState = self.currentState - stateJumps
             if newState < MachineState.READ_QR_CODE:
                 self.currentState = MachineState.READ_QR_CODE
@@ -156,7 +201,7 @@ class MachineStateMachine:
     def incrementStateFrom(self, expectedState: MachineState, stateJumps: int = 1) -> bool:
         """Increment only if the state is still expectedState (atomically). False if another thread (an abort) has
         changed the state meanwhile: a step finishing after an abort must not move the reset cycle on."""
-        with self._lock:
+        with self._changing():
             if self._currentState != expectedState:
                 return False
             self.incrementState(stateJumps)
@@ -164,7 +209,7 @@ class MachineStateMachine:
 
     def decrementStateFrom(self, expectedState: MachineState, stateJumps: int = 1) -> bool:
         """Decrement only if the state is still expectedState (atomically); see incrementStateFrom."""
-        with self._lock:
+        with self._changing():
             if self._currentState != expectedState:
                 return False
             self.decrementState(stateJumps)
@@ -176,7 +221,7 @@ class MachineStateMachine:
 
     def setCurrentState(self, newState: Union[int, MachineState]) -> None:
         """Set the current state, ensuring it's valid."""
-        with self._lock:
+        with self._changing():
             if isinstance(newState, MachineState):
                 if not (MachineState.READ_QR_CODE <= newState <= MachineState.READ_FREE_ROTATION_TORQUE_1):
                     newState = MachineState.READ_QR_CODE

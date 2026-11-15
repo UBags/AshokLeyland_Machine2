@@ -2,7 +2,6 @@ from random import random
 
 from numba import njit, prange
 import numpy as np
-from random import random
 
 @njit(parallel=True)
 def parallel_sum(arr):

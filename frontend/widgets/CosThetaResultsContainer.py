@@ -7,7 +7,7 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPixmap, Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from numpy import ndarray
-from frontend.widgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer, app, monitorHeight, monitorWidth
+from frontend.widgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer
 from Configuration import CosThetaConfigurator
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
 from frontend.frontendutils.CosThetaImageUtils import createImage

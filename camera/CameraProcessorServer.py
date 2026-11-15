@@ -72,6 +72,17 @@ cameraWorkers = WorkerWatch("Camera server")
 # *******************************Start of the main Threaded Classes*********************************
 
 # *******************************MonitorGetPicQueue start*******************************************
+# The IOServer's end of cycle, passed down the same queues as the picture requests (MonitorGetPicQueue -> TakePictures ->
+# ConverterScalerAndProcessor), so the cycle state is dropped on the thread that runs the checks, after any check
+# queued or running (CHANGES 110: before, MonitorGetPicQueue dropped it at once, and a check still running then wrote
+# the old cycle's state back).
+endOfCycleCommand : str = "endOfCycle"
+
+
+def isEndOfCycleItem(item) -> bool:
+    return isinstance(item, dict) and item.get(actionKeyString) == endOfCycleCommand
+
+
 class MonitorGetPicQueue(GenericQueueProcessor):
 
     # NOTE: This is a thread that is constantly monitoring the io2cameraq for a (takePicture+currentMachineState) message
@@ -142,13 +153,13 @@ class MonitorGetPicQueue(GenericQueueProcessor):
             logBoth('logWarning', MonitorGetPicQueue.logSource, f"Exception reading camera queue: {e}", Logger.ISSUE)
             self.connectToRedis()
         if (not takePicture) and currentMachineState == MachineState.READ_QR_CODE:
-            # End-of-cycle message from the IOServer (cycle completed or aborted): drop what was kept for the cycle -
-            # the QR code, the earlier pictures and the top bearing profile
-            ImageProcessor.endOfCycle()
-            logBoth('logInfo', MonitorGetPicQueue.logSource,
-                    "End of cycle from the IOServer: QR code, pictures and top bearing profile of the cycle dropped",
+            # End-of-cycle message from the IOServer (cycle completed or aborted): passed on behind any picture request
+            # already queued; ConverterScalerAndProcessor drops the cycle's state (QR code, pictures, bearing ring,
+            # knuckle frame) when it reaches it
+            logBoth('logInfo', MonitorGetPicQueue.logSource, "End of cycle from the IOServer: passed to the check thread",
                     Logger.SUCCESS)
-            return None
+            return {timeKeyString: time.time(), currentMachineStateKeyString: MachineState.READ_QR_CODE,
+                    actionKeyString: endOfCycleCommand, requestIdKeyString: None}
         if takePicture:
             timeOfMessage = float(timeOfMessage)
             logBoth('logInfo', MonitorGetPicQueue.logSource, f"Got takePicture command in MonitorGetPicQueue", Logger.SUCCESS)
@@ -297,13 +308,15 @@ class TakePictures(GenericQueueProcessor):
 
     def addItem(self, item: Any) -> Union[Any, None]:
         if isinstance(item, dict):
-            if item[actionKeyString] == takePictureCommand:
+            if item[actionKeyString] == takePictureCommand or isEndOfCycleItem(item):
                 return super().addItem(item)
 
     def preWorkLoop(self):
         return
 
     def processItem(self, item : Any) -> Any :
+        if isEndOfCycleItem(item):
+            return item                     # passed on to the check thread, in order (no pictures)
         logBoth('logDebug', TakePictures.logSource, f"In TakePictures, about to process item. Camera status is {self.camera.connected}", Logger.GENERAL)
         if not self.camera.connected:
             # no pictures, but the answer must still name the picture state the IOServer asked for: it then gets a
@@ -502,6 +515,12 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
     def processItem(self, item : Any) -> Any :
         global resultsFromPictureAssessment, resultsStatus, resultsLock
         # printBoldGreen(f"Inside processItem() of ConverterScalerAndProcessor got item {item}")
+        if isEndOfCycleItem(item):
+            # here, after every check queued before it has finished (it cannot run in the middle of one)
+            ImageProcessor.endOfCycle()
+            logBoth('logInfo', ConverterScalerAndProcessor.logSource,
+                    "End of cycle: QR code, pictures, bearing ring and knuckle frame of the cycle dropped", Logger.SUCCESS)
+            return None
         resetResults()
         if item is not None:
 
@@ -1243,14 +1262,14 @@ class ImageProcessor():
     def getBearingProfile(cls) -> Dict[str, Any] | None:
         """The top bearing ring kept in this cycle, or None (none kept, dropped at the end of a cycle or on an abort,
         or kept for another component)."""
-        profile, savedFor = ImageProcessor.bearingCentreAndRadii, ImageProcessor.bearingProfileQRCode
+        ringProfile, savedFor = ImageProcessor.bearingCentreAndRadii, ImageProcessor.bearingProfileQRCode
         current = ImageProcessor.currentComponentQRCodeValue
-        if profile is not None and savedFor is not None and current is not None and savedFor != current:
-            profile = None
-        if profile is None:
+        if ringProfile is not None and savedFor is not None and current is not None and savedFor != current:
+            ringProfile = None
+        if ringProfile is None:
             logBoth('logWarning', ImageProcessor.logSource,
                     "No top bearing profile kept for the current component", Logger.RISK)
-        return profile
+        return ringProfile
 
     @classmethod
     def setCurrentComponentName(cls, qrCodeValue : str | None = None):

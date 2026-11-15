@@ -1,7 +1,6 @@
 import smtplib
 from email.mime.text import MIMEText
 import base64
-from email.mime.text import MIMEText
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from requests import HTTPError

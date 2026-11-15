@@ -26,11 +26,14 @@ from utils.RedisUtils import (
     ALIVE, DEAD, actionKeyString, getStopCommandFromQueue, readAbortDataInQRCodeServerFromIOServer,
     readDataInQRCodeServerFromIOServer, sendComponentQRCodeFromQRCodeServerToCameraServer,
     sendDataFromQRCodeServerToFEServer, sendDataFromQRCodeServerToIOServer,
-    sendHeartbeatFromQRCodeServerToHeartbeatServer, sendStoppedResponse, timeKeyString)
+    sendHeartbeatFromQRCodeServerToHeartbeatServer, sendStoppedResponse, timeKeyString,
+    sendAlarmSignalToHeartbeatServer, setFrontendNotice, clearFrontendNotice)
 from Configuration import CosThetaConfigurator
 
 # Placeholder constants (define these in a constants module if not already)
 qrCodeKey = "qrCode"
+INVALID_QR_CODE_NOTICE = "QR Code not valid"     # shown on the frontend (notice "qrcode") for an invalid scan
+INVALID_QR_CODE_NOTICE_SECS = 10.0
 GetAndValidateQRCodeCommand = "GetAndValidateQRCode"
 
 class MonitorGetQRCodeQueue(GenericQueueProcessor):
@@ -131,6 +134,31 @@ class GetAndValidateQRCode(GenericQueueProcessor):
         self.currentQRCodeValue: str = ""
         self.abortRead: bool = False
         self.readInProgress: bool = False
+        self.redisConnectionForNotices: Union[Redis, None] = None
+
+    def _noticeConnection(self) -> Redis:
+        if self.redisConnectionForNotices is None:
+            self.redisConnectionForNotices = Redis(GenericQueueProcessor.redisHost, GenericQueueProcessor.redisPort,
+                                                   socket_timeout=1.0, socket_connect_timeout=1.0, retry_on_timeout=True)
+        return self.redisConnectionForNotices
+
+    def reportInvalidQRCode(self, qrCode: str) -> None:
+        """An invalid scan (CHANGES 110): "QR Code not valid" on the frontend's screen, and the same alarm signal as a
+        vision check that is NOT OK (the heartbeat server plays the alarm sound). The scan goes on as before."""
+        try:
+            connection = self._noticeConnection()
+            setFrontendNotice(connection, "qrcode", INVALID_QR_CODE_NOTICE, ttlSecs=INVALID_QR_CODE_NOTICE_SECS)
+            sendAlarmSignalToHeartbeatServer(redisConnection=connection, aProducer="QRCodeServer")
+        except Exception as e:
+            self.redisConnectionForNotices = None
+            SlaveFileLogger.getInstance().logTakeAction(GetAndValidateQRCode.logSource,
+                                                        f"Could not report the invalid QR code {qrCode!r}: {e}", Logger.PROBLEM)
+
+    def clearInvalidQRCodeNotice(self) -> None:
+        try:
+            clearFrontendNotice(self._noticeConnection(), "qrcode")
+        except Exception:
+            self.redisConnectionForNotices = None
 
     def isReadInProgress(self) -> bool:
         return self.readInProgress
@@ -212,7 +240,10 @@ class GetAndValidateQRCode(GenericQueueProcessor):
                             self.currentQRCodeValue = qrCode
                             messageToConsumer = {timeKeyString: timeOfMessage, qrCodeKey: qrCode}
                             self.readInProgress = False
+                            self.clearInvalidQRCodeNotice()
                             break
+                        elif qrCode:
+                            self.reportInvalidQRCode(qrCode)
                 else:
                     SlaveConsoleLogger.getInstance().logTakeAction(GetAndValidateQRCode.logSource, "Scanner not connected; retrying", Logger.ISSUE)
             except Exception as e:

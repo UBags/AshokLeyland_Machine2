@@ -52,10 +52,6 @@ class MyTimedRotatingFileHandler(logging.handlers.TimedRotatingFileHandler):
         """
         self.stream.close()
 
-        # Get the time that this sequence started at
-        t = self.rolloverAt - self.interval
-        timeTuple = time.localtime(t)
-
         self.baseFilename = self.dir_log + time.strftime("%m%d%Y") + ".txt"
 
         if self.encoding:

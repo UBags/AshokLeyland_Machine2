@@ -29,6 +29,11 @@ from typing import Any, Optional, Tuple
 READY_TIMEOUT_SECS = 600.0        # loading the models on a cold start can take a while
 STOP_TIMEOUT_SECS = 3.0
 TIMEOUTS_IN_A_ROW_FOR_ALARM = 3   # this many timed-out checks in a row: the checks are too slow on this PC (alarm)
+# A worker that does not reach "ready" (dies while starting, e.g. a missing DLL) is started again after a growing pause
+# - 1, 2, 4 ... RESTART_BACKOFF_MAX_SECS s - instead of at once, which spawned processes in a tight loop (CHANGES 110).
+# A restart after a worker that had been ready (a timed-out check, a crash during a check) stays immediate.
+RESTART_BACKOFF_BASE_SECS = 1.0
+RESTART_BACKOFF_MAX_SECS = 60.0
 
 _worker = None
 _workerLock = threading.Lock()
@@ -144,6 +149,8 @@ class VisionCheckWorker:
         self.lastStopReason: str = ""
         self.lastCheckSecs = None              # the last check's time in the worker, and the transfer around it
         self.lastTransferSecs = None
+        self.failedStarts: int = 0             # starts in a row that did not reach ready (reset when one does)
+        self.restartPending: bool = False      # a start is scheduled after a pause (back-off)
 
     # ------------------------------------------------------------------------------------------------ process
     def start(self) -> None:
@@ -167,6 +174,7 @@ class VisionCheckWorker:
                 if process is not self._process:
                     return
                 self._problems = list(problems or [])
+                self.failedStarts = 0
                 self._ready.set()
                 if self._problems:
                     _log('logCritical', "Vision check worker: missing vision dependencies - every check is NOT OK:\n  - "
@@ -178,6 +186,7 @@ class VisionCheckWorker:
             _log('logCritical', f"Vision check worker did not start: {e}")
         if process is self._process:
             with self._lock:
+                self.failedStarts += 1
                 self._restart("did not report ready")
 
     def stop(self) -> None:
@@ -196,11 +205,34 @@ class VisionCheckWorker:
                 process.kill()
                 process.join(STOP_TIMEOUT_SECS)
 
+    def restartDelay(self) -> float:
+        """The pause before the next start: 0 unless the last starts did not reach ready."""
+        if self.failedStarts <= 0:
+            return 0.0
+        return min(RESTART_BACKOFF_BASE_SECS * 2 ** (self.failedStarts - 1), RESTART_BACKOFF_MAX_SECS)
+
     def _restart(self, reason: str) -> None:
         self.lastStopReason = reason
-        _log('logCritical', f"Vision check worker stopped ({reason}); starting a new one")
         self.stop()
-        self.start()
+        if self.restartPending:
+            return                          # a start is already scheduled (the checks are NOT OK until it is ready)
+        delay = self.restartDelay()
+        if delay <= 0:
+            _log('logCritical', f"Vision check worker stopped ({reason}); starting a new one")
+            self.start()
+            return
+        _log('logCritical', f"Vision check worker stopped ({reason}); {self.failedStarts} start(s) in a row did not "
+                            f"reach ready - starting a new one in {delay:g} s")
+        self.restartPending = True
+        timer = threading.Timer(delay, self._delayedStart)
+        timer.daemon = True
+        timer.start()
+
+    def _delayedStart(self) -> None:
+        with self._lock:
+            self.restartPending = False
+            if self._process is None:
+                self.start()
 
     @property
     def ready(self) -> bool:

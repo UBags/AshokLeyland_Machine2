@@ -11,7 +11,7 @@ from frontend.CosThetaStylesheets import okLabelStylesheet, notokLabelStylesheet
     bypassedLabelStylesheet, BYPASSED_TEXT
 from numpy import ndarray
 from typing import Union
-from frontend.frontendutils.CosThetaLabelUtils import noResultLabelStylesheet, notokLabelStylesheet, okLabelStylesheet
+import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - its stylesheets are the CosThetaStylesheets ones (imported above); kept for its import-time effects
 from Configuration import CosThetaConfigurator
 from frontend.frontendutils.CosThetaImageUtils import convertNDArrayToPixmap, getPixmapImage, resize_pixmap
 import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects

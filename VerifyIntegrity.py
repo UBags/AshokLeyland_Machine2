@@ -133,9 +133,8 @@ class WindowsRegistry:
         value_list = WindowsRegistry.parse_data(full_path)
         print(value_list)
         try:
-            with winreg.OpenKey(getattr(winreg, value_list[0]), value_list[1] + '\\' + value_list[2], 0, winreg.KEY_READ) as opened_key:
+            with winreg.OpenKey(getattr(winreg, value_list[0]), value_list[1] + '\\' + value_list[2], 0, winreg.KEY_READ):
                 pass
-                # winreg.CloseKey(opened_key)
             return True
         except (Exception, Error):
             # print(e)
@@ -779,7 +778,6 @@ commonCurrentDataString = "A7-65-94-26-87-18:53-00-87-00-16-00-32-17 : 00-00-00"
 
 def encryptAndStoreCurrentDate():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key1
@@ -823,7 +821,6 @@ def encryptAndStoreCurrentDate():
 
 def decryptAndVerifyCurrentDateIntegrity():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key1
@@ -936,7 +933,6 @@ commonStartingTimeString = "23-09-76-76-23-65-23-18-17-21 : 01-02-03"
 
 def encryptAndStoreStartingDate():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key2
@@ -980,7 +976,6 @@ def encryptAndStoreStartingDate():
 
 def decryptAndGetStartingDate():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key2
@@ -1034,7 +1029,6 @@ def decryptAndGetStartingDate():
 firstTime = True
 def updateAndEncryptHoU(initialisation : bool = False):
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key4
@@ -1115,7 +1109,6 @@ commonHouLimitString = "DJY71.344.65U5OP0.762U"
 
 def encryptAndStoreMoUAndHoULimits():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key3
@@ -1171,7 +1164,6 @@ def encryptAndStoreMoUAndHoULimits():
 
 def decryptMoUandHoULimits():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key3
@@ -1292,7 +1284,6 @@ commonHouString = "2769458BDCA27810876336845190345"
 
 def decryptHoU():
     import Crypto
-    from Crypto import Cipher
     from Crypto.Cipher import AES
     import os
     global key4
