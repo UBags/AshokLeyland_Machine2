@@ -25,7 +25,8 @@ features sit 4-5 px higher in the picture than the DOSTPLUS ones (measured on th
 of the same parts, CHANGES 102), hence one displacement per type. With no camera movement, place = the side's own
 usual spindle + D[T]. The hub, bearing, nut, bung and cap all sit on the spindle, so their centres follow it.
 
-The reference centres are in CENTRES below (in the code, not in ApplicationConfiguration.properties). With a frame,
+The reference values are <vendor>.vision.frame.* keys in ApplicationConfiguration.properties (read below through
+VisionConfig; CENTRES is the table of them). With a frame,
 applyToChecks() writes the placed centres into the checks' constants before each check; with no frame (no knuckle
 located in this cycle - Machine 1, the regions knuckle method, or the camera server restarted during a cycle) it puts
 back the values from the properties file, as before. The frame is part of the cycle's state (ImageProcessor.visionFrame)
@@ -38,71 +39,122 @@ import math
 import sys
 from typing import Any, Dict, Optional, Tuple
 
-REF_SPINDLE: Tuple[float, float] = (642.2, 359.1)       # mean spindle of the 13 Nov knuckles (all types)
-# Mean usual spindle per type (LHS and RHS of NOMINAL_PINS below)
-TYPE_SPINDLE: Dict[str, Tuple[float, float]] = {"DOST": (642.35, 358.45), "DOSTPLUS": (642.2, 359.7)}
+
+# ------------------------------------------------------------------------------------------------ reference values
+# Per machine: <vendor>.vision.frame.* in ApplicationConfiguration.properties (2026-11-15; before, in this file). Machine 2
+# values measured on the 13 Nov 2026 pictures. Machine 1 runs the regions knuckle method and does not use these; its
+# allenbradley.vision.frame.* values are the Machine 2 ones until they are measured on Machine 1 pictures.
+# The values are read where they are used (nominalPins(), typeSpindle(), centres()), so a live reload applies.
+
+# Mean spindle of the knuckles of all types: only used to state the camera shift (and its limit)
+REF_SPINDLE = (642.2, 359.1)
+# Mean usual spindle per type (LHS and RHS of the nominal pins below)
+TYPE_SPINDLE_DOST = (642.35, 358.45)
+TYPE_SPINDLE_DOSTPLUS = (642.2, 359.7)
 
 # The pins (dark core = bore + fixture pin, inside each machined boss) per type and side at the reference camera position:
-# distance (px), angle of the line left pin -> right pin (deg), pin midpoint, spindle (user's laptop run, 13 Nov pictures).
-NOMINAL_PINS: Dict[Tuple[str, str], Dict[str, Any]] = {
-    ("DOST", "LHS"): dict(distance=400.35, angle=0.65, pin_mid=(644.15, 194.93), spindle=(643.2, 359.8)),
-    ("DOST", "RHS"): dict(distance=400.17, angle=0.68, pin_mid=(643.75, 192.95), spindle=(641.5, 357.1)),
-    ("DOSTPLUS", "LHS"): dict(distance=394.26, angle=0.69, pin_mid=(643.70, 199.65), spindle=(642.1, 359.1)),
-    ("DOSTPLUS", "RHS"): dict(distance=394.64, angle=0.77, pin_mid=(643.62, 200.00), spindle=(642.3, 360.3)),
-}
+# pin distance (px), angle of the line left pin -> right pin (deg), pin midpoint x, y, spindle x, y.
+NOMINAL_PINS_DOST_LHS = (400.35, 0.65, 644.15, 194.93, 643.2, 359.8)
+NOMINAL_PINS_DOST_RHS = (400.17, 0.68, 643.75, 192.95, 641.5, 357.1)
+NOMINAL_PINS_DOSTPLUS_LHS = (394.26, 0.69, 643.7, 199.65, 642.1, 359.1)
+NOMINAL_PINS_DOSTPLUS_RHS = (394.64, 0.77, 643.62, 200.0, 642.3, 360.3)
 
 # The spindle mask is expected within this of where the pins put the spindle (spread measured: +-1 px); further away
 # it is noted in the frame (spindleCheck) and logged; the pins' spindle is the anchor either way.
 ANCHOR_AGREEMENT_PX = 6.0
 
-# The later checks' centres per type at the reference camera position (13 Nov 2026).
-# name: (module, class or None, attributes, {type: reference (x, y)}). Attributes: one name holding an (x, y) tuple, or
-# two names holding x and y.
-# How the per-type values were set (measured on the 13 Nov pictures, same parts through the stations; each type's
-# mean over its parts, every part weighted equally - DOST had two parts, DOSTPLUS one):
+# The later checks' centres per type at the reference camera position.
+# How the Machine 2 values were set (13 Nov pictures, same parts through the stations; each type's mean over its parts,
+# every part weighted equally - DOST had two parts, DOSTPLUS one):
 #   hub inner bore (MobileSAM)  DOST (644.0, 335.5)  DOSTPLUS (643.4, 339.4)   DOST - DOSTPLUS (+0.6, -3.9)
 #   top bearing ring            DOST (641.8, 338.3)  DOSTPLUS (641.6, 343.2)                   (+0.2, -4.9)
 #   nut ring                    DOST (644.3, 334.1)  DOSTPLUS (643.4, 338.5)                   (+0.9, -4.4)
 #   seated bung face            DOST (646, 325)      DOSTPLUS (647, 330)                       (-1.0, -5.0)
-# The single centres used so far (the properties values) were set on both types' pictures; each is split by half the
+# The single centres used before (the properties values) were set on both types' pictures; each is split by half the
 # type difference of its feature: DOST = centre + diff / 2, DOSTPLUS = centre - diff / 2 (the hub difference for the
-# hub centre check and the cap; the bung difference for the bung disc). The seated bung positions were already per type.
-_HUB_DIFF, _BEARING_DIFF, _NUT_DIFF, _BUNG_DIFF = (0.6, -3.9), (0.2, -4.9), (0.9, -4.4), (-1.0, -5.0)
+# hub centre check and the cap; the bung difference for the bung disc). The seated bung positions are per type already
+# (the same value under both types).
+CENTRE_HUB_SEGMENT_DOST = (645.3, 332.05)
+CENTRE_HUB_SEGMENT_DOSTPLUS = (644.7, 335.95)
+CENTRE_HUB_CHECK_DOST = (644.3, 338.05)
+CENTRE_HUB_CHECK_DOSTPLUS = (643.7, 341.95)
+CENTRE_TOP_BEARING_DOST = (642.1, 342.55)
+CENTRE_TOP_BEARING_DOSTPLUS = (641.9, 347.45)
+CENTRE_NUT_DOST = (644.45, 341.8)
+CENTRE_NUT_DOSTPLUS = (643.55, 346.2)
+CENTRE_NOBUNK_NUT_DOST = (644.45, 341.8)
+CENTRE_NOBUNK_NUT_DOSTPLUS = (643.55, 346.2)
+CENTRE_BUNK_DISC_DOST = (645.5, 325.5)
+CENTRE_BUNK_DISC_DOSTPLUS = (646.5, 330.5)
+CENTRE_BUNG_SEATED_DOST = (646.0, 325.0)
+CENTRE_BUNG_SEATED_DOSTPLUS = (647.0, 330.0)
+CENTRE_CAP_DOST = (644.3, 338.05)
+CENTRE_CAP_DOSTPLUS = (643.7, 341.95)
 
-
-def _split(centre: Tuple[float, float], diff: Tuple[float, float]) -> Dict[str, Tuple[float, float]]:
-    return {"DOST": (centre[0] + diff[0] / 2.0, centre[1] + diff[1] / 2.0),
-            "DOSTPLUS": (centre[0] - diff[0] / 2.0, centre[1] - diff[1] / 2.0)}
-
-
-CENTRES: Dict[str, Tuple[str, Optional[str], Tuple[str, ...], Dict[str, Tuple[float, float]]]] = {
+# name: (module, class or None, attributes, (DOST constant, DOSTPLUS constant)). Attributes: one name holding an (x, y)
+# tuple, or two names holding x and y.
+_TARGETS = {
     "hub.segment.center": ("camera.HubAndBearingSegmenter", None, ("HUB_SEGMENT_CENTER_X", "HUB_SEGMENT_CENTER_Y"),
-                           _split((645, 334), _HUB_DIFF)),
+                           ("CENTRE_HUB_SEGMENT_DOST", "CENTRE_HUB_SEGMENT_DOSTPLUS")),
     "hub.centre.check": ("camera.CheckHubAndBottomBearing", None, ("HUB_CENTRE_CHECK_X", "HUB_CENTRE_CHECK_Y"),
-                         _split((644, 340), _HUB_DIFF)),
+                         ("CENTRE_HUB_CHECK_DOST", "CENTRE_HUB_CHECK_DOSTPLUS")),
     "topbearing.annular.center": ("camera.CheckTopBearing", "CheckTopBearing", ("ANNULAR_CENTER_X", "ANNULAR_CENTER_Y"),
-                                  _split((642, 345), _BEARING_DIFF)),
+                                  ("CENTRE_TOP_BEARING_DOST", "CENTRE_TOP_BEARING_DOSTPLUS")),
     "nutwasher.nut.detection.center": ("camera.CheckNutAndPlateWasher", "CheckNutAndPlateWasher",
-                                       ("NUT_DETECTION_CENTER",), _split((644, 344), _NUT_DIFF)),
+                                       ("NUT_DETECTION_CENTER",), ("CENTRE_NUT_DOST", "CENTRE_NUT_DOSTPLUS")),
     "nobunk.nut.detection.center": ("camera.CheckNoBunk", "CheckNoBunk", ("NUT_DETECTION_CENTER",),
-                                    _split((644, 344), _NUT_DIFF)),
-    "bunk.outer.disc.center": ("camera.BunkSegmenter", None, ("OUTER_DISC_CENTER",), _split((646, 328), _BUNG_DIFF)),
+                                    ("CENTRE_NOBUNK_NUT_DOST", "CENTRE_NOBUNK_NUT_DOSTPLUS")),
+    "bunk.outer.disc.center": ("camera.BunkSegmenter", None, ("OUTER_DISC_CENTER",),
+                               ("CENTRE_BUNK_DISC_DOST", "CENTRE_BUNK_DISC_DOSTPLUS")),
     "bunk.seating.seated.centre.dost": ("camera.BunkSegmenter", None, ("SEATING_SEATED_CENTRE_DOST",),
-                                        {"DOST": (646, 325), "DOSTPLUS": (646, 325)}),
+                                        ("CENTRE_BUNG_SEATED_DOST", "CENTRE_BUNG_SEATED_DOST")),
     "bunk.seating.seated.centre.dostplus": ("camera.BunkSegmenter", None, ("SEATING_SEATED_CENTRE_DOSTPLUS",),
-                                            {"DOST": (647, 330), "DOSTPLUS": (647, 330)}),
-    "cap.center": ("camera.CheckCap", "CheckCap", ("CENTER",), _split((644, 340), _HUB_DIFF)),
+                                            ("CENTRE_BUNG_SEATED_DOSTPLUS", "CENTRE_BUNG_SEATED_DOSTPLUS")),
+    "cap.center": ("camera.CheckCap", "CheckCap", ("CENTER",), ("CENTRE_CAP_DOST", "CENTRE_CAP_DOSTPLUS")),
 }
+
+
+def _here():
+    return sys.modules[__name__]
+
+
+def nominalPins() -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """(type, side) -> dict(distance, angle, pin_mid, spindle), from the current values."""
+    out = {}
+    for (t, sd) in (("DOST", "LHS"), ("DOST", "RHS"), ("DOSTPLUS", "LHS"), ("DOSTPLUS", "RHS")):
+        v = getattr(_here(), f"NOMINAL_PINS_{t}_{sd}")
+        out[(t, sd)] = dict(distance=float(v[0]), angle=float(v[1]), pin_mid=(float(v[2]), float(v[3])),
+                            spindle=(float(v[4]), float(v[5])))
+    return out
+
+
+def typeSpindle() -> Dict[str, Tuple[float, float]]:
+    return {"DOST": tuple(float(x) for x in TYPE_SPINDLE_DOST), "DOSTPLUS": tuple(float(x) for x in TYPE_SPINDLE_DOSTPLUS)}
+
+
+def centres() -> Dict[str, Tuple[str, Optional[str], Tuple[str, ...], Dict[str, Tuple[float, float]]]]:
+    """name -> (module, class or None, attributes, {type: reference (x, y)}), from the current values."""
+    out = {}
+    for name, (module, cls, attrs, (dost, dostplus)) in _TARGETS.items():
+        out[name] = (module, cls, attrs, {"DOST": tuple(float(x) for x in getattr(_here(), dost)),
+                                          "DOSTPLUS": tuple(float(x) for x in getattr(_here(), dostplus))})
+    return out
+
+
+# As read at import (kept for the tools and dry runs that look at them); the code uses the functions above.
+NOMINAL_PINS = nominalPins()
+TYPE_SPINDLE = typeSpindle()
+CENTRES = centres()
 
 
 def reference(name: str, modelType: str) -> Tuple[float, float]:
     """The centre of a check for a type at the reference camera position."""
-    return CENTRES[name][3][modelType]
+    return centres()[name][3][modelType]
 
 
 def displacement(name: str, modelType: str) -> Tuple[float, float]:
     """The centre's displacement from the spindle for a type (reference centre - that type's mean spindle)."""
-    ref, sp = reference(name, modelType), TYPE_SPINDLE[modelType]
+    ref, sp = reference(name, modelType), typeSpindle()[modelType]
     return ref[0] - sp[0], ref[1] - sp[1]
 
 
@@ -126,7 +178,7 @@ def buildFrame(modelType: str, side: str, pins: Tuple[Tuple[float, float], Tuple
                spindleMask: Optional[Tuple[float, float]]) -> Optional[Dict[str, Any]]:
     """The frame from the two pin centres (left, right), the type / side and the spindle mask centre (None if no
     usable spindle mask). None if the type / side has no reference."""
-    nom = NOMINAL_PINS.get((modelType, side))
+    nom = nominalPins().get((modelType, side))
     if nom is None or pins is None:
         return None
     (lx, ly), (rx, ry) = pins
@@ -141,7 +193,8 @@ def buildFrame(modelType: str, side: str, pins: Tuple[Tuple[float, float], Tuple
         return mid[0] + dx, mid[1] + dy
 
     anchor = camera(nom["spindle"])
-    cameraShift = tuple(a - b for a, b in zip(camera(REF_SPINDLE), REF_SPINDLE))
+    refSpindle = (float(REF_SPINDLE[0]), float(REF_SPINDLE[1]))
+    cameraShift = tuple(a - b for a, b in zip(camera(refSpindle), refSpindle))
     if spindleMask is None:
         source, maskOffset = "pins (spindle mask not usable)", None
     else:
@@ -154,13 +207,13 @@ def buildFrame(modelType: str, side: str, pins: Tuple[Tuple[float, float], Tuple
                 rotation=round(rotation, 3), scale=round(scale, 5),
                 cameraShift=(round(cameraShift[0], 2), round(cameraShift[1], 2)),
                 pinMid=(round(mid[0], 2), round(mid[1], 2)), pinDistance=round(distance, 2),
-                pinAngle=round(angle, 3), refSpindle=REF_SPINDLE)
+                pinAngle=round(angle, 3), refSpindle=refSpindle)
 
 
 def place(frame: Dict[str, Any], point: Tuple[float, float]) -> Tuple[float, float]:
     """A point at the reference camera position, given for the frame's type (its spindle at TYPE_SPINDLE) -> this
     cycle's picture."""
-    sp = TYPE_SPINDLE[frame["type"]]
+    sp = typeSpindle()[frame["type"]]
     dx, dy = _rotate(point[0] - sp[0], point[1] - sp[1], frame["rotation"], frame["scale"])
     return frame["anchor"][0] + dx, frame["anchor"][1] + dy
 
@@ -174,7 +227,7 @@ def placedCentres(frame: Optional[Dict[str, Any]]) -> Dict[str, Tuple[int, int]]
     """Every later check's centre for this frame (rounded to whole pixels, as in the properties)."""
     if not frame:
         return {}
-    return {name: tuple(int(round(v)) for v in placeCentre(frame, name)) for name in CENTRES}
+    return {name: tuple(int(round(v)) for v in placeCentre(frame, name)) for name in _TARGETS}
 
 
 def withinLimits(frame: Dict[str, Any], maxShift: float, maxRotation: float, maxZoomChange: float) -> Tuple[bool, str]:
@@ -236,7 +289,7 @@ def applyToChecks(frame: Optional[Dict[str, Any]]) -> Dict[str, Tuple]:
     global _lastApplied
     placed = placedCentres(frame)
     written = {}
-    for name, (moduleName, className, attributes, _ref) in CENTRES.items():
+    for name, (moduleName, className, attributes, _ref) in _TARGETS.items():
         owner = _owner(moduleName, className)
         if owner is None:
             continue

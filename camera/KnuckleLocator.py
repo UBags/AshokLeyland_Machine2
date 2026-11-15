@@ -40,32 +40,87 @@ import numpy as np
 
 from camera import VisionFrame
 
+
 # --------------------------------------------------------------------------------------------------- reference values
-SPINDLE_EXPECTED = (642, 360)
+# Per machine: <vendor>.vision.knuckle.locator.* in ApplicationConfiguration.properties (2026-11-15; before, in this
+# file). Machine 2 values from the 13 Nov 2026 pictures; Machine 1 (regions method, does not use them) has the Machine 2
+# values until they are measured on Machine 1 pictures. Read where they are used, so a live reload applies.
+SPINDLE_EXPECTED = (642, 360)      # point prompt for the spindle
 SPINDLE_MAX_SHIFT = 80.0
 SPINDLE_R = (35.0, 65.0)
-SPINDLE_R_OK = (46.0, 52.0)              # usable as the anchor: 48.1-49.9 measured; 53.9 with a bearing on the spindle
+# usable as the anchor: 48.1-49.9 measured; 53.9 with a bearing on the spindle
+SPINDLE_R_OK = (46.0, 52.0)
 SPINDLE_FILL_MIN = 0.75
 
-BOSS_FROM_SPINDLE = {"BOSS_L": (-198.0, -161.0), "BOSS_R": (200.0, -161.0)}
-SPACING = 2 * 26 / math.sqrt(2)          # 36.77 px
+# Each boss's usual place from the spindle, and the 4 x 4 prompt grid round it
+BOSS_L_FROM_SPINDLE = (-198.0, -161.0)
+BOSS_R_FROM_SPINDLE = (200.0, -161.0)
+SPACING = 36.76955262170047    # 2 x 26 / sqrt(2) px
 GRID_N = 4
 DEDUPE_IOU = 0.85
-BOSS_LIMITS = dict(radius=(30.0, 60.0), circularity_min=0.75, fill_min=0.70, ring_min=80.0, contrast_min=40.0,
-                   core_radius=(6.0, 22.0), concentricity_max=8.0)
-AREA_GATE = (BOSS_LIMITS["fill_min"] * math.pi * BOSS_LIMITS["radius"][0] ** 2, math.pi * BOSS_LIMITS["radius"][1] ** 2)
+# A boss: radius, circularity, fill, bright ring round a dark core (bore + pin), concentricity
+BOSS_RADIUS = (30.0, 60.0)
+BOSS_CIRCULARITY_MIN = 0.75
+BOSS_FILL_MIN = 0.70
+BOSS_RING_MIN = 80.0
+BOSS_CONTRAST_MIN = 40.0
+BOSS_CORE_RADIUS = (6.0, 22.0)
+BOSS_CONCENTRICITY_MAX = 8.0
 
-ARM_POINTS = {"ARM_L": [(-155, 115), (-165, 182), (-192, 248), (-220, 310)],
-              "ARM_R": [(150, 123), (162, 189), (186, 254), (210, 315)]}
-LOWER = dict(grey_max=75.0, area=(8000, 70000), rect_fill_max=0.75, reach=220, top_dy=(20, 150))
+# Lower arm: 4 prompt points down each possible arm (from the spindle), and what the arm's mask must be
+ARM_L_POINTS = [(-155, 115), (-165, 182), (-192, 248), (-220, 310)]
+ARM_R_POINTS = [(150, 123), (162, 189), (186, 254), (210, 315)]
+LOWER_GREY_MAX = 75.0
+LOWER_AREA = (8000, 70000)
+LOWER_RECT_FILL_MAX = 0.75
+LOWER_REACH = 220                    # px below the spindle
+LOWER_TOP_DY = (20, 150)           # top of the arm below the spindle
 
-TYPE_AREA_RATIO = 34.5                   # decides: DOST 29.0-31.2, DOSTPLUS 36.8-41.1
-TYPE_RADIUS_RATIO = 0.1095               # cross-check: DOST 0.102-0.105, DOSTPLUS 0.114-0.124 (enclosing circle: one
-TYPE_RADIUS_BAND = 0.0025                # bump of the mask moves it); it vetoes only when beyond the limit +- this band
+TYPE_AREA_RATIO = 34.5        # decides: DOST 29.0-31.2, DOSTPLUS 36.8-41.1
+# cross-check: DOST 0.102-0.105, DOSTPLUS 0.114-0.124 (enclosing circle: one bump of the mask moves it); it vetoes only
+# when beyond the limit +- the band
+TYPE_RADIUS_RATIO = 0.1095
+TYPE_RADIUS_BAND = 0.0025
 # The right pin from the left one (and back) - for a boss not found where expected while the other was:
 # (397, 4.8) = mean pin vector of the four types / sides (distance 394-400 px, angle 0.65-0.77 deg)
 PIN_VECTOR = (397.0, 4.8)
-OPEN_KERNEL = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
+OPEN_KERNEL_SIZE = 21              # opening of masks when no boss passed
+
+
+def bossFromSpindle() -> Dict[str, Tuple[float, float]]:
+    return {"BOSS_L": tuple(BOSS_L_FROM_SPINDLE), "BOSS_R": tuple(BOSS_R_FROM_SPINDLE)}
+
+
+def bossLimits() -> Dict[str, Any]:
+    return dict(radius=tuple(BOSS_RADIUS), circularity_min=BOSS_CIRCULARITY_MIN, fill_min=BOSS_FILL_MIN,
+                ring_min=BOSS_RING_MIN, contrast_min=BOSS_CONTRAST_MIN, core_radius=tuple(BOSS_CORE_RADIUS),
+                concentricity_max=BOSS_CONCENTRICITY_MAX)
+
+
+def areaGate() -> Tuple[float, float]:
+    """Mask areas that can pass the boss rule (radius and fill): only those are measured."""
+    return (BOSS_FILL_MIN * math.pi * BOSS_RADIUS[0] ** 2, math.pi * BOSS_RADIUS[1] ** 2)
+
+
+def armPoints() -> Dict[str, List[Tuple[float, float]]]:
+    return {"ARM_L": [tuple(p) for p in ARM_L_POINTS], "ARM_R": [tuple(p) for p in ARM_R_POINTS]}
+
+
+def lowerArmRule() -> Dict[str, Any]:
+    return dict(grey_max=LOWER_GREY_MAX, area=tuple(LOWER_AREA), rect_fill_max=LOWER_RECT_FILL_MAX, reach=LOWER_REACH,
+                top_dy=tuple(LOWER_TOP_DY))
+
+
+def openKernel():
+    return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(OPEN_KERNEL_SIZE), int(OPEN_KERNEL_SIZE)))
+
+
+# As read at import (kept for tools that look at them); the code uses the functions above.
+BOSS_FROM_SPINDLE = bossFromSpindle()
+BOSS_LIMITS = bossLimits()
+AREA_GATE = areaGate()
+ARM_POINTS = armPoints()
+LOWER = lowerArmRule()
 
 
 # ------------------------------------------------------------------------------------------------------- mask measures
@@ -128,7 +183,8 @@ def dark_core(mask: np.ndarray, grey: np.ndarray, cx: float, cy: float) -> Dict[
     return out
 
 
-def is_boss(m: Dict[str, Any], limits: Dict = BOSS_LIMITS) -> bool:
+def is_boss(m: Dict[str, Any], limits: Optional[Dict] = None) -> bool:
+    limits = bossLimits() if limits is None else limits
     return (limits["radius"][0] <= m["radius"] <= limits["radius"][1] and m["circularity"] >= limits["circularity_min"]
             and m["round_fill"] >= limits["fill_min"] and m["ring_grey"] >= limits["ring_min"]
             and m["contrast"] >= limits["contrast_min"]
@@ -213,6 +269,7 @@ class KnuckleLocator:
         import torch
         pairs = grid_pairs()
         found = {}
+        gate = areaGate()
         for name, (cx, cy) in centres.items():
             # one decoder call per boss (24 prompts x 3 masks), as in the study: both at once doubles the GPU memory
             pts = grid_points(cx, cy)
@@ -229,7 +286,7 @@ class KnuckleLocator:
                 for k in range(masks.shape[1]):
                     m = masks[p, k]
                     area = int(np.count_nonzero(m))
-                    if not (AREA_GATE[0] <= area <= AREA_GATE[1]):
+                    if not (gate[0] <= area <= gate[1]):
                         continue           # cannot be a boss (see the study: most masks are background)
                     d = measure_boss(m, grey)
                     d["iou"] = float(scores[p, k])
@@ -241,8 +298,8 @@ class KnuckleLocator:
                 # 0.6, radius 51); an opening with a 21 px disc removes such strips and leaves the round boss
                 opened = []
                 for (p, k) in kept:
-                    m = cv2.morphologyEx(masks[p, k].astype(np.uint8), cv2.MORPH_OPEN, OPEN_KERNEL) > 0
-                    if not (AREA_GATE[0] <= int(np.count_nonzero(m)) <= AREA_GATE[1]):
+                    m = cv2.morphologyEx(masks[p, k].astype(np.uint8), cv2.MORPH_OPEN, openKernel()) > 0
+                    if not (gate[0] <= int(np.count_nonzero(m)) <= gate[1]):
                         continue
                     n, lab, stats, _ = cv2.connectedComponentsWithStats(m.astype(np.uint8), connectivity=8)
                     if n > 2:              # keep the largest piece
@@ -275,7 +332,9 @@ class KnuckleLocator:
     def _arms(self, predictor, device, shape, grey, sx, sy) -> Dict[str, Dict]:
         import torch
         names = ["ARM_L", "ARM_R"]
-        pts = np.array([[(sx + dx, sy + dy) for dx, dy in ARM_POINTS[n]] for n in names], dtype=np.float32)
+        arm = armPoints()
+        lower = lowerArmRule()
+        pts = np.array([[(sx + dx, sy + dy) for dx, dy in arm[n]] for n in names], dtype=np.float32)
         tc = torch.as_tensor(predictor.transform.apply_coords(pts, shape), dtype=torch.float, device=device)
         am, _, _ = predictor.predict_torch(tc, torch.ones(tc.shape[:2], dtype=torch.int, device=device),
                                            multimask_output=False)
@@ -285,10 +344,10 @@ class KnuckleLocator:
             if not m.any():
                 continue
             d = describe(fill_holes(m), grey)
-            d["is_arm"] = (d["grey"] < LOWER["grey_max"] and LOWER["area"][0] <= d["area"] <= LOWER["area"][1]
-                           and d["rect_fill"] < LOWER["rect_fill_max"]
-                           and d["bbox"][1] + d["bbox"][3] > sy + LOWER["reach"]
-                           and LOWER["top_dy"][0] <= d["bbox"][1] - sy <= LOWER["top_dy"][1])
+            d["is_arm"] = (d["grey"] < lower["grey_max"] and lower["area"][0] <= d["area"] <= lower["area"][1]
+                           and d["rect_fill"] < lower["rect_fill_max"]
+                           and d["bbox"][1] + d["bbox"][3] > sy + lower["reach"]
+                           and lower["top_dy"][0] <= d["bbox"][1] - sy <= lower["top_dy"][1])
             found[name] = d
         return found
 
@@ -311,10 +370,10 @@ class KnuckleLocator:
             sp = self._spindle(predictor, grey)
             spOk = sp is not None and SPINDLE_R_OK[0] <= sp["radius"] <= SPINDLE_R_OK[1]
             base = (sp["circle_x"], sp["circle_y"]) if sp is not None else VisionFrame.REF_SPINDLE
-            centres = {n: (base[0] + d[0], base[1] + d[1]) for n, d in BOSS_FROM_SPINDLE.items()}
+            centres = {n: (base[0] + d[0], base[1] + d[1]) for n, d in bossFromSpindle().items()}
             bosses = self._bosses(predictor, device, shape, grey, centres)
             fixed = {n: (VisionFrame.REF_SPINDLE[0] + d[0], VisionFrame.REF_SPINDLE[1] + d[1])
-                     for n, d in BOSS_FROM_SPINDLE.items()}
+                     for n, d in bossFromSpindle().items()}
             gridAt = "spindle"
             if (bosses["BOSS_L"] is None or bosses["BOSS_R"] is None) and sp is not None and \
                     math.hypot(base[0] - VisionFrame.REF_SPINDLE[0], base[1] - VisionFrame.REF_SPINDLE[1]) > 10:
