@@ -152,7 +152,9 @@ class SlaveConsoleLogger(SlaveLogger):
         SlaveConsoleLogger.updateLoggingLevels()
 
         if self.stopped:
-            printRed("Slave Console Logger stopped")
+            if not getattr(self, "_stoppedReported", False):     # once, not at every log call (CHANGES 111)
+                self._stoppedReported = True
+                printRed("Slave Console Logger stopped")
             return False
 
         if messageLogLevel < SlaveConsoleLogger.currentConsoleLoggingLevel:

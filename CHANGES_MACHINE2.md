@@ -3539,3 +3539,23 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
     Mock-PLC window 17/17; endpoints 91/91; vision verifier ALL EQUIVALENT both;
   - not run: `DryRun_Cap_Check.py` stops at `ModelManager.load_models` without the YOLO weights (the same on the code
     before this change); all-checks `--auto` and the windows (no vision logic changed).
+
+## 111. A stop command left in Redis by an earlier run no longer stops the loggers; "Slave Console Logger stopped" once (2026-11-16)
+
+- **Reported (laptop, `DryRun_Cap_Check.py`):** "Slave Console Logger stopped" printed 9-13 times per picture.
+- **Diagnosis:** `getStopCommandFromQueue` reads `stopcommandQ` from its start (`xread` from id 0) and never removes
+  the message - on purpose, every process must see the one stop. So a stop left by an earlier run (MainProgram's
+  shutdown: MainProgram flushes Redis only at its own next start) was taken by every later process on that Redis:
+  each slave logger stopped within 5 s of starting, and `SlaveConsoleLogger.logMessage` then printed the line at
+  every log call (dry runs and tools do not flush Redis). Reproduced: a stop sent by an earlier process, then a new
+  process logging 5 messages -> logger stopped, 5 lines. Clearing Redis would only hide it until the next stale stop.
+- **Fix:** `utils/RedisUtils.getStopCommandFromQueue` ignores a stop command sent before the reading process started
+  (`_PROCESS_STARTED_AT`, set when the module is imported - at the start of every process; the message carries its
+  send time), noted once per process ("Stop command from an earlier run ignored ..."). Nothing legitimate needs such
+  a stop: MainProgram flushes Redis before it starts the servers, and its stop is sent after they started; the
+  supervisor does not restart a server after a stop command. `SlaveConsoleLogger.logMessage` prints "Slave Console
+  Logger stopped" once, not at every call.
+- **Run:** new `DryRun_Stale_Stop_Command.py` (both folders) 5/5 (old code 1/5: S1 logger stopped with 5 lines, S2 5
+  lines); heartbeat / start-up 28/28 (H10 shutdown); process supervisor 7/7; logging 37/37; DB no record loss (c: a
+  stop with 3 records pending - drained, then stopped; b, d, e pass); integrated all-servers cycle (DB row as before,
+  state sync in sync); work-thread health 17/17 (one run 16/17, C2 timing; 3/3 again after, 2/2 on the old code).

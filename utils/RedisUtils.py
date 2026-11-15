@@ -15,6 +15,7 @@ from statemachine.StateMachine import MachineState
 # From utils
 from utils.CosThetaPrintUtils import (
     printBoldRed,
+    printBoldYellow,
     printBoldGreen,
     printBoldBlue,
     printBold,
@@ -478,9 +479,19 @@ def getData(redisConnection: redis.client.Redis, queueName: str = commonStreamKe
     return timeOfMessage, newData
 
 # RETURNS timestamp and boolean
+# When this process started (this module is imported at the start of every process). A stop command sent before it
+# is from an earlier run - left in Redis because the stop queue is read from the start and never trimmed (every process
+# must see the one stop) - and is ignored (CHANGES 111): it used to stop the log threads of any later process on a Redis
+# that had not been flushed (dry runs, test tools), which then printed "Slave Console Logger stopped" at every log call.
+_PROCESS_STARTED_AT: float = time.time()
+_staleStopReported: bool = False
+
+
 def getStopCommandFromQueue(redisConnection: redis.client.Redis, block : int = 1):
     # Note this is not in a 'while not done' loop. This ensures that this function call does not block
     # Calling programs will need to implement a loop, if needed. Or, run this as an aync call
+    # A stop command sent before this process started is ignored (see _PROCESS_STARTED_AT).
+    global _staleStopReported
     if redisConnection is None:
         printBoldRed("Redis connection is None. Cannot receive data.")
         # raise Exception("Redis Connection is None")
@@ -511,6 +522,16 @@ def getStopCommandFromQueue(redisConnection: redis.client.Redis, block : int = 1
     # printBoldRed(f"{getGeneralLoggingMessage(getFullyQualifiedName(__file__), 'in getStopCommand()')} {stopNow =}")
     if stopNow is not None:
         if stopNow == stopCommand:
+            try:
+                sentAt = float(timeOfMessage)
+            except (TypeError, ValueError):
+                sentAt = None
+            if sentAt is not None and sentAt < _PROCESS_STARTED_AT:
+                if not _staleStopReported:
+                    _staleStopReported = True
+                    printBoldYellow(f"Stop command from an earlier run ignored in process {os.getpid()} (sent "
+                                    f"{_PROCESS_STARTED_AT - sentAt:.0f} s before this process started)")
+                return timeOfMessage, False
             # printBoldRed(f"Got stop command in process {os.getpid()}")
             return timeOfMessage, True
     return timeOfMessage, False

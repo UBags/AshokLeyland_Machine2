@@ -30,7 +30,7 @@ MainProgram's red / green / blue / yellow printers are `utils/CosThetaPrintUtils
 green were `CosThetaFileUtils`'s console-only printers before), so its lines also go to the log file once
 `setLogProcess` has run.
 
-8. `monitorStop` waits for `stopcommandQ`, then sends the stop and collects each `stoppedresponseQ`, ends the processes and backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
+8. `monitorStop` waits for `stopcommandQ` (read from its start and never trimmed, so every process sees the one stop; `getStopCommandFromQueue` ignores a stop sent before the reading process started - one left by an earlier run, CHANGES §111), then sends the stop and collects each `stoppedresponseQ`, ends the processes and backs up the database (`doBackup`; before CHANGES §84 this never ran, because `stopProcesses` ended the thread with `sys.exit`).
 
 **ProcessSupervisor.** Every `supervisor.check.interval.sec` (2 s), `checkOnce()` restarts each registered process that has died. This is enabled by `supervisor.restart.dead.processes`. Restarts are limited to `supervisor.max.restarts.per.hour` (10) for each process; above that the process is left down and logged. Supervision stops once `isStopping()` is true.
 
@@ -427,6 +427,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_Picture_Retention.py` | The picture clean-up at start: old pictures deleted in every sub-folder, young ones and other files kept, empty old folders removed, today's kept; the folders and limits from the properties (P1-P6) |
 | `DryRun_Camera_End_Of_Cycle_Order.py` | END_OF_CYCLE passed down the camera server's queues and handled after the check in progress (E1-E4) |
 | `DryRun_Vision_Worker_Backoff.py` | A worker failing at start restarted with a growing pause, checks NOT OK at once meanwhile, the pause reset by a worker that gets ready (B1-B3) |
+| `DryRun_Stale_Stop_Command.py` | A stop command from an earlier run ignored; a stop during the run honoured, its notice printed once (S1-S2) |
 | `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |
 | Frontend / DB / index and day-folder | FE workers (F7b: production counts read off the GUI thread, a 3 s database read does not stall it, the last counts kept when the database is down); inserts; record loss (b: 3 attempts 5 s apart, pictures saved once, the picture files in the FailedRecords JSON; d: one failure then success; e: the heartbeat's one kept-open connection, replaced when broken); indexes; day folder |
