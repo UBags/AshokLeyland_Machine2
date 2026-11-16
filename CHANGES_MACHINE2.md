@@ -3604,3 +3604,20 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   its CRLF line ends (checked: a 3-line diff).
 - Not run here (Windows only): the next `runNuitka.bat siemens` on the laptop must print the copy line, the checks
   (`plc.vendor=siemens`, OK for the yaml, wavs, internalimages) and "SUCCESS!".
+
+## 114. runNuitka.bat: the copy and the checks catch their errors; `copyonly` (2026-11-16)
+
+- **User:** put the copy into runNuitka.bat and catch any error from it (the copy and checks were there, but had never
+  run - §113).
+- **Copy:** `copy /Y ... >nul 2>&1`, then `if errorlevel 1` -> "ERROR: could not copy ... - is it open, or
+  MainProgram.exe running?" (counted as a problem) or the copy line. Before: the copy's result was not looked at, and
+  the copy line was printed either way. No `MainProgram.dist`: said so, nothing copied. No properties file: said so.
+- **Checks:** MainProgram.exe; in the copied properties `plc.vendor=<vendor>`, `picture.retention.days.trial=` and
+  `.main=` (each printed `OK: <line>` or `MISSING ...`); the yaml, `wavs\`, `internalimages\`. Every command's own
+  error output suppressed; the end says SUCCESS or "SOMETHING ABOVE FAILED OR IS MISSING - fix it before copying to
+  the plant PC".
+- **`runNuitka.bat siemens copyonly`** (or `allenbradley copyonly`): no build - only the copy and the checks on the
+  existing `MainProgram.dist`. Any other second argument shows the usage.
+- `%CD%` no longer echoed inside parenthesised blocks (a `)` in the folder path would close the block early).
+- CRLF line ends kept. Not run here (no Windows `cmd` in the sandbox): checked by reading - labels, `if errorlevel` at
+  run time inside blocks, no unescaped parentheses in the echoed texts.

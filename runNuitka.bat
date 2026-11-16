@@ -5,6 +5,8 @@ REM  Build MainProgram.exe with Nuitka for Machine 1 (Allen-Bradley) or Machine 
 REM
 REM    runNuitka.bat allenbradley   Machine 1: ApplicationConfiguration.Machine1.properties (plc.vendor=allenbradley)
 REM    runNuitka.bat siemens        Machine 2: ApplicationConfiguration.Machine2.properties (plc.vendor=siemens)
+REM    runNuitka.bat siemens copyonly   no build: only copies the run-time files into the existing MainProgram.dist
+REM                                     and checks it (also: allenbradley copyonly)
 REM  No default: without (or with any other) argument it shows these two commands and exits.
 REM
 REM  Run from the project root with the project's .venv activated (torch cu128 for the target machine).
@@ -16,6 +18,7 @@ REM  <folder of MainProgram.exe>\models\ - on the target, MainProgram.exe must s
 REM ==========================================================================================================
 
 set "VENDOR=%~1"
+set "MODE=%~2"
 if /I "%VENDOR%"=="allenbradley" (
     set "VENDOR=allenbradley"
     set "MACHINE=1"
@@ -27,6 +30,8 @@ if /I "%VENDOR%"=="allenbradley" (
 ) else (
     goto :usage
 )
+if /I "%MODE%"=="copyonly" goto :copyfiles
+if not "%MODE%"=="" goto :usage
 
 echo ============================================
 echo Compiling MainProgram.py with Nuitka for Machine %MACHINE% (%VENDOR%)
@@ -35,7 +40,7 @@ echo Started: %date% %time%
 
 REM ---- checks before a long build
 if not exist "%PROPS%" (
-    echo ERROR: %PROPS% not found in %CD%
+    echo ERROR: %PROPS% not found in the current folder
     goto :end
 )
 findstr /B /C:"plc.vendor=%VENDOR%" "%PROPS%" >nul
@@ -138,30 +143,64 @@ if errorlevel 1 (
     goto :end
 )
 
+REM ---- after the build (also "runNuitka.bat <vendor> copyonly"): run-time files into MainProgram.dist, then checks.
+REM Every command's own error output is suppressed; a failure is reported in plain words and counted (PROBLEMS).
+:copyfiles
 echo.
 echo ============================================
 echo Copying run-time files into MainProgram.dist
 echo ============================================
-copy /Y "%PROPS%" "MainProgram.dist\ApplicationConfiguration.properties" >nul
-echo   ApplicationConfiguration.properties  ^<-  %PROPS%
+set "PROBLEMS=0"
+if not exist "MainProgram.dist\" (
+    echo   ERROR: MainProgram.dist not found in the current folder - build first: runNuitka.bat %VENDOR%
+    set "PROBLEMS=1"
+    goto :summary
+)
+if not exist "%PROPS%" (
+    echo   ERROR: %PROPS% not found in the current folder
+    set "PROBLEMS=1"
+    goto :checks
+)
+copy /Y "%PROPS%" "MainProgram.dist\ApplicationConfiguration.properties" >nul 2>&1
+if errorlevel 1 (
+    echo   ERROR: could not copy %PROPS% to MainProgram.dist\ApplicationConfiguration.properties - is it open, or MainProgram.exe running?
+    set "PROBLEMS=1"
+) else (
+    echo   ApplicationConfiguration.properties  ^<-  %PROPS%
+)
 
+:checks
 echo.
 echo ============================================
 echo Checking MainProgram.dist
 echo ============================================
-set "PROBLEMS=0"
-findstr /B /C:"plc.vendor=%VENDOR%" "MainProgram.dist\ApplicationConfiguration.properties"
-if errorlevel 1 (echo   MISSING: plc.vendor=%VENDOR% in MainProgram.dist\ApplicationConfiguration.properties & set "PROBLEMS=1")
-if exist "MainProgram.dist\costhetaio\siemens\IOServerProperties.yaml" (echo   OK: costhetaio\siemens\IOServerProperties.yaml) else (echo   MISSING: costhetaio\siemens\IOServerProperties.yaml & set "PROBLEMS=1")
-if exist "MainProgram.dist\wavs" (echo   OK: wavs\) else (echo   MISSING: wavs\ & set "PROBLEMS=1")
-if exist "MainProgram.dist\internalimages" (echo   OK: internalimages\) else (echo   MISSING: internalimages\ & set "PROBLEMS=1")
+if exist "MainProgram.dist\MainProgram.exe" (echo   OK: MainProgram.exe) else (echo   MISSING: MainProgram.exe& set "PROBLEMS=1")
+if not exist "MainProgram.dist\ApplicationConfiguration.properties" (
+    echo   MISSING: ApplicationConfiguration.properties
+    set "PROBLEMS=1"
+    goto :checkfolders
+)
+for %%K in ("plc.vendor=%VENDOR%" "picture.retention.days.trial=" "picture.retention.days.main=") do (
+    findstr /B /C:%%K "MainProgram.dist\ApplicationConfiguration.properties" >nul 2>&1
+    if errorlevel 1 (
+        echo   MISSING in ApplicationConfiguration.properties: %%~K
+        set "PROBLEMS=1"
+    ) else (
+        for /f "delims=" %%L in ('findstr /B /C:%%K "MainProgram.dist\ApplicationConfiguration.properties" 2^>nul') do echo   OK: %%L
+    )
+)
+:checkfolders
+if exist "MainProgram.dist\costhetaio\siemens\IOServerProperties.yaml" (echo   OK: costhetaio\siemens\IOServerProperties.yaml) else (echo   MISSING: costhetaio\siemens\IOServerProperties.yaml& set "PROBLEMS=1")
+if exist "MainProgram.dist\wavs\" (echo   OK: wavs\) else (echo   MISSING: wavs\& set "PROBLEMS=1")
+if exist "MainProgram.dist\internalimages\" (echo   OK: internalimages\) else (echo   MISSING: internalimages\& set "PROBLEMS=1")
 
+:summary
 echo.
 echo ============================================
 if "%PROBLEMS%"=="0" (
     echo SUCCESS! Machine %MACHINE% ^(%VENDOR%^) executable:
 ) else (
-    echo BUILT, BUT SOMETHING ABOVE IS MISSING. Executable:
+    echo SOMETHING ABOVE FAILED OR IS MISSING - fix it before copying to the plant PC. Executable:
 )
 echo MainProgram.dist\MainProgram.exe
 echo ============================================
@@ -186,7 +225,10 @@ echo.
 echo     runNuitka.bat siemens
 echo         Machine 2 ^(Siemens S7-1515 PLC^): uses ApplicationConfiguration.Machine2.properties
 echo.
+echo     runNuitka.bat siemens copyonly   ^(or allenbradley copyonly^)
+echo         No build: copies the properties file into the existing MainProgram.dist and checks it.
+echo.
 echo From PowerShell:  .\runNuitka.bat allenbradley    or    .\runNuitka.bat siemens
-if not "%~1"=="" echo.& echo Not a valid option: "%~1"
+if not "%~1"=="" echo.& echo Not a valid option: "%~1 %~2"
 endlocal
 exit /b 1
