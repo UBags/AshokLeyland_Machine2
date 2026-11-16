@@ -96,7 +96,9 @@ if not defined CLANGCL (
     goto :end
 )
 echo Using %CLANGCL%
-nuitka --standalone ^
+REM "python -m nuitka", not "nuitka": in a venv "nuitka" is nuitka.cmd, and a batch file run from a batch file
+REM without CALL never returns - everything below (properties copy, checks) was skipped (CHANGES 113).
+python -m nuitka --standalone ^
     --clang ^
     --jobs=4 ^
     --report=compilation-report.xml ^

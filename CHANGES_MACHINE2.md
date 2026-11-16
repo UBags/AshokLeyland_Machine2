@@ -3590,3 +3590,17 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   change, D4 nested calls); fault scenarios Siemens 201/201 (O4: the abort's state change published with its reason),
   Allen-Bradley 218/218; two full cycles (28 states); state sync monitor 15/15; frontend 145/145; integrated
   all-servers cycle (DB row as before, state sync in sync); work-thread health 17/17; DB indexes 8/8.
+
+## 113. runNuitka.bat: the properties copy and the checks after the build never ran (2026-11-16)
+
+- **Reported (laptop build of 16 Nov):** the build succeeded, but `MainProgram.dist\ApplicationConfiguration.properties`
+  did not exist; the build output ended at "Compilation report written" (no "Copying run-time files", no checks, no
+  "Ended:").
+- **Cause:** the build line called `nuitka --standalone ...`. In a Windows venv `nuitka` is `.venv\Scripts\nuitka.cmd`,
+  a batch file, and a batch file run from another batch file without `call` never returns: everything after it in
+  `runNuitka.bat` (the copy of the machine's properties file, the dist checks, the models note, "Ended:", `pause`) was
+  skipped. The version line already used `python -m nuitka`.
+- **Fix:** `python -m nuitka --standalone ...` (returns normally; also certain to use the venv's Python). The file keeps
+  its CRLF line ends (checked: a 3-line diff).
+- Not run here (Windows only): the next `runNuitka.bat siemens` on the laptop must print the copy line, the checks
+  (`plc.vendor=siemens`, OK for the yaml, wavs, internalimages) and "SUCCESS!".
