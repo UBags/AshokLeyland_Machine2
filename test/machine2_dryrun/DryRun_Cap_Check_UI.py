@@ -154,8 +154,9 @@ class CapCheckWindow:
         ttk.Button(bar2, text="Earlier pictures...", command=self.chooseEarlier).pack(side="left")
         self.earlierText = tk.StringVar(master=root, value=f"hub / top bearing / nut pictures: {HERE.name} dry-run folders")
         ttk.Label(bar2, textvariable=self.earlierText).pack(side="left", padx=6)
-        seat = (f"seating ON (brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, silver top face to outline <= "
-                f"{CheckCap.SEATING_SILVER_FACE_OFFSET_MAX}, silver outline to centre <= "
+        seat = (f"seating ON (brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, silver face on one circle >= "
+                f"{CheckCap.SEATING_SILVER_FACE_FIT_MIN}, hub centre uncovered <= {CheckCap.SEATING_HUB_VISIBLE_MAX}, "
+                f"silver outline to centre <= "
                 f"{CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX} px)" if CheckCap.SEATING_CHECK else "seating OFF")
         ttk.Label(bar2, text=f"centre {tuple(CheckCap.CENTER)}, {seat}").pack(side="right")
 

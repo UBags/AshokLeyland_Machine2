@@ -123,6 +123,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 7 State sync logs (after a few weeks of production) | Pending - Plan A went in on 2026-11-15 |
 | 8 Picture clean-up lines, invalid QR notice + siren, MainProgram lines in the log, DB retry (CHANGES 110) | Not reported yet |
 | 9 Bung check: rotation dry run on the laptop, failing bungs now OK, `[Bung]` lines, check time (CHANGES 115) | Not reported yet |
+| 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time (CHANGES 128, 129) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

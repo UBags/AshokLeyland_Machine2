@@ -157,6 +157,22 @@ On the Machine 2 PC with the new exe:
 5. **Time.** The bung check's time (the `check time` in the camera server's log) - each gamma now decodes about 220
    point prompts; it must stay well inside the 12 s timeout (expected: well under a second per gamma on the GPU).
 
+## 10. Cap seating: brass by fitted circles, silver by two rules (CHANGES 128, 129)
+
+On the laptop after `git pull`: `DryRun_Cap_Production_Path.py` (12/12) and `DryRun_Cap_Silver_Seating.py` (6/6),
+both with the MobileSAM weights.
+
+On the Machine 2 PC with the new exe:
+1. **Seated caps OK.** Run normal production for a shift: brass and silver caps placed correctly are OK.
+2. **Tilted silver cap.** Press a silver cap in tilted (one side proud, the bore still covered) and one pushed aside
+   (part of the bore visible): both NOT OK.
+3. **Log.** Each seating writes `CheckCap seating: ...`. Silver: `top face edge on one circle <fit> >= 0.64`, `hub
+   centre uncovered <n> px <= 400 (hub r .., cap outline .. px from hub centre)`; brass: `cap centre to bore centre`.
+   Send these lines for a shift (seated caps) and for any wrong verdict - the silver limits were set without
+   pictures of a hub and its own cap (the hub picture of the same cycle is used in production).
+4. **Time.** Silver seating now runs MobileSAM on two pictures (cap and hub); the cap check's time must stay well
+   inside the 12 s timeout.
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -171,3 +187,4 @@ On the Machine 2 PC with the new exe:
 | 7 State sync after a few weeks (MISMATCH / GAP lines, cycles in sync) | | | | |
 | 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |
 | 9 Bung: rotation dry run and Bung_Check_UI on the laptop; failing bungs now OK; [Bung] lines; check time | | | | |
+| 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time | | | | |

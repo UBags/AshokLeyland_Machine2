@@ -3953,3 +3953,56 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   top-face test (top face centre to outline centre 9.1, 9.1-9.4, 12.6-12.7 px against 9.0); MobileSAM's top-face mask is
   irregular on the embossed face, and no edge-based measure tried here separated them from the 13 Nov skewed caps.
 
+
+## 129. Silver cap seating by two rules: hub centre uncovered, top face edge on one circle (2026-11-18)
+
+- **User:** the cap check should look at the cap against the hub centre; a silver cap is wider than the hub centre, so
+  any visible part of the hub centre means not seated - plus another rule if needed. No pictures of a hub and its own
+  cap exist; do the best possible for silver. Brass: keep a rule that separates seated from skewed.
+- **Brass: unchanged.** CHANGES 128 already separates them (cap centre to bore centre, same picture: seated 0.6-7.6 px,
+  skewed 13.5-23.1, limit 10.5). Measured today for comparison: whole-cap MobileSAM mask (8-point ring at r 55 plus a
+  box; round, whole-cap masks on 112/112 brass pictures) to bore 1.1-5.1 / 11.3-20.3; against the hub circle of the
+  uploaded hub pictures 0.4-3.5 / 11.7-15.8. Same margin, so no change (no MobileSAM, no hub picture needed).
+- **Silver before:** top face centre to outline centre <= 9 px (MobileSAM face mask). Rejected seated 17 Nov caps: the
+  embossed face gives ragged masks, and a seated cap's face already sits about 8 px from its outline centre (the camera
+  looks a little from one side), varying per cap.
+- **Measured (37 silver pictures: 25 of 17 Nov + 5 of 13 Nov seated, 7 of 13 Nov skewed; 38 hub pictures of 13 Nov,
+  uploaded today, none of the same parts):**
+  - Whole silver cap: MobileSAM point prompt finds it on 36/36 (r 101-104, roundness >= 0.96).
+  - Hub circle in the hub pictures: MobileSAM, 12 points on a ring of r 95 plus a box: 38/38, r 110-116, roundness
+    >= 0.948, centre spread 1-2 px per model. (A polar edge fit was up to 6-10 px off it: not used.)
+  - The hub circle is hidden under a silver cap in the cap picture (found on 18/36), so rule 1 takes it from the cycle's
+    hub + bottom bearing picture (already in `currentPictures`; the cap check uses it for step 3).
+  - Annulus / crescent between cap and hub circle as the test (user's first idea) does not work alone: the shape changes
+    at offset = hub radius - cap radius (brass ~27 px: skewed brass still a full annulus; silver ~9-10 px: seated
+    silver already crescents).
+  - Top face edge on one circle (polar fit round the outline centre): seated 0.68-0.88 (30), skewed 0.46-0.59 (6 with
+    an outline) - separates all, including DOST_skewed_02 (tilted, bore fully covered, uncovered 0 px). Face centre to
+    outline centre overlaps (seated 4.8-13.7, skewed 9.0-21.4): logged only.
+  - Hub centre uncovered (hub picture of another part): seated 0-150 px, skewed 0-2493 (only the cap pushed off the
+    bore, DOST_skewed_07, above 1000).
+- **Now (`CheckCap.checkSeating` for silver, new `hubCircle`, `hubCentreVisible`, `silverFaceCircle`; the old face test
+  kept as `silverFaceBySegmenter`, unused):** NOT SEATED if (1) the hub centre (hub circle less 12 px) has more than
+  400 px dark (HSV value < 60), outside the cap mask, after an opening of 9 px (removes the shadow line round a seated
+  cap); or (2) less than 0.64 of the face edge lies on one circle; or (3) as before, the outline centre more than 20 px
+  from `cap.center`. No hub picture or no hub circle: rule 1 is not applied and the reason says so. `checkSeating` takes
+  the hub picture as a third argument (`checkCap` passes it). Marked picture: hub circle blue, face circle yellow.
+  The reason line now reads e.g. `top face edge on one circle 0.72 >= 0.64 (face r 81.7, 12.2 px from outline centre);
+  hub centre uncovered 0 px <= 400 (hub r 113.4, cap outline 8.6 px from hub centre); cap outline centre to cap centre
+  7.9 px <= 20.0`.
+- **Limits, honestly:** 0.64 sits between 0.59 and 0.68 (6 skewed caps only). Rule 1's 400 px is set wide because the
+  hub picture was never of the same part: in production (same part) a seated cap should leave 0 px. The log lines give
+  both numbers every cycle; tighten 400 (and check 0.64) from a shift's lines. Silver seating now runs MobileSAM on two
+  pictures: 2.0-2.8 s per check on the sandbox CPU (GPU on the plant PC).
+- New keys (both machines, all three files; allenbradley = the code defaults; seating stays off on Machine 1):
+  `cap.seating.hub.{ring.radius, box.half, radius.min, radius.max, centre.inset, dark.level, dark.open, visible.max}`,
+  `cap.seating.silver.face.{band.min, edge.margin, fit.min}`. `silver.face.offset.max` and `face.box.scale` are no
+  longer used (kept with the old test).
+- Reference commit 892041d (8ecef55's CheckCap + this logic, values written in); both manifests; verifier ALL
+  EQUIVALENT on both machines.
+- `cap_images/DOST_cap_06-09.jpg` (Machine 2): four 17 Nov seated silver caps.
+- Dry runs: new `DryRun_Cap_Silver_Seating.py` (both copies) 6/6 on Machine 2 (Machine 1: skipped, seating off);
+  `DryRun_Cap_Production_Path.py` 12/12 (9 seated silver OK, 7 skewed silver NOT OK; brass as before);
+  `DryRun_Cap_Check.py` all as expected on both machines; `DryRun_All_Checks_UI.py --auto`: cap OK (3.1 s; the YOLO
+  checks cannot run in the sandbox). `checkSeating` callers in the dry runs updated (silver prints the face fit).
+- Plant PC verification step 10 added. Needs a rebuilt exe and the properties file.

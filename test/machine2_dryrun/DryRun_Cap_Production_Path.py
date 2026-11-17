@@ -66,7 +66,7 @@ def main() -> int:
 
     runs = []
     realSeating = CheckCap.checkSeating
-    CheckCap.checkSeating = staticmethod(lambda img, found: (runs.append(1), realSeating(img, found))[1])
+    CheckCap.checkSeating = staticmethod(lambda img, found, *rest: (runs.append(1), realSeating(img, found, *rest))[1])
     IP = cps.ImageProcessor
     IP.stateFile = None
 

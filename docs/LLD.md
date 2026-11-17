@@ -227,9 +227,20 @@ guard was not applied). In the dry-run windows the check runs the guard itself (
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): brass (CHANGES §128, no MobileSAM): the picture unwrapped
 round the cap centre, per angle the strongest fall of R-B in `seating.brass.edge.band` (55-112 px: the cap edge) and of
 grey in `seating.bore.edge.band` (106-140 px: the bore edge), a RANSAC circle fitted to each (fit share and radius
-checked); cap centre to bore centre ≤ `seating.brass.offset.max` (10.5 px); silver (MobileSAM point prompt at the cap
-centre): top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
-the cap centre. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+checked); cap centre to bore centre ≤ `seating.brass.offset.max` (10.5 px); silver (CHANGES §129): the cap outline by
+MobileSAM (point prompt at the cap centre, radius 95-112), then two rules - (1) the hub centre must not be left
+uncovered: the hub circle is found in this cycle's hub + bottom bearing picture (MobileSAM, 12 points on a ring of
+`seating.hub.ring.radius` 95 px plus a box of ±`seating.hub.box.half` 125 px, roundest mask of radius 100-125); the hub
+centre is that circle less `seating.hub.centre.inset` (12 px); in the cap picture its pixels darker than
+`seating.hub.dark.level` (HSV value 60), outside the cap mask, after an opening of `seating.hub.dark.open` (9 px, removes
+the shadow line round a seated cap), must be ≤ `seating.hub.visible.max` (400 px); no hub picture or no hub circle: rule
+1 not applied, said in the reason; (2) the top face edge on one circle: round the outline centre, per angle the
+strongest fall of brightness outward between `seating.silver.face.band.min` (60) and the outline radius less
+`seating.silver.face.edge.margin` (6), a RANSAC circle fitted; the share of the 360 angles on it ≥
+`seating.silver.face.fit.min` (0.64) - a tilted cap shows its side wall on one side and its face edge stops being one
+circle; and the outline centre ≤ 20 px from the cap centre. The face-centre offset is logged only (a seated cap's face
+already sits ~8 px from the outline centre: camera angle). Marked picture: hub circle blue, cap green / red, face circle
+yellow. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /

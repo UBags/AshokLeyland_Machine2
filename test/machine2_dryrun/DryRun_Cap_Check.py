@@ -63,7 +63,8 @@ def main() -> int:
     print(f"Machine: {os.environ['COSTHETA_PLC_VENDOR']}   centre {tuple(CheckCap.CENTER)}   "
           f"radius DOST {CheckCap.RADIUS_DOST} / DOSTPLUS {CheckCap.RADIUS_DOSTPLUS}")
     print(f"Seating: {'on' if CheckCap.SEATING_CHECK else 'off'} - brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, "
-          f"silver top face to outline <= {CheckCap.SEATING_SILVER_FACE_OFFSET_MAX} px, silver outline to centre <= "
+          f"silver top face edge on one circle >= {CheckCap.SEATING_SILVER_FACE_FIT_MIN} and hub centre uncovered <= "
+          f"{CheckCap.SEATING_HUB_VISIBLE_MAX} px (hub picture), silver outline to centre <= "
           f"{CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX} px (0 = off)")
     print(f"Which cap: brass if R-B(r{CheckCap.RADIUS_DOSTPLUS}) > {CheckCap.RB_THRESHOLD_DOSTPLUS}; else silver if "
           f"R-B(r{CheckCap.RADIUS_DOST}) < {CheckCap.RB_THRESHOLD_DOST} and brightness(r{CheckCap.SILVER_BRIGHTNESS_RADIUS}) "
@@ -93,6 +94,9 @@ def main() -> int:
         s = CheckCap.checkSeating(image, "DOSTPLUS" if found == "brass" else "DOST")
         if s["offset"] is None:
             return f"seat: {s['reason']}"
+        if s.get("fit") is not None:    # silver (CHANGES 129): face edge on one circle, hub centre uncovered
+            return (f"face {s['fit']:.2f}/{s['fit_min']}" + (f" hub {s['hub_visible']}" if "hub_visible" in s else "")
+                    + (f" ctr {s['outline_offset']:4.1f}" if "outline_offset" in s else ""))
         return f"seat {s['offset']:5.1f}/{s['limit']}" + (f" ctr {s['outline_offset']:4.1f}" if "outline_offset" in s else "")
 
     def run(name, image, model, expectOK, exclude=None, tag="", skewed=False):
