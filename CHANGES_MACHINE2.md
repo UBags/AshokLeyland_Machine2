@@ -3719,3 +3719,13 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   to the larger disc). Seated positions, reference ovals and seating limits unchanged. Verifier ALL EQUIVALENT
   (both); nothing else run (user: fast).
 
+## 118. Bung seating limits relaxed (2026-11-17)
+
+- **User (siemens, all three properties files):** `bunk.seating.outside.reference.oval.max` 0.02 -> **0.06**;
+  `bunk.seating.roundness.min.dost` 0.952 -> **0.925**, `.dostplus` 0.96 -> **0.925**.
+- **Effect on the 13 Nov pictures (from the measured values, not re-run):** no verdict changes. The 16 pictures labelled
+  not seated that have a hole pattern still fail the hole-centre limit (20 px): 15 at 27-48 px; the 16th (C14) at
+  20.7 px, which now passes the oval test (4.0 %) and roundness (0.944) - so the hole-centre offset alone rejects
+  it, with a 0.7 px margin. The seated pictures keep passing; in the rotation run the DOST roundness of turned
+  seated pictures (0.929 at least) now passes. Verifier ALL EQUIVALENT (both).
+
