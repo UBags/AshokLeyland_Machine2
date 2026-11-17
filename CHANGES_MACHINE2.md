@@ -3706,3 +3706,16 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   decisions as §115; 16 s per gamma on this CPU (about 30 s before). The GPU time is the user's to measure.
   Reference commit 0866373 (both manifests); verifier ALL EQUIVALENT on both machines. Nothing else run (user: fast).
 
+## 117. Bung disc centre 3 px left / 6 px down, hole disc r135 (2026-11-17)
+
+- **User's DryRun_Bunk_Check_UI run on the 13 Nov pictures ("should be all OK"):** the 11 seated DOST and 12 seated
+  DOSTPLUS pictures OK, each NOT OK as the other model. NOT OK as their own model: 16 pictures with a hole pattern
+  that failed seating (hole-pattern centre 20.7-48.2 px from the seated position, 4.0-18.9 % of the face outside the
+  reference oval, roundness 0.857-0.948 on all but two) and 5 with no hole pattern (1 or 0 holes, the one found 68-92 px
+  from the disc centre). These are the pictures labelled "not seated" in CHANGES 100.
+- **Change (user; siemens, all three properties files):** `bunk.outer.disc.center` 646,328 -> **643,334**; the frame
+  centres `frame.centre.bunk.outer.disc.center.dost/.dostplus` moved the same (642.5,331.5 / 643.5,336.5);
+  `bunk.inner.disc.radius` 125 -> **135**; `bunk.hole.grid.radius.max` 90 -> **110** (so the grid reaches holes out
+  to the larger disc). Seated positions, reference ovals and seating limits unchanged. Verifier ALL EQUIVALENT
+  (both); nothing else run (user: fast).
+
