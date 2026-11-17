@@ -96,8 +96,8 @@ The PLC is reached only by the IOServer, through `PLCDataIO` (Siemens pyS7 or Al
 
 ```
 QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ top bearing ─▶ nut+plate washer
-   ─▶ torque 1 ─▶ bunk for component press ─▶ component press ─▶ no bunk ─▶ torque 2
-   ─▶ split pin+washer ─▶ cap ─▶ bunk for cap press ─▶ cap press ─▶ free-rotation torque ─▶ DB row ─▶ QR read
+   ─▶ torque 1 ─▶ bung for component press ─▶ component press ─▶ no bung ─▶ torque 2
+   ─▶ split pin+washer ─▶ cap ─▶ bung for cap press ─▶ cap press ─▶ free-rotation torque ─▶ DB row ─▶ QR read
 ```
 
 - The IOServer walks 28 states: a read state and a write state for each check, plus the value and event states.
@@ -119,8 +119,8 @@ runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `
 | 5 | Hub and bottom bearing (`CheckHubAndBottomBearing`) | MobileSAMv2 (YOLO + SAM) shapes in a ring round the hub centre; 4 evenly spaced holes = DOST, 5 = DOSTPLUS, must match the QR code. The "no bearing in the bore" test is off in production | one |
 | 7 | Top bearing (`CheckTopBearing`) | OpenCV ring finder (gamma branches, RANSAC circle fit, ring refinement); bearing size limits; ring brighter than in the hub picture. The ring is kept for the nut / washer check | one |
 | 9 | Nut and plate washer (`CheckNutAndPlateWasher`) | Hexagon nut (MobileSAM masks, hexagon and size tests; ring fallback); washer by the colour change on the bearing race against the top bearing picture (Machine 2: red only). Bearing-ring guard: a bearing-sized ring on the nut picture = NOT OK (run in the camera server beside the worker) | one |
-| 13, 24 | Bung for component press / cap press (`CheckNoCapBunk`, `CheckBunk`) | MobileSAM holes (YOLO boxes + a 15 px point grid over the hole disc): DOST 4 in a square, DOSTPLUS 2 opposite each other at the configured spacing; then (Machine 2) seating: hole-pattern centre near the seated position, a round, clean top-face oval inside the reference oval | one |
-| 16 | No bung (`CheckNoBunk`) | Nut found by the hexagon nut detector | one |
+| 13, 24 | Bung for component press / cap press (`CheckNoCapBung`, `CheckBung`) | MobileSAM holes (YOLO boxes + a 20 px point grid over the r135 hole disc): DOST 4 in a square, DOSTPLUS 2 opposite each other at the configured spacing; then (Machine 2) seating: hole-pattern centre near the seated position, a round, clean top-face oval inside the reference oval | one |
+| 16 | No bung (`CheckNoBung`) | Nut found by the hexagon nut detector | one |
 | 20 | Split pin and washer | Placeholder: OK whenever a QR code is known (on hold until production pictures exist) | 2 of 3 |
 | 22 | Cap (`CheckCap`) | Which cap (brass / silver / none) by colour and brightness; must be the model's; brightening against the hub, top bearing and nut pictures; then (Machine 2) seating by MobileSAM | steps before seating on 3, 2 must pass; seating once |
 
@@ -190,7 +190,7 @@ No values or words are written on the pictures sent to the frontend (outlines on
   - fault scenarios on both vendors;
   - the integrated cycle down to the DB row;
   - the frontend, DB, heartbeat and startup, knuckle, vision timeout and supervisor.
-- Vision dry runs and windows run the real checks on the stored pictures (`knuckle_images/`, `hub_images/`, `top_bearing_images/`, `nut_washer_images/`, `cap_images/`, `bunk_images_20261113/`): `DryRun_Knuckle_Frame.py` (knuckle by segmentation and the frame, with simulated camera moves), `DryRun_Cap_Check.py`, `DryRun_Bearing_Ring_Guard.py` and the tkinter windows per check. The model-based ones need the MobileSAM (and YOLO) weights, which are not in git.
+- Vision dry runs and windows run the real checks on the stored pictures (`knuckle_images/`, `hub_images/`, `top_bearing_images/`, `nut_washer_images/`, `cap_images/`, `bung_images_20261113/`): `DryRun_Knuckle_Frame.py` (knuckle by segmentation and the frame, with simulated camera moves), `DryRun_Cap_Check.py`, `DryRun_Bearing_Ring_Guard.py` and the tkinter windows per check. The model-based ones need the MobileSAM (and YOLO) weights, which are not in git.
 - `Verify_Vision_Config_Equivalence` proves that vision refactors do not change behaviour (each vision file against its reference commit, every configurable value replaced by its default).
 
 ## 10. Planned architecture work

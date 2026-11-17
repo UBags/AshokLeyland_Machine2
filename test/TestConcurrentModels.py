@@ -1,4 +1,4 @@
-from camera.BunkSegmenter import BunkSegmenter
+from camera.BungSegmenter import BungSegmenter
 from camera.HexagonNutDetector import HexagonNutDetector
 from camera.HubAndBearingSegmenter import HubAndBearingSegmenter
 from camera.ModelManager import ModelManager
@@ -11,7 +11,7 @@ assert manager1 is manager2
 # Verify models shared
 detector = HexagonNutDetector()
 detector.load_models()
-segmenter = BunkSegmenter(None, None)
+segmenter = BungSegmenter(None, None)
 assert detector.sam_predictor is segmenter.sam_predictor
 assert detector.yolo_model is segmenter.yolo_model
 
@@ -24,7 +24,7 @@ if torch.cuda.is_available():
     print(f"GPU Memory Reserved: {torch.cuda.memory_reserved() / 1e9:.2f} GB")
 
 # Test that multiple detectors can run concurrently
-bung = BunkSegmenter(None, None)
+bung = BungSegmenter(None, None)
 nut = HexagonNutDetector()
 nut.load_models()
 hub = HubAndBearingSegmenter(None, None)
@@ -32,8 +32,8 @@ hub = HubAndBearingSegmenter(None, None)
 # All should work without conflicts
 
 
-# Method 1: BunkSegmenter / HubAndBearingSegmenter style (auto-load)
-# segmenter = BunkSegmenter(None, None)  # Models auto-loaded
+# Method 1: BungSegmenter / HubAndBearingSegmenter style (auto-load)
+# segmenter = BungSegmenter(None, None)  # Models auto-loaded
 # count, components, gamma = segmenter.segment_holes_batch(...)
 #
 # # Method 2: HexagonNutDetector style (explicit load)

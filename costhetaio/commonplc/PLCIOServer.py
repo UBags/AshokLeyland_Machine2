@@ -392,18 +392,18 @@ class PLCIOServer:
     PLC_PC_Station2RotationDuringTighteningDone: str = CosThetaConfigurator.getInstance().getPlcPcStation2RotationDuringTighteningDoneTagName()
     PLC_PC_Station2TorqueValue: str = CosThetaConfigurator.getInstance().getPlcPcStation2TorqueValueTagName()
 
-    # ==================== No Cap Bunk Tags (Step 7) ====================
-    PLC_PC_CheckNoCapBunk: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoCapBunkTagName()
-    PC_PLC_NoCapBunkCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcNoCapBunkCheckOKTagName()
-    PC_PLC_NoCapBunkCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcNoCapBunkCheckDoneTagName()
+    # ==================== No Cap Bung Tags (Step 7) ====================
+    PLC_PC_CheckNoCapBung: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoCapBungTagName()
+    PC_PLC_NoCapBungCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcNoCapBungCheckOKTagName()
+    PC_PLC_NoCapBungCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcNoCapBungCheckDoneTagName()
 
     # ==================== Component Press Done Tag (Step 8) ====================
     PLC_PC_ComponentPressDone: str = CosThetaConfigurator.getInstance().getPlcPcComponentPressDoneTagName()
 
-    # ==================== No Bunk Tags (Step 9) ====================
-    PLC_PC_CheckNoBunk: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoBunkTagName()
-    PC_PLC_NoBunkCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcNoBunkCheckOKTagName()
-    PC_PLC_NoBunkCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcNoBunkCheckDoneTagName()
+    # ==================== No Bung Tags (Step 9) ====================
+    PLC_PC_CheckNoBung: str = CosThetaConfigurator.getInstance().getPlcPcCheckNoBungTagName()
+    PC_PLC_NoBungCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcNoBungCheckOKTagName()
+    PC_PLC_NoBungCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcNoBungCheckDoneTagName()
 
     # ==================== Split Pin and Washer Tags (Step 11) ====================
     PLC_PC_CheckSplitPinAndWasher: str = CosThetaConfigurator.getInstance().getPlcPcCheckSplitPinAndWasherTagName()
@@ -416,10 +416,10 @@ class PLCIOServer:
     PC_PLP_CapCheckOK: str = PC_PLC_CapCheckOK      # the earlier, misspelt name (kept as an alias for older scripts)
     PC_PLC_CapCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcCapCheckDoneTagName()
 
-    # ==================== Bunk Tags (Step 13) ====================
-    PLC_PC_CheckBunk: str = CosThetaConfigurator.getInstance().getPlcPcCheckBunkTagName()
-    PC_PLC_BunkCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcBunkCheckOKTagName()
-    PC_PLC_BunkCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcBunkCheckDoneTagName()
+    # ==================== Bung Tags (Step 13) ====================
+    PLC_PC_CheckBung: str = CosThetaConfigurator.getInstance().getPlcPcCheckBungTagName()
+    PC_PLC_BungCheckOK: str = CosThetaConfigurator.getInstance().getPcPlcBungCheckOKTagName()
+    PC_PLC_BungCheckDone: str = CosThetaConfigurator.getInstance().getPcPlcBungCheckDoneTagName()
 
     # ==================== Cap Press Done Tag (Step 14) ====================
     PLC_PC_CapPressDone: str = CosThetaConfigurator.getInstance().getPlcPcCapPressDoneTagName()
@@ -968,15 +968,15 @@ class PLCIOServer:
     OP_HUB_BEARING    = "T2_HubAndBottomBearing"
     OP_TOP_BEARING    = "T3_TopBearing"
     OP_NUT_WASHER     = "T4_NutAndPlateWasher_to_Torque1Read"
-    OP_NOCAP_BUNK     = "T5_NoCapBunk"
-    OP_TORQUE2        = "T6_NoCapBunkStart_to_Torque2Done"
+    OP_NOCAP_BUNG     = "T5_NoCapBung"
+    OP_TORQUE2        = "T6_NoCapBungStart_to_Torque2Done"
     OP_SPLITPIN       = "T7_SplitPinAndWasher"
     OP_CAP            = "T8_Cap"
-    OP_BUNK_CAP_PRESS = "T9_BunkCapPress_to_Station3TorqueValueSet"
+    OP_BUNG_CAP_PRESS = "T9_BungCapPress_to_Station3TorqueValueSet"
 
     ALL_OP_KEYS = [
         OP_KNUCKLE, OP_HUB_BEARING, OP_TOP_BEARING, OP_NUT_WASHER,
-        OP_NOCAP_BUNK, OP_TORQUE2, OP_SPLITPIN, OP_CAP, OP_BUNK_CAP_PRESS,
+        OP_NOCAP_BUNG, OP_TORQUE2, OP_SPLITPIN, OP_CAP, OP_BUNG_CAP_PRESS,
     ]
 
     def _resetOpTimestamps(self) -> None:
@@ -1019,11 +1019,11 @@ class PLCIOServer:
         T2 = getDelta(PLCIOServer.OP_HUB_BEARING)
         T3 = getDelta(PLCIOServer.OP_TOP_BEARING)
         T4 = getDelta(PLCIOServer.OP_NUT_WASHER)
-        T5 = getDelta(PLCIOServer.OP_NOCAP_BUNK)
+        T5 = getDelta(PLCIOServer.OP_NOCAP_BUNG)
         T6 = getDelta(PLCIOServer.OP_TORQUE2)
         T7 = getDelta(PLCIOServer.OP_SPLITPIN)
         T8 = getDelta(PLCIOServer.OP_CAP)
-        T9 = getDelta(PLCIOServer.OP_BUNK_CAP_PRESS)
+        T9 = getDelta(PLCIOServer.OP_BUNG_CAP_PRESS)
 
         sumOfDeltas   = T1 + T2 + T3 + T4 + T5 + T6 + T7 + T8 + T9
         fixedOverhead = 8   # seconds — fixed machine overhead per cycle
@@ -1037,11 +1037,11 @@ class PLCIOServer:
             f"T2  (Hub & bottom bearing    : PLC trigger → HubCheckDone)               : {T2:.3f} sec\n"
             f"T3  (Top bearing             : PLC trigger → HubAndSecondBearingDone)    : {T3:.3f} sec\n"
             f"T4  (Nut & plate washer      : PLC trigger → Torque 1 read)              : {T4:.3f} sec\n"
-            f"T5  (No-cap bunk             : PLC trigger → NoCapBunkCheckDone)         : {T5:.3f} sec\n"
-            f"T6  (No-cap bunk → Torque2   : PLC trigger → Station2TorqueValueSet)     : {T6:.3f} sec\n"
+            f"T5  (No-cap bung             : PLC trigger → NoCapBungCheckDone)         : {T5:.3f} sec\n"
+            f"T6  (No-cap bung → Torque2   : PLC trigger → Station2TorqueValueSet)     : {T6:.3f} sec\n"
             f"T7  (Split pin & washer      : PLC trigger → SplitPinAndWasherDone)      : {T7:.3f} sec\n"
             f"T8  (Cap                     : PLC trigger → CapCheckDone)               : {T8:.3f} sec\n"
-            f"T9  (Bunk for cap press      : PLC trigger → Station3TorqueValueSet ready): {T9:.3f} sec\n"
+            f"T9  (Bung for cap press      : PLC trigger → Station3TorqueValueSet ready): {T9:.3f} sec\n"
             f"{'-' * 70}\n"
             f"Sum of T1 – T9                                                           : {sumOfDeltas:.3f} sec\n"
             f"Fixed overhead                                                           : +{fixedOverhead} sec\n"
@@ -1068,13 +1068,13 @@ class PLCIOServer:
         - States 7-8:   Top bearing - uses PLC_PC_CheckHubAndSecondBearing
         - States 9-10:  Nut and Plate Washer
         - States 11-12: Tightening Torque 1 - PLC_PC_Station2TorqueValueSet / PLC_PC_Station2TorqueValue
-        - States 13-14: Bunk for Component Press - uses PLC_PC_CheckNoCapBunk
+        - States 13-14: Bung for Component Press - uses PLC_PC_CheckNoCapBung
         - State 15:     Component Press Done
-        - States 16-17: No Bunk
+        - States 16-17: No Bung
         - States 18-19: Tightening Torque 2 - Station 2 torque tags (reused)
         - States 20-21: Split Pin and Washer
         - States 22-23: Cap
-        - States 24-25: Bunk for Cap Press - uses PLC_PC_CheckBunk
+        - States 24-25: Bung for Cap Press - uses PLC_PC_CheckBung
         - State 26:     Cap Press Done
         - States 27-28: Free Rotation Torque - PLC_PC_Station3TorqueValueSet / PLC_PC_Station3TorqueValue
         """
@@ -1106,17 +1106,17 @@ class PLCIOServer:
         if currentState == MachineState.READ_TIGHTENING_TORQUE_1:
             return [PLCIOServer.PLC_PC_Station2TorqueValue], [float]
 
-        # Step 7: No Cap Bunk for Component Press
-        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-            return [PLCIOServer.PLC_PC_CheckNoCapBunk], [bool]
+        # Step 7: No Cap Bung for Component Press
+        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS:
+            return [PLCIOServer.PLC_PC_CheckNoCapBung], [bool]
 
         # Step 8: Component Press Done
         if currentState == MachineState.READ_COMPONENT_PRESS_DONE:
             return [PLCIOServer.PLC_PC_ComponentPressDone], [bool]
 
-        # Step 9: No Bunk
-        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
-            return [PLCIOServer.PLC_PC_CheckNoBunk], [bool]
+        # Step 9: No Bung
+        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG:
+            return [PLCIOServer.PLC_PC_CheckNoBung], [bool]
 
         # Step 10: Tightening Torque 2 (Station 2 - second round, reuses same tags)
         if currentState == MachineState.READ_TIGHTENING_TORQUE_2_DONE:
@@ -1132,9 +1132,9 @@ class PLCIOServer:
         if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP:
             return [PLCIOServer.PLC_PC_CheckCap], [bool]
 
-        # Step 13: Bunk for Cap Press - reuses CheckBunk
-        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
-            return [PLCIOServer.PLC_PC_CheckBunk], [bool]
+        # Step 13: Bung for Cap Press - reuses CheckBung
+        if currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS:
+            return [PLCIOServer.PLC_PC_CheckBung], [bool]
 
         # Step 14: Cap Press Done
         if currentState == MachineState.READ_CAP_PRESS_DONE:
@@ -1180,14 +1180,14 @@ class PLCIOServer:
             return [PLCIOServer.PC_PLC_NutAndPlateWasherCheckOK, PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone,
                     PLCIOServer.PLC_PC_CheckNutAndPlateWasher]
 
-        # Step 7: No Cap Bunk for Component Press
-        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-            return [PLCIOServer.PC_PLC_NoCapBunkCheckOK, PLCIOServer.PC_PLC_NoCapBunkCheckDone,
-                    PLCIOServer.PLC_PC_CheckNoCapBunk]
+        # Step 7: No Cap Bung for Component Press
+        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNG_FOR_COMPONENT_PRESS:
+            return [PLCIOServer.PC_PLC_NoCapBungCheckOK, PLCIOServer.PC_PLC_NoCapBungCheckDone,
+                    PLCIOServer.PLC_PC_CheckNoCapBung]
 
-        # Step 9: No Bunk
-        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_NO_BUNK:
-            return [PLCIOServer.PC_PLC_NoBunkCheckOK, PLCIOServer.PC_PLC_NoBunkCheckDone, PLCIOServer.PLC_PC_CheckNoBunk]
+        # Step 9: No Bung
+        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_NO_BUNG:
+            return [PLCIOServer.PC_PLC_NoBungCheckOK, PLCIOServer.PC_PLC_NoBungCheckDone, PLCIOServer.PLC_PC_CheckNoBung]
 
         # Step 11: Split Pin and Washer
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER:
@@ -1198,9 +1198,9 @@ class PLCIOServer:
         if currentState == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
             return [PLCIOServer.PC_PLC_CapCheckOK, PLCIOServer.PC_PLC_CapCheckDone, PLCIOServer.PLC_PC_CheckCap]
 
-        # Step 13: Bunk for Cap Press - reuses CheckBunk
-        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS:
-            return [PLCIOServer.PC_PLC_BunkCheckOK, PLCIOServer.PC_PLC_BunkCheckDone, PLCIOServer.PLC_PC_CheckBunk]
+        # Step 13: Bung for Cap Press - reuses CheckBung
+        if currentState == MachineState.WRITE_RESULT_OF_CHECKING_BUNG_FOR_CAP_PRESS:
+            return [PLCIOServer.PC_PLC_BungCheckOK, PLCIOServer.PC_PLC_BungCheckDone, PLCIOServer.PLC_PC_CheckBung]
 
         return None
 
@@ -1699,11 +1699,11 @@ class PLCIOServer:
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: PLCIOServer.PLC_PC_CheckHub,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: PLCIOServer.PLC_PC_CheckHubAndSecondBearing,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: PLCIOServer.PLC_PC_CheckNutAndPlateWasher,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: PLCIOServer.PLC_PC_CheckNoCapBunk,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: PLCIOServer.PLC_PC_CheckNoBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: PLCIOServer.PLC_PC_CheckNoCapBung,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: PLCIOServer.PLC_PC_CheckNoBung,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: PLCIOServer.PLC_PC_CheckSplitPinAndWasher,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: PLCIOServer.PLC_PC_CheckCap,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: PLCIOServer.PLC_PC_CheckBunk,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: PLCIOServer.PLC_PC_CheckBung,
         }.get(readState)
 
     def _readBoolOrNone(self, tag: str) -> Optional[bool]:
@@ -2082,8 +2082,8 @@ class PLCIOServer:
                                     objRef._recordOpEnd(PLCIOServer.OP_HUB_BEARING)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_TOP_BEARING:
                                     objRef._recordOpEnd(PLCIOServer.OP_TOP_BEARING)
-                                elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-                                    objRef._recordOpEnd(PLCIOServer.OP_NOCAP_BUNK)
+                                elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_BUNG_FOR_COMPONENT_PRESS:
+                                    objRef._recordOpEnd(PLCIOServer.OP_NOCAP_BUNG)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER:
                                     objRef._recordOpEnd(PLCIOServer.OP_SPLITPIN)
                                 elif stateBeforeWrite == MachineState.WRITE_RESULT_OF_CHECKING_CAP:
@@ -2164,11 +2164,11 @@ class PLCIOServer:
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_1_DONE:
                         successfullySent = True
 
-                    # Step 7: Bunk for Component Press — START of T5 and T6
-                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+                    # Step 7: Bung for Component Press — START of T5 and T6
+                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS:
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS)
                         if successfullySent:
-                            self._recordOpStart(PLCIOServer.OP_NOCAP_BUNK)
+                            self._recordOpStart(PLCIOServer.OP_NOCAP_BUNG)
                             self._recordOpStart(PLCIOServer.OP_TORQUE2)
 
                     # Step 8: Component Press Done
@@ -2181,9 +2181,9 @@ class PLCIOServer:
                                                   "after the component press Done was read",
                                                   delay=CosThetaConfigurator.getInstance().getPlcComponentPressResetDelay())
 
-                    # Step 9: No Bunk
-                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
-                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+                    # Step 9: No Bung
+                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG:
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG)
 
                     # Step 10: Tightening Torque 2 Done — END of T6
                     elif currentState == MachineState.READ_TIGHTENING_TORQUE_2_DONE:
@@ -2202,11 +2202,11 @@ class PLCIOServer:
                         if successfullySent:
                             self._recordOpStart(PLCIOServer.OP_CAP)
 
-                    # Step 13: Bunk for Cap Press — START of T9
-                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
-                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
+                    # Step 13: Bung for Cap Press — START of T9
+                    elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS:
+                        successfullySent = self._requestPicture(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS)
                         if successfullySent:
-                            self._recordOpStart(PLCIOServer.OP_BUNK_CAP_PRESS)
+                            self._recordOpStart(PLCIOServer.OP_BUNG_CAP_PRESS)
 
                     # Step 14: Cap Press Done
                     elif currentState == MachineState.READ_CAP_PRESS_DONE:
@@ -2220,7 +2220,7 @@ class PLCIOServer:
                     # Step 15: Free Rotation Torque 1 Done — END of T9
                     elif currentState == MachineState.READ_FREE_ROTATION_TORQUE_1_DONE:
                         successfullySent = True
-                        self._recordOpEnd(PLCIOServer.OP_BUNK_CAP_PRESS)
+                        self._recordOpEnd(PLCIOServer.OP_BUNG_CAP_PRESS)
 
                     if successfullySent:
                         printBold(f"Transition from state {self.machineState.getCurrentState().name}")
@@ -2856,13 +2856,13 @@ class PLCIOServer:
             (PLCIOServer.PC_PLC_NutAndPlateWasherCheckDone, bool),
             (PLCIOServer.PLC_PC_Station2TorqueValueSet, bool), (PLCIOServer.PLC_PC_Station2TorqueValue, float),
             (PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, bool),
-            (PLCIOServer.PLC_PC_CheckNoCapBunk, bool), (PLCIOServer.PC_PLC_NoCapBunkCheckOK, bool), (PLCIOServer.PC_PLC_NoCapBunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckNoCapBung, bool), (PLCIOServer.PC_PLC_NoCapBungCheckOK, bool), (PLCIOServer.PC_PLC_NoCapBungCheckDone, bool),
             (PLCIOServer.PLC_PC_ComponentPressDone, bool),
-            (PLCIOServer.PLC_PC_CheckNoBunk, bool), (PLCIOServer.PC_PLC_NoBunkCheckOK, bool), (PLCIOServer.PC_PLC_NoBunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckNoBung, bool), (PLCIOServer.PC_PLC_NoBungCheckOK, bool), (PLCIOServer.PC_PLC_NoBungCheckDone, bool),
             (PLCIOServer.PLC_PC_CheckSplitPinAndWasher, bool), (PLCIOServer.PC_PLC_SplitPinAndWasherCheckOK, bool),
             (PLCIOServer.PC_PLC_SplitPinAndWasherCheckDone, bool),
             (PLCIOServer.PLC_PC_CheckCap, bool), (PLCIOServer.PC_PLC_CapCheckOK, bool), (PLCIOServer.PC_PLC_CapCheckDone, bool),
-            (PLCIOServer.PLC_PC_CheckBunk, bool), (PLCIOServer.PC_PLC_BunkCheckOK, bool), (PLCIOServer.PC_PLC_BunkCheckDone, bool),
+            (PLCIOServer.PLC_PC_CheckBung, bool), (PLCIOServer.PC_PLC_BungCheckOK, bool), (PLCIOServer.PC_PLC_BungCheckDone, bool),
             (PLCIOServer.PLC_PC_CapPressDone, bool),
             (PLCIOServer.PLC_PC_Station3TorqueValueSet, bool), (PLCIOServer.PLC_PC_Station3TorqueValue, float),
             (PLCIOServer.PLC_PC_EmergencyAbort, bool),
@@ -3182,18 +3182,18 @@ class PLCIOServer:
             tag_values[PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone] = self.read_bool(
                 PLCIOServer.PLC_PC_Station2RotationDuringTighteningDone, debug=False)
 
-        # Step 7: No Cap Bunk
-        tag_values[PLCIOServer.PLC_PC_CheckNoCapBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckNoCapBunk, debug=False)
-        tag_values[PLCIOServer.PC_PLC_NoCapBunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoCapBunkCheckOK, debug=False)
-        tag_values[PLCIOServer.PC_PLC_NoCapBunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoCapBunkCheckDone, debug=False)
+        # Step 7: No Cap Bung
+        tag_values[PLCIOServer.PLC_PC_CheckNoCapBung] = self.read_bool(PLCIOServer.PLC_PC_CheckNoCapBung, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoCapBungCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoCapBungCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoCapBungCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoCapBungCheckDone, debug=False)
 
         # Step 8: Component Press Done
         tag_values[PLCIOServer.PLC_PC_ComponentPressDone] = self.read_bool(PLCIOServer.PLC_PC_ComponentPressDone, debug=False)
 
-        # Step 9: No Bunk
-        tag_values[PLCIOServer.PLC_PC_CheckNoBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckNoBunk, debug=False)
-        tag_values[PLCIOServer.PC_PLC_NoBunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoBunkCheckOK, debug=False)
-        tag_values[PLCIOServer.PC_PLC_NoBunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoBunkCheckDone, debug=False)
+        # Step 9: No Bung
+        tag_values[PLCIOServer.PLC_PC_CheckNoBung] = self.read_bool(PLCIOServer.PLC_PC_CheckNoBung, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoBungCheckOK] = self.read_bool(PLCIOServer.PC_PLC_NoBungCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_NoBungCheckDone] = self.read_bool(PLCIOServer.PC_PLC_NoBungCheckDone, debug=False)
 
         # Step 11: Split Pin and Washer
         tag_values[PLCIOServer.PLC_PC_CheckSplitPinAndWasher] = self.read_bool(PLCIOServer.PLC_PC_CheckSplitPinAndWasher,
@@ -3208,10 +3208,10 @@ class PLCIOServer:
         tag_values[PLCIOServer.PC_PLC_CapCheckOK] = self.read_bool(PLCIOServer.PC_PLC_CapCheckOK, debug=False)
         tag_values[PLCIOServer.PC_PLC_CapCheckDone] = self.read_bool(PLCIOServer.PC_PLC_CapCheckDone, debug=False)
 
-        # Step 13: Bunk
-        tag_values[PLCIOServer.PLC_PC_CheckBunk] = self.read_bool(PLCIOServer.PLC_PC_CheckBunk, debug=False)
-        tag_values[PLCIOServer.PC_PLC_BunkCheckOK] = self.read_bool(PLCIOServer.PC_PLC_BunkCheckOK, debug=False)
-        tag_values[PLCIOServer.PC_PLC_BunkCheckDone] = self.read_bool(PLCIOServer.PC_PLC_BunkCheckDone, debug=False)
+        # Step 13: Bung
+        tag_values[PLCIOServer.PLC_PC_CheckBung] = self.read_bool(PLCIOServer.PLC_PC_CheckBung, debug=False)
+        tag_values[PLCIOServer.PC_PLC_BungCheckOK] = self.read_bool(PLCIOServer.PC_PLC_BungCheckOK, debug=False)
+        tag_values[PLCIOServer.PC_PLC_BungCheckDone] = self.read_bool(PLCIOServer.PC_PLC_BungCheckDone, debug=False)
 
         # Step 14: Cap Press Done
         tag_values[PLCIOServer.PLC_PC_CapPressDone] = self.read_bool(PLCIOServer.PLC_PC_CapPressDone, debug=False)

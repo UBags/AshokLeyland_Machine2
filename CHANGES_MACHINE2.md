@@ -3814,3 +3814,48 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   `updateMachineSettingsDialog` before the dialog, Save prompts carry the change list and the confirmation text, no
   Yes / No asked. In the 165 above.
 
+## 125. Bunk -> Bung everywhere (code, files, folders, properties, database, frontend, logs, docs) (2026-11-17)
+
+- **User:** change Bunk to Bung throughout - DB, frontend, file and folder names, logs, properties - without breaking
+  anything.
+- **Done with one case-preserving text change** (`BUNK`/`Bunk`/`bunk` -> `BUNG`/`Bung`/`bung`) over every tracked text
+  file except `archive/`, `bokeh/` and this file's earlier sections (history stays as written), plus `git mv`:
+  `camera/BungSegmenter.py`, `CheckBung.py`, `CheckNoBung.py`, `CheckNoCapBung.py`; `DryRun_Bung_Check(_UI).py` (both
+  folders); `test/machine2_dryrun/bung_images/` and `bung_images_20261113/` (and the picture names in them). This
+  covers class / function / variable names, the state names (`READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS`, ...),
+  Redis field names, properties keys (`<vendor>.vision.bung.*`, `vision.frame.centre.bung.*`, `plc.pc.check.bung.tagname`,
+  `images.bung.and.no.bung.folder` = **`7-BUNGAndNoBUNG/`**, ...), operator instructions ("Place BUNG on CAP ..."), log
+  lines, frontend tiles, trial-picture folders (`BungForComponentPress/`, `BungForCapPress/`, `NoBung/`), reports.
+- **Kept on purpose:** the PLC tag names - the values of the 9 `*.tagname` keys (`PLC_PC_CheckBunkForComponentPress`,
+  `PC_PLC_BunkForComponentPressCheckOK/Done`, `PLC_PC_CheckNoBunk`, `PC_PLC_NoBunkCheckOK/Done`,
+  `PLC_PC_CheckBunkForCapPress`, `PC_PLC_BunkForCapPressCheckOK/Done`), the matching keys of
+  `costhetaio/siemens/IOServerProperties.yaml` and the defaults in `Configuration.py`. They are the PLC program's names
+  (Allen-Bradley reads tags by these names; the yaml maps them to Siemens addresses), so changing them needs the PLC
+  programmer. `costhetaio/allenbradley/IOServer_ModbusTCP.py` (legacy, one tag string) is unchanged. The Python
+  attributes that hold them (`IOServer.PLC_PC_CheckNoBung`, ...) are renamed.
+- **Nothing breaks on the plant PC:**
+  - *Database:* `createAllTables` (run at every start) renames the 9 old columns (`check_bunk_for_component_press_*`,
+    `check_no_bunk_*`, `check_bunk_cap_press_*`) to their `bung` names if they exist and the new ones do not - data kept,
+    a no-op afterwards. Stored picture paths keep their old folder names.
+  - *Properties:* `CosThetaConfigurator._addLegacyBungKeys` - at every load / live reload each old `bunk` key whose
+    `bung` spelling is missing is added under the new spelling (one warning). An old properties file gives exactly the
+    new values except the picture folder (it stays `7-BUNKAndNoBUNK/` until the file is replaced). Checked: the
+    pre-change Machine 2 file loads with 92 keys mapped, every `bung` key equal to the new file's.
+  - *Pictures:* new ones go to `7-BUNGAndNoBUNG/<date>/`; the picture clean-up walks the whole picture root, so the old
+    folders are still cleaned up.
+  - *Camera state file / Redis:* field names changed; MainProgram flushes Redis at start, and a state file from the
+    old build simply has no pictures under the new names (ignored).
+- **Vision verifier:** the renamed vision files no longer match their reference commits, so a new reference commit
+  `0ff5470` holds `camera/BungSegmenter.py` (= 0866373 BunkSegmenter), `camera/CheckNoBung.py` (= 5728def CheckNoBunk)
+  and `camera/VisionFrame.py` (= f3aa0ed) with the same text change; both manifests point at it (keys and file names in
+  `extracted` renamed too). **ALL EQUIVALENT** on both machines.
+- Runs (sandbox): verifier both folders ALL EQUIVALENT; every file compiles; `DryRun_FEServer_Cycles` 165/165;
+  `DryRun_IOServer_Fault_Scenarios` (Siemens) 211/211; `DryRun_State_Sync_Monitor` 15/15;
+  `DryRun_IOServer_Two_Full_Cycles`, `DryRun_FEServer_To_DBServer_Pipeline`, `DryRun_All_Servers_Integrated_Cycle`
+  (DB row all OK, state sync in sync) completed; `DryRun_DBServer_And_Persistence` 66/66 with a new section 10 (a
+  database with the old column names: renamed at set-up, the old row's values kept, a second set-up changes nothing; the
+  sandbox's own Test database, made before the rename, was migrated the same way); `DryRun_DB_Indexes_And_Day_Folder`
+  8/8 (one earlier run failed D1: the test checks all 7 day folders right after the first one moves - a race in the
+  test, not in the rename; passed on the rerun).
+- Needs a rebuilt exe and the new properties file (both in the new `MainProgram.dist`).
+

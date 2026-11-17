@@ -81,10 +81,10 @@ def realisticCycle(s: Sim, cycle=5):
         s.fe = feNext; s.run(0.8)                                              # frontend has the OK; IOServer handshakes
     s.ioState(MS.READ_TIGHTENING_TORQUE_1_DONE, cycle); s.run(20)             # tightening
     s.ioState(MS.READ_TIGHTENING_TORQUE_1, cycle); s.run(0.2)
-    s.fe = MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS; s.run(0.5)
-    rest = [(MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MS.READ_COMPONENT_PRESS_DONE),
-            (MS.READ_COMPONENT_PRESS_DONE, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK),
-            (MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MS.READ_TIGHTENING_TORQUE_2)]
+    s.fe = MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS; s.run(0.5)
+    rest = [(MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MS.READ_COMPONENT_PRESS_DONE),
+            (MS.READ_COMPONENT_PRESS_DONE, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG),
+            (MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, MS.READ_TIGHTENING_TORQUE_2)]
     for st, feNext in rest:
         s.ioState(st, cycle); s.run(3.0)
         if st.name.startswith("READ_TAKE_PICTURE"):
@@ -94,8 +94,8 @@ def realisticCycle(s: Sim, cycle=5):
     s.ioState(MS.READ_TIGHTENING_TORQUE_2, cycle); s.run(0.2)
     s.fe = MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER; s.run(0.5)
     for read, feNext in [(MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP),
-                         (MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS),
-                         (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, MS.READ_CAP_PRESS_DONE)]:
+                         (MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS),
+                         (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, MS.READ_CAP_PRESS_DONE)]:
         s.ioState(read, cycle); s.run(3.0)
         s.ioState(MS(int(read) + 1), cycle); s.run(1.2)
         s.fe = feNext; s.run(0.8)

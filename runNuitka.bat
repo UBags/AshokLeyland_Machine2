@@ -70,7 +70,7 @@ REM raises ImportError not only on import but also on importlib.util.find_spec()
 REM Python returns None - so a library that only LOOKS FOR a package by name breaks too.
 REM MUST stay IN (do not exclude):
 REM   networkx - torch._functorch...graph_info_provider imports it at module level; reached when MobileSAM loads
-REM   pandas   - every YOLO predict (hub / bunk / nut checks): ultralytics AutoBackend.__init__ -> _model_type() ->
+REM   pandas   - every YOLO predict (hub / bung / nut checks): ultralytics AutoBackend.__init__ -> _model_type() ->
 REM              exporter.export_formats() -> import pandas
 REM   sklearn  - torch._dynamo.trace_rules calls find_spec("sklearn") (and "pandas", "networkx") at module level
 REM   scipy (hub / top bearing / nut checks), sympy (torch), matplotlib (ultralytics) stay as well.

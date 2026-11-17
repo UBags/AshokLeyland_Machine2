@@ -1,12 +1,12 @@
 """
-DryRun_Bunk_Check - the real bunk checks on this machine's bung pictures, with this machine's settings
-(<vendor>.vision.bunk.* in ApplicationConfiguration.properties). Console only. Needs the MobileSAM models (as the
+DryRun_Bung_Check - the real bung checks on this machine's bung pictures, with this machine's settings
+(<vendor>.vision.bung.* in ApplicationConfiguration.properties). Console only. Needs the MobileSAM models (as the
 camera server does); a CUDA GPU makes it fast.
 
-Both checks run the same hole detection (camera/BunkSegmenter.py):
-  - CheckNoCapBunk.checkNoCapBunk  - state 13, bung before the component press
-  - CheckBunk.checkBunk            - state 24, bung before the cap press
-The r<outer.disc.radius> disc round <vendor>.vision.bunk.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
+Both checks run the same hole detection (camera/BungSegmenter.py):
+  - CheckNoCapBung.checkNoCapBung  - state 13, bung before the component press
+  - CheckBung.checkBung            - state 24, bung before the cap press
+The r<outer.disc.radius> disc round <vendor>.vision.bung.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
 until a definite answer; YOLO boxes + a point every hole.grid.step px); holes count only inside r<inner.disc.radius>
 round the same centre (area min/max.mask.area). One "[Bung] ..." log line per gamma.
   DOST     : 4 holes forming a square (sides within square.side.length.tolerance of the median, corners
@@ -14,7 +14,7 @@ round the same centre (area min/max.mask.area). One "[Bung] ..." log line per ga
   DOSTPLUS : 2 holes dostplus.hole.pair.distance.min..max apart, opposite about the centre (the best pair
              among the candidates); a DOST square found = NOT OK
 
-Pictures: <folder>/<MODEL>_*.jpg|png (MODEL = DOST or DOSTPLUS, from the file name; default folder: bunk_images next to
+Pictures: <folder>/<MODEL>_*.jpg|png (MODEL = DOST or DOSTPLUS, from the file name; default folder: bung_images next to
 this file). Each picture is checked
   - as its own model           -> must be OK
   - as the other model         -> must be NOT OK (wrong bung)
@@ -24,10 +24,10 @@ Printed per picture: OK / NOT OK, the gamma that decided, the holes found (centr
 (DOSTPLUS: pair distance; DOST: the 4 sides), and how far the centre of the holes is from the configured centre.
 
 Run from the project root:
-    python test/machine1_dryrun/DryRun_Bunk_Check.py                      (CheckBunk, state 24)
-    python test/machine1_dryrun/DryRun_Bunk_Check.py --check nocap        (CheckNoCapBunk, state 13)
-    python test/machine1_dryrun/DryRun_Bunk_Check.py --check both --save  (both; marked pictures to <folder>/bunk_results/)
-    python test/machine1_dryrun/DryRun_Bunk_Check.py --folder D:/pictures/bungs
+    python test/machine2_dryrun/DryRun_Bung_Check.py                      (CheckBung, state 24)
+    python test/machine2_dryrun/DryRun_Bung_Check.py --check nocap        (CheckNoCapBung, state 13)
+    python test/machine2_dryrun/DryRun_Bung_Check.py --check both --save  (both; marked pictures to <folder>/bung_results/)
+    python test/machine2_dryrun/DryRun_Bung_Check.py --folder D:/pictures/bungs
 """
 import argparse
 import glob
@@ -51,8 +51,8 @@ OTHER = {"DOST": "DOSTPLUS", "DOSTPLUS": "DOST"}
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--folder", default=str(HERE / "bunk_images"))
-ap.add_argument("--check", choices=("bunk", "nocap", "both"), default="bunk")
+ap.add_argument("--folder", default=str(HERE / "bung_images"))
+ap.add_argument("--check", choices=("bung", "nocap", "both"), default="bung")
 ap.add_argument("--save", action="store_true")
 ARGS = ap.parse_args()
 
@@ -67,19 +67,19 @@ def modelOf(name: str):
 
 
 def main() -> int:
-    import camera.BunkSegmenter as BS
-    from camera.CheckBunk import CheckBunk
-    from camera.CheckNoCapBunk import CheckNoCapBunk
+    import camera.BungSegmenter as BS
+    from camera.CheckBung import CheckBung
+    from camera.CheckNoCapBung import CheckNoCapBung
 
     # Keep what the hole detection returned last (the decisive gamma's holes), to print the hole positions
     last = {}
-    original = BS.BunkSegmenter.segment_holes_single
+    original = BS.BungSegmenter.segment_holes_single
 
     def recording(self, preprocessed_image, gamma, expected_count, model_type):
         result = original(self, preprocessed_image, gamma, expected_count, model_type)
         last["result"] = result
         return result
-    BS.BunkSegmenter.segment_holes_single = recording
+    BS.BungSegmenter.segment_holes_single = recording
 
     centre = tuple(BS.OUTER_DISC_CENTER)
     offset = (centre[0] - BS.INNER_DISC_RADIUS, centre[1] - BS.INNER_DISC_RADIUS)   # inner-disc coords -> picture
@@ -96,10 +96,10 @@ def main() -> int:
               f"--folder.")
         return 1
 
-    checks = {"bunk": [("CheckBunk (state 24)", CheckBunk.checkBunk)],
-              "nocap": [("CheckNoCapBunk (state 13)", CheckNoCapBunk.checkNoCapBunk)]}
-    checks["both"] = checks["nocap"] + checks["bunk"]
-    outDir = pathlib.Path(ARGS.folder) / "bunk_results"
+    checks = {"bung": [("CheckBung (state 24)", CheckBung.checkBung)],
+              "nocap": [("CheckNoCapBung (state 13)", CheckNoCapBung.checkNoCapBung)]}
+    checks["both"] = checks["nocap"] + checks["bung"]
+    outDir = pathlib.Path(ARGS.folder) / "bung_results"
     failures, total = 0, 0
 
     for title, check in checks[ARGS.check]:
@@ -155,7 +155,7 @@ def main() -> int:
                     cv2.putText(out, f"{title} as {model}: {verdict}", (10, 700), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
                                 (0, 255, 0) if ok else (0, 0, 255), 2)
                     outDir.mkdir(parents=True, exist_ok=True)
-                    tag = "nocap" if "NoCap" in title else "bunk"
+                    tag = "nocap" if "NoCap" in title else "bung"
                     cv2.imwrite(str(outDir / f"{pathlib.Path(name).stem}_{tag}_as_{model}.png"), out)
 
     print(f"\nRESULT: {total - failures}/{total} as expected" + ("" if failures == 0 else f" - {failures} UNEXPECTED"))

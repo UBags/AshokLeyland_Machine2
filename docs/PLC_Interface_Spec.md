@@ -66,7 +66,7 @@ The settings come from the latest `machine_settings` row of the QR code's model 
 - The value is the model's Machine Setting "Bypass Component Press and Second Tightening" (frontend, password-protected).
 - The Torque 2 setpoint is still written when bypassed.
 - **The PLC branches on it:** with True, after the first tightening torque value (state 12) the next PLC request is
-  `CheckSplitPinAndWasher` (state 20); it must not raise CheckNoCapBunk, ComponentPressDone, CheckNoBunk or the second
+  `CheckSplitPinAndWasher` (state 20); it must not raise CheckNoCapBung, ComponentPressDone, CheckNoBung or the second
   Station2TorqueValueSet.
 - Until the PLC has the tag (Siemens: no address in IOServerProperties.yaml; Allen-Bradley: not in the controller's tag
   list), the PC writes nothing and runs the full cycle, whatever the setting (logged, shown on the frontend).
@@ -81,11 +81,11 @@ The settings come from the latest `machine_settings` row of the QR code's model 
 | 5 → 6 Hub and bottom bearing | CheckHub X2.2 | HubCheckOK X0.4 | HubCheckDone X0.3 |
 | 7 → 8 Top bearing | CheckBearing X2.1 | BearingCheckOK X0.7 | BearingCheckDone X1.0 |
 | 9 → 10 Nut and plate washer | CheckNutAndPlateWasher X2.3 | NutAndPlateWasherCheckOK X1.1 | NutAndPlateWasherCheckDone X1.2 |
-| 13 → 14 Bunk for component press | CheckBunkForComponentPress X4.0 | BunkForComponentPressCheckOK X4.1 | BunkForComponentPressCheckDone X4.2 |
-| 16 → 17 No bunk | CheckNoBunk X4.3 | NoBunkCheckOK X4.5 | NoBunkCheckDone X4.4 |
+| 13 → 14 Bung for component press | CheckBungForComponentPress X4.0 | BungForComponentPressCheckOK X4.1 | BungForComponentPressCheckDone X4.2 |
+| 16 → 17 No bung | CheckNoBung X4.3 | NoBungCheckOK X4.5 | NoBungCheckDone X4.4 |
 | 20 → 21 Split pin and washer | CheckSplitPinAndWasher X3.0 | SplitPinAndWasherCheckOK X0.6 | SplitPinAndWasherCheckDone X0.5 |
 | 22 → 23 Cap | CheckCap X3.1 | CapCheckOK X1.3 | CapCheckDone X1.4 |
-| 24 → 25 Bunk for cap press | CheckBunkForCapPress X2.4 | BunkForCapPressCheckOK X1.5 | BunkForCapPressCheckDone X1.6 |
+| 24 → 25 Bung for cap press | CheckBungForCapPress X2.4 | BungForCapPressCheckOK X1.5 | BungForCapPressCheckDone X1.6 |
 
 All of these tags are in DB500. The split pin check is on hold until production pictures exist; its handshake is still in place.
 

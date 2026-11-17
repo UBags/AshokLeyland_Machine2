@@ -33,13 +33,13 @@ Machine 2 process steps (15) and IOServer states (28):
 - Step 3:  Top Bearing               (States 7-8)   - Vision
 - Step 4:  Nut + Plate Washer        (States 9-10)  - Vision
 - Step 5:  Tightening Torque 1       (States 11-12) - Signal (PLC sets Station 2 torque, IOServer reads it)
-- Step 6:  Bunk for Component Press  (States 13-14) - Vision
+- Step 6:  Bung for Component Press  (States 13-14) - Vision
 - Step 7:  Component Press Done      (State 15)     - Signal (PLC only)
-- Step 8:  No Bunk                   (States 16-17) - Vision
+- Step 8:  No Bung                   (States 16-17) - Vision
 - Step 9:  Tightening Torque 2       (States 18-19) - Signal (PLC sets Station 2 torque, IOServer reads it)
 - Step 10: Split Pin + Washer        (States 20-21) - Vision
 - Step 11: Cap                       (States 22-23) - Vision
-- Step 12: Bunk for Cap Press        (States 24-25) - Vision
+- Step 12: Bung for Cap Press        (States 24-25) - Vision
 - Step 13: Cap Press Done            (State 26)     - Signal (PLC only)
 - Step 14: Free Rotation Torque      (States 27-28) - Signal (PLC sets Station 3 torque, IOServer reads it; last state,
                                                       IOServer then wraps to state 1)
@@ -124,18 +124,18 @@ TAG_GROUPS = [
                                      _cfg.getPlcPcStation2TorqueValueTagName()]
                                     + ([_cfg.getPlcPcStation2RotationDuringTighteningDoneTagName()]   # Siemens only
                                        if _cfg.getPlcPcStation2RotationDuringTighteningDoneTagName() else [])),
-    ("Step 6: Bunk for Comp. Press", [_cfg.getPlcPcCheckNoCapBunkTagName(), _cfg.getPcPlcNoCapBunkCheckOKTagName(),
-                                      _cfg.getPcPlcNoCapBunkCheckDoneTagName()]),
+    ("Step 6: Bung for Comp. Press", [_cfg.getPlcPcCheckNoCapBungTagName(), _cfg.getPcPlcNoCapBungCheckOKTagName(),
+                                      _cfg.getPcPlcNoCapBungCheckDoneTagName()]),
     ("Step 7: Component Press", [_cfg.getPlcPcComponentPressDoneTagName()]),
-    ("Step 8: No Bunk", [_cfg.getPlcPcCheckNoBunkTagName(), _cfg.getPcPlcNoBunkCheckOKTagName(),
-                         _cfg.getPcPlcNoBunkCheckDoneTagName()]),
+    ("Step 8: No Bung", [_cfg.getPlcPcCheckNoBungTagName(), _cfg.getPcPlcNoBungCheckOKTagName(),
+                         _cfg.getPcPlcNoBungCheckDoneTagName()]),
     ("Step 10: Split Pin+Washer", [_cfg.getPlcPcCheckSplitPinAndWasherTagName(),
                                    _cfg.getPcPlcSplitPinAndWasherCheckOKTagName(),
                                    _cfg.getPcPlcSplitPinAndWasherCheckDoneTagName()]),
     ("Step 11: Cap", [_cfg.getPlcPcCheckCapTagName(), _cfg.getPcPlcCapCheckOKTagName(),
                       _cfg.getPcPlcCapCheckDoneTagName()]),
-    ("Step 12: Bunk for Cap Press", [_cfg.getPlcPcCheckBunkTagName(), _cfg.getPcPlcBunkCheckOKTagName(),
-                                     _cfg.getPcPlcBunkCheckDoneTagName()]),
+    ("Step 12: Bung for Cap Press", [_cfg.getPlcPcCheckBungTagName(), _cfg.getPcPlcBungCheckOKTagName(),
+                                     _cfg.getPcPlcBungCheckDoneTagName()]),
     ("Step 13: Cap Press", [_cfg.getPlcPcCapPressDoneTagName()]),
     ("Step 14: Station3 Torque", [_cfg.getPlcPcStation3TorqueValueSetTagName(),
                                   _cfg.getPlcPcStation3TorqueValueTagName()]),
@@ -262,13 +262,13 @@ class IOServerTestApp:
             ("Step 3", "Top Bearing", "States 7-8", "vision", 3),
             ("Step 4", "Nut + Plate Washer", "States 9-10", "vision", 4),
             ("Step 5", "Tightening Torque 1", "States 11-12", "signal", 5),
-            ("Step 6", "Bunk for Comp. Press", "States 13-14", "vision", 6),
+            ("Step 6", "Bung for Comp. Press", "States 13-14", "vision", 6),
             ("Step 7", "Component Press Done", "State 15", "signal", 7),
-            ("Step 8", "No Bunk", "States 16-17", "vision", 8),
+            ("Step 8", "No Bung", "States 16-17", "vision", 8),
             ("Step 9", "Tightening Torque 2", "States 18-19", "signal", 9),
             ("Step 10", "Split Pin + Washer", "States 20-21", "vision", 10),
             ("Step 11", "Cap", "States 22-23", "vision", 11),
-            ("Step 12", "Bunk for Cap Press", "States 24-25", "vision", 12),
+            ("Step 12", "Bung for Cap Press", "States 24-25", "vision", 12),
             ("Step 13", "Cap Press Done", "State 26", "signal", 13),
             ("Step 14", "Free Rotation Torque", "States 27-28", "signal", 14),
         ]
@@ -280,11 +280,11 @@ class IOServerTestApp:
             2: MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
             3: MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING,
             4: MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-            6: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-            8: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
+            6: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+            8: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG,
             10: MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
             11: MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
-            12: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS,
+            12: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS,
         }
         # WRITE state in which IOServer consumes the QR / camera response of each step
         self.write_state_map = {
@@ -293,11 +293,11 @@ class IOServerTestApp:
             2: MS.WRITE_RESULT_OF_CHECKING_HUB_AND_BOTTOM_BEARING,
             3: MS.WRITE_RESULT_OF_CHECKING_TOP_BEARING,
             4: MS.WRITE_RESULT_OF_CHECKING_NUT_AND_PLATEWASHER,
-            6: MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-            8: MS.WRITE_RESULT_OF_CHECKING_NO_BUNK,
+            6: MS.WRITE_RESULT_OF_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+            8: MS.WRITE_RESULT_OF_CHECKING_NO_BUNG,
             10: MS.WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER,
             11: MS.WRITE_RESULT_OF_CHECKING_CAP,
-            12: MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS,
+            12: MS.WRITE_RESULT_OF_CHECKING_BUNG_FOR_CAP_PRESS,
         }
 
         # Map signal step index to the MachineState that indicates completion
@@ -306,8 +306,8 @@ class IOServerTestApp:
         #   2. VALUE state: Reads torque value from PLC, resets tags, transitions
         # Signal step is marked complete when IOServer has passed the VALUE state
         self.signal_completion_state_map = {
-            5: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,  # Torque 1: states 11 -> 12 -> 13
-            7: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,                   # Component Press: state 15 -> 16
+            5: MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,  # Torque 1: states 11 -> 12 -> 13
+            7: MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG,                   # Component Press: state 15 -> 16
             9: MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,       # Torque 2: states 18 -> 19 -> 20
             13: MS.READ_FREE_ROTATION_TORQUE_1_DONE,                        # Cap Press: state 26 -> 27
             14: MS.READ_QR_CODE,                                            # Free rotation torque: 27 -> 28 -> 1
@@ -954,11 +954,11 @@ step for easy reading.
                 (2, "Hub", "vision"),
                 (3, "Top Bearing", "vision"),
                 (4, "Nut + Plate Washer", "vision"),
-                (6, "Bunk for Comp. Press", "vision"),
-                (8, "No Bunk", "vision"),
+                (6, "Bung for Comp. Press", "vision"),
+                (8, "No Bung", "vision"),
                 (10, "Split Pin + Washer", "vision"),
                 (11, "Cap", "vision"),
-                (12, "Bunk for Cap Press", "vision"),
+                (12, "Bung for Cap Press", "vision"),
             ]
             self.full_cycle_running = True
             self.stop_full_cycle = False

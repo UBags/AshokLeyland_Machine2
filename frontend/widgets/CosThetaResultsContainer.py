@@ -85,7 +85,7 @@ class CosThetaResultsContainer(QWidget):
                                                 fontColor=Qt.GlobalColor.darkBlue, replaceChar=['=',' '], forceUseOfFontSizeAs=defaultImageFontSize)
     defaultCapCheckImage = createImage("Cap Check", imageDimensions=(defaultImageWidth, defaultImageHeight),
                                                 fontColor=Qt.GlobalColor.darkBlue, replaceChar=['=',' '], forceUseOfFontSizeAs=defaultImageFontSize)
-    defaultBunkCheckImage = createImage("Bunk Check", imageDimensions=(defaultImageWidth, defaultImageHeight),
+    defaultBungCheckImage = createImage("Bung Check", imageDimensions=(defaultImageWidth, defaultImageHeight),
                                         fontColor=Qt.GlobalColor.darkBlue, replaceChar=['=',' '], forceUseOfFontSizeAs=defaultImageFontSize)
     defaultCapPressImage = createImage("Cap\bPress Result", imageDimensions=(defaultImageWidth, defaultImageHeight),
                                                 fontColor=Qt.GlobalColor.darkBlue, replaceChar=['=',' '], forceUseOfFontSizeAs=defaultImageFontSize)
@@ -154,8 +154,8 @@ class CosThetaResultsContainer(QWidget):
                                                                            CosThetaResultsContainer.height_of_each_container, CosThetaResultsContainer.defaultCapCheckImage,
                                                                            labelHeight=CosThetaResultsContainer.averageLabelHeight, bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bunk_check_container = CosThetaOutcomeContainer("Bunk Check", CosThetaResultsContainer.width_of_each_container,
-                                                             CosThetaResultsContainer.height_of_each_container, CosThetaResultsContainer.defaultBunkCheckImage,
+        self.bung_check_container = CosThetaOutcomeContainer("Bung Check", CosThetaResultsContainer.width_of_each_container,
+                                                             CosThetaResultsContainer.height_of_each_container, CosThetaResultsContainer.defaultBungCheckImage,
                                                              labelHeight=CosThetaResultsContainer.averageLabelHeight, bg_color = Qt.GlobalColor.black,
                                                              fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.cap_press_result_container = CosThetaOutcomeContainer("Cap Press Result", CosThetaResultsContainer.width_of_each_container,
@@ -225,7 +225,7 @@ class CosThetaResultsContainer(QWidget):
         row2_box_layout.addSpacing(CosThetaResultsContainer.horizontalSpacing)
         row2_box_layout.addWidget(self.cap_check_container)
         row2_box_layout.addSpacing(CosThetaResultsContainer.horizontalSpacing)
-        row2_box_layout.addWidget(self.bunk_check_container)
+        row2_box_layout.addWidget(self.bung_check_container)
         row2_box_layout.addSpacing(CosThetaResultsContainer.horizontalSpacing)
         row2_box_layout.addWidget(self.cap_press_result_container)
         self.row2Widget.setLayout(row2_box_layout)
@@ -243,7 +243,7 @@ class CosThetaResultsContainer(QWidget):
         # main_central_box_layout.addSpacing(2)
         self.setLayout(main_central_box_layout)
         self.update()
-        # print(f"{self.no_bunk_after_component_press_check_container.geometry()}")
+        # print(f"{self.no_bung_after_component_press_check_container.geometry()}")
 
     # ****************************************
 
@@ -343,13 +343,13 @@ class CosThetaResultsContainer(QWidget):
         else:
             self.cap_check_container.setDefault()
 
-    def setBunkCheckData(self, value, result):
+    def setBungCheckData(self, value, result):
         if isinstance(value, str):
-            self.bunk_check_container.setTextAndResult(value, result)
+            self.bung_check_container.setTextAndResult(value, result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
-            self.bunk_check_container.setImageAndResult(value, result)
+            self.bung_check_container.setImageAndResult(value, result)
         else:
-            self.bunk_check_container.setDefault()
+            self.bung_check_container.setDefault()
 
     def setCapPressResultData(self, value, result):
         if isinstance(value, str):
@@ -400,8 +400,8 @@ class CosThetaResultsContainer(QWidget):
     def setCapCheckDefault(self):
         self.cap_check_container.setDefault()
 
-    def setBunkCheckDefault(self):
-        self.bunk_check_container.setDefault()
+    def setBungCheckDefault(self):
+        self.bung_check_container.setDefault()
 
     def setCapPressResultDefault(self):
         self.cap_press_result_container.setDefault()
@@ -424,7 +424,7 @@ class CosThetaResultsContainer(QWidget):
         self.setRotationTorque3Default()
         self.setSplitPinAndWasherCheckDefault()
         self.setCapCheckDefault()
-        self.setBunkCheckDefault()
+        self.setBungCheckDefault()
         self.setCapPressResultDefault()
         self.setInstructionDefault()
 
@@ -442,7 +442,7 @@ class CosThetaResultsContainer(QWidget):
         self.setRotationTorque3Default()
         self.setSplitPinAndWasherCheckDefault()
         self.setCapCheckDefault()
-        self.setBunkCheckDefault()
+        self.setBungCheckDefault()
         self.setCapPressResultDefault()
 
     def displayDefault(self):

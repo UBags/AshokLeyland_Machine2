@@ -27,19 +27,19 @@ Every M1 state from 14 to 29 moves down by one. Machine 2 therefore has 28 state
 | 11 | READ_TIGHTENING_TORQUE_1_DONE | 11 | Press 2HB to send the part to station 2. Automatic tightening runs with simultaneous rotation. |
 | 12 | READ_TIGHTENING_TORQUE_1 | 12 | The PC reads torque 1. The part returns to station 1. |
 | — | ~~READ_FREE_ROTATIONS_DONE~~ | 13 | **Removed in M2.** Rotation happens during the tightening at station 2. |
-| 13 | READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS | 14 | Place the bunk. Press 2HB for the bunk check. |
-| 14 | WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS | 15 | |
+| 13 | READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS | 14 | Place the bung. Press 2HB for the bung check. |
+| 14 | WRITE_RESULT_OF_CHECKING_BUNG_FOR_COMPONENT_PRESS | 15 | |
 | 15 | READ_COMPONENT_PRESS_DONE | 16 | Press 2HB to send the part to station 4. The Mercury press presses the component and the part returns to station 1. |
-| 16 | READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK | 17 | Remove the bunk. Press 2HB for the no-bunk check. |
-| 17 | WRITE_RESULT_OF_CHECKING_NO_BUNK | 18 | |
+| 16 | READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG | 17 | Remove the bung. Press 2HB for the no-bung check. |
+| 17 | WRITE_RESULT_OF_CHECKING_NO_BUNG | 18 | |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | 19 | Press 2HB to send the part to station 2. Tightening runs with simultaneous rotation. |
 | 19 | READ_TIGHTENING_TORQUE_2 | 20 | The PC reads torque 2. The part returns to station 1. |
 | 20 | READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER | 21 | Put on the split pin and washer. Press 2HB for the check. |
 | 21 | WRITE_RESULT_OF_CHECKING_SPLITPIN_AND_WASHER | 22 | |
 | 22 | READ_TAKE_PICTURE_FOR_CHECKING_CAP | 23 | Place the cap. Press 2HB for the cap check. |
 | 23 | WRITE_RESULT_OF_CHECKING_CAP | 24 | |
-| 24 | READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS | 25 | Place the bunk. Press 2HB for the bunk check. |
-| 25 | WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS | 26 | |
+| 24 | READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS | 25 | Place the bung. Press 2HB for the bung check. |
+| 25 | WRITE_RESULT_OF_CHECKING_BUNG_FOR_CAP_PRESS | 26 | |
 | 26 | READ_CAP_PRESS_DONE | 27 | Press 2HB to send the part to station 4. The Mercury press presses the cap. |
 | 27 | READ_FREE_ROTATION_TORQUE_1_DONE | 28 | The part goes to station 3 and free rotation is measured. |
 | 28 | READ_FREE_ROTATION_TORQUE_1 | 29 | The PC reads the free-rotation value. The part returns to station 1 and the lock is released. **Then back to state 1.** |

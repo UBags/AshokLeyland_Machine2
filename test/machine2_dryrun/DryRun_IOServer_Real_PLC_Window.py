@@ -100,7 +100,7 @@ VISION_TAGS = {1: (IOServer.PLC_PC_CheckKnuckle, IOServer.PC_PLC_KnuckleCheckDon
                4: (IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone),
                10: (IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone),
                11: (IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone),
-               12: (IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone)}
+               12: (IOServer.PLC_PC_CheckBung, IOServer.PC_PLC_BungCheckDone)}
 
 def vision(idx):
     """The PLC asks for the picture, the window answers OK (its own handler), the PLC drops the trigger."""

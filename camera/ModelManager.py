@@ -2,7 +2,7 @@
 ModelManager.py - Singleton manager for shared MobileSAM and YOLO models.
 
 This ensures only ONE set of models is loaded into GPU memory,
-shared across CheckBunk, CheckHubAndBottomBearing, and CheckNutAndPlateWasher.
+shared across CheckBung, CheckHubAndBottomBearing, and CheckNutAndPlateWasher.
 
 GPU Memory Savings:
 - BEFORE: 3 separate model sets = ~9-12 GB GPU memory
@@ -70,11 +70,11 @@ import torch
 torch.cuda.reset_peak_memory_stats()
 
 # Create all three segmenters
-from camera.BunkSegmenter import CheckBunk
+from camera.BungSegmenter import CheckBung
 from camera.HubAndBearingSegmenter import CheckHubAndBottomBearing
 from camera.HexagonNutDetector import NutDetector
 
-bunk = CheckBunk()
+bung = CheckBung()
 hub = CheckHubAndBottomBearing(mobile_sam_path="...", yolo_path="...")
 nut = NutDetector()
 
@@ -214,11 +214,11 @@ class ModelManager:
     """
     Singleton manager for shared MobileSAM and YOLO models.
 
-    All checker classes (CheckBunk, CheckHub, CheckNut) get models from here.
+    All checker classes (CheckBung, CheckHub, CheckNut) get models from here.
     This ensures only ONE set of models in GPU memory.
 
     Usage:
-        # In BunkSegmenter, HubAndBearingSegmenter, HexagonNutDetector:
+        # In BungSegmenter, HubAndBearingSegmenter, HexagonNutDetector:
         model_manager = ModelManager.get_instance()
         sam_predictor = model_manager.get_sam_predictor()
         yolo_model = model_manager.get_yolo_model()
@@ -318,7 +318,7 @@ class ModelManager:
             logBoth('logInfo', ModelManager.logSource, "All models loaded successfully", Logger.SUCCESS)
 
     def _force_yolo_detection_mode(self, yolo_model):
-        """Force YOLO model to detection mode (same as BunkSegmenter)."""
+        """Force YOLO model to detection mode (same as BungSegmenter)."""
         try:
             logBoth('logInfo', ModelManager.logSource, "Forcing YOLO to detection mode...", Logger.GENERAL)
 

@@ -1,12 +1,12 @@
 """
-DryRun_Bunk_Check_UI - the real bunk check on a folder of bung pictures, with this machine's settings
-(<vendor>.vision.bunk.* in ApplicationConfiguration.properties), shown one picture at a time. Needs the MobileSAM models
+DryRun_Bung_Check_UI - the real bung check on a folder of bung pictures, with this machine's settings
+(<vendor>.vision.bung.* in ApplicationConfiguration.properties), shown one picture at a time. Needs the MobileSAM models
 (as the camera server does); a CUDA GPU makes it fast.
 
-Both bunk checks run the same hole detection (camera/BunkSegmenter.py); choose which one in the window:
-  - CheckBunk.checkBunk            - state 24, bung before the cap press
-  - CheckNoCapBunk.checkNoCapBunk  - state 13, bung before the component press
-The r<outer.disc.radius> disc round <vendor>.vision.bunk.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
+Both bung checks run the same hole detection (camera/BungSegmenter.py); choose which one in the window:
+  - CheckBung.checkBung            - state 24, bung before the cap press
+  - CheckNoCapBung.checkNoCapBung  - state 13, bung before the component press
+The r<outer.disc.radius> disc round <vendor>.vision.bung.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
 until a definite answer; YOLO boxes + a point every hole.grid.step px); holes count only inside r<inner.disc.radius>
 round the same centre. One "[Bung] ..." log line per gamma.
   DOST     : 4 holes forming a square (sides within square.side.length.tolerance of the median, corners
@@ -15,20 +15,20 @@ round the same centre. One "[Bung] ..." log line per gamma.
              among the candidates); a DOST square found = NOT OK
 
   Start: model (DOST / DOSTPLUS - every picture is checked as this model; "Both" - every picture is checked as DOST
-  and as DOSTPLUS), folder (default: bunk_images_20261113 next to this script, the pictures that come with git pull;
+  and as DOSTPLUS), folder (default: bung_images_20261113 next to this script, the pictures that come with git pull;
   "Folder..." to choose another), seconds between pictures, check (state 24 / state 13), "Save marked pictures"
-  (<folder>/bunk_results/).
+  (<folder>/bung_results/).
   Picture: no text on it - cyan circle = the segmented disc, yellow circle and cross = the hole search disc and its
   centre, red dots = the holes found (green border = OK, red = NOT OK). The list at the bottom and the terminal give,
   for each picture, the model checked, the number of holes found, OK / NOT OK, the time, the spacing, their centre's
   distance from the set centre and the deciding gamma. Terminal lines start "HOLES".
-  Seating (vision.bunk.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
+  Seating (vision.bung.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
   centre against the model's seated position, the roundness of the top-face mask (MobileSAM), how well it fits an
   ellipse and how much of it lies outside the model's reference oval; the line after HOLES
   starts "SEATING" (SEATED / NOT SEATED and both values; "not run" when the holes did not pass). On the picture the
   top-face outline is green (seated) or red.
 
-Run from the project root:   python test/machine2_dryrun/DryRun_Bunk_Check_UI.py
+Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py
 """
 import os
 import pathlib
@@ -53,14 +53,14 @@ QR = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL A
       "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 WAIT_CHOICES = ("0.5", "1", "2", "3", "5", "10", "20")
-CHECKS = ("CheckBunk (state 24)", "CheckNoCapBunk (state 13)")
+CHECKS = ("CheckBung (state 24)", "CheckNoCapBung (state 13)")
 VIEW_W, VIEW_H = 1120, 630
 
 
-class BunkCheckWindow:
+class BungCheckWindow:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.BS = None                # camera.BunkSegmenter
+        self.BS = None                # camera.BungSegmenter
         self.checks = {}              # title -> check function
         self.last = {}                # what the hole detection returned last (the deciding gamma)
         self.results = queue.Queue()
@@ -69,7 +69,7 @@ class BunkCheckWindow:
         self.photo = None
         self.summary = []
 
-        root.title(f"Dry run - bunk check ({os.environ['COSTHETA_PLC_VENDOR']})")
+        root.title(f"Dry run - bung check ({os.environ['COSTHETA_PLC_VENDOR']})")
         bar = ttk.Frame(root, padding=6)
         bar.pack(fill="x")
         ttk.Label(bar, text="Model").pack(side="left")
@@ -77,7 +77,7 @@ class BunkCheckWindow:
         ttk.Combobox(bar, textvariable=self.model, values=("Both", "DOST", "DOSTPLUS"), state="readonly",
                      width=10).pack(side="left", padx=4)
         ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left", padx=(10, 0))
-        default = HERE / "bunk_images_20261113"
+        default = HERE / "bung_images_20261113"
         self.folder = tk.StringVar(value=str(default) if default.is_dir() else "")
         ttk.Label(bar, textvariable=self.folder, width=52).pack(side="left", padx=6)
         ttk.Label(bar, text="Seconds between pictures").pack(side="left", padx=(10, 0))
@@ -116,19 +116,19 @@ class BunkCheckWindow:
     # ------------------------------------------------------------------ check
     def load(self):
         try:
-            import camera.BunkSegmenter as BS
-            from camera.CheckBunk import CheckBunk
-            from camera.CheckNoCapBunk import CheckNoCapBunk
+            import camera.BungSegmenter as BS
+            from camera.CheckBung import CheckBung
+            from camera.CheckNoCapBung import CheckNoCapBung
             t0 = time.time()
-            BS.BunkSegmenter.get_instance()                      # loads MobileSAM + YOLO once
-            original = BS.BunkSegmenter.segment_holes_single
+            BS.BungSegmenter.get_instance()                      # loads MobileSAM + YOLO once
+            original = BS.BungSegmenter.segment_holes_single
 
             def recording(segmenter, preprocessed_image, gamma, expected_count, model_type):
                 result = original(segmenter, preprocessed_image, gamma, expected_count, model_type)
                 self.last["result"] = result                     # the last call is the deciding gamma
                 return result
 
-            BS.BunkSegmenter.segment_holes_single = recording
+            BS.BungSegmenter.segment_holes_single = recording
             originalSeating = BS.check_bung_seating
 
             def recordingSeating(image_rgb, components, model_type):
@@ -138,7 +138,7 @@ class BunkCheckWindow:
 
             BS.check_bung_seating = recordingSeating
             self.BS = BS
-            self.checks = {CHECKS[0]: CheckBunk.checkBunk, CHECKS[1]: CheckNoCapBunk.checkNoCapBunk}
+            self.checks = {CHECKS[0]: CheckBung.checkBung, CHECKS[1]: CheckNoCapBung.checkNoCapBung}
             self.results.put(("ready",
                 f"Models loaded in {time.time() - t0:.1f} s. Centre {tuple(BS.OUTER_DISC_CENTER)}, segmented disc "
                 f"r{BS.OUTER_DISC_RADIUS}, holes within r{BS.INNER_DISC_RADIUS}; DOSTPLUS pair "
@@ -148,7 +148,7 @@ class BunkCheckWindow:
                    f"/ DOSTPLUS {tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS)}, roundness >= {BS.SEATING_ROUNDNESS_MIN_DOST} / "
                    f"{BS.SEATING_ROUNDNESS_MIN_DOSTPLUS})." if BS.SEATING_CHECK else ".")))
         except Exception as e:
-            self.results.put(("fatal", f"Could not load the bunk check: {e}"))
+            self.results.put(("fatal", f"Could not load the bung check: {e}"))
 
     # ------------------------------------------------------------------ controls
     def chooseFolder(self):
@@ -172,9 +172,9 @@ class BunkCheckWindow:
         self.stopRequested.clear()
         self.startButton.config(state="disabled")
         self.stopButton.config(state="normal")
-        outFolder = pathlib.Path(self.folder.get()) / "bunk_results"
+        outFolder = pathlib.Path(self.folder.get()) / "bung_results"
         threading.Thread(target=self.run, args=(files, self.model.get(), self.check.get(), self.save.get(), outFolder),
-                         name="Bunk check", daemon=True).start()
+                         name="Bung check", daemon=True).start()
 
     def stop(self):
         self.stopRequested.set()
@@ -281,7 +281,7 @@ class BunkCheckWindow:
                     self.startButton.config(state="normal")
                 elif kind == "fatal":
                     self.status.set(data)
-                    messagebox.showerror("Bunk check", data)
+                    messagebox.showerror("Bung check", data)
                 elif kind == "busy":
                     self.status.set(data)
                 elif kind == "shown":
@@ -290,7 +290,7 @@ class BunkCheckWindow:
                     okCount = sum(1 for r in self.summary if r)
                     self.status.set(f"Done: {len(self.summary)} check(s), model {self.model.get()}: {okCount} OK, "
                                     f"{len(self.summary) - okCount} NOT OK" +
-                                    (f"  -  marked pictures in {self.folder.get()}/bunk_results"
+                                    (f"  -  marked pictures in {self.folder.get()}/bung_results"
                                      if self.save.get() else ""))
                     self.startButton.config(state="normal")
                     self.stopButton.config(state="disabled")
@@ -315,5 +315,5 @@ class BunkCheckWindow:
 if __name__ == "__main__":
     window = tk.Tk()
     window.geometry("1180x960")
-    BunkCheckWindow(window)
+    BungCheckWindow(window)
     window.mainloop()

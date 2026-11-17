@@ -113,8 +113,8 @@ def main():
     import camera.CheckHubAndBottomBearing as HC
     import camera.CheckTopBearing as TB
     import camera.CheckNutAndPlateWasher as NW
-    import camera.CheckNoBunk as NB
-    import camera.BunkSegmenter as BS
+    import camera.CheckNoBung as NB
+    import camera.BungSegmenter as BS
     import camera.CheckCap as CC
     from camera.VisionConfig import getRegistry
     registry = getRegistry()
@@ -200,10 +200,10 @@ def main():
                 "hub.centre.check": (HC.HUB_CENTRE_CHECK_X, HC.HUB_CENTRE_CHECK_Y),
                 "topbearing.annular.center": (TB.CheckTopBearing.ANNULAR_CENTER_X, TB.CheckTopBearing.ANNULAR_CENTER_Y),
                 "nutwasher.nut.detection.center": tuple(NW.CheckNutAndPlateWasher.NUT_DETECTION_CENTER),
-                "nobunk.nut.detection.center": tuple(NB.CheckNoBunk.NUT_DETECTION_CENTER),
-                "bunk.outer.disc.center": tuple(BS.OUTER_DISC_CENTER),
-                "bunk.seating.seated.centre.dost": tuple(BS.SEATING_SEATED_CENTRE_DOST),
-                "bunk.seating.seated.centre.dostplus": tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS),
+                "nobung.nut.detection.center": tuple(NB.CheckNoBung.NUT_DETECTION_CENTER),
+                "bung.outer.disc.center": tuple(BS.OUTER_DISC_CENTER),
+                "bung.seating.seated.centre.dost": tuple(BS.SEATING_SEATED_CENTRE_DOST),
+                "bung.seating.seated.centre.dostplus": tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS),
                 "cap.center": tuple(CC.CheckCap.CENTER)}
 
     before = read()

@@ -22,10 +22,11 @@ try:
     _PROJECT_ROOT = get_project_root()
     if _PROJECT_ROOT not in sys.path:
         sys.path.insert(0, _PROJECT_ROOT)
-except:
+except Exception:
     pass
 
 from camera.HexagonNutDetector import NutDetector
+from camera.VisionConfig import vInt, vTuple
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -79,8 +80,8 @@ class CheckNoBung:
     """
 
     # Nut detection parameters
-    NUT_DETECTION_CENTER = (632, 360)
-    NUT_DETECTION_RADIUS = 80
+    NUT_DETECTION_CENTER = vTuple("vision.nobung.nut.detection.center", (632, 360))
+    NUT_DETECTION_RADIUS = vInt("vision.nobung.nut.detection.radius", 80)
 
     # Singleton nut detector
     _nut_detector: Optional[NutDetector] = None

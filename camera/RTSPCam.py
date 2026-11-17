@@ -32,9 +32,9 @@ from logutils.Logger import Logger
 import logutils.Logger  # noqa: F401 - was "from logutils.Logger import *"; nothing used from it, imported for its import-time effects
 import logutils.AbstractSlaveLogger  # noqa: F401 - was "from logutils.AbstractSlaveLogger import *"; nothing used from it, imported for its import-time effects
 from utils.RedisUtils import (
-    ALIVE, DEAD, actionKeyString, capPictureKeyString, capPressBunkPictureKeyString,
-    componentPressBunkPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
-    knucklePictureKeyString, noBunkPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
+    ALIVE, DEAD, actionKeyString, capPictureKeyString, capPressBungPictureKeyString,
+    componentPressBungPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
+    knucklePictureKeyString, noBungPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
     requestIdKeyString, splitPinAndWasherPictureKeyString, takePictureCommand, timeKeyString,
     topBearingPictureKeyString)
 from utils.IPUtils import checkIP

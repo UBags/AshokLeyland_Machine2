@@ -51,13 +51,13 @@ class CosThetaResultsContainer(QFrame):
         self.tightening_torque1_check_container = CosThetaOutcomeContainer(title = "Tightening Torque 1",imageHint="Tightening\nTorque 1",
                                                                            bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bunk_for_component_press_check_container = CosThetaOutcomeContainer(title ="Bunk - Comp Press", imageHint="Place\nBunk for\n Component Press",
+        self.bung_for_component_press_check_container = CosThetaOutcomeContainer(title ="Bung - Comp Press", imageHint="Place\nBung for\n Component Press",
                                                                                  bg_color = Qt.GlobalColor.black,
                                                                                  fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.component_press_check_container = CosThetaOutcomeContainer(title ="Component Press", imageHint="Component\nPress",
                                                                         bg_color = Qt.GlobalColor.black,
                                                                         fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.no_bunk_after_component_press_check_container = CosThetaOutcomeContainer(title ="Remove bunk", imageHint="Remove\nBunk",
+        self.no_bung_after_component_press_check_container = CosThetaOutcomeContainer(title ="Remove bung", imageHint="Remove\nBung",
                                                                                       bg_color = Qt.GlobalColor.black,
                                                                                       fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.tightening_torque2_check_container = CosThetaOutcomeContainer(title ="Tightening Torque 2",imageHint="Tightening\nTorque 2",
@@ -68,7 +68,7 @@ class CosThetaResultsContainer(QFrame):
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.cap_check_container = CosThetaOutcomeContainer(title = "Cap Check", bg_color = Qt.GlobalColor.black, imageHint="Cap\nCheck",
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bunk_check_container = CosThetaOutcomeContainer(title ="Bunk Check", bg_color = Qt.GlobalColor.black, imageHint="Bunk\nCheck",
+        self.bung_check_container = CosThetaOutcomeContainer(title ="Bung Check", bg_color = Qt.GlobalColor.black, imageHint="Bung\nCheck",
                                                              fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         self.cap_press_result_container = CosThetaOutcomeContainer(title = "Cap Press Result", bg_color = Qt.GlobalColor.black, imageHint="Cap\nPress\nResult",
                                                                    fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
@@ -97,14 +97,14 @@ class CosThetaResultsContainer(QFrame):
         grid_layout.addWidget(self.top_bearing_check_container, 0, 2, 1, 1)
         grid_layout.addWidget(self.nut_and_plate_washer_check_container, 0, 3, 1, 1)
         grid_layout.addWidget(self.tightening_torque1_check_container, 0, 4, 1, 1)
-        grid_layout.addWidget(self.bunk_for_component_press_check_container, 0, 5, 1, 1)
+        grid_layout.addWidget(self.bung_for_component_press_check_container, 0, 5, 1, 1)
         grid_layout.addWidget(self.component_press_check_container, 0, 6, 1, 1)
 
-        grid_layout.addWidget(self.no_bunk_after_component_press_check_container, 1, 0, 1, 1)
+        grid_layout.addWidget(self.no_bung_after_component_press_check_container, 1, 0, 1, 1)
         grid_layout.addWidget(self.tightening_torque2_check_container, 1, 1, 1, 1)
         grid_layout.addWidget(self.splitpin_and_washer_check_container, 1, 2, 1, 1)
         grid_layout.addWidget(self.cap_check_container, 1, 3, 1, 1)
-        grid_layout.addWidget(self.bunk_check_container, 1, 4, 1, 1)
+        grid_layout.addWidget(self.bung_check_container, 1, 4, 1, 1)
         grid_layout.addWidget(self.cap_press_result_container, 1, 5, 1, 1)
         grid_layout.addWidget(self.free_rotation_torque_container, 1, 6, 1, 1)
 
@@ -149,9 +149,9 @@ class CosThetaResultsContainer(QFrame):
     def outcomeContainers(self) -> list:
         return [self.knuckle_check_container, self.hub_and_bottom_bearing_check_container, self.top_bearing_check_container,
                 self.nut_and_plate_washer_check_container, self.tightening_torque1_check_container,
-                self.bunk_for_component_press_check_container, self.component_press_check_container,
-                self.no_bunk_after_component_press_check_container, self.tightening_torque2_check_container,
-                self.splitpin_and_washer_check_container, self.cap_check_container, self.bunk_check_container,
+                self.bung_for_component_press_check_container, self.component_press_check_container,
+                self.no_bung_after_component_press_check_container, self.tightening_torque2_check_container,
+                self.splitpin_and_washer_check_container, self.cap_check_container, self.bung_check_container,
                 self.cap_press_result_container, self.free_rotation_torque_container]
 
     # Call after self.show() and QApplication.processEvents() (the tiles have their real size)
@@ -222,13 +222,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.free_rotation_torque_container.setDefault()
 
-    def setBunkForComponentPressData(self, value, result):
+    def setBungForComponentPressData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
-            self.bunk_for_component_press_check_container.setTextAndResult(f"{value}", result)
+            self.bung_for_component_press_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
-            self.bunk_for_component_press_check_container.setImageAndResult(value, result)
+            self.bung_for_component_press_check_container.setImageAndResult(value, result)
         else:
-            self.bunk_for_component_press_check_container.setDefault()
+            self.bung_for_component_press_check_container.setDefault()
 
     def setComponentPressData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
@@ -238,13 +238,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.component_press_check_container.setDefault()
 
-    def setNoBunkAfterComponentPress(self, value, result):
+    def setNoBungAfterComponentPress(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
-            self.no_bunk_after_component_press_check_container.setTextAndResult(f"{value}", result)
+            self.no_bung_after_component_press_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
-            self.no_bunk_after_component_press_check_container.setImageAndResult(value, result)
+            self.no_bung_after_component_press_check_container.setImageAndResult(value, result)
         else:
-            self.no_bunk_after_component_press_check_container.setDefault()
+            self.no_bung_after_component_press_check_container.setDefault()
 
     def setTighteningTorque2Data(self, value, result, rotationDone=None):
         """Torque value; with rotationDone (True / False) a second, smaller line: Rotation Done / Rotation Not Done.
@@ -276,13 +276,13 @@ class CosThetaResultsContainer(QFrame):
         else:
             self.cap_check_container.setDefault()
 
-    def setBunkCheckData(self, value, result):
+    def setBungCheckData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
-            self.bunk_check_container.setTextAndResult(f"{value}", result)
+            self.bung_check_container.setTextAndResult(f"{value}", result)
         elif isinstance(value, get_args(Union[QImage, QPixmap, ndarray])):
-            self.bunk_check_container.setImageAndResult(value, result)
+            self.bung_check_container.setImageAndResult(value, result)
         else:
-            self.bunk_check_container.setDefault()
+            self.bung_check_container.setDefault()
 
     def setCapPressResultData(self, value, result):
         if isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
@@ -315,14 +315,14 @@ class CosThetaResultsContainer(QFrame):
     def setFreeRotationTorqueDefault(self):
         self.free_rotation_torque_container.setDefault()
 
-    def setBunkForComponentPressDefault(self):
-        self.bunk_for_component_press_check_container.setDefault()
+    def setBungForComponentPressDefault(self):
+        self.bung_for_component_press_check_container.setDefault()
 
     def setComponentPressDefault(self):
         self.component_press_check_container.setDefault()
 
-    def setNoBunkAfterComponentPressDefault(self):
-        self.no_bunk_after_component_press_check_container.setDefault()
+    def setNoBungAfterComponentPressDefault(self):
+        self.no_bung_after_component_press_check_container.setDefault()
 
     def setTighteningTorque2Default(self):
         self.tightening_torque2_check_container.setDefault()
@@ -333,16 +333,16 @@ class CosThetaResultsContainer(QFrame):
     def setCapCheckDefault(self):
         self.cap_check_container.setDefault()
 
-    def setBunkForCapPressCheckDefault(self):
-        self.bunk_check_container.setDefault()
+    def setBungForCapPressCheckDefault(self):
+        self.bung_check_container.setDefault()
 
     def setCapPressResultDefault(self):
         self.cap_press_result_container.setDefault()
 
     def setPressAndTightening2Bypassed(self):
         """Machine Setting "Bypass Component Press and Second Tightening": the 4 skipped steps show "Bypassed"."""
-        for tile in (self.bunk_for_component_press_check_container, self.component_press_check_container,
-                     self.no_bunk_after_component_press_check_container, self.tightening_torque2_check_container):
+        for tile in (self.bung_for_component_press_check_container, self.component_press_check_container,
+                     self.no_bung_after_component_press_check_container, self.tightening_torque2_check_container):
             tile.setBypassed()
 
     def setInstructionDefault(self):
@@ -356,13 +356,13 @@ class CosThetaResultsContainer(QFrame):
         self.setTopBearingCheckDefault()
         self.setNutAndPlateWasherCheckDefault()
         self.setTighteningTorque1Default()
-        self.setBunkForComponentPressDefault()
+        self.setBungForComponentPressDefault()
         self.setComponentPressDefault()
-        self.setNoBunkAfterComponentPressDefault()
+        self.setNoBungAfterComponentPressDefault()
         self.setTighteningTorque2Default()
         self.setSplitPinAndWasherCheckDefault()
         self.setCapCheckDefault()
-        self.setBunkForCapPressCheckDefault()
+        self.setBungForCapPressCheckDefault()
         self.setCapPressResultDefault()
         self.setFreeRotationTorqueDefault()
         self.setInstructionDefault()
@@ -374,13 +374,13 @@ class CosThetaResultsContainer(QFrame):
         self.setTopBearingCheckDefault()
         self.setNutAndPlateWasherCheckDefault()
         self.setTighteningTorque1Default()
-        self.setBunkForComponentPressDefault()
+        self.setBungForComponentPressDefault()
         self.setComponentPressDefault()
-        self.setNoBunkAfterComponentPressDefault()
+        self.setNoBungAfterComponentPressDefault()
         self.setTighteningTorque2Default()
         self.setSplitPinAndWasherCheckDefault()
         self.setCapCheckDefault()
-        self.setBunkForCapPressCheckDefault()
+        self.setBungForCapPressCheckDefault()
         self.setCapPressResultDefault()
         self.setFreeRotationTorqueDefault()
 

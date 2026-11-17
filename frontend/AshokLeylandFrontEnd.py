@@ -179,18 +179,18 @@ class AshokLeylandFrontEnd(QMainWindow):
     currentTighteningTorque1RotationDone: Optional[bool] = None     # PLC_PC_Station2RotationDuringTighteningDone
 
 
-    originalBunkForComponentPressCheckImage: Union[np.ndarray, None] = None
-    processedBunkForComponentPressCheckImage: Union[np.ndarray, None] = None
-    currentBunkForComponentPressCheckResult: Union[str, None] = None
-    currentBunkForComponentPressCheckDatetime: str = defaultTime
+    originalBungForComponentPressCheckImage: Union[np.ndarray, None] = None
+    processedBungForComponentPressCheckImage: Union[np.ndarray, None] = None
+    currentBungForComponentPressCheckResult: Union[str, None] = None
+    currentBungForComponentPressCheckDatetime: str = defaultTime
 
     currentComponentPressDone: str = notok
     currentComponentPressDatetime: str = defaultTime
 
-    originalNoBunkAfterComponentPressCheckImage: Union[np.ndarray, None] = None
-    processedNoBunkAfterComponentPressCheckImage: Union[np.ndarray, None] = None
-    currentNoBunkAfterComponentPressCheckResult: Union[str, None] = None
-    currentNoBunkAfterComponentPressCheckDatetime: str = defaultTime
+    originalNoBungAfterComponentPressCheckImage: Union[np.ndarray, None] = None
+    processedNoBungAfterComponentPressCheckImage: Union[np.ndarray, None] = None
+    currentNoBungAfterComponentPressCheckResult: Union[str, None] = None
+    currentNoBungAfterComponentPressCheckDatetime: str = defaultTime
 
     currentTighteningTorque2: float = 0.0
     currentTighteningTorque2CheckResult: str = notok
@@ -207,10 +207,10 @@ class AshokLeylandFrontEnd(QMainWindow):
     currentCapCheckResult: Union[str, None] = None
     currentCapCheckDatetime: str = defaultTime
 
-    originalBunkForCapPressCheckImage: Union[np.ndarray, None] = None
-    processedBunkForCapPressCheckImage: Union[np.ndarray, None] = None
-    currentBunkForCapPressCheckResult: Union[str, None] = None
-    currentBunkForCapPressCheckDatetime: str = defaultTime
+    originalBungForCapPressCheckImage: Union[np.ndarray, None] = None
+    processedBungForCapPressCheckImage: Union[np.ndarray, None] = None
+    currentBungForCapPressCheckResult: Union[str, None] = None
+    currentBungForCapPressCheckDatetime: str = defaultTime
 
     currentCapPressDone: str = notok
     currentCapPressDatetime: str = defaultTime
@@ -918,18 +918,18 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.currentTighteningTorque1RotationDone = None
 
 
-        AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage = None
-        AshokLeylandFrontEnd.processedBunkForComponentPressCheckImage = None
-        AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult = None
-        AshokLeylandFrontEnd.currentBunkForComponentPressCheckDatetime = defaultTime
+        AshokLeylandFrontEnd.originalBungForComponentPressCheckImage = None
+        AshokLeylandFrontEnd.processedBungForComponentPressCheckImage = None
+        AshokLeylandFrontEnd.currentBungForComponentPressCheckResult = None
+        AshokLeylandFrontEnd.currentBungForComponentPressCheckDatetime = defaultTime
 
         AshokLeylandFrontEnd.currentComponentPressDone = False
         AshokLeylandFrontEnd.currentComponentPressDatetime = defaultTime
 
-        AshokLeylandFrontEnd.originalNoBunkAfterComponentPressCheckImage = None
-        AshokLeylandFrontEnd.processedNoBunkAfterComponentPressCheckImage = None
-        AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult = None
-        AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckDatetime = defaultTime
+        AshokLeylandFrontEnd.originalNoBungAfterComponentPressCheckImage = None
+        AshokLeylandFrontEnd.processedNoBungAfterComponentPressCheckImage = None
+        AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult = None
+        AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckDatetime = defaultTime
 
         AshokLeylandFrontEnd.currentTighteningTorque2 = 0.0
         AshokLeylandFrontEnd.currentTighteningTorque2CheckResult = notok
@@ -946,10 +946,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.currentCapCheckResult = None
         AshokLeylandFrontEnd.currentCapCheckDatetime = defaultTime
 
-        AshokLeylandFrontEnd.originalBunkForCapPressCheckImage = None
-        AshokLeylandFrontEnd.processedBunkForCapPressCheckImage = None
-        AshokLeylandFrontEnd.currentBunkForCapPressCheckResult = None
-        AshokLeylandFrontEnd.currentBunkForCapPressCheckDatetime = defaultTime
+        AshokLeylandFrontEnd.originalBungForCapPressCheckImage = None
+        AshokLeylandFrontEnd.processedBungForCapPressCheckImage = None
+        AshokLeylandFrontEnd.currentBungForCapPressCheckResult = None
+        AshokLeylandFrontEnd.currentBungForCapPressCheckDatetime = defaultTime
 
         AshokLeylandFrontEnd.currentCapPressDone = notok
         AshokLeylandFrontEnd.currentCapPressDatetime = defaultTime
@@ -1303,11 +1303,11 @@ class AshokLeylandFrontEnd(QMainWindow):
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: self._handleHubAndBottomBearingCheck,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: self._handleTopBearingCheck,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: self._handleNutAndPlateWasherCheck,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: self._handleBunkForComponentPress,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: self._handleNoBunkAfterComponentPress,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: self._handleBungForComponentPress,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: self._handleNoBungAfterComponentPress,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: self._handleSplitPinAndWasherCheck,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: self._handleCapCheck,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: self._handleBunkCheckForCapPress,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: self._handleBungCheckForCapPress,
         }
 
         handler = stateHandlerMap.get(currentState)
@@ -1389,36 +1389,36 @@ class AshokLeylandFrontEnd(QMainWindow):
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
             self.requestPictureAndResult()
 
-    def _handleBunkForComponentPress(self):
+    def _handleBungForComponentPress(self):
         self.showATemporaryLargeImage(
-            anImage=AshokLeylandFrontEnd.processedBunkForComponentPressCheckImage,
-            result=AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult
+            anImage=AshokLeylandFrontEnd.processedBungForComponentPressCheckImage,
+            result=AshokLeylandFrontEnd.currentBungForComponentPressCheckResult
         )
-        self.resultsContainer.setBunkForComponentPressData(
-            value=AshokLeylandFrontEnd.processedBunkForComponentPressCheckImage,
-            result=AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult
+        self.resultsContainer.setBungForComponentPressData(
+            value=AshokLeylandFrontEnd.processedBungForComponentPressCheckImage,
+            result=AshokLeylandFrontEnd.currentBungForComponentPressCheckResult
         )
-        if AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult == ok:
+        if AshokLeylandFrontEnd.currentBungForComponentPressCheckResult == ok:
             self.setCurrentState(MachineState.READ_COMPONENT_PRESS_DONE)
             self.requestTorqueReadingPlusCapPressAndResult()
         else:
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS)
             self.requestPictureAndResult()
 
-    def _handleNoBunkAfterComponentPress(self):
+    def _handleNoBungAfterComponentPress(self):
         self.showATemporaryLargeImage(
-            anImage=AshokLeylandFrontEnd.processedNoBunkAfterComponentPressCheckImage,
-            result=AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult
+            anImage=AshokLeylandFrontEnd.processedNoBungAfterComponentPressCheckImage,
+            result=AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult
         )
-        self.resultsContainer.setNoBunkAfterComponentPress(
-            value=AshokLeylandFrontEnd.processedNoBunkAfterComponentPressCheckImage,
-            result=AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult
+        self.resultsContainer.setNoBungAfterComponentPress(
+            value=AshokLeylandFrontEnd.processedNoBungAfterComponentPressCheckImage,
+            result=AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult
         )
-        if AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult == ok:
+        if AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult == ok:
             self.setCurrentState(MachineState.READ_TIGHTENING_TORQUE_2)
             self.requestTorqueReadingPlusCapPressAndResult()
         else:
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG)
             self.requestPictureAndResult()
 
     def _handleSplitPinAndWasherCheck(self):
@@ -1446,25 +1446,25 @@ class AshokLeylandFrontEnd(QMainWindow):
             result=AshokLeylandFrontEnd.currentCapCheckResult
         )
         if AshokLeylandFrontEnd.currentCapCheckResult == ok:
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
+            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS)
         else:
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP)
         self.requestPictureAndResult()
 
-    def _handleBunkCheckForCapPress(self):
+    def _handleBungCheckForCapPress(self):
         self.showATemporaryLargeImage(
-            anImage=AshokLeylandFrontEnd.processedBunkForCapPressCheckImage,
-            result=AshokLeylandFrontEnd.currentBunkForCapPressCheckResult
+            anImage=AshokLeylandFrontEnd.processedBungForCapPressCheckImage,
+            result=AshokLeylandFrontEnd.currentBungForCapPressCheckResult
         )
-        self.resultsContainer.setBunkCheckData(
-            value=AshokLeylandFrontEnd.processedBunkForCapPressCheckImage,
-            result=AshokLeylandFrontEnd.currentBunkForCapPressCheckResult
+        self.resultsContainer.setBungCheckData(
+            value=AshokLeylandFrontEnd.processedBungForCapPressCheckImage,
+            result=AshokLeylandFrontEnd.currentBungForCapPressCheckResult
         )
-        if AshokLeylandFrontEnd.currentBunkForCapPressCheckResult == ok:
+        if AshokLeylandFrontEnd.currentBungForCapPressCheckResult == ok:
             self.setCurrentState(MachineState.READ_CAP_PRESS_DONE)
             self.requestTorqueReadingPlusCapPressAndResult()
         else:
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
+            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS)
             self.requestPictureAndResult()
 
     # ********************************************
@@ -1509,8 +1509,8 @@ class AshokLeylandFrontEnd(QMainWindow):
                 self.resultsContainer.setPressAndTightening2Bypassed()
                 self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
             else:
-                # Machine 2: no separate free-rotation step; next is the bunk check before component press
-                self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
+                # Machine 2: no separate free-rotation step; next is the bung check before component press
+                self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS)
             self.requestPictureAndResult()
         else:
             self.resultsContainer.setTighteningTorque1Default()
@@ -1522,7 +1522,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             self.resultsContainer.setComponentPressData(
                 value="Done", result=ok
             )
-            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+            self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG)
             self.requestPictureAndResult()
         else:
             self.resultsContainer.setComponentPressDefault()
@@ -1580,13 +1580,13 @@ class AshokLeylandFrontEnd(QMainWindow):
             AshokLeylandFrontEnd.currentTopBearingCheckResult == ok,
             AshokLeylandFrontEnd.currentNutAndPlateWasherCheckResult == ok,
             AshokLeylandFrontEnd.currentTighteningTorque1CheckResult == ok,  # ADD
-            bypassed or AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult == ok,
+            bypassed or AshokLeylandFrontEnd.currentBungForComponentPressCheckResult == ok,
             bypassed or AshokLeylandFrontEnd.currentComponentPressDone == ok,
-            bypassed or AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult == ok,
+            bypassed or AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult == ok,
             bypassed or AshokLeylandFrontEnd.currentTighteningTorque2CheckResult == ok,  # ADD
             AshokLeylandFrontEnd.currentSplitPinAndWasherCheckResult == ok,
             AshokLeylandFrontEnd.currentCapCheckResult == ok,
-            AshokLeylandFrontEnd.currentBunkForCapPressCheckResult == ok,
+            AshokLeylandFrontEnd.currentBungForCapPressCheckResult == ok,
             AshokLeylandFrontEnd.currentCapPressDone == ok,  # ADD
             AshokLeylandFrontEnd.currentRotationTorque1CheckResult == ok,
         ]
@@ -1688,14 +1688,14 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              tighteningTorque1=AshokLeylandFrontEnd.currentTighteningTorque1,
                                              tighteningTorque1Result=self.okNotokResult(AshokLeylandFrontEnd.currentTighteningTorque1CheckResult),
                                              tighteningTorque1Datetime=AshokLeylandFrontEnd.currentTighteningTorque1Datetime,
-                                             componentPressBunkCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage,
-                                             componentPressBunkCheckingResult=stepResult(AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult),
-                                             componentPressBunkCheckDatetime=stepTime(AshokLeylandFrontEnd.currentBunkForComponentPressCheckDatetime),
+                                             componentPressBungCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalBungForComponentPressCheckImage,
+                                             componentPressBungCheckingResult=stepResult(AshokLeylandFrontEnd.currentBungForComponentPressCheckResult),
+                                             componentPressBungCheckDatetime=stepTime(AshokLeylandFrontEnd.currentBungForComponentPressCheckDatetime),
                                              componentPressDone=stepResult(AshokLeylandFrontEnd.currentComponentPressDone),
                                              componentPressDoneDatetime=stepTime(AshokLeylandFrontEnd.currentComponentPressDatetime),
-                                             noBunkCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalNoBunkAfterComponentPressCheckImage,
-                                             noBunkCheckingResult=stepResult(AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult),
-                                             noBunkCheckDatetime=stepTime(AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckDatetime),
+                                             noBungCheckingPicture=None if bypassed else AshokLeylandFrontEnd.originalNoBungAfterComponentPressCheckImage,
+                                             noBungCheckingResult=stepResult(AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult),
+                                             noBungCheckDatetime=stepTime(AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckDatetime),
                                              tighteningTorque2=-1.0 if bypassed else AshokLeylandFrontEnd.currentTighteningTorque2,
                                              tighteningTorque2Result=stepResult(AshokLeylandFrontEnd.currentTighteningTorque2CheckResult),
                                              tighteningTorque2Datetime=stepTime(AshokLeylandFrontEnd.currentTighteningTorque2Datetime),
@@ -1705,9 +1705,9 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              capCheckingPicture=AshokLeylandFrontEnd.originalCapCheckImage,
                                              capCheckingResult=self.okNotokResult(AshokLeylandFrontEnd.currentCapCheckResult),
                                              capCheckingDatetime=AshokLeylandFrontEnd.currentCapCheckDatetime,
-                                             bunkCheckingPicture=AshokLeylandFrontEnd.originalBunkForCapPressCheckImage,
-                                             capPressBunkCheckingResult=self.okNotokResult(AshokLeylandFrontEnd.currentBunkForCapPressCheckResult),
-                                             capPressBunkCheckDatetime=AshokLeylandFrontEnd.currentBunkForCapPressCheckDatetime,
+                                             bungCheckingPicture=AshokLeylandFrontEnd.originalBungForCapPressCheckImage,
+                                             capPressBungCheckingResult=self.okNotokResult(AshokLeylandFrontEnd.currentBungForCapPressCheckResult),
+                                             capPressBungCheckDatetime=AshokLeylandFrontEnd.currentBungForCapPressCheckDatetime,
                                              pressDone=self.okNotokResult(AshokLeylandFrontEnd.currentCapPressDone),
                                              capPressDoneDatetime=AshokLeylandFrontEnd.currentCapPressDatetime,
                                              freeRotationTorque1=AshokLeylandFrontEnd.currentRotationTorque1,
@@ -1910,11 +1910,11 @@ class GetPictureAndResultWorker(QObject):
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
-            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS
+            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS
         ]
 
     def __init__(self):
@@ -1980,17 +1980,17 @@ class GetPictureAndResultWorker(QObject):
                     AshokLeylandFrontEnd.currentNutAndPlateWasherCheckResult = decodedResult
                     AshokLeylandFrontEnd.currentNutAndPlateWasherCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
 
-                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS:
-                    AshokLeylandFrontEnd.originalBunkForComponentPressCheckImage = decodedOriginalImage
-                    AshokLeylandFrontEnd.processedBunkForComponentPressCheckImage = decodedProcessedImage
-                    AshokLeylandFrontEnd.currentBunkForComponentPressCheckResult = decodedResult
-                    AshokLeylandFrontEnd.currentBunkForComponentPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
+                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS:
+                    AshokLeylandFrontEnd.originalBungForComponentPressCheckImage = decodedOriginalImage
+                    AshokLeylandFrontEnd.processedBungForComponentPressCheckImage = decodedProcessedImage
+                    AshokLeylandFrontEnd.currentBungForComponentPressCheckResult = decodedResult
+                    AshokLeylandFrontEnd.currentBungForComponentPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
 
-                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK:
-                    AshokLeylandFrontEnd.originalNoBunkAfterComponentPressCheckImage = decodedOriginalImage
-                    AshokLeylandFrontEnd.processedNoBunkAfterComponentPressCheckImage = decodedProcessedImage
-                    AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckResult = decodedResult
-                    AshokLeylandFrontEnd.currentNoBunkAfterComponentPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
+                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG:
+                    AshokLeylandFrontEnd.originalNoBungAfterComponentPressCheckImage = decodedOriginalImage
+                    AshokLeylandFrontEnd.processedNoBungAfterComponentPressCheckImage = decodedProcessedImage
+                    AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckResult = decodedResult
+                    AshokLeylandFrontEnd.currentNoBungAfterComponentPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
 
                 elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER:
                     AshokLeylandFrontEnd.originalSplitPinAndWasherCheckImage = decodedOriginalImage
@@ -2004,11 +2004,11 @@ class GetPictureAndResultWorker(QObject):
                     AshokLeylandFrontEnd.currentCapCheckResult = decodedResult
                     AshokLeylandFrontEnd.currentCapCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
 
-                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS:
-                    AshokLeylandFrontEnd.originalBunkForCapPressCheckImage = decodedOriginalImage
-                    AshokLeylandFrontEnd.processedBunkForCapPressCheckImage = decodedProcessedImage
-                    AshokLeylandFrontEnd.currentBunkForCapPressCheckResult = decodedResult
-                    AshokLeylandFrontEnd.currentBunkForCapPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
+                elif currentState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS:
+                    AshokLeylandFrontEnd.originalBungForCapPressCheckImage = decodedOriginalImage
+                    AshokLeylandFrontEnd.processedBungForCapPressCheckImage = decodedProcessedImage
+                    AshokLeylandFrontEnd.currentBungForCapPressCheckResult = decodedResult
+                    AshokLeylandFrontEnd.currentBungForCapPressCheckDatetime = getPostgresDatetimeFromString(getCurrentTime())
 
                 self.gotPictureAndResult.emit()
 

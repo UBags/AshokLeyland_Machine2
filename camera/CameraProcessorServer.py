@@ -13,9 +13,9 @@ import threading
 from redis import Redis
 from typing import Any, Dict, List, Optional, Tuple, Union
 from camera.RTSPCam import (
-    ALIVE, DEAD, RTSPCam, actionKeyString, capPictureKeyString, capPressBunkPictureKeyString,
-    componentPressBunkPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
-    knucklePictureKeyString, noBunkPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
+    ALIVE, DEAD, RTSPCam, actionKeyString, capPictureKeyString, capPressBungPictureKeyString,
+    componentPressBungPictureKeyString, currentMachineStateKeyString, hubAndBottomBearingPictureKeyString,
+    knucklePictureKeyString, noBungPictureKeyString, notok, nutAndPlateWasherPictureKeyString, ok,
     requestIdKeyString, splitPinAndWasherPictureKeyString, takePictureCommand, timeKeyString,
     topBearingPictureKeyString)
 from BaseUtils import getFullyQualifiedName, profile
@@ -44,9 +44,9 @@ from camera.CheckTopBearing import CheckTopBearing
 from camera.CheckNutAndPlateWasher import CheckNutAndPlateWasher
 from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher
 from camera.CheckCap import CheckCap
-from camera.CheckNoCapBunk import CheckNoCapBunk
-from camera.CheckNoBunk import CheckNoBunk
-from camera.CheckBunk import CheckBunk
+from camera.CheckNoCapBung import CheckNoCapBung
+from camera.CheckNoBung import CheckNoBung
+from camera.CheckBung import CheckBung
 from camera import VisionFrame
 
 import warnings
@@ -677,10 +677,10 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                 currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING)
     is_nut_and_washer = (
                 currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER)
-    is_nocap_bunk = (
-                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS)
-    is_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS)
-    is_no_bunk = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK)
+    is_nocap_bung = (
+                currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS)
+    is_bung = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS)
+    is_no_bung = (currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG)
     is_top_bearing = (
                 currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING)
     # knuckle by segmentation (Machine 2): one MobileSAM run on one picture instead of three pictures and a vote
@@ -699,12 +699,12 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
         singlePictureFolder = "TopBearing"
     elif is_nut_and_washer:
         singlePictureFolder = "NutAndPlateWasher"
-    elif is_nocap_bunk:
-        singlePictureFolder = "BunkForComponentPress"
-    elif is_bunk:
-        singlePictureFolder = "BunkForCapPress"
-    elif is_no_bunk:
-        singlePictureFolder = "NoBunk"
+    elif is_nocap_bung:
+        singlePictureFolder = "BungForComponentPress"
+    elif is_bung:
+        singlePictureFolder = "BungForCapPress"
+    elif is_no_bung:
+        singlePictureFolder = "NoBung"
     if singlePictureFolder is not None and ImageProcessor.saveTrialPictures and imagesToBeProcessed \
             and imagesToBeProcessed[0] is not None:
         try:
@@ -721,7 +721,7 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
     chosenOriginalImage = None
 
     # Enter this block if we have a method to execute OR if it's a batch processing state
-    if methodToBeExecuted is not None or is_hub_and_bearing or is_nut_and_washer or is_nocap_bunk or is_bunk or is_no_bunk or is_top_bearing:
+    if methodToBeExecuted is not None or is_hub_and_bearing or is_nut_and_washer or is_nocap_bung or is_bung or is_no_bung or is_top_bearing:
         # (the knuckle check's start of a new cycle - QR code, earlier pictures, bearing ring - is handled before the
         # assessment, in ImageProcessor.prepareForKnuckleCheck, so that a knuckle retake keeps the cycle's QR code)
 
@@ -812,17 +812,17 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                     chosenProcessedImage = imagesToBeProcessed[0]
                     chosenOriginalImage = imagesToBeProcessed[0]
 
-            elif is_nocap_bunk:
-                # NEW: Use batch processing for CheckNoCapBunk
-                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoCapBunk", Logger.GENERAL)
+            elif is_nocap_bung:
+                # NEW: Use batch processing for CheckNoCapBung
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoCapBung", Logger.GENERAL)
 
                 try:
                     # Use the first image (they're all duplicates in imagesToBeProcessed)
                     test_image = imagesToBeProcessed[0]
 
-                    ImageProcessor.currentPictures[componentPressBunkPictureKeyString] = test_image
+                    ImageProcessor.currentPictures[componentPressBungPictureKeyString] = test_image
 
-                    chosenProcessedImage, allok, winning_gamma = CheckNoCapBunk.checkNoCapBunk(
+                    chosenProcessedImage, allok, winning_gamma = CheckNoCapBung.checkNoCapBung(
                         test_image,
                         ImageProcessor.currentComponentQRCodeValue,
                         bearing_geometry=ImageProcessor.getBearingProfile()
@@ -832,31 +832,31 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
 
                     if allok:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                f"CheckNoCapBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
+                                f"CheckNoCapBung PASSED with gamma={winning_gamma}", Logger.SUCCESS)
                     else:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                "CheckNoCapBunk FAILED", Logger.ISSUE)
+                                "CheckNoCapBung FAILED", Logger.ISSUE)
 
                 except Exception as e:
                     logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                            f"CheckNoCapBunk exception: {e}", Logger.ISSUE)
+                            f"CheckNoCapBung exception: {e}", Logger.ISSUE)
                     import traceback
                     traceback.print_exc()
                     allok = False
                     chosenProcessedImage = imagesToBeProcessed[0]
                     chosenOriginalImage = imagesToBeProcessed[0]
 
-            elif is_bunk:
-                # NEW: Use batch processing for CheckBunk
-                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckBunk", Logger.GENERAL)
+            elif is_bung:
+                # NEW: Use batch processing for CheckBung
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckBung", Logger.GENERAL)
 
                 try:
                     # Use the first image (they're all duplicates in imagesToBeProcessed)
                     test_image = imagesToBeProcessed[0]
 
-                    ImageProcessor.currentPictures[capPressBunkPictureKeyString] = test_image
+                    ImageProcessor.currentPictures[capPressBungPictureKeyString] = test_image
 
-                    chosenProcessedImage, allok, winning_gamma = CheckBunk.checkBunk(
+                    chosenProcessedImage, allok, winning_gamma = CheckBung.checkBung(
                         test_image,
                         ImageProcessor.currentComponentQRCodeValue,
                         bearing_geometry=ImageProcessor.getBearingProfile()
@@ -866,30 +866,30 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
 
                     if allok:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                f"CheckBunk PASSED with gamma={winning_gamma}", Logger.SUCCESS)
+                                f"CheckBung PASSED with gamma={winning_gamma}", Logger.SUCCESS)
                     else:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                "CheckBunk FAILED", Logger.ISSUE)
+                                "CheckBung FAILED", Logger.ISSUE)
 
                 except Exception as e:
                     logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                            f"CheckBunk exception: {e}", Logger.ISSUE)
+                            f"CheckBung exception: {e}", Logger.ISSUE)
                     import traceback
                     traceback.print_exc()
                     allok = False
                     chosenProcessedImage = imagesToBeProcessed[0]
                     chosenOriginalImage = imagesToBeProcessed[0]
 
-            elif is_no_bunk:
-                # Use batch processing for CheckNoBunk (avoids ThreadPoolExecutor timeout issues)
-                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoBunk", Logger.GENERAL)
+            elif is_no_bung:
+                # Use batch processing for CheckNoBung (avoids ThreadPoolExecutor timeout issues)
+                logBoth('logDebug', ConverterScalerAndProcessor.logSource, "Using batch processing for CheckNoBung", Logger.GENERAL)
 
                 try:
                     test_image = imagesToBeProcessed[0]
 
-                    ImageProcessor.currentPictures[noBunkPictureKeyString] = test_image
+                    ImageProcessor.currentPictures[noBungPictureKeyString] = test_image
 
-                    chosenProcessedImage, allok = CheckNoBunk.checkNoBunk(
+                    chosenProcessedImage, allok = CheckNoBung.checkNoBung(
                         anImage=test_image,
                         currentPictures=ImageProcessor.currentPictures,
                         componentQRCode=ImageProcessor.currentComponentQRCodeValue
@@ -899,14 +899,14 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
 
                     if allok:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                "CheckNoBunk PASSED", Logger.SUCCESS)
+                                "CheckNoBung PASSED", Logger.SUCCESS)
                     else:
                         logBoth('logInfo', ConverterScalerAndProcessor.logSource,
-                                "CheckNoBunk FAILED", Logger.ISSUE)
+                                "CheckNoBung FAILED", Logger.ISSUE)
 
                 except Exception as e:
                     logBoth('logWarning', ConverterScalerAndProcessor.logSource,
-                            f"CheckNoBunk exception: {e}", Logger.ISSUE)
+                            f"CheckNoBung exception: {e}", Logger.ISSUE)
                     import traceback
                     traceback.print_exc()
                     allok = False
@@ -995,7 +995,7 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
             pass
 
     is_cap = currentMachineState == MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP
-    if not is_cap and not is_knuckle_segmentation and not is_hub_and_bearing and not is_bunk and not is_nocap_bunk and not is_nut_and_washer and not is_no_bunk and not is_top_bearing:
+    if not is_cap and not is_knuckle_segmentation and not is_hub_and_bearing and not is_bung and not is_nocap_bung and not is_nut_and_washer and not is_no_bung and not is_top_bearing:
         allok = False
         # Original voting mechanism
         okcount: int = 0
@@ -1092,9 +1092,9 @@ class ImageProcessor():
                                                       nutAndPlateWasherPictureKeyString : None,
                                                       splitPinAndWasherPictureKeyString : None,
                                                       capPictureKeyString : None,
-                                                      componentPressBunkPictureKeyString : None,
-                                                      noBunkPictureKeyString : None,
-                                                      capPressBunkPictureKeyString : None}
+                                                      componentPressBungPictureKeyString : None,
+                                                      noBungPictureKeyString : None,
+                                                      capPressBungPictureKeyString : None}
 
     currentComponentQRCodeValue: str | None = None
     currentModelName: str | None = None
@@ -1260,9 +1260,9 @@ class ImageProcessor():
             ImageProcessor.currentPictures[nutAndPlateWasherPictureKeyString] = None
             ImageProcessor.currentPictures[splitPinAndWasherPictureKeyString] = None
             ImageProcessor.currentPictures[capPictureKeyString] = None
-            ImageProcessor.currentPictures[componentPressBunkPictureKeyString] = None
-            ImageProcessor.currentPictures[noBunkPictureKeyString] = None
-            ImageProcessor.currentPictures[capPressBunkPictureKeyString] = None
+            ImageProcessor.currentPictures[componentPressBungPictureKeyString] = None
+            ImageProcessor.currentPictures[noBungPictureKeyString] = None
+            ImageProcessor.currentPictures[capPressBungPictureKeyString] = None
         except Exception as e:
             logBoth('logWarning', ImageProcessor.logSource,
                     f"Exception in clearCurrentPictures: {e}", Logger.RISK)
@@ -1451,7 +1451,7 @@ class ImageProcessor():
             return anImage, False
 
     @classmethod
-    def checkNoBunk(cls, anImage: np.ndarray, index: int = -1, gamma : float = 2.0) -> Tuple[np.ndarray, bool]:
+    def checkNoBung(cls, anImage: np.ndarray, index: int = -1, gamma : float = 2.0) -> Tuple[np.ndarray, bool]:
         try:
             if ImageProcessor.saveTrialPictures:
                 currentMethodName = f"{inspect.currentframe().f_code.co_name}"
@@ -1465,14 +1465,14 @@ class ImageProcessor():
                 # printLight(f"Saving image to {fileNameForSaving}")
                 saveFileWithFullPath(anImage, fileNameForSaving)
             if index == 0:
-                ImageProcessor.currentPictures[noBunkPictureKeyString] = anImage
-            return CheckNoBunk.checkNoBunk(anImage=anImage,
+                ImageProcessor.currentPictures[noBungPictureKeyString] = anImage
+            return CheckNoBung.checkNoBung(anImage=anImage,
                                            currentPictures=ImageProcessor.currentPictures,
                                            componentQRCode=ImageProcessor.currentComponentQRCodeValue,
                                            gamma=gamma)
         except Exception as e:
             logBoth('logCritical', ImageProcessor.logSource,
-                    f"Exception in ImageProcessor.checkNoBunk: {e}",
+                    f"Exception in ImageProcessor.checkNoBung: {e}",
                     Logger.PROBLEM)
             return anImage, False
 
@@ -1481,11 +1481,11 @@ class ImageProcessor():
         MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: None,
         MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: checkTopBearing,
         MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: None,
-        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: None,
-        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: checkNoBunk,
+        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: None,
+        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: checkNoBung,
         MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: checkSplitPinAndWasher,
         MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: checkCap,
-        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: None
+        MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: None
     }
 
     # NOTE: As there are 3 pics being taken, instantiate 3 ImageProcessors per cameraId (==Camera Server)
@@ -1610,11 +1610,11 @@ def verifyVisionDependencies(loadModels: bool = True) -> list:
     loads the models, so the first cycle is not slowed by lazy loading."""
     problems = []
     import camera.CheckHubAndBottomBearing as _hub
-    import camera.CheckNoCapBunk as _noCapBunk
-    import camera.CheckBunk as _bunk
+    import camera.CheckNoCapBung as _noCapBung
+    import camera.CheckBung as _bung
     for name, module in (("Hub & bottom bearing check (HubAndBearingSegmenter)", _hub),
-                         ("Bunk-for-component-press check (BunkSegmenter)", _noCapBunk),
-                         ("Bunk-for-cap-press check (BunkSegmenter)", _bunk)):
+                         ("Bung-for-component-press check (BungSegmenter)", _noCapBung),
+                         ("Bung-for-cap-press check (BungSegmenter)", _bung)):
         if not getattr(module, "SAM_AVAILABLE", False):
             problems.append(f"{name}: segmentation engine could not be imported")
     try:

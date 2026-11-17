@@ -42,7 +42,7 @@ def sendData():
                                                    rotationTorque3 = 0.2, rotationTorque3Result = ok,
                                                    splitPinAndWasherPicture = image1, splitPinAndWasherResult = ok,
                                                    capCheckingPicture = image1, capCheckingResult = ok,
-                                                   bunkCheckingPicture= image1, capPressBunkCheckingResult= ok,
+                                                   bungCheckingPicture= image1, capPressBungCheckingResult= ok,
                                                    pressDone = ok, overallResult = notok))
     end = time.time()
     print(f"Time taken = {(end - start)*1000/repeats} ms")

@@ -86,13 +86,13 @@ STATIONS = [
      "top_bearing_images/{T}_bearing_01.jpg"),
     ("nut", "Nut and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, ("nutwasher.nut.detection.center",),
      "nut_washer_images/{T}_nut_01.jpg"),
-    ("bung1", "Bung (Component Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-     ("bunk.outer.disc.center",), None),
-    ("nobung", "No Bung", MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, ("nobunk.nut.detection.center",),
+    ("bung1", "Bung (Component Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+     ("bung.outer.disc.center",), None),
+    ("nobung", "No Bung", MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, ("nobung.nut.detection.center",),
      "nut_washer_images/{T}_nut_01.jpg"),
     ("splitpin", "Split Pin and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, (), None),
     ("cap", "Cap", MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, ("cap.center",), "cap_images/{T}_cap_01.jpg"),
-    ("bung2", "Bung (Cap Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, ("bunk.outer.disc.center",), None),
+    ("bung2", "Bung (Cap Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, ("bung.outer.disc.center",), None),
 ]
 VOTE_STATES = (MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
 

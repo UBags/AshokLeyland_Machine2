@@ -79,13 +79,13 @@ STEPS = [
     ("check_top_bearing", "topBearingPicture", "topBearingResult", "topBearingDatetime"),
     ("check_nut_and_platewasher", "nutAndPlateWasherPicture", "nutAndPlateWasherResult", "nutAndPlateWasherDatetime"),
     ("nut_tightening_torque_1", None, "tighteningTorque1Result", "tighteningTorque1Datetime"),
-    ("check_bunk_for_component_press", "componentPressBunkCheckingPicture", "componentPressBunkCheckingResult", "componentPressBunkCheckDatetime"),
+    ("check_bung_for_component_press", "componentPressBungCheckingPicture", "componentPressBungCheckingResult", "componentPressBungCheckDatetime"),
     ("component_press", None, "componentPressDone", "componentPressDoneDatetime"),
-    ("check_no_bunk", "noBunkCheckingPicture", "noBunkCheckingResult", "noBunkCheckDatetime"),
+    ("check_no_bung", "noBungCheckingPicture", "noBungCheckingResult", "noBungCheckDatetime"),
     ("nut_tightening_torque_2", None, "tighteningTorque2Result", "tighteningTorque2Datetime"),
     ("check_splitpin_and_washer", "splitPinAndWasherPicture", "splitPinAndWasherResult", "splitPinAndWasherDatetime"),
     ("check_cap", "capCheckingPicture", "capCheckingResult", "capCheckingDatetime"),
-    ("check_bunk_cap_press", "bunkCheckingPicture", "capPressBunkCheckingResult", "capPressBunkCheckDatetime"),
+    ("check_bung_cap_press", "bungCheckingPicture", "capPressBungCheckingResult", "capPressBungCheckDatetime"),
     ("cap_press", None, "pressDone", "capPressDoneDatetime"),
     ("free_rotation_torque_1", None, "freeRotationTorque1Result", "freeRotationTorque1Datetime"),
 ]
@@ -128,8 +128,8 @@ check("1 database exists", P.checkIfDatabaseExists(DB))
 c = conn(); cur = c.cursor()
 cur.execute("select column_name from information_schema.columns where table_schema=%s and table_name=%s", (SCHEMA, TABLE))
 cols = {r[0] for r in cur.fetchall()}
-m2_cols = {"check_bunk_for_component_press_result", "component_press_done", "check_no_bunk_result", "nut_tightening_torque_2",
-           "check_bunk_cap_press_result", "cap_press_done", "free_rotation_torque_1", "free_rotation_torque_1_result"}
+m2_cols = {"check_bung_for_component_press_result", "component_press_done", "check_no_bung_result", "nut_tightening_torque_2",
+           "check_bung_cap_press_result", "cap_press_done", "free_rotation_torque_1", "free_rotation_torque_1_result"}
 check("1 table has the Machine 2 columns", m2_cols <= cols, str(sorted(m2_cols - cols)))
 check("1 rotation-during-tightening columns present (boolean)",
       {"nut_tightening_torque_1_rotation_done", "nut_tightening_torque_2_rotation_done"} <= cols)
@@ -241,7 +241,7 @@ if rs:
 check("6b record column bypassed_press_and_tightening2 (boolean) present", "bypassed_press_and_tightening2" in cols)
 code6b = qr(QR_LHS, 7); CREATED_QRS.append(code6b)
 kw, expected, images = full_record(code6b, seed=7)
-SKIPPED_STEPS = ("check_bunk_for_component_press", "component_press", "check_no_bunk", "nut_tightening_torque_2")
+SKIPPED_STEPS = ("check_bung_for_component_press", "component_press", "check_no_bung", "nut_tightening_torque_2")
 for stem, pic, res, dt in STEPS:
     if stem in SKIPPED_STEPS:
         if pic: kw[pic] = None; images.pop(stem, None)
@@ -263,7 +263,7 @@ if rs:
           row["bypassed_press_and_tightening2"] is True and row["nut_tightening_torque_2_rotation_done"] is None,
           str((row["bypassed_press_and_tightening2"], row["nut_tightening_torque_2_rotation_done"])))
     check("6b no image file for the two bung checks",
-          not row["check_bunk_for_component_press_imagefile"] and not row["check_no_bunk_imagefile"])
+          not row["check_bung_for_component_press_imagefile"] and not row["check_no_bung_imagefile"])
     CREATED_FILES += [row[f"{s}_imagefile"] for s in images if row[f"{s}_imagefile"]]
 rs6 = rows_for(code6)
 check("6b an ordinary record is not marked bypassed", rs6 and rs6[0]["bypassed_press_and_tightening2"] is False)
@@ -368,6 +368,42 @@ legacy = cur.fetchone()[0]
 check("9 every model has settings after the clean-up (copied / defaults when the database is set up)",
       all(P.getMachineSettings(DB, model_name=mdl) for mdl in MODELS), str(legacy))
 c.close()
+
+# ---------------- 10. Bunk -> Bung column rename (CHANGES 125) ----------------
+print("\n=== 10. A database made before 2026-11-17 (columns named 'bunk'): renamed at set-up, data kept ===", flush=True)
+MIG_DB = "ashok_leyland_bung_migration_dryrun"
+OLD_NEW = [(n.replace("bung", "bunk"), n) for n in (
+    "check_bung_for_component_press_imagefile", "check_bung_for_component_press_result",
+    "check_bung_for_component_press_datetime", "check_no_bung_imagefile", "check_no_bung_result", "check_no_bung_datetime",
+    "check_bung_cap_press_imagefile", "check_bung_cap_press_result", "check_bung_cap_press_datetime")]
+adm = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", database="postgres"); adm.autocommit = True
+adm.cursor().execute(f"drop database if exists {MIG_DB}"); adm.cursor().execute(f"create database {MIG_DB}")
+P.createSchema(db_name=MIG_DB); P.createAllTables(db_name=MIG_DB)
+P.insertRole(role_name="Administrator", db_name=MIG_DB)
+P.insertNewUser(username="admin", password="admin123", first_name="Administrator", middle_name="", last_name="", email="",
+                role_name="Administrator", mobile="", db_name=MIG_DB)
+m = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", database=MIG_DB); m.autocommit = True
+mc = m.cursor()
+for old, new in OLD_NEW:                       # make it look like a database from before the rename
+    mc.execute(f"alter table {SCHEMA}.hub_and_disc_assembly_data rename column {new} to {old}")
+mc.execute(f"insert into {SCHEMA}.hub_and_disc_assembly_data (qr_code, check_bunk_for_component_press_result, "
+           f"check_no_bunk_result, check_bunk_cap_press_result, check_bunk_cap_press_imagefile, created_on, username) "
+           f"values ('MIG-QR', 'OK', 'NOTOK', 'OK', 'old/7-BUNKAndNoBUNK/x.png', now(), 'admin')")
+def columns():
+    mc.execute("select column_name from information_schema.columns where table_schema = %s and table_name = "
+               "'hub_and_disc_assembly_data'", (SCHEMA,))
+    return {r[0] for r in mc.fetchall()}
+check("10 before: the old 'bunk' columns", all(o in columns() for o, _ in OLD_NEW))
+P.createAllTables(db_name=MIG_DB)              # what setDatabaseName() runs at every start
+cols = columns()
+check("10 after set-up: every 'bunk' column renamed to 'bung', none left",
+      all(n in cols and o not in cols for o, n in OLD_NEW) and not [x for x in cols if "bunk" in x], sorted(x for x in cols if "bu" in x))
+mc.execute(f"select check_bung_for_component_press_result, check_no_bung_result, check_bung_cap_press_result, "
+           f"check_bung_cap_press_imagefile from {SCHEMA}.hub_and_disc_assembly_data where qr_code = 'MIG-QR'")
+check("10 the old row's values kept under the new names", mc.fetchone() == ("OK", "NOTOK", "OK", "old/7-BUNKAndNoBUNK/x.png"))
+P.createAllTables(db_name=MIG_DB)
+check("10 set-up again (next start): nothing changes", columns() == cols)
+m.close(); adm.cursor().execute(f"drop database if exists {MIG_DB}"); adm.close()
 
 failed = [n for n, ok_ in RESULTS if not ok_]
 print(f"\nRESULT {len(RESULTS) - len(failed)}/{len(RESULTS)} checks passed" + (f"; FAILED: {failed}" if failed else ""), flush=True)

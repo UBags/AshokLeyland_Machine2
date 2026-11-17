@@ -9,8 +9,8 @@ time: this program plays the IOServer (and the QRCodeServer for the component QR
 the IOServer and Frontend would otherwise read.
 
 For each picture state, in Machine 2 order -
-  knuckle, hub (with bottom bearing), top bearing, nut & plate washer, bunk for component press, no bunk,
-  split pin & washer, cap, bunk for cap press -
+  knuckle, hub (with bottom bearing), top bearing, nut & plate washer, bung for component press, no bung,
+  split pin & washer, cap, bung for cap press -
 it sends sendDataFromIOServerToCameraServer(<state>) on io2camera.q, then waits for the result on camera2io.q (what the
 IOServer reads) and the original + processed images on camera2fe.q (what the Frontend reads), saves the images to the
 output folder and finally prints a table. Before the knuckle picture the component QR code is sent on qrcode2camera.q
@@ -66,11 +66,11 @@ PICTURE_STATES = [
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS,
 ]
 
 

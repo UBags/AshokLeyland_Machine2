@@ -9,8 +9,8 @@ A Tk window steps through the 10 results the IOServer waits for in a Machine 2 (
   - QR code             -> qrcode2io.q  sendDataFromQRCodeServerToIOServer(qrCode=..., ok)   (IOServer state WRITE_QR_CODE;
                            the QR text decides the LHS/RHS + model tags IOServer writes to the PLC in state 2)
   - 9 visual checks     -> camera2io.q  sendDataFromCameraServerToIOServer(OK / NOT OK, <picture state>), in M2 order:
-                           knuckle, hub (with bottom bearing), top bearing, nut & plate washer, bunk for component press,
-                           no bunk, split pin & washer, cap, bunk for cap press.
+                           knuckle, hub (with bottom bearing), top bearing, nut & plate washer, bung for component press,
+                           no bung, split pin & washer, cap, bung for cap press.
 Torques, component/cap press and the free-rotation torque come from the PLC, not from this program.
 "Send OK" / "Send NOT OK" send the next result in order (wrapping back to the QR code); send each one only while the
 IOServer is in the matching WRITE_... state, because IOServer trims camera2io.q to the latest message.
@@ -49,11 +49,11 @@ STEPS = [
     ("checking hub (with bottom bearing)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING),
     ("checking top bearing", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING),
     ("checking nut and plate washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER),
-    ("checking bunk for component press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
-    ("checking no bunk", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK),
+    ("checking bung for component press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS),
+    ("checking no bung", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG),
     ("checking split pin and washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER),
     ("checking cap", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP),
-    ("checking bunk for cap press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS),
+    ("checking bung for cap press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS),
 ]
 
 

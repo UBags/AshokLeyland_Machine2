@@ -79,14 +79,14 @@ The trigger in each state is the tag read in that state; the write states write 
 | 9/10 | Nut and plate washer | CheckNutAndPlateWasher | Same. OK → 11 |
 | 11 | READ_TIGHTENING_TORQUE_1_DONE | Station2TorqueValueSet | → 12 |
 | 12 | READ_TIGHTENING_TORQUE_1 | Station2TorqueValue (float), RotationDuringTighteningDone | Value to FE; Set, Value and RotationDuringTighteningDone reset 2.0 s later → 13. Bypassed (`PC_PLC_Skip_Second_Tightening` True written in state 2): to FE with moveTo = 20 → 20 (13–19 skipped) |
-| 13/14 | Bunk for component press | CheckBunkForComponentPress | Handshake. OK → 15 |
+| 13/14 | Bung for component press | CheckBungForComponentPress | Handshake. OK → 15 |
 | 15 | READ_COMPONENT_PRESS_DONE | ComponentPressDone | To FE; reset after 1.5 s → 16 |
-| 16/17 | No bunk | CheckNoBunk | Handshake. OK → 18 |
+| 16/17 | No bung | CheckNoBung | Handshake. OK → 18 |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | Station2TorqueValueSet | → 19 |
 | 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue, RotationDuringTighteningDone | To FE; reset after 2.0 s → 20 |
 | 20/21 | Split pin and washer | CheckSplitPinAndWasher | Handshake. OK → 22 |
 | 22/23 | Cap | CheckCap | Handshake. OK → 24 |
-| 24/25 | Bunk for cap press | CheckBunkForCapPress | Handshake. OK → 26 |
+| 24/25 | Bung for cap press | CheckBungForCapPress | Handshake. OK → 26 |
 | 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset after 1.5 s → 27 |
 | 27 | READ_FREE_ROTATION_TORQUE_1_DONE | Station3TorqueValueSet | → 28 |
 | 28 | READ_FREE_ROTATION_TORQUE_1 | Station3TorqueValue | To FE with moveTo = 1; Set and Value reset after 2.0 s; `resetForNextCycle("cycle completed", keepPendingResets=True)` → 1 |
@@ -226,15 +226,15 @@ guard was not applied). In the dry-run windows the check runs the guard itself (
 
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
 face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
-the cap centre. Bung (`vision.bunk.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+the cap centre. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
 red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119). Each uses its own
 `SamPredictor` per thread on the shared model.
 
-**Bung holes (`BunkSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
-definite answer), on the r250 disc round `bunk.outer.disc.center`:
+**Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
+definite answer), on the r250 disc round `bung.outer.disc.center`:
 1. masks: one per YOLO box, plus one per point of a grid every `hole.grid.step` (15) px in the band
    `hole.grid.radius.min`-`max` (20-90 px, about 110 points; CHANGES 116), always - decoded in batches of 32 at the
    model's low resolution; only masks whose low-resolution area can pass `min/max.mask.area` (325-1300 px, 30 % slack)
@@ -264,7 +264,7 @@ One INFO line per gamma, `[Bung] <model> gamma <g>: masks ... candidates n: (x,y
 
 **Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
 
-**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBunk` (bunk for component press), `CheckNoBunk`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBunk` (bunk for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BunkSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` too (`vision.knuckle.locator.*`, `vision.frame.*`, since CHANGES §105). The pictures sent to the frontend carry outlines only, no values or words; a picture NOT OK without a check's verdict (timeout, stalled camera, worker starting) gets a red border (`_withReason`), and the reason goes to the log, the answer's `reason` and the "check" notice.
+**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBung` (bung for component press), `CheckNoBung`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBung` (bung for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BungSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` too (`vision.knuckle.locator.*`, `vision.frame.*`, since CHANGES §105). The pictures sent to the frontend carry outlines only, no values or words; a picture NOT OK without a check's verdict (timeout, stalled camera, worker starting) gets a red border (`_withReason`), and the reason goes to the log, the answer's `reason` and the "check" notice.
 
 ## 4. QR code server (`costhetaio/qrcodescanner/QRCodeScanningServer.py`)
 
@@ -303,7 +303,7 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 | `HeartbeatSenderWorker` | — | `fe2hb.q`: DEAD while the GUI thread has not run its 1 s tick for 60 s, unless a menu dialog (FreeSimpleGUI, `_runDialog`) is open |
 | `TimeDurationUpdateWorker` | PostgreSQL, one kept-open connection (`PersistentDBConnection`), in its own thread | Cycle timer and the production counts (today / week / month OK, one query, `getProductionCounts`), sent with the signal; a database error keeps the counts shown (CHANGES §110; before, three queries ran in the GUI thread, each on a new connection) |
 
-At the end of the cycle (state 28), the FE builds the record, adding `cycleSettings:<QR>`, and sends it on `fe2db.q`. The frontend abort (Ctrl+Alt+Z, password `frontend.abort.password`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8. Passwords, read from the properties file at each use: `frontend.abort.password` (Ctrl+Alt+Z), `machine.settings.password` (Save in Machine Settings) and, in addition when the bypass switch changes, `machine.settings.bypass.password` (all `admin123` at delivery).
+At the end of the cycle (state 28; also at an abort), `doFinalProcessing` -> `finishCycle()` at once: the result box ("Component Successfully Done" / "Not Successfully Done" / "Aborted"), the record (with `cycleSettings:<QR>`) on `fe2db.q`, the data points reset, back to READ_QR_CODE with the QR code read requested. The tiles and the QR code line keep the finished cycle's values and pictures for `frontend.free.rotation.torque.display.sec` (5 s) and are then cleared by `clearFinishedCycleTiles` (numbered, so a stale timer does nothing); a new QR code during that time clears them at once (CHANGES §123). An emergency or manual abort during those seconds takes the waiting-for-the-QR-code path (abort screen, no record). The frontend abort (Ctrl+Alt+Z, password `frontend.abort.password`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8. Passwords, read from the properties file at each use: `frontend.abort.password` (Ctrl+Alt+Z); `machine.settings.password` to open Machine Settings and again at Save, where the prompt lists the changes and says that entering the password confirms them (no Yes / No since CHANGES §124); in addition at Save when the bypass switch changes, `machine.settings.bypass.password`, worded the same way (all `admin123` at delivery).
 
 ## 6. Heartbeat and alarm server (`monitorAllConnections/HeartbeatAndAlarmServer.py`)
 
@@ -358,7 +358,7 @@ One row per component. Primary key `record_id`, a sequence.
 | Group | Columns |
 |---|---|
 | Identity | `qr_code`, `model_name`, `lhs_rhs`, `model_tonnage`, `component_assembly_start_datetime` |
-| Each vision check | `check_<name>_imagefile`, `check_<name>_result` (default 'Not Checked'), `check_<name>_datetime`, for knuckle, hub_and_bottom_bearing, top_bearing, nut_and_platewasher, bunk_for_component_press, no_bunk, splitpin_and_washer, cap and bunk_cap_press |
+| Each vision check | `check_<name>_imagefile`, `check_<name>_result` (default 'Not Checked'), `check_<name>_datetime`, for knuckle, hub_and_bottom_bearing, top_bearing, nut_and_platewasher, bung_for_component_press, no_bung, splitpin_and_washer, cap and bung_cap_press |
 | Torques | `nut_tightening_torque_1/2`, `free_rotation_torque_1` (float, default −1), each with `_result` and `_datetime`; `nut_tightening_torque_1/2_rotation_done` (bool) |
 | Abort | `aborted` (bool, default false), `abort_reason` (varchar 255): emergency button on the machine or manual abort (Ctrl+Alt+Z); no record for an abort while waiting for the QR code |
 | Bypass | `bypassed_press_and_tightening2` (bool, default false). When true: the 4 skipped steps have result `Bypassed`, NULL datetimes, no picture file, `nut_tightening_torque_2` = -1.0, rotation done NULL; they do not count against the overall result |
@@ -366,7 +366,7 @@ One row per component. Primary key `record_id`, a sequence.
 | Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` |
 | Overall | `ok_notok_result`, `username` (FK to `users`), `remarks`, `created_on` |
 
-Indexes: `idx_qr_code`, `idx_model_name`, `idx_created_on`, plus the primary key (older duplicate indexes are dropped at start-up). The earlier REINDEX after every insert has been removed.
+Indexes: `idx_qr_code`, `idx_model_name`, `idx_created_on`, plus the primary key (older duplicate indexes are dropped at start-up). Databases made before 2026-11-17 had `bunk` in the 9 bung column names; `createAllTables` (every start) renames each old column that exists to its `bung` name, keeping the data (CHANGES §125). The earlier REINDEX after every insert has been removed.
 
 ### `machine_settings`
 
@@ -411,6 +411,8 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 
 ## 10. Configuration keys (selection)
 
+Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.bung.folder`, `plc.pc.check.bung.tagname`, `<vendor>.vision.bung.*`, ...). A properties file with the old spelling still works: at every load `CosThetaConfigurator._addLegacyBungKeys` adds each old key under its new spelling (a warning is printed). The PLC tag names themselves (`PLC_PC_CheckBunkForCapPress`, `PC_PLC_NoBunkCheckOK`, ... - the values of the `*.tagname` keys and the keys of `IOServerProperties.yaml`) are the PLC program's names and keep their spelling (CHANGES §125).
+
 | Key | Default | Section |
 |---|---|---|
 | `plc.vendor` | siemens (Machine 1: allenbradley) | 2 |
@@ -424,12 +426,12 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `plc.camera.answer.timeout.sec` | 20 (at least the vision check timeout + 8) | 2.4 |
 | `camera.frame.max.wait.sec` | 1.0 | 3 |
 | `pc.plc.cycle.aborted.tagname` | `PC_PLC_CycleAborted` (optional tag; no Siemens address yet) | 2.4 |
-| `pc.plc.skip.second.tightening.tagname` | `PC_PLC_Skip_Second_Tightening` (optional tag; no Siemens address yet) | 2.4 |
+| `pc.plc.skip.second.tightening.tagname` | `PC_PLC_Skip_Second_Tightening` (optional tag; Siemens `DB500,X48.0`, CHANGES §121) | 2.4 |
 | `cycle.settings.source` | database | 2.4 |
 | `supervisor.restart.dead.processes` / `.check.interval.sec` / `.max.restarts.per.hour` | True / 2 / 10 | 1 |
 | `redis.health.check.interval.sec` | 60 | 6 |
 | `heartbeat.work.loop.max.silence.sec` | 60 | 3, 5, 7 |
-| `frontend.free.rotation.torque.display.sec` | 2.0 | 5 |
+| `frontend.free.rotation.torque.display.sec` | 5.0 (seconds the finished cycle's values stay in the tiles; the result box comes at once) | 5 |
 | `frontend.state.sync.grace.sec` | 5.0 (a state difference lasting longer is logged; logging only) | 5 |
 | `frontend.abort.password` / `machine.settings.password` / `machine.settings.bypass.password` | admin123 / admin123 / admin123 | 5 |
 | `camera.state.file.max.age.sec` | 3600 | 3 |
@@ -440,7 +442,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
-| `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bunk.seating.check` | True / True (Machine 1: False / False) | 3 |
+| `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)
@@ -468,7 +470,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_All_Checks_UI.py` | Window (or `--auto`): one picture per check; Process Images runs them in order as in one cycle, a configurable pause (3 s) between checks, each check's marked picture and log lines shown; the frame's centres listed |
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
-| Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
+| Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` | The real check on a folder of pictures, shown one at a time |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |

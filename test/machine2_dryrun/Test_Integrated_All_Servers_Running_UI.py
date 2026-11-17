@@ -60,24 +60,24 @@ STEPS = [
     ("Take picture for checking nut and plate washer", "camera",
                                                             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER),
     ("Read tightening torque 1",                  "value",  MachineState.READ_TIGHTENING_TORQUE_1),
-    ("Take picture for checking bunk for component press", "camera",
-                                                            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
+    ("Take picture for checking bung for component press", "camera",
+                                                            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS),
     ("Component press done",                      "press",  MachineState.READ_COMPONENT_PRESS_DONE),
-    ("Take picture for checking no bunk",         "camera", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK),
+    ("Take picture for checking no bung",         "camera", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG),
     ("Read tightening torque 2",                  "value",  MachineState.READ_TIGHTENING_TORQUE_2),
     ("Take picture for checking split pin and washer", "camera",
                                                             MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER),
     ("Take picture for checking cap",             "camera", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP),
-    ("Take picture for checking bunk for cap press", "camera",
-                                                            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS),
+    ("Take picture for checking bung for cap press", "camera",
+                                                            MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS),
     ("Cap press done",                            "press",  MachineState.READ_CAP_PRESS_DONE),
     ("Read free rotation torque (final - next component)", "final", MachineState.READ_FREE_ROTATION_TORQUE_1),
 ]
 
 # Short labels for the per-step buttons (the operator's process steps)
 STEP_BUTTON_LABELS = [
-    "QR", "Knuckle", "Hub", "Top Bearing", "Nut & Plate Washer", "Tightening Torque 1", "Bunk - Comp Press",
-    "Component Press", "No Bunk", "Tightening Torque 2", "Split Pin & Washer", "Cap", "Bunk - Cap Press",
+    "QR", "Knuckle", "Hub", "Top Bearing", "Nut & Plate Washer", "Tightening Torque 1", "Bung - Comp Press",
+    "Component Press", "No Bung", "Tightening Torque 2", "Split Pin & Washer", "Cap", "Bung - Cap Press",
     "Cap Press", "Free Rotation Torque",
 ]
 

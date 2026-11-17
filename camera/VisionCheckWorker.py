@@ -114,8 +114,8 @@ def _warmUp(cps) -> None:
     t0 = time.monotonic()
     for state in (MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
                   MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-                  MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-                  MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK):
+                  MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+                  MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG):
         snapshot = cps.ImageProcessor.snapshotState()
         try:
             cps.assessPictures(state, [blank] * 6)

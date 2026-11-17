@@ -107,7 +107,7 @@ for _ in range(40):
         moved = True; break
 check("D1 same day: the folders are left as they are", same == start, same)
 folders = [P.getFolderForKnuckleImages(), P.getFolderForHubAndBottomBearingImages(), P.getFolderForTopBearingImages(),
-           P.getFolderForNutAndPlateWasherImages(), P.getFolderForBunkAndNoBunkImages(),
+           P.getFolderForNutAndPlateWasherImages(), P.getFolderForBungAndNoBungImages(),
            P.getFolderForSplitPinAndWasherImages(), P.getFolderForCapImages()]
 check("D1 the date changed between two wake-ups -> every step's folder is the new day's, and it exists",
       moved and all(tomorrow in f and os.path.isdir(f) for f in folders), f"{folders[0]}")

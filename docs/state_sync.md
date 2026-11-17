@@ -51,9 +51,10 @@ exactly as before.
 - for each IOServer state, the frontend states that agree with it (`FRONTEND_STATES_FOR`): the frontend shows only
   the READ state of a check and is one step ahead while the IOServer finishes a handshake or after a value / press
   event (e.g. IOServer `WRITE_RESULT_OF_CHECKING_KNUCKLE` -> frontend knuckle or hub);
-- a difference counts only when it lasts longer than `frontend.state.sync.grace.sec` (5 s); at the end of a cycle
-  (frontend still showing the free-rotation torque, IOServer back at the QR code) the display time
-  `frontend.free.rotation.torque.display.sec` + 1 s is added.
+- a difference counts only when it lasts longer than `frontend.state.sync.grace.sec` (5 s); for a frontend still at
+  the free-rotation torque while the IOServer is back at the QR code, `frontend.free.rotation.torque.display.sec` + 1 s
+  is added. Since CHANGES §123 the frontend goes back to the QR code at once at the end of a cycle (only the tiles stay
+  on screen), so that allowance no longer comes into play.
 
 **What is logged** (frontend log; every line starts with `STATE-SYNC`):
 

@@ -84,14 +84,14 @@ nutAndPlateWasherDatetimeKeyString : str = "nutAndPlateWasherDatetime"
 tighteningTorque1ValueKeyString : str = "tight1Value"
 tighteningTorque1ResultKeyString : str = "tight1Result"
 tighteningTorque1DatetimeKeyString : str = "tighteningTorque1Datetime"
-componentPressBunkPictureKeyString : str = "componentPressBunkPicture"
-componentPressBunkCheckResultKeyString : str = "componentPressBunkCheckResult"
-componentPressBunkCheckDatetimeKeyString : str = "componentPressBunkCheckDatetime"
+componentPressBungPictureKeyString : str = "componentPressBungPicture"
+componentPressBungCheckResultKeyString : str = "componentPressBungCheckResult"
+componentPressBungCheckDatetimeKeyString : str = "componentPressBungCheckDatetime"
 componentPressDoneResultKeyString : str = "componentPressDoneResult"
 componentPressDoneDatetimeKeyString : str = "componentPressDoneDatetime"
-noBunkPictureKeyString : str = "noBunkPicture"
-noBunkCheckResultKeyString : str = "noBunkCheckResult"
-noBunkCheckDatetimeKeyString : str = "noBunkCheckDatetime"
+noBungPictureKeyString : str = "noBungPicture"
+noBungCheckResultKeyString : str = "noBungCheckResult"
+noBungCheckDatetimeKeyString : str = "noBungCheckDatetime"
 tighteningTorque2ValueKeyString : str = "tight2Value"
 tighteningTorque2ResultKeyString : str = "tight2Result"
 tighteningTorque2DatetimeKeyString : str = "tighteningTorque2Datetime"
@@ -101,9 +101,9 @@ splitPinAndWasherCheckDatetimeKeyString : str = "splitPinAndWasherCheckDatetime"
 capPictureKeyString : str = "capPicture"
 capCheckResultKeyString : str = "capCheckResult"
 capCheckDatetimeKeyString : str = "capCheckDatetime"
-capPressBunkPictureKeyString : str = "capPressBunkPicture"
-capPressBunkCheckResultKeyString : str = "capPressBunkCheckResult"
-capPressBunkCheckDatetimeKeyString : str = "capPressBunkCheckDatetime"
+capPressBungPictureKeyString : str = "capPressBungPicture"
+capPressBungCheckResultKeyString : str = "capPressBungCheckResult"
+capPressBungCheckDatetimeKeyString : str = "capPressBungCheckDatetime"
 capPressDoneResultKeyString : str = "pressDoneResult"
 capPressDoneDatetimeKeyString : str = "capPressDatetime"
 freeRotationTorque1ValueKeyString : str = "rotation1Value"
@@ -1159,13 +1159,13 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
                                          topBearingPicture : Union[np.ndarray, None], topBearingResult : ResultType, topBearingDatetime : str,
                                          nutAndPlateWasherPicture : Union[np.ndarray, None], nutAndPlateWasherResult : ResultType, nutAndPlateWasherDatetime : str,
                                          tighteningTorque1 : Union[str, float], tighteningTorque1Result : ResultType, tighteningTorque1Datetime : str,
-                                         componentPressBunkCheckingPicture: Union[np.ndarray, None], componentPressBunkCheckingResult : ResultType, componentPressBunkCheckDatetime : str,
+                                         componentPressBungCheckingPicture: Union[np.ndarray, None], componentPressBungCheckingResult : ResultType, componentPressBungCheckDatetime : str,
                                          componentPressDone :  ResultType, componentPressDoneDatetime : str,
-                                         noBunkCheckingPicture: Union[np.ndarray, None], noBunkCheckingResult : ResultType, noBunkCheckDatetime : str,
+                                         noBungCheckingPicture: Union[np.ndarray, None], noBungCheckingResult : ResultType, noBungCheckDatetime : str,
                                          tighteningTorque2 : Union[str, float], tighteningTorque2Result : ResultType, tighteningTorque2Datetime : str,
                                          splitPinAndWasherPicture: Union[np.ndarray, None], splitPinAndWasherResult : ResultType, splitPinAndWasherDatetime : str,
                                          capCheckingPicture: Union[np.ndarray, None], capCheckingResult : ResultType, capCheckingDatetime : str,
-                                         bunkCheckingPicture: Union[np.ndarray, None], capPressBunkCheckingResult : ResultType, capPressBunkCheckDatetime : str,
+                                         bungCheckingPicture: Union[np.ndarray, None], capPressBungCheckingResult : ResultType, capPressBungCheckDatetime : str,
                                          pressDone: ResultType, capPressDoneDatetime : str,
                                          freeRotationTorque1: Union[str, float], freeRotationTorque1Result: ResultType, freeRotationTorque1Datetime : str,
                                          overallResult : ResultType,
@@ -1227,24 +1227,24 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
 
     # print("Reached here - 5")
 
-    componentPressBunkCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
+    componentPressBungCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
     try:
-        if validate_image(componentPressBunkCheckingPicture):
-            retval, buffer = cv2.imencode('.png', componentPressBunkCheckingPicture)
+        if validate_image(componentPressBungCheckingPicture):
+            retval, buffer = cv2.imencode('.png', componentPressBungCheckingPicture)
             if buffer is not None:
-                componentPressBunkCheckingPictureAsMessage = np.array(buffer).tobytes()
+                componentPressBungCheckingPictureAsMessage = np.array(buffer).tobytes()
     except Exception as e:
-        printBoldRed(f"Problem in getting bunk check picture before component press - {e}")
+        printBoldRed(f"Problem in getting bung check picture before component press - {e}")
         pass
 
-    noBunkCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
+    noBungCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
     try:
-        if validate_image(noBunkCheckingPicture):
-            retval, buffer = cv2.imencode('.png', noBunkCheckingPicture)
+        if validate_image(noBungCheckingPicture):
+            retval, buffer = cv2.imencode('.png', noBungCheckingPicture)
             if buffer is not None:
-                noBunkCheckingPictureAsMessage = np.array(buffer).tobytes()
+                noBungCheckingPictureAsMessage = np.array(buffer).tobytes()
     except Exception as e:
-        printBoldRed(f"Problem in getting no bunk check picture after component press - {e}")
+        printBoldRed(f"Problem in getting no bung check picture after component press - {e}")
         pass
 
     splitPinAndWasherPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
@@ -1271,14 +1271,14 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
 
     # print("Reached here - 7")
 
-    capPressBunkCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
+    capPressBungCheckingPictureAsMessage = bytes(EMPTY_IMAGE_STRING, "utf-8")
     try:
-        if validate_image(bunkCheckingPicture):
-            retval, buffer = cv2.imencode('.png', bunkCheckingPicture)
+        if validate_image(bungCheckingPicture):
+            retval, buffer = cv2.imencode('.png', bungCheckingPicture)
             if buffer is not None:
-                capPressBunkCheckingPictureAsMessage = np.array(buffer).tobytes()
+                capPressBungCheckingPictureAsMessage = np.array(buffer).tobytes()
     except Exception as e:
-        printBoldRed(f"Problem in getting bunk check picture before cap press - {e}")
+        printBoldRed(f"Problem in getting bung check picture before cap press - {e}")
         pass
 
     # print("Reached here - 8")
@@ -1295,20 +1295,20 @@ def sendDataFromFEServerToDatabaseServer(redisConnection : redis.client.Redis,
         nutAndPlateWasherDatetimeKeyString : nutAndPlateWasherDatetime,
         tighteningTorque1ValueKeyString : str(tighteningTorque1), tighteningTorque1ResultKeyString : tighteningTorque1Result,
         tighteningTorque1DatetimeKeyString : tighteningTorque1Datetime,
-        componentPressBunkPictureKeyString: componentPressBunkCheckingPictureAsMessage, componentPressBunkCheckResultKeyString: componentPressBunkCheckingResult,
-        componentPressBunkCheckDatetimeKeyString : componentPressBunkCheckDatetime,
+        componentPressBungPictureKeyString: componentPressBungCheckingPictureAsMessage, componentPressBungCheckResultKeyString: componentPressBungCheckingResult,
+        componentPressBungCheckDatetimeKeyString : componentPressBungCheckDatetime,
         componentPressDoneResultKeyString : componentPressDone,
         componentPressDoneDatetimeKeyString : componentPressDoneDatetime,
-        noBunkPictureKeyString : noBunkCheckingPictureAsMessage, noBunkCheckResultKeyString : noBunkCheckingResult,
-        noBunkCheckDatetimeKeyString : noBunkCheckDatetime,
+        noBungPictureKeyString : noBungCheckingPictureAsMessage, noBungCheckResultKeyString : noBungCheckingResult,
+        noBungCheckDatetimeKeyString : noBungCheckDatetime,
         tighteningTorque2ValueKeyString : str(tighteningTorque2), tighteningTorque2ResultKeyString : tighteningTorque2Result,
         tighteningTorque2DatetimeKeyString: tighteningTorque2Datetime,
         splitPinAndWasherPictureKeyString : splitPinAndWasherPictureAsMessage, splitPinAndWasherCheckResultKeyString : splitPinAndWasherResult,
         splitPinAndWasherCheckDatetimeKeyString: splitPinAndWasherDatetime,
         capPictureKeyString : capCheckingPictureAsMessage, capCheckResultKeyString : capCheckingResult,
         capCheckDatetimeKeyString: capCheckingDatetime,
-        capPressBunkPictureKeyString : capPressBunkCheckingPictureAsMessage, capPressBunkCheckResultKeyString : capPressBunkCheckingResult,
-        capPressBunkCheckDatetimeKeyString: capPressBunkCheckDatetime,
+        capPressBungPictureKeyString : capPressBungCheckingPictureAsMessage, capPressBungCheckResultKeyString : capPressBungCheckingResult,
+        capPressBungCheckDatetimeKeyString: capPressBungCheckDatetime,
         capPressDoneResultKeyString : pressDone,
         capPressDoneDatetimeKeyString: capPressDoneDatetime,
         freeRotationTorque1ValueKeyString: str(freeRotationTorque1), freeRotationTorque1ResultKeyString: freeRotationTorque1Result,
@@ -2284,14 +2284,14 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     tighteningTorque1: float = 0.
     tighteningTorque1Result: str = notok
     tighteningTorque1Datetime : str = '1970-01-01 00:00:00'
-    componentPressBunkPicture: Union[np.ndarray, None] = None
-    componentPressBunkCheckResult : str = notok
-    componentPressBunkCheckDatetime : str = '1970-01-01 00:00:00'
+    componentPressBungPicture: Union[np.ndarray, None] = None
+    componentPressBungCheckResult : str = notok
+    componentPressBungCheckDatetime : str = '1970-01-01 00:00:00'
     componentPressDone : str = notok
     componentPressDoneDatetime : str = '1970-01-01 00:00:00'
-    noBunkPicture: Union[np.ndarray, None] = None
-    noBunkCheckResult : str = notok
-    noBunkCheckDatetime : str = '1970-01-01 00:00:00'
+    noBungPicture: Union[np.ndarray, None] = None
+    noBungCheckResult : str = notok
+    noBungCheckDatetime : str = '1970-01-01 00:00:00'
     tighteningTorque2: float = 0.
     tighteningTorque2Result: str = notok
     tighteningTorque2Datetime : str = '1970-01-01 00:00:00'
@@ -2301,9 +2301,9 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
     capPicture: Union[np.ndarray, None] = None
     capCheckResult : str = notok
     capCheckDatetime : str = '1970-01-01 00:00:00'
-    capPressBunkPicture: Union[np.ndarray, None] = None
-    capPressBunkCheckResult : str = notok
-    capPressBunkCheckDatetime : str = '1970-01-01 00:00:00'
+    capPressBungPicture: Union[np.ndarray, None] = None
+    capPressBungCheckResult : str = notok
+    capPressBungCheckDatetime : str = '1970-01-01 00:00:00'
     capPressDone : str = notok
     capPressDoneDatetime : str = '1970-01-01 00:00:00'
     freeRotationTorque1: float = 0.
@@ -2327,13 +2327,13 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
                     nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
                     tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-                    componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
+                    componentPressBungPicture, componentPressBungCheckResult, componentPressBungCheckDatetime,
                     componentPressDone, componentPressDoneDatetime,
-                    noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
+                    noBungPicture, noBungCheckResult, noBungCheckDatetime,
                     tighteningTorque2, tighteningTorque2Result, tighteningTorque2Datetime,
                     splitPinAndWasherPicture, splitPinAndWasherCheckResult, splitPinAndWasherCheckDatetime,
                     capPicture, capCheckResult, capCheckDatetime,
-                    capPressBunkPicture, capPressBunkCheckResult, capPressBunkCheckDatetime,
+                    capPressBungPicture, capPressBungCheckResult, capPressBungCheckDatetime,
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
@@ -2467,25 +2467,25 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 tighteningTorque1Datetime = '1970-01-01 00:00:00'
 
             try:
-                componentPressBunkPicture = cv2.imdecode(np.frombuffer(newData[componentPressBunkPictureKeyString], np.uint8), 1)
+                componentPressBungPicture = cv2.imdecode(np.frombuffer(newData[componentPressBungPictureKeyString], np.uint8), 1)
                 if printStatements:
-                    print(componentPressBunkPicture.shape)
+                    print(componentPressBungPicture.shape)
             except Exception:
-                componentPressBunkPicture = None
+                componentPressBungPicture = None
 
             try:
-                sentResult = str(newData[componentPressBunkCheckResultKeyString].decode('utf-8'))
+                sentResult = str(newData[componentPressBungCheckResultKeyString].decode('utf-8'))
                 # without a picture only 'Bypassed' (Machine Setting: step skipped) is taken; else NOT OK
-                if componentPressBunkPicture is not None or sentResult == BYPASSED_RESULT:
-                    componentPressBunkCheckResult = sentResult
+                if componentPressBungPicture is not None or sentResult == BYPASSED_RESULT:
+                    componentPressBungCheckResult = sentResult
             except Exception:
-                componentPressBunkCheckResult = notok
+                componentPressBungCheckResult = notok
 
             try:
-                componentPressBunkCheckDatetime = str(newData[componentPressBunkCheckDatetimeKeyString].decode('utf-8'))
+                componentPressBungCheckDatetime = str(newData[componentPressBungCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed("Couldn't get componentPressBunkCheckDatetime")
-                componentPressBunkCheckDatetime = '1970-01-01 00:00:00'
+                printBoldRed("Couldn't get componentPressBungCheckDatetime")
+                componentPressBungCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 componentPressDone = str(newData[componentPressDoneResultKeyString].decode('utf-8'))
@@ -2499,25 +2499,25 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 componentPressDoneDatetime = '1970-01-01 00:00:00'
 
             try:
-                noBunkPicture = cv2.imdecode(np.frombuffer(newData[noBunkPictureKeyString], np.uint8), 1)
+                noBungPicture = cv2.imdecode(np.frombuffer(newData[noBungPictureKeyString], np.uint8), 1)
                 if printStatements:
-                    print(noBunkPicture.shape)
+                    print(noBungPicture.shape)
             except Exception:
-                noBunkPicture = None
+                noBungPicture = None
 
             try:
-                sentResult = str(newData[noBunkCheckResultKeyString].decode('utf-8'))
+                sentResult = str(newData[noBungCheckResultKeyString].decode('utf-8'))
                 # without a picture only 'Bypassed' (Machine Setting: step skipped) is taken; else NOT OK
-                if noBunkPicture is not None or sentResult == BYPASSED_RESULT:
-                    noBunkCheckResult = sentResult
+                if noBungPicture is not None or sentResult == BYPASSED_RESULT:
+                    noBungCheckResult = sentResult
             except Exception:
-                noBunkCheckResult = notok
+                noBungCheckResult = notok
 
             try:
-                noBunkCheckDatetime = str(newData[noBunkCheckDatetimeKeyString].decode('utf-8'))
+                noBungCheckDatetime = str(newData[noBungCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed("Couldn't get noBunkCheckDatetime")
-                noBunkCheckDatetime = '1970-01-01 00:00:00'
+                printBoldRed("Couldn't get noBungCheckDatetime")
+                noBungCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 tighteningTorque2 = float(newData[tighteningTorque2ValueKeyString].decode('utf-8'))
@@ -2574,23 +2574,23 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                 capCheckDatetime = '1970-01-01 00:00:00'
 
             try:
-                capPressBunkPicture = cv2.imdecode(np.frombuffer(newData[capPressBunkPictureKeyString], np.uint8), 1)
+                capPressBungPicture = cv2.imdecode(np.frombuffer(newData[capPressBungPictureKeyString], np.uint8), 1)
                 if printStatements:
-                    print(capPressBunkPicture.shape)
+                    print(capPressBungPicture.shape)
             except Exception:
-                capPressBunkPicture = None
+                capPressBungPicture = None
 
             try:
-                if capPressBunkPicture is not None:
-                    capPressBunkCheckResult = str(newData[capPressBunkCheckResultKeyString].decode('utf-8'))
+                if capPressBungPicture is not None:
+                    capPressBungCheckResult = str(newData[capPressBungCheckResultKeyString].decode('utf-8'))
             except Exception:
-                capPressBunkCheckResult = notok
+                capPressBungCheckResult = notok
 
             try:
-                capPressBunkCheckDatetime = str(newData[capPressBunkCheckDatetimeKeyString].decode('utf-8'))
+                capPressBungCheckDatetime = str(newData[capPressBungCheckDatetimeKeyString].decode('utf-8'))
             except Exception:
-                printBoldRed("Couldn't get capPressBunkCheckDatetime")
-                capPressBunkCheckDatetime = '1970-01-01 00:00:00'
+                printBoldRed("Couldn't get capPressBungCheckDatetime")
+                capPressBungCheckDatetime = '1970-01-01 00:00:00'
 
             try:
                 capPressDone = str(newData[capPressDoneResultKeyString].decode('utf-8'))
@@ -2642,13 +2642,13 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
                     topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
                     nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
                     tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-                    componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
+                    componentPressBungPicture, componentPressBungCheckResult, componentPressBungCheckDatetime,
                     componentPressDone, componentPressDoneDatetime,
-                    noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
+                    noBungPicture, noBungCheckResult, noBungCheckDatetime,
                     tighteningTorque2, tighteningTorque2Result, tighteningTorque2Datetime,
                     splitPinAndWasherPicture, splitPinAndWasherCheckResult, splitPinAndWasherCheckDatetime,
                     capPicture, capCheckResult, capCheckDatetime,
-                    capPressBunkPicture, capPressBunkCheckResult, capPressBunkCheckDatetime,
+                    capPressBungPicture, capPressBungCheckResult, capPressBungCheckDatetime,
                     capPressDone, capPressDoneDatetime,
                     freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                     overallResult)
@@ -2666,13 +2666,13 @@ def readDataInDatabaseServerFromFEServer(redisConnection : redis.client.Redis, b
             topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
             nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
             tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-            componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
+            componentPressBungPicture, componentPressBungCheckResult, componentPressBungCheckDatetime,
             componentPressDone, componentPressDoneDatetime,
-            noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
+            noBungPicture, noBungCheckResult, noBungCheckDatetime,
             tighteningTorque2, tighteningTorque2Result, tighteningTorque2Datetime,
             splitPinAndWasherPicture, splitPinAndWasherCheckResult, splitPinAndWasherCheckDatetime,
             capPicture, capCheckResult, capCheckDatetime,
-            capPressBunkPicture, capPressBunkCheckResult, capPressBunkCheckDatetime,
+            capPressBungPicture, capPressBungCheckResult, capPressBungCheckDatetime,
             capPressDone, capPressDoneDatetime,
             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
             overallResult)

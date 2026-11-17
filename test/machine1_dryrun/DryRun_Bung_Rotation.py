@@ -1,9 +1,9 @@
 """
 DryRun_Bung_Rotation - the bung check must not depend on how the bung is turned.
 
-Each seated bung picture of 13 Nov (bunk_images_20261113, labels below) is turned about the model's seated bung centre
-(<vendor>.vision.bunk.seating.seated.centre.<model>) in --step degree steps (default 15: 24 angles) and checked with
-the real CheckBunk.checkBunk (state 24; CheckNoCapBunk runs the same hole detection and seating):
+Each seated bung picture of 13 Nov (bung_images_20261113, labels below) is turned about the model's seated bung centre
+(<vendor>.vision.bung.seating.seated.centre.<model>) in --step degree steps (default 15: 24 angles) and checked with
+the real CheckBung.checkBung (state 24; CheckNoCapBung runs the same hole detection and seating):
   - as its own model    -> the hole pattern must pass at every angle
   - as the other model  -> the hole pattern must fail at every angle (wrong bung)    (--own-only skips this)
 Turning the picture is not the same as turning the bung under the fixed light (the highlights turn with it), but it
@@ -49,7 +49,7 @@ SEATED = {**{n: "DOST" for n in ["A01"] + [f"A{i:02d}" for i in range(7, 17)]},
           **{n: "DOSTPLUS" for n in ["A03", "A04"] + [f"B{i:02d}" for i in range(11, 21)]}}
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--folder", default=str(HERE / "bunk_images_20261113"))
+ap.add_argument("--folder", default=str(HERE / "bung_images_20261113"))
 ap.add_argument("--pictures", nargs="*", default=None, help="picture names without extension (default: all seated)")
 ap.add_argument("--step", type=float, default=15.0, help="degrees between angles")
 ap.add_argument("--own-only", action="store_true", help="only check each picture as its own model")
@@ -67,8 +67,8 @@ def turned(image: np.ndarray, centre, degrees: float) -> np.ndarray:
 
 
 def main() -> int:
-    import camera.BunkSegmenter as BS
-    from camera.CheckBunk import CheckBunk
+    import camera.BungSegmenter as BS
+    from camera.CheckBung import CheckBung
 
     if ARGS.no_yolo:                       # MobileSAM only; the YOLO weights need not exist
         from camera.ModelManager import ModelManager
@@ -82,17 +82,17 @@ def main() -> int:
             mm.sam_model = sam_model_registry["vit_t"](checkpoint=mm.mobile_sam_path).to(mm.device).eval()
             mm.sam_predictor = SamPredictor(mm.sam_model)
         mm.yolo_model = _NoBoxes()
-    segmenter = BS.BunkSegmenter.get_instance()
+    segmenter = BS.BungSegmenter.get_instance()
 
     gammaLines, lastHoles = [], {}
-    original = BS.BunkSegmenter._holes_in_preprocessed
+    original = BS.BungSegmenter._holes_in_preprocessed
 
     def recording(self, *a, **k):
         result = original(self, *a, **k)
         gammaLines.append(self.last_gamma_text)
         lastHoles["result"] = result
         return result
-    BS.BunkSegmenter._holes_in_preprocessed = recording
+    BS.BungSegmenter._holes_in_preprocessed = recording
 
     seatingLines, lastSeating = [], {}
     originalSeating = BS.check_bung_seating
@@ -128,7 +128,7 @@ def main() -> int:
                 seatingLines.clear()
                 lastHoles.clear()
                 lastSeating.clear()
-                _, ok, gamma = CheckBunk.checkBunk(turned(image, centre, a), QR[model], None)
+                _, ok, gamma = CheckBung.checkBung(turned(image, centre, a), QR[model], None)
                 count, _, definitive = lastHoles.get("result", (0, [], False))
                 holesOk = bool(definitive and count == EXPECTED[model])
                 seatedFalse = holesOk and lastSeating.get("seated") is False

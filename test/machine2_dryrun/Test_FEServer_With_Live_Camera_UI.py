@@ -54,11 +54,11 @@ from utils.RedisUtils import (
     hubAndBottomBearingPictureKeyString,
     topBearingPictureKeyString,
     nutAndPlateWasherPictureKeyString,
-    componentPressBunkPictureKeyString,
+    componentPressBungPictureKeyString,
     splitPinAndWasherPictureKeyString,
-    noBunkPictureKeyString,
+    noBungPictureKeyString,
     capPictureKeyString,
-    capPressBunkPictureKeyString
+    capPressBungPictureKeyString
 )
 
 # Import check modules - using the class-based approach. Some need torch/models; a module that cannot be imported
@@ -77,11 +77,11 @@ CheckKnuckle = _importCheck("CheckKnuckle")
 CheckHubAndBottomBearing = _importCheck("CheckHubAndBottomBearing")
 CheckTopBearing = _importCheck("CheckTopBearing")
 CheckNutAndPlateWasher = _importCheck("CheckNutAndPlateWasher")
-CheckBunk = _importCheck("CheckBunk")
-CheckNoBunk = _importCheck("CheckNoBunk")
+CheckBung = _importCheck("CheckBung")
+CheckNoBung = _importCheck("CheckNoBung")
 CheckSplitPinAndWasher = _importCheck("CheckSplitPinAndWasher")
 CheckCap = _importCheck("CheckCap")
-CheckNoCapBunk = _importCheck("CheckNoCapBunk")
+CheckNoCapBung = _importCheck("CheckNoCapBung")
 
 def _requireCheck(checkClass, name: str):
     if checkClass is None:
@@ -113,8 +113,8 @@ def createDisplayString(qrCode: str, printQRCode: bool = False) -> Union[str, No
     return displayString
 
 # Steps a bypassed cycle skips (Machine Setting "Bypass Component Press and Second Tightening")
-BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
-                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MachineState.READ_TIGHTENING_TORQUE_2)
+BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
+                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, MachineState.READ_TIGHTENING_TORQUE_2)
 
 
 class TestStep:
@@ -138,9 +138,9 @@ class ImageProcessorTestUI:
                                                       nutAndPlateWasherPictureKeyString : None,
                                                       splitPinAndWasherPictureKeyString : None,
                                                       capPictureKeyString : None,
-                                                      componentPressBunkPictureKeyString : None,
-                                                      noBunkPictureKeyString : None,
-                                                      capPressBunkPictureKeyString : None}
+                                                      componentPressBungPictureKeyString : None,
+                                                      noBungPictureKeyString : None,
+                                                      capPressBungPictureKeyString : None}
 
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -197,18 +197,18 @@ class ImageProcessorTestUI:
             TestStep("Nut & Plate Washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, "camera",
                      check_name="nut_platewasher"),
             TestStep("Tightening Torque 1", MachineState.READ_TIGHTENING_TORQUE_1, "torque"),
-            TestStep("Bunk for Component Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-                     "camera", check_name="no_cap_bunk"),
+            TestStep("Bung for Component Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+                     "camera", check_name="no_cap_bung"),
             TestStep("Component Press", MachineState.READ_COMPONENT_PRESS_DONE, "done"),
-            TestStep("No Bunk (after component press)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, "camera",
-                     check_name="no_bunk"),
+            TestStep("No Bung (after component press)", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, "camera",
+                     check_name="no_bung"),
             TestStep("Tightening Torque 2", MachineState.READ_TIGHTENING_TORQUE_2, "torque"),
             TestStep("Split Pin & Washer", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, "camera",
                      check_name="splitpin_washer"),
             TestStep("Cap", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP, "camera",
                      check_name="cap"),
-            TestStep("Bunk for Cap Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, "camera",
-                     check_name="bunk"),
+            TestStep("Bung for Cap Press", MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, "camera",
+                     check_name="bung"),
             TestStep("Cap Press", MachineState.READ_CAP_PRESS_DONE, "done"),
             # Final step - the frontend ends the cycle on this message and sends the record to the DB server
             TestStep("Free Rotation Torque", MachineState.READ_FREE_ROTATION_TORQUE_1, "torque_final"),
@@ -737,16 +737,16 @@ class ImageProcessorTestUI:
             )
             return result, processed_image
 
-        elif check_name == "no_cap_bunk":
-            # CheckNoCapBunk.checkNoCapBunk(image, qr_code) -> (result_image, success, winning_gamma)
-            ImageProcessorTestUI.currentPictures[componentPressBunkPictureKeyString] = image
-            result_image, success, _ = _requireCheck(CheckNoCapBunk, "CheckNoCapBunk").checkNoCapBunk(anImage=image, componentQRCode=self.current_qr_code)
+        elif check_name == "no_cap_bung":
+            # CheckNoCapBung.checkNoCapBung(image, qr_code) -> (result_image, success, winning_gamma)
+            ImageProcessorTestUI.currentPictures[componentPressBungPictureKeyString] = image
+            result_image, success, _ = _requireCheck(CheckNoCapBung, "CheckNoCapBung").checkNoCapBung(anImage=image, componentQRCode=self.current_qr_code)
             return success, result_image
 
-        elif check_name == "no_bunk":
-            # CheckNoBunk.checkNoBunk(image, currentPictures, qr_code) -> (annotated_image, nut_present)
-            ImageProcessorTestUI.currentPictures[noBunkPictureKeyString] = image
-            processed_image, result = _requireCheck(CheckNoBunk, "CheckNoBunk").checkNoBunk(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
+        elif check_name == "no_bung":
+            # CheckNoBung.checkNoBung(image, currentPictures, qr_code) -> (annotated_image, nut_present)
+            ImageProcessorTestUI.currentPictures[noBungPictureKeyString] = image
+            processed_image, result = _requireCheck(CheckNoBung, "CheckNoBung").checkNoBung(anImage=image, currentPictures=ImageProcessorTestUI.currentPictures,
                                                               componentQRCode=self.current_qr_code)
             return result, processed_image
 
@@ -764,10 +764,10 @@ class ImageProcessorTestUI:
                                                            componentQRCode=self.current_qr_code)
             return result, processed_image
 
-        elif check_name == "bunk":
-            # CheckBunk.checkBunk(image, qr_code) -> (result_image, success, winning_gamma)
-            ImageProcessorTestUI.currentPictures[capPressBunkPictureKeyString] = image
-            result_image, success, _ = _requireCheck(CheckBunk, "CheckBunk").checkBunk(anImage=image, componentQRCode=self.current_qr_code)
+        elif check_name == "bung":
+            # CheckBung.checkBung(image, qr_code) -> (result_image, success, winning_gamma)
+            ImageProcessorTestUI.currentPictures[capPressBungPictureKeyString] = image
+            result_image, success, _ = _requireCheck(CheckBung, "CheckBung").checkBung(anImage=image, componentQRCode=self.current_qr_code)
             return success, result_image
 
         else:
@@ -883,9 +883,9 @@ class ImageProcessorTestUI:
                                                     nutAndPlateWasherPictureKeyString: None,
                                                     splitPinAndWasherPictureKeyString: None,
                                                     capPictureKeyString: None,
-                                                    componentPressBunkPictureKeyString: None,
-                                                    noBunkPictureKeyString: None,
-                                                    capPressBunkPictureKeyString: None}
+                                                    componentPressBungPictureKeyString: None,
+                                                    noBungPictureKeyString: None,
+                                                    capPressBungPictureKeyString: None}
             self.current_step_index = 0
             self.waiting_for = None
             self.current_qr_code = ""

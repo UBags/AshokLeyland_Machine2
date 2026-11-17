@@ -28,9 +28,9 @@ COLS = [0, 273, 546, 819, 1092, 1366, 1638]; ROWS = [255, 537]
 def photo(rw, c): x0, y0 = COLS[c], ROWS[rw]; return src[y0 + 42: y0 + 238, x0 + 8: x0 + 266].copy()
 IMG = {MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: photo(0, 0), MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: photo(0, 1),
        MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: photo(0, 2), MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: photo(0, 3),
-       MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: photo(0, 6)[:, :250], MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: photo(1, 1),
+       MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: photo(0, 6)[:, :250], MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: photo(1, 1),
        MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: photo(1, 3), MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP: photo(1, 4),
-       MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: photo(1, 5)}
+       MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: photo(1, 5)}
 QR = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"   # DOSTPLUS RHS
 
 # ---------------- simulated QR scanner + camera servers (incl. their heartbeats) ----------------
@@ -91,13 +91,13 @@ def plc():
     check(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone)
     check(IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone)
     value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.08, rotationDone=True)
-    check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
+    check(IOServer.PLC_PC_CheckNoCapBung, IOServer.PC_PLC_NoCapBungCheckDone)
     pulse(IOServer.PLC_PC_ComponentPressDone)
-    check(IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckDone)
+    check(IOServer.PLC_PC_CheckNoBung, IOServer.PC_PLC_NoBungCheckDone)
     value(IOServer.PLC_PC_Station2TorqueValueSet, IOServer.PLC_PC_Station2TorqueValue, 19.03, rotationDone=False)
     check(IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone)
     check(IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone)
-    check(IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone)
+    check(IOServer.PLC_PC_CheckBung, IOServer.PC_PLC_BungCheckDone)
     pulse(IOServer.PLC_PC_CapPressDone)
     value(IOServer.PLC_PC_Station3TorqueValueSet, IOServer.PLC_PC_Station3TorqueValue, 2.41)
     RESULT['plc_done'] = True
@@ -129,8 +129,8 @@ app.exec()
 
 c = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", database="ashok_leyland_production"); cur = c.cursor()
 cur.execute("""select model_name, lhs_rhs, model_tonnage, nut_tightening_torque_1, nut_tightening_torque_2, free_rotation_torque_1,
-               check_knuckle_result, check_bunk_for_component_press_result, component_press_done, check_no_bunk_result,
-               check_splitpin_and_washer_result, check_cap_result, check_bunk_cap_press_result, cap_press_done,
+               check_knuckle_result, check_bung_for_component_press_result, component_press_done, check_no_bung_result,
+               check_splitpin_and_washer_result, check_cap_result, check_bung_cap_press_result, cap_press_done,
                ok_notok_result, username, setting_rotation_rpm, setting_tightening_torque1_setpoint,
                setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
                nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data

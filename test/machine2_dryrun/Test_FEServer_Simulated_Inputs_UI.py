@@ -11,13 +11,13 @@ Machine 2 operator steps (15) and the frontend state each message is sent for:
  4. Top Bearing Check (visual)         READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING              (camera2fe)
  5. Nut & Plate Washer Check (visual)  READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER      (camera2fe)
  6. Tightening Torque 1 (IO value)     READ_TIGHTENING_TORQUE_1                                (io2fe)
- 7. Bunk for Component Press (visual)  READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS (camera2fe)
+ 7. Bung for Component Press (visual)  READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS (camera2fe)
  8. Component Press (IO)               READ_COMPONENT_PRESS_DONE                               (io2fe)
- 9. No Bunk Check (visual)             READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK                  (camera2fe)
+ 9. No Bung Check (visual)             READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG                  (camera2fe)
 10. Tightening Torque 2 (IO value)     READ_TIGHTENING_TORQUE_2                                (io2fe)
 11. Split Pin & Washer Check (visual)  READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER      (camera2fe)
 12. Cap Check (visual)                 READ_TAKE_PICTURE_FOR_CHECKING_CAP                      (camera2fe)
-13. Bunk for Cap Press Check (visual)  READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS       (camera2fe)
+13. Bung for Cap Press Check (visual)  READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS       (camera2fe)
 14. Cap Press (IO)                     READ_CAP_PRESS_DONE                                     (io2fe)
 15. Free Rotation Torque (IO, final)   READ_FREE_ROTATION_TORQUE_1                             (io2fe, action=moveAheadToNextComponent)
 
@@ -72,11 +72,11 @@ KNUCKLE_IMAGE_PATH = f"{IMAGE_BASE_DIR}/1-Knuckle/test_image.png"
 HUB_AND_BOTTOM_BEARING_IMAGE_PATH = f"{IMAGE_BASE_DIR}/2-HubAndBottomBearing/test_image.png"
 TOP_BEARING_IMAGE_PATH = f"{IMAGE_BASE_DIR}/3-TopBearing/test_image.png"
 NUT_AND_PLATE_WASHER_IMAGE_PATH = f"{IMAGE_BASE_DIR}/4-NutAndPlateWasher/test_image.png"
-BUNK_FOR_COMPONENT_PRESS_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
-NO_BUNK_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
+BUNG_FOR_COMPONENT_PRESS_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
+NO_BUNG_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
 SPLIT_PIN_AND_WASHER_IMAGE_PATH = f"{IMAGE_BASE_DIR}/5-SplitPinAndWasher/test_image.png"
 CAP_IMAGE_PATH = f"{IMAGE_BASE_DIR}/6-Cap/test_image.png"
-BUNK_FOR_CAP_PRESS_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
+BUNG_FOR_CAP_PRESS_IMAGE_PATH = f"{IMAGE_BASE_DIR}/7-BungAndNoBung/test_image.png"
 
 FALLBACK_IMAGE_PATH = f"{IMAGE_BASE_DIR}/fallback_test_image.png"
 
@@ -85,11 +85,11 @@ IMAGE_PATHS = {
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: HUB_AND_BOTTOM_BEARING_IMAGE_PATH,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: TOP_BEARING_IMAGE_PATH,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: NUT_AND_PLATE_WASHER_IMAGE_PATH,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: BUNK_FOR_COMPONENT_PRESS_IMAGE_PATH,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: NO_BUNK_IMAGE_PATH,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: BUNG_FOR_COMPONENT_PRESS_IMAGE_PATH,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: NO_BUNG_IMAGE_PATH,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: SPLIT_PIN_AND_WASHER_IMAGE_PATH,
     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP: CAP_IMAGE_PATH,
-    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: BUNK_FOR_CAP_PRESS_IMAGE_PATH,
+    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: BUNG_FOR_CAP_PRESS_IMAGE_PATH,
 }
 
 
@@ -162,8 +162,8 @@ def _camera_command(name: str, description: str, state: MachineState) -> dict:
 
 # This cycle's bypass (set when the QR code is sent with "Bypass ..." ticked): steps 7-10 skipped
 BYPASS = {"cycle": False}
-BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
-                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MachineState.READ_TIGHTENING_TORQUE_2)
+BYPASSED_STATES = (MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MachineState.READ_COMPONENT_PRESS_DONE,
+                   MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, MachineState.READ_TIGHTENING_TORQUE_2)
 
 
 def _send_qr_code(result):
@@ -220,20 +220,20 @@ commands = [
                     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER),
     _io_command("Tightening Torque 1", f"First tightening torque ({DEFAULT_TIGHTENING_TORQUE_1} Nm)", "io_torque",
                 MachineState.READ_TIGHTENING_TORQUE_1, DEFAULT_TIGHTENING_TORQUE_1),
-    _camera_command("Bunk for Component Press Check", "Visual inspection of bunk placement for component press",
-                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
+    _camera_command("Bung for Component Press Check", "Visual inspection of bung placement for component press",
+                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS),
     _io_command("Component Press", "Component press operation", "io_signal",
                 MachineState.READ_COMPONENT_PRESS_DONE, -1.0),
-    _camera_command("No Bunk Check (after Component Press)", "Visual inspection confirming bunk removal",
-                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK),
+    _camera_command("No Bung Check (after Component Press)", "Visual inspection confirming bung removal",
+                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG),
     _io_command("Tightening Torque 2", f"Second tightening torque ({DEFAULT_TIGHTENING_TORQUE_2} Nm)", "io_torque",
                 MachineState.READ_TIGHTENING_TORQUE_2, DEFAULT_TIGHTENING_TORQUE_2),
     _camera_command("Split Pin & Washer Check", "Visual inspection of split pin and washer",
                     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER),
     _camera_command("Cap Check", "Visual inspection of cap",
                     MachineState.READ_TAKE_PICTURE_FOR_CHECKING_CAP),
-    _camera_command("Bunk for Cap Press Check", "Visual inspection of bunk placement for cap press",
-                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS),
+    _camera_command("Bung for Cap Press Check", "Visual inspection of bung placement for cap press",
+                    MachineState.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS),
     _io_command("Cap Press", "Cap press operation", "io_signal",
                 MachineState.READ_CAP_PRESS_DONE, -1.0),
     # Final step: the frontend ends the cycle (and sends the record to the DB server) whether OK or NOT OK

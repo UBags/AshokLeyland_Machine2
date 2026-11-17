@@ -108,17 +108,17 @@ class MockPLC:
             config.getPlcPcStation2TorqueValueTagName(): 0.0,
 
             # No Cap Bung (Step 7)
-            config.getPlcPcCheckNoCapBunkTagName(): False,
-            config.getPcPlcNoCapBunkCheckOKTagName(): False,
-            config.getPcPlcNoCapBunkCheckDoneTagName(): False,
+            config.getPlcPcCheckNoCapBungTagName(): False,
+            config.getPcPlcNoCapBungCheckOKTagName(): False,
+            config.getPcPlcNoCapBungCheckDoneTagName(): False,
 
             # Component Press Done (Step 8)
             config.getPlcPcComponentPressDoneTagName(): False,
 
             # No Bung (Step 9)
-            config.getPlcPcCheckNoBunkTagName(): False,
-            config.getPcPlcNoBunkCheckOKTagName(): False,
-            config.getPcPlcNoBunkCheckDoneTagName(): False,
+            config.getPlcPcCheckNoBungTagName(): False,
+            config.getPcPlcNoBungCheckOKTagName(): False,
+            config.getPcPlcNoBungCheckDoneTagName(): False,
 
             # Split Pin and Washer (Step 11)
             config.getPlcPcCheckSplitPinAndWasherTagName(): False,
@@ -131,9 +131,9 @@ class MockPLC:
             config.getPcPlcCapCheckDoneTagName(): False,
 
             # Bung (Step 13)
-            config.getPlcPcCheckBunkTagName(): False,
-            config.getPcPlcBunkCheckOKTagName(): False,
-            config.getPcPlcBunkCheckDoneTagName(): False,
+            config.getPlcPcCheckBungTagName(): False,
+            config.getPcPlcBungCheckOKTagName(): False,
+            config.getPcPlcBungCheckDoneTagName(): False,
 
             # Cap Press Done (Step 14)
             config.getPlcPcCapPressDoneTagName(): False,

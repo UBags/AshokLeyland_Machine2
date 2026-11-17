@@ -18,7 +18,7 @@ the script prints PASS/FAIL per check and exits 1 if any check fails.
      see CHANGES_MACHINE2.md section 9 (rejection is not reported to the PLC; to be decided). The accepted code then
      completes state 2 normally, with the side/model of THAT code.
 
-  C. Emergency abort part-way through a cycle (after tightening torque 1, waiting for the bunk picture)
+  C. Emergency abort part-way through a cycle (after tightening torque 1, waiting for the bung picture)
      Stale messages are placed on every queue first. After the PLC raises PLC_PC_EmergencyAbort, IOServer must:
      send ABORT to the QR server (io2qrcodeabort.q) and the emergency message to the frontend (emergency.q); clear the
      7 key communication queues (no stale message left); write False / 0.0 to all 37 per-cycle handshake tags, 38 on Siemens (an
@@ -218,13 +218,13 @@ VISION = [  # (trigger, Done, OK) in Machine 2 order, with the PLC-driven steps 
     ("TOP", IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone, IOServer.PC_PLC_HubAndSecondBearingCheckOK),
     ("NUT", IOServer.PLC_PC_CheckNutAndPlateWasher, IOServer.PC_PLC_NutAndPlateWasherCheckDone, IOServer.PC_PLC_NutAndPlateWasherCheckOK),
     ("TORQUE1", None, None, None),
-    ("BUNK_CP", IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone, IOServer.PC_PLC_NoCapBunkCheckOK),
+    ("BUNG_CP", IOServer.PLC_PC_CheckNoCapBung, IOServer.PC_PLC_NoCapBungCheckDone, IOServer.PC_PLC_NoCapBungCheckOK),
     ("COMP_PRESS", None, None, None),
-    ("NOBUNK", IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckDone, IOServer.PC_PLC_NoBunkCheckOK),
+    ("NOBUNG", IOServer.PLC_PC_CheckNoBung, IOServer.PC_PLC_NoBungCheckDone, IOServer.PC_PLC_NoBungCheckOK),
     ("TORQUE2", None, None, None),
     ("SPLITPIN", IOServer.PLC_PC_CheckSplitPinAndWasher, IOServer.PC_PLC_SplitPinAndWasherCheckDone, IOServer.PC_PLC_SplitPinAndWasherCheckOK),
     ("CAP", IOServer.PLC_PC_CheckCap, IOServer.PC_PLC_CapCheckDone, IOServer.PC_PLC_CapCheckOK),
-    ("BUNK_CAPP", IOServer.PLC_PC_CheckBunk, IOServer.PC_PLC_BunkCheckDone, IOServer.PC_PLC_BunkCheckOK),
+    ("BUNG_CAPP", IOServer.PLC_PC_CheckBung, IOServer.PC_PLC_BungCheckDone, IOServer.PC_PLC_BungCheckOK),
     ("CAP_PRESS", None, None, None),
     ("FREE_ROT", None, None, None),
 ]
@@ -336,8 +336,8 @@ def run_scenarios():
     TRACE.clear()
     plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
     run_steps(last="TORQUE1")
-    check("C: before abort, waiting for the bunk (component press) picture",
-          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
+    check("C: before abort, waiting for the bung (component press) picture",
+          wait_for(lambda: io.machineState.getCurrentState() == MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS),
           io.machineState.getCurrentState().name)
     PAUSE.set(); time.sleep(0.3)
     KEY_QUEUES = [io2cameraq, io2qrcodeq, qrcode2ioq, qrcode2feq, qrcode2cameraq, camera2ioq, camera2feq]
@@ -355,12 +355,12 @@ def run_scenarios():
         "PLC_PC_CheckHubAndSecondBearing", "PC_PLC_HubAndSecondBearingCheckOK", "PC_PLC_HubAndSecondBearingCheckDone",
         "PLC_PC_CheckNutAndPlateWasher", "PC_PLC_NutAndPlateWasherCheckOK", "PC_PLC_NutAndPlateWasherCheckDone",
         "PLC_PC_Station2TorqueValueSet", "PLC_PC_Station2TorqueValue",
-        "PLC_PC_CheckNoCapBunk", "PC_PLC_NoCapBunkCheckOK", "PC_PLC_NoCapBunkCheckDone",
+        "PLC_PC_CheckNoCapBung", "PC_PLC_NoCapBungCheckOK", "PC_PLC_NoCapBungCheckDone",
         "PLC_PC_ComponentPressDone",
-        "PLC_PC_CheckNoBunk", "PC_PLC_NoBunkCheckOK", "PC_PLC_NoBunkCheckDone",
+        "PLC_PC_CheckNoBung", "PC_PLC_NoBungCheckOK", "PC_PLC_NoBungCheckDone",
         "PLC_PC_CheckSplitPinAndWasher", "PC_PLC_SplitPinAndWasherCheckOK", "PC_PLC_SplitPinAndWasherCheckDone",
         "PLC_PC_CheckCap", "PC_PLC_CapCheckOK", "PC_PLC_CapCheckDone",
-        "PLC_PC_CheckBunk", "PC_PLC_BunkCheckOK", "PC_PLC_BunkCheckDone",
+        "PLC_PC_CheckBung", "PC_PLC_BungCheckOK", "PC_PLC_BungCheckDone",
         "PLC_PC_CapPressDone",
         "PLC_PC_Station3TorqueValueSet", "PLC_PC_Station3TorqueValue",
         "PLC_PC_EmergencyAbort")}
@@ -816,8 +816,8 @@ def run_vision_result_reset():
     check(f"G4 (c) torque 1 read -> Set=False, Value=0.0{', RotationDone=False' if RD else ''} about {tDelay} s later "
           f"({elapsed:.2f} s)", took is not None and tDelay - 0.15 <= elapsed <= tDelay + 0.8, str(writes_of([t for t, _ in resets], mark)))
 
-    # bunk for component press (plain), then G5 (d): component press Done
-    plc_check(IOServer.PLC_PC_CheckNoCapBunk, IOServer.PC_PLC_NoCapBunkCheckDone)
+    # bung for component press (plain), then G5 (d): component press Done
+    plc_check(IOServer.PLC_PC_CheckNoCapBung, IOServer.PC_PLC_NoCapBungCheckDone)
     CPD = IOServer.PLC_PC_ComponentPressDone
     assert wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_COMPONENT_PRESS_DONE, 5)
     mark = len(WRITES)
@@ -830,25 +830,25 @@ def run_vision_result_reset():
           took is not None and pDelay - 0.15 <= elapsed <= pDelay + 0.8 and TAGS[CPD] is False, str(writes_of((CPD,), mark)))
 
     # G6: a camera answer for another picture state is not this check's result
-    NB = MSP.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK
-    NT, NO, ND = IOServer.PLC_PC_CheckNoBunk, IOServer.PC_PLC_NoBunkCheckOK, IOServer.PC_PLC_NoBunkCheckDone
+    NB = MSP.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG
+    NT, NO, ND = IOServer.PLC_PC_CheckNoBung, IOServer.PC_PLC_NoBungCheckOK, IOServer.PC_PLC_NoBungCheckDone
     assert wait_for(lambda: io.machineState.getCurrentState() == NB, 5)
     PAUSE.set(); time.sleep(0.3)
     mark = len(WRITES)
     with LOCK: TAGS[NT] = True
-    assert wait_for(lambda: io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNK, 5)
+    assert wait_for(lambda: io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNG, 5)
     rr = Redis('localhost', 6379)
     sendDataFromCameraServerToIOServer(rr, result=ok, currentMachineState=MSP.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
     time.sleep(1.0)
-    check("G6 camera answer for the knuckle while waiting for the no-bunk result: ignored (nothing written, no move)",
-          io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNK and writes_of((NO, ND), mark) == [],
+    check("G6 camera answer for the knuckle while waiting for the no-bung result: ignored (nothing written, no move)",
+          io.machineState.getCurrentState() == MSP.WRITE_RESULT_OF_CHECKING_NO_BUNG and writes_of((NO, ND), mark) == [],
           f"{io.machineState.getCurrentState().name} {writes_of((NO, ND), mark)}")
     sendDataFromCameraServerToIOServer(rr, result=ok, currentMachineState=NB)
     moved = wait_for(lambda: TAGS[ND] is True, 3)
     rr.delete(io2cameraq)                                    # the take-picture request the paused camera did not see
     with LOCK: TAGS[NT] = False
     PAUSE.clear()
-    check("G6 ... the answer for the no-bunk picture: OK, Done written, on to tightening torque 2",
+    check("G6 ... the answer for the no-bung picture: OK, Done written, on to tightening torque 2",
           moved and wait_for(lambda: io.machineState.getCurrentState() == MSP.READ_TIGHTENING_TORQUE_2_DONE, 3),
           io.machineState.getCurrentState().name)
     time.sleep(delay + 0.3)
@@ -869,7 +869,7 @@ def run_end_of_cycle():
     plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
     run_steps(last="CAP")
     check("H1 no end-of-cycle message while the cycle runs (knuckle ... cap done)", seen_after(mark) == [], str(len(seen_after(mark))))
-    run_steps(first="BUNK_CAPP")
+    run_steps(first="BUNG_CAPP")
     check("H1 cycle completes", wrapped(), f"trace {TRACE}")
     check("H1 end-of-cycle message received by the camera server when the cycle completed",
           wait_for(lambda: len(seen_after(mark)) == 1, 3), str(len(seen_after(mark))))
@@ -1106,7 +1106,7 @@ def run_servers_down():
     release(IOServer.PLC_PC_CheckHubAndSecondBearing, IOServer.PC_PLC_HubAndSecondBearingCheckDone)
     HEARTBEAT["camera"] = True
     check("J3 camera server back", wait_for(lambda: not io._cameraDown, 5))
-    run_steps(first="TOP", last="NOBUNK")
+    run_steps(first="TOP", last="NOBUNG")
 
     # J4: database down part-way -> the cycle is finished ("Continue till end of cycle"), the next one is held
     HEARTBEAT["db"] = False
@@ -1417,7 +1417,7 @@ def run_bypass():
         check("N2 cycle completes without states 13-19 (no bung pictures, no press, no Torque 2)",
               wrapped() and not (SKIPPED & set(TRACE)), f"trace {TRACE}")
         check("N2 no picture asked for the bung checks",
-              not ({MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK}
+              not ({MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG}
                    & set(PICTURE_REQUESTS[pics0:])), str(PICTURE_REQUESTS[pics0:]))
         # N3: a model without the bypass -> False, full run
         TRACE.clear(); mark = len(WRITES)

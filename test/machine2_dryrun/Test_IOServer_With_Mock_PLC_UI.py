@@ -38,13 +38,13 @@ Machine 2 process steps (15) and IOServer states (28):
     Step 3  Top Bearing                states 7-8    (vision)
     Step 4  Nut & Plate Washer         states 9-10   (vision)
     Step 5  Tightening Torque 1        states 11-12  (PLC: Station 2 torque)
-    Step 6  Bunk for Component Press   states 13-14  (vision)
+    Step 6  Bung for Component Press   states 13-14  (vision)
     Step 7  Component Press Done       state  15     (PLC signal)
-    Step 8  No Bunk                    states 16-17  (vision)
+    Step 8  No Bung                    states 16-17  (vision)
     Step 9  Tightening Torque 2        states 18-19  (PLC: Station 2 torque)
     Step 10 Split Pin & Washer         states 20-21  (vision)
     Step 11 Cap                        states 22-23  (vision)
-    Step 12 Bunk for Cap Press         states 24-25  (vision)
+    Step 12 Bung for Cap Press         states 24-25  (vision)
     Step 13 Cap Press Done             state  26     (PLC signal)
     Step 14 Free Rotation Torque       states 27-28  (PLC: Station 3 torque; final, wraps to state 1)
 """
@@ -92,14 +92,14 @@ STEPS = [
      ("PLC_PC_CheckNutAndPlateWasher", "PC_PLC_NutAndPlateWasherCheckOK", "PC_PLC_NutAndPlateWasherCheckDone")),
     (5, "Tightening Torque 1", TORQUE, "torque1", MS.READ_TIGHTENING_TORQUE_1_DONE, MS.READ_TIGHTENING_TORQUE_1,
      ("PLC_PC_Station2TorqueValueSet", "PLC_PC_Station2TorqueValue")),
-    (6, "Bunk for Component Press", VISION, "PLC_PC_CheckNoCapBunk",
-     MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_COMPONENT_PRESS,
-     ("PLC_PC_CheckNoCapBunk", "PC_PLC_NoCapBunkCheckOK", "PC_PLC_NoCapBunkCheckDone")),
+    (6, "Bung for Component Press", VISION, "PLC_PC_CheckNoCapBung",
+     MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MS.WRITE_RESULT_OF_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+     ("PLC_PC_CheckNoCapBung", "PC_PLC_NoCapBungCheckOK", "PC_PLC_NoCapBungCheckDone")),
     (7, "Component Press Done", SIGNAL, "PLC_PC_ComponentPressDone", MS.READ_COMPONENT_PRESS_DONE,
      MS.READ_COMPONENT_PRESS_DONE, ("PLC_PC_ComponentPressDone",)),
-    (8, "No Bunk", VISION, "PLC_PC_CheckNoBunk",
-     MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, MS.WRITE_RESULT_OF_CHECKING_NO_BUNK,
-     ("PLC_PC_CheckNoBunk", "PC_PLC_NoBunkCheckOK", "PC_PLC_NoBunkCheckDone")),
+    (8, "No Bung", VISION, "PLC_PC_CheckNoBung",
+     MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, MS.WRITE_RESULT_OF_CHECKING_NO_BUNG,
+     ("PLC_PC_CheckNoBung", "PC_PLC_NoBungCheckOK", "PC_PLC_NoBungCheckDone")),
     (9, "Tightening Torque 2", TORQUE, "torque2", MS.READ_TIGHTENING_TORQUE_2_DONE, MS.READ_TIGHTENING_TORQUE_2,
      ("PLC_PC_Station2TorqueValueSet", "PLC_PC_Station2TorqueValue")),
     (10, "Split Pin & Washer", VISION, "PLC_PC_CheckSplitPinAndWasher",
@@ -108,9 +108,9 @@ STEPS = [
     (11, "Cap", VISION, "PLC_PC_CheckCap",
      MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.WRITE_RESULT_OF_CHECKING_CAP,
      ("PLC_PC_CheckCap", "PC_PLC_CapCheckOK", "PC_PLC_CapCheckDone")),
-    (12, "Bunk for Cap Press", VISION, "PLC_PC_CheckBunk",
-     MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, MS.WRITE_RESULT_OF_CHECKING_BUNK_FOR_CAP_PRESS,
-     ("PLC_PC_CheckBunk", "PC_PLC_BunkCheckOK", "PC_PLC_BunkCheckDone")),
+    (12, "Bung for Cap Press", VISION, "PLC_PC_CheckBung",
+     MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, MS.WRITE_RESULT_OF_CHECKING_BUNG_FOR_CAP_PRESS,
+     ("PLC_PC_CheckBung", "PC_PLC_BungCheckOK", "PC_PLC_BungCheckDone")),
     (13, "Cap Press Done", SIGNAL, "PLC_PC_CapPressDone", MS.READ_CAP_PRESS_DONE, MS.READ_CAP_PRESS_DONE,
      ("PLC_PC_CapPressDone",)),
     (14, "Free Rotation Torque", TORQUE, "torque_frt", MS.READ_FREE_ROTATION_TORQUE_1_DONE,
@@ -660,7 +660,7 @@ class TestIOServerGUI:
                     good = self._do_qr(side, True)
                     settings = self._read_cycle_settings()
                     if self.plc.get_tag("PC_PLC_Skip_Second_Tightening") is True:     # the PLC's branch
-                        skipped = set(range(MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS.value,
+                        skipped = set(range(MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS.value,
                                             MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER.value))
                 else:
                     if not self._wait_for_state([first]):

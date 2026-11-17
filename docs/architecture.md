@@ -101,13 +101,13 @@ Read the columns as follows:
 | 4 Nut and plate washer | 9 → 10 | `PLC_PC_CheckNutAndPlateWasher` | Camera: CheckNutAndPlateWasher | `…OK/Done` |
 | 5 Torque round 1 | 11, 12 | `PLC_PC_Station2TorqueValueSet`, then float `PLC_PC_Station2TorqueValue` | Send the torque to FE; after 1.5 s, reset both tags | — |
 | 6 Free rotations | 13 | `PLC_PC_Station3ValueSet` | Notify FE; after 2.0 s, reset `Station3ValueSet` and `Station3TorqueValue` | — |
-| 7 Bunk before component press | 14 → 15 | `PLC_PC_CheckNoCapBung` | Camera: CheckNoCapBunk | `PC_PLC_NoCapBungCheckOK/Done` |
+| 7 Bung before component press | 14 → 15 | `PLC_PC_CheckNoCapBung` | Camera: CheckNoCapBung | `PC_PLC_NoCapBungCheckOK/Done` |
 | 8 Component press | 16 | `PLC_PC_ComponentPressDone` | Notify FE | — |
-| 9 Bunk removed | 17 → 18 | `PLC_PC_CheckNoBung` | Camera: CheckNoBunk | `PC_PLC_NoBungCheckOK/Done` |
+| 9 Bung removed | 17 → 18 | `PLC_PC_CheckNoBung` | Camera: CheckNoBung | `PC_PLC_NoBungCheckOK/Done` |
 | 10 Torque round 2 | 19, 20 | same Station2 tags as step 5 | As step 5 | — |
 | 11 Split pin and washer | 21 → 22 | `PLC_PC_CheckSplitPinAndWasher` | Camera: CheckSplitPinAndWasher (**stub**) | `…OK/Done` |
 | 12 Cap | 23 → 24 | `PLC_PC_CheckCap` | Camera: CheckCap | `PC_PLC_CapCheckOK/Done` |
-| 13 Bunk before cap press | 25 → 26 | `PLC_PC_CheckBung` | Camera: CheckBunk | `PC_PLC_BungCheckOK/Done` |
+| 13 Bung before cap press | 25 → 26 | `PLC_PC_CheckBung` | Camera: CheckBung | `PC_PLC_BungCheckOK/Done` |
 | 14 Cap press | 27 | `PLC_PC_CapPressDone` | Notify FE | — |
 | 15 Free-rotation torque | 28, 29 | `PLC_PC_Station3ValueSet` (**same tag as step 6**), then `PLC_PC_Station3TorqueValue` | Send the torque to FE with `moveAheadToNextComponent`, then wrap to state 1 | — |
 
@@ -218,7 +218,7 @@ FE EmergencyStatusMonitoringWorker (polls every 3 s, :1630)
 
 - **Mode bar:** mode and product name, plus the QR display (e.g. "DOST - LHS - 2.0T : … [- DUPLICATE]").
 - **Connection tiles:** four tiles for Camera, QR Scanner, I/O and Database. There is no tile for the frontend itself.
-- **Results grid:** 2×7 outcome tiles: Knuckle, Hub, Top Bearing, Nut & Washer, Torque 1, Free Rotations, Bunk/Component Press, Remove Bunk, Torque 2, Split Pin & Washer, Cap, Bunk Check, Cap Press. Each shows the processed image or a value, plus OK or Not OK. The final free-rotation torque is written into the Cap Press tile.
+- **Results grid:** 2×7 outcome tiles: Knuckle, Hub, Top Bearing, Nut & Washer, Torque 1, Free Rotations, Bung/Component Press, Remove Bung, Torque 2, Split Pin & Washer, Cap, Bung Check, Cap Press. Each shows the processed image or a value, plus OK or Not OK. The final free-rotation torque is written into the Cap Press tile.
 - **Instruction line:** text for the current state.
 - **Info panel:** date, start and running time, counters for today, week and month (these count OK rows only), and user and role.
 - **`LargeImageWindow`:** an ApplicationModal pop-up that shows each step's image on a green or red background. At end of cycle it shows Success, Not Successful or Aborted.
@@ -267,7 +267,7 @@ The heartbeat, emergency and counter slots run on the **GUI thread** and do bloc
 
 There are two dispatch modes:
 - **Vote mode.** Used for Knuckle, Split pin and Cap. The check runs on 3 frames (submitted twice each), and **2 of 3** must pass. The `gamma=index+1` argument is ignored by these checks.
-- **Single-frame mode.** Used for Hub, Top bearing, Nut, NoCapBunk, NoBunk and Bunk. Only frame 1 is used.
+- **Single-frame mode.** Used for Hub, Top bearing, Nut, NoCapBung, NoBung and Bung. Only frame 1 is used.
 
 A NOT OK result also sends `alarm.q`, which plays BadComponent.wav.
 
@@ -285,8 +285,8 @@ A NOT OK result also sends `alarm.q`, which plays BadComponent.wav.
 | Hub and bottom bearing | Hub seated, bearing centre empty, stud pattern | Gamma 3 annulus mean below 144; then **YOLO ObjectAwareModel + MobileSAM** masks, filtered for a regular K-gon; smart gamma order 1–6 | 4 holes (DOST) or 5 holes (DOSTPLUS), matching the QR model | model |
 | Top bearing | Top bearing placed | Classical: 10 gamma/offset branches, ray-trace plus RANSAC circle fit; brightness delta over 30 against the hub image | min score above 0.65, G above 77, delta above 30. **Outputs bearing geometry.** | none |
 | Nut and plate washer | Hex nut present; washer covers the bearing ring | NutDetector (YOLO + MobileSAM, hexagon rules); washer by colour difference from the top-bearing image inside the bearing ring | Nut found **and** diffR above 0.55 and diffRB above 5.57 | none (parsed only) |
-| NoCapBunk (state 14) / Bunk (state 25) | Bunk placed correctly | YOLO + MobileSAM hole segmentation | DOST: 4 holes in a square. DOSTPLUS: 2 holes 75–100 px apart | model |
-| NoBunk (state 17) | Bunk removed | NutDetector only (a visible nut is taken to mean the bunk is gone) | Nut found | none |
+| NoCapBung (state 14) / Bung (state 25) | Bung placed correctly | YOLO + MobileSAM hole segmentation | DOST: 4 holes in a square. DOSTPLUS: 2 holes 75–100 px apart | model |
+| NoBung (state 17) | Bung removed | NutDetector only (a visible nut is taken to mean the bung is gone) | Nut found | none |
 | **Split pin and washer** | — | **Stub: returns True whenever a QR code exists** (`CheckSplitPinAndWasher.py:27-29`) | **Always passes** | — |
 | Cap | Cap present and the right colour | Brightness delta against the hub, top-bearing and nut images; R−B colour | DOST deltas 30/30/35 and R−B below −1. DOSTPLUS deltas 35/50/35 and R−B above 15 | model |
 
@@ -378,8 +378,8 @@ The web service and the MI dashboard query the old `hub_and_disc_assembly_schema
 | R13 | Medium | QR server re-runs DB create/seed on every scan; REINDEX runs after every insert; the image date folder is fixed at start | `QRCodeScanningServer.py:262`, `Persistence.py:1577`, `Persistence.py:365` | V |
 | R14 | Medium | Every queue is latest-value only (`xtrim 1` before read), so bursts lose messages; `io2frontend.q` is not cleared on abort | `RedisUtils.py` | V |
 | R15 | Medium | Emergency latency: IO polls every 1 s, FE every 3 s | `IOServer.py:1020`, properties :97 | V |
-| R16 | Medium | The Production properties file uses `bung` keys and `PC_PLC_`-prefixed rotation tags; the current file uses `bunk` keys and unprefixed tags. Deploying either file blindly can pick up code defaults or wrong tag names | the two `.properties` files | V |
-| R17 | Low | `C:/RHS_Images` debug dump on every RHS no-cap-bunk check; operator-hand detection disabled; FE NOT OK images use the OK display time; duplicate Ctrl+Alt+A/D shortcuts; double teardown on Exit; reporting endpoints broken | various | V |
+| R16 | Medium | The Production properties file uses `bung` keys and `PC_PLC_`-prefixed rotation tags; the current file uses `bung` keys and unprefixed tags. Deploying either file blindly can pick up code defaults or wrong tag names | the two `.properties` files | V |
+| R17 | Low | `C:/RHS_Images` debug dump on every RHS no-cap-bung check; operator-hand detection disabled; FE NOT OK images use the OK display time; duplicate Ctrl+Alt+A/D shortcuts; double teardown on Exit; reporting endpoints broken | various | V |
 
 ## 10. Open questions (need the PLC programme or shop-floor knowledge)
 

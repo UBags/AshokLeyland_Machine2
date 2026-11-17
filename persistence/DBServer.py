@@ -14,7 +14,7 @@ from redis import Redis
 
 # From persistence package
 import persistence
-from persistence.Persistence import (setDatabaseName, makeFoldersForImages, getDatabaseName, getSchemaName, getDataSubFolder, checkConnection, PersistentDBConnection, checkIfDatabaseExists, checkIfQRCodeExists, insertData, getFolderForKnuckleImages, getFolderForHubAndBottomBearingImages, getFolderForTopBearingImages, getFolderForNutAndPlateWasherImages, getFolderForSplitPinAndWasherImages, getFolderForCapImages, getFolderForBunkAndNoBunkImages)
+from persistence.Persistence import (setDatabaseName, makeFoldersForImages, getDatabaseName, getSchemaName, getDataSubFolder, checkConnection, PersistentDBConnection, checkIfDatabaseExists, checkIfQRCodeExists, insertData, getFolderForKnuckleImages, getFolderForHubAndBottomBearingImages, getFolderForTopBearingImages, getFolderForNutAndPlateWasherImages, getFolderForSplitPinAndWasherImages, getFolderForCapImages, getFolderForBungAndNoBungImages)
 
 # From utils package
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
@@ -272,13 +272,13 @@ class DataPersistence():
             return fName
         return ""
 
-    def saveBunkAndNoBunkImage(self, image: Union[np.ndarray, None]):
+    def saveBungAndNoBungImage(self, image: Union[np.ndarray, None]):
         if validate_image(image):
             fName = getFileNameForSaving()
             if self.currentModelName is not None:
-                fName = f"{getFolderForBunkAndNoBunkImages()}{self.currentModelName}/{fName}"
+                fName = f"{getFolderForBungAndNoBungImages()}{self.currentModelName}/{fName}"
             else:
-                fName = f"{getFolderForBunkAndNoBunkImages()}{fName}"
+                fName = f"{getFolderForBungAndNoBungImages()}{fName}"
             saveFileWithFullPath(image, fName)
             return fName
         return ""
@@ -316,13 +316,13 @@ class DataPersistence():
                             topBearingPicture, topBearingCheckResult, topBearingCheckDatetime,
                             nutAndPlateWasherPicture, nutAndPlateWasherCheckResult, nutAndPlateWasherCheckDatetime,
                             tighteningTorque1, tighteningTorque1Result, tighteningTorque1Datetime,
-                            componentPressBunkPicture, componentPressBunkCheckResult, componentPressBunkCheckDatetime,
+                            componentPressBungPicture, componentPressBungCheckResult, componentPressBungCheckDatetime,
                             componentPressDone, componentPressDoneDatetime,
-                            noBunkPicture, noBunkCheckResult, noBunkCheckDatetime,
+                            noBungPicture, noBungCheckResult, noBungCheckDatetime,
                             tighteningTorque2, tighteningTorque2Result, tighteningTorque2Datetime,
                             splitPinAndWasherPicture, splitPinAndWasherCheckResult, splitPinAndWasherCheckDatetime,
                             capPicture, capCheckResult, capCheckDatetime,
-                            capPressBunkPicture, capPressBunkCheckResult, capPressBunkCheckDatetime,
+                            capPressBungPicture, capPressBungCheckResult, capPressBungCheckDatetime,
                             capPressDone, capPressDoneDatetime,
                             freeRotationTorque1, freeRotationTorque1Result, freeRotationTorque1Datetime,
                             overallResult, tighteningTorque1RotationDone, tighteningTorque2RotationDone,
@@ -350,11 +350,11 @@ class DataPersistence():
                                 "check_hub_and_bottom_bearing_imagefile": self.saveHubAndBottomBearingImage(hubAndBottomBearingPicture),
                                 "check_top_bearing_imagefile": self.saveTopBearingImage(topBearingPicture),
                                 "check_nut_and_platewasher_imagefile": self.saveNutAndPlateWasherImage(nutAndPlateWasherPicture),
-                                "check_bunk_for_component_press_imagefile": self.saveBunkAndNoBunkImage(componentPressBunkPicture),
-                                "check_no_bunk_imagefile": self.saveBunkAndNoBunkImage(noBunkPicture),
+                                "check_bung_for_component_press_imagefile": self.saveBungAndNoBungImage(componentPressBungPicture),
+                                "check_no_bung_imagefile": self.saveBungAndNoBungImage(noBungPicture),
                                 "check_splitpin_and_washer_imagefile": self.saveSplitPinAndWasherImages(splitPinAndWasherPicture),
                                 "check_cap_imagefile": self.saveCapImage(capPicture),
-                                "check_bunk_cap_press_imagefile": self.saveBunkAndNoBunkImage(capPressBunkPicture),
+                                "check_bung_cap_press_imagefile": self.saveBungAndNoBungImage(capPressBungPicture),
                             }
                         except Exception as saveError:
                             self.currentModelName = None
@@ -369,11 +369,11 @@ class DataPersistence():
                     hubAndBottomBearingPictureFile : str = pictureFiles["check_hub_and_bottom_bearing_imagefile"]
                     topBearingPictureFile : str = pictureFiles["check_top_bearing_imagefile"]
                     nutAndPlateWasherPictureFile : str = pictureFiles["check_nut_and_platewasher_imagefile"]
-                    bunkForComponentPressFile : str = pictureFiles["check_bunk_for_component_press_imagefile"]
-                    noBunkFile : str = pictureFiles["check_no_bunk_imagefile"]
+                    bungForComponentPressFile : str = pictureFiles["check_bung_for_component_press_imagefile"]
+                    noBungFile : str = pictureFiles["check_no_bung_imagefile"]
                     splitPinAndWasherFile : str = pictureFiles["check_splitpin_and_washer_imagefile"]
                     capPictureFile = pictureFiles["check_cap_imagefile"]
-                    bunkCapPressFile : str = pictureFiles["check_bunk_cap_press_imagefile"]
+                    bungCapPressFile : str = pictureFiles["check_bung_cap_press_imagefile"]
                     # tStamp = getYMDHMSmFormatFromTimeDotTime(timeOfMessage)[:-4]
                     tStamp = datetime.fromtimestamp(float(timeOfMessage)).strftime('%Y-%m-%d %H:%M:%S')
                     from logutils.LogSettings import setLocalCycleContext
@@ -415,14 +415,14 @@ class DataPersistence():
                             nut_tightening_torque_1 = float(tighteningTorque1),
                             nut_tightening_torque_1_result = tighteningTorque1Result,
                             nut_tightening_torque_1_datetime = tighteningTorque1Datetime,
-                            check_bunk_for_component_press_imagefile= bunkForComponentPressFile,
-                            check_bunk_for_component_press_result= componentPressBunkCheckResult,
-                            check_bunk_for_component_press_datetime= componentPressBunkCheckDatetime,
+                            check_bung_for_component_press_imagefile= bungForComponentPressFile,
+                            check_bung_for_component_press_result= componentPressBungCheckResult,
+                            check_bung_for_component_press_datetime= componentPressBungCheckDatetime,
                             component_press_done = componentPressDone,
                             component_press_datetime = componentPressDoneDatetime,
-                            check_no_bunk_imagefile= noBunkFile,
-                            check_no_bunk_result= noBunkCheckResult,
-                            check_no_bunk_datetime= noBunkCheckDatetime,
+                            check_no_bung_imagefile= noBungFile,
+                            check_no_bung_result= noBungCheckResult,
+                            check_no_bung_datetime= noBungCheckDatetime,
                             nut_tightening_torque_2 = float(tighteningTorque2),
                             nut_tightening_torque_2_result = tighteningTorque2Result,
                             nut_tightening_torque_2_datetime = tighteningTorque2Datetime,
@@ -432,9 +432,9 @@ class DataPersistence():
                             check_cap_imagefile = capPictureFile,
                             check_cap_result = capCheckResult,
                             check_cap_datetime = capCheckDatetime,
-                            check_bunk_cap_press_imagefile= bunkCapPressFile,
-                            check_bunk_cap_press_result= capPressBunkCheckResult,
-                            check_bunk_cap_press_datetime= capPressBunkCheckDatetime,
+                            check_bung_cap_press_imagefile= bungCapPressFile,
+                            check_bung_cap_press_result= capPressBungCheckResult,
+                            check_bung_cap_press_datetime= capPressBungCheckDatetime,
                             cap_press_done = capPressDone,
                             cap_press_datetime = capPressDoneDatetime,
                             free_rotation_torque_1 = float(freeRotationTorque1),
@@ -666,7 +666,7 @@ class DataPersistence():
             print(f"{getFolderForNutAndPlateWasherImages() = }")
             print(f"{getFolderForSplitPinAndWasherImages() = }")
             print(f"{getFolderForCapImages() = }")
-            print(f"{getFolderForBunkAndNoBunkImages() = }")
+            print(f"{getFolderForBungAndNoBungImages() = }")
         except (Exception, Error) as error:
             SlaveFileLogger.getInstance().logTakeNote(DataPersistence.logSource,
                                                       f"Error {error} while executing printData()",

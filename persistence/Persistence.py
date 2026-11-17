@@ -82,7 +82,7 @@ folderForKnuckleImages: str = ""
 folderForHubAndBottomBearingImages: str = ""
 folderForTopBearingImages: str = ""
 folderForNutAndPlateWasherImages: str = ""
-folderForBunkAndNoBunkImages: str = ""
+folderForBungAndNoBungImages: str = ""
 folderForSplitPinAndWasherImages: str = ""
 folderForCapImages: str = ""
 
@@ -103,8 +103,8 @@ def getFolderForNutAndPlateWasherImages() -> str:
     return folderForNutAndPlateWasherImages
 
 
-def getFolderForBunkAndNoBunkImages() -> str:
-    return folderForBunkAndNoBunkImages
+def getFolderForBungAndNoBungImages() -> str:
+    return folderForBungAndNoBungImages
 
 
 def getFolderForSplitPinAndWasherImages() -> str:
@@ -139,7 +139,7 @@ def printAllVariables() -> None:
     printLight(f"{getFolderForHubAndBottomBearingImages() = }")
     printLight(f"{getFolderForTopBearingImages() = }")
     printLight(f"{getFolderForNutAndPlateWasherImages() = }")
-    printLight(f"{getFolderForBunkAndNoBunkImages() = }")
+    printLight(f"{getFolderForBungAndNoBungImages() = }")
     printLight(f"{getFolderForSplitPinAndWasherImages() = }")
     printLight(f"{getFolderForCapImages() = }")
 
@@ -160,7 +160,7 @@ def setDatabaseName(mode: str, createDB: bool = True) -> str:
     """
     global database_name, data_subfolder, currentMode
     global folderForKnuckleImages, folderForHubAndBottomBearingImages, folderForTopBearingImages, folderForNutAndPlateWasherImages
-    global folderForBunkAndNoBunkImages, folderForSplitPinAndWasherImages, folderForCapImages
+    global folderForBungAndNoBungImages, folderForSplitPinAndWasherImages, folderForCapImages
     if mode.lower() == "test":
         database_name = "ashok_leyland_test"
         data_subfolder = "Test/"
@@ -374,12 +374,12 @@ def getTodaysDateAsAFolder() -> str:
 
 def makeFoldersForImages(mode_data_subfolder):
     global folderForKnuckleImages, folderForHubAndBottomBearingImages, folderForTopBearingImages, folderForNutAndPlateWasherImages
-    global folderForBunkAndNoBunkImages, folderForSplitPinAndWasherImages, folderForCapImages
+    global folderForBungAndNoBungImages, folderForSplitPinAndWasherImages, folderForCapImages
     folderForKnuckleImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForKnuckleImages()}{getTodaysDateAsAFolder()}"
     folderForHubAndBottomBearingImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForHubAndBottomBearingImages()}{getTodaysDateAsAFolder()}"
     folderForTopBearingImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForTopBearingImages()}{getTodaysDateAsAFolder()}"
     folderForNutAndPlateWasherImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForNutAndPlateWasherImages()}{getTodaysDateAsAFolder()}"
-    folderForBunkAndNoBunkImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForBunkAndNoBunkImages()}{getTodaysDateAsAFolder()}"
+    folderForBungAndNoBungImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForBungAndNoBungImages()}{getTodaysDateAsAFolder()}"
     folderForSplitPinAndWasherImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForSplitPinAndWasherImages()}{getTodaysDateAsAFolder()}"
     folderForCapImages = f"{CosThetaConfigurator.getInstance().getBaseFolderForImages()}{getDataSubFolder()}{CosThetaConfigurator.getInstance().getFolderForCapImages()}{getTodaysDateAsAFolder()}"
     # print(f"{folderForKnuckleImages = }")
@@ -387,7 +387,7 @@ def makeFoldersForImages(mode_data_subfolder):
     createDirectory(folderForHubAndBottomBearingImages)
     createDirectory(folderForTopBearingImages)
     createDirectory(folderForNutAndPlateWasherImages)
-    createDirectory(folderForBunkAndNoBunkImages)
+    createDirectory(folderForBungAndNoBungImages)
     createDirectory(folderForSplitPinAndWasherImages)
     createDirectory(folderForCapImages)
 
@@ -486,14 +486,14 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     nut_tightening_torque_1 float DEFAULT -1.0 NOT NULL,
     nut_tightening_torque_1_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     nut_tightening_torque_1_datetime timestamp without time zone,
-    check_bunk_for_component_press_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
-    check_bunk_for_component_press_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
-    check_bunk_for_component_press_datetime timestamp without time zone,
+    check_bung_for_component_press_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
+    check_bung_for_component_press_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
+    check_bung_for_component_press_datetime timestamp without time zone,
     component_press_done character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     component_press_datetime timestamp without time zone,
-    check_no_bunk_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
-    check_no_bunk_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
-    check_no_bunk_datetime timestamp without time zone,
+    check_no_bung_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
+    check_no_bung_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
+    check_no_bung_datetime timestamp without time zone,
     nut_tightening_torque_2 float DEFAULT -1.0 NOT NULL,
     nut_tightening_torque_2_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     nut_tightening_torque_2_datetime timestamp without time zone,
@@ -503,9 +503,9 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     check_cap_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
     check_cap_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     check_cap_datetime timestamp without time zone,
-    check_bunk_cap_press_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
-    check_bunk_cap_press_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
-    check_bunk_cap_press_datetime timestamp without time zone,
+    check_bung_cap_press_imagefile character varying(255) COLLATE pg_catalog."default" DEFAULT 'Not Populated',
+    check_bung_cap_press_result character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
+    check_bung_cap_press_datetime timestamp without time zone,
     cap_press_done character varying(15) COLLATE pg_catalog."default" NOT NULL DEFAULT 'Not Checked',
     cap_press_datetime timestamp without time zone,
     free_rotation_torque_1 float DEFAULT -1.0 NOT NULL,
@@ -542,6 +542,33 @@ CREATE INDEX IF NOT EXISTS idx_model_name ON al_hub_and_disc_assembly_schema.hub
 CREATE INDEX IF NOT EXISTS idx_qr_code ON al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data (qr_code);
 
 CREATE INDEX IF NOT EXISTS idx_created_on ON al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data(created_on);
+
+-- 2026-11-17 (CHANGES 125): 'bunk' became 'bung' in the column names. Databases made before keep their data: each old
+-- column is renamed (only if it exists and the new one does not; a no-op on new databases and on later starts).
+DO $$
+DECLARE
+    pair text[];
+BEGIN
+    FOREACH pair SLICE 1 IN ARRAY ARRAY[
+        ARRAY['check_bunk_for_component_press_imagefile', 'check_bung_for_component_press_imagefile'],
+        ARRAY['check_bunk_for_component_press_result', 'check_bung_for_component_press_result'],
+        ARRAY['check_bunk_for_component_press_datetime', 'check_bung_for_component_press_datetime'],
+        ARRAY['check_no_bunk_imagefile', 'check_no_bung_imagefile'],
+        ARRAY['check_no_bunk_result', 'check_no_bung_result'],
+        ARRAY['check_no_bunk_datetime', 'check_no_bung_datetime'],
+        ARRAY['check_bunk_cap_press_imagefile', 'check_bung_cap_press_imagefile'],
+        ARRAY['check_bunk_cap_press_result', 'check_bung_cap_press_result'],
+        ARRAY['check_bunk_cap_press_datetime', 'check_bung_cap_press_datetime']
+    ] LOOP
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'al_hub_and_disc_assembly_schema'
+                   AND table_name = 'hub_and_disc_assembly_data' AND column_name = pair[1])
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'al_hub_and_disc_assembly_schema'
+                   AND table_name = 'hub_and_disc_assembly_data' AND column_name = pair[2]) THEN
+            EXECUTE format('ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data RENAME COLUMN %I TO %I',
+                           pair[1], pair[2]);
+        END IF;
+    END LOOP;
+END $$;
 
 -- Machine 2: the separate free-rotation step (M1 state 13) no longer exists.
 -- Drop its columns from databases created by earlier versions (no-op on new databases).
@@ -1361,16 +1388,16 @@ def insertData(
         nut_tightening_torque_1_datetime: str = "",
 
 
-        check_bunk_for_component_press_imagefile: str = "Not Populated",
-        check_bunk_for_component_press_result: str = "Not Checked",
-        check_bunk_for_component_press_datetime: str = "",
+        check_bung_for_component_press_imagefile: str = "Not Populated",
+        check_bung_for_component_press_result: str = "Not Checked",
+        check_bung_for_component_press_datetime: str = "",
 
         component_press_done: str = "Not Checked",
         component_press_datetime: str = "",
 
-        check_no_bunk_imagefile: str = "Not Populated",
-        check_no_bunk_result: str = "Not Checked",
-        check_no_bunk_datetime: str = "",
+        check_no_bung_imagefile: str = "Not Populated",
+        check_no_bung_result: str = "Not Checked",
+        check_no_bung_datetime: str = "",
 
         nut_tightening_torque_2: float = -1.0,
         nut_tightening_torque_2_result: str = "Not Checked",
@@ -1384,9 +1411,9 @@ def insertData(
         check_cap_result: str = "Not Checked",
         check_cap_datetime: str = "",
 
-        check_bunk_cap_press_imagefile: str = "Not Populated",
-        check_bunk_cap_press_result: str = "Not Checked",
-        check_bunk_cap_press_datetime: str = "",
+        check_bung_cap_press_imagefile: str = "Not Populated",
+        check_bung_cap_press_result: str = "Not Checked",
+        check_bung_cap_press_datetime: str = "",
 
         cap_press_done: str = "Not Checked",
         cap_press_datetime: str = "",
@@ -1431,13 +1458,13 @@ def insertData(
         check_top_bearing_result,
         check_nut_and_platewasher_result,
         nut_tightening_torque_1_result,
-        check_bunk_for_component_press_result,
+        check_bung_for_component_press_result,
         component_press_done,
-        check_no_bunk_result,
+        check_no_bung_result,
         nut_tightening_torque_2_result,
         check_splitpin_and_washer_result,
         check_cap_result,
-        check_bunk_cap_press_result,
+        check_bung_cap_press_result,
         cap_press_done,
         free_rotation_torque_1_result,
     ]
@@ -1453,13 +1480,13 @@ def insertData(
         check_top_bearing_result,
         check_nut_and_platewasher_result,
         nut_tightening_torque_1_result,
-        check_bunk_for_component_press_result,
+        check_bung_for_component_press_result,
         component_press_done,
-        check_no_bunk_result,
+        check_no_bung_result,
         nut_tightening_torque_2_result,
         check_splitpin_and_washer_result,
         check_cap_result,
-        check_bunk_cap_press_result,
+        check_bung_cap_press_result,
         cap_press_done,
         free_rotation_torque_1_result,
     ) = normalized_results
@@ -1535,15 +1562,15 @@ def insertData(
             (check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime),
             (check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime),
             (nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime),
-            (check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result,
-             check_bunk_for_component_press_datetime),
+            (check_bung_for_component_press_imagefile, check_bung_for_component_press_result,
+             check_bung_for_component_press_datetime),
             # result + datetime pair
             (component_press_done, component_press_datetime),
-            (check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime),
+            (check_no_bung_imagefile, check_no_bung_result, check_no_bung_datetime),
             (nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime),
             (check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime),
             (check_cap_imagefile, check_cap_result, check_cap_datetime),
-            (check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime),
+            (check_bung_cap_press_imagefile, check_bung_cap_press_result, check_bung_cap_press_datetime),
             # result + datetime pair
             (cap_press_done, cap_press_datetime),
             # back to value/result/datetime triple
@@ -1598,13 +1625,13 @@ def insertData(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
+                check_bung_for_component_press_imagefile, check_bung_for_component_press_result, check_bung_for_component_press_datetime,
                 component_press_done, component_press_datetime,
-                check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
+                check_no_bung_imagefile, check_no_bung_result, check_no_bung_datetime,
                 nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime,
                 check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime,
                 check_cap_imagefile, check_cap_result, check_cap_datetime,
-                check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
+                check_bung_cap_press_imagefile, check_bung_cap_press_result, check_bung_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
@@ -1660,14 +1687,14 @@ all_columns_record_header = [
     "nut_tightening_torque_1",
     "nut_tightening_torque_1_result",
     "nut_tightening_torque_1_datetime",
-    "check_bunk_for_component_press_imagefile",
-    "check_bunk_for_component_press_result",
-    "check_bunk_for_component_press_datetime",
+    "check_bung_for_component_press_imagefile",
+    "check_bung_for_component_press_result",
+    "check_bung_for_component_press_datetime",
     "component_press_done",
     "component_press_datetime",
-    "check_no_bunk_imagefile",
-    "check_no_bunk_result",
-    "check_no_bunk_datetime",
+    "check_no_bung_imagefile",
+    "check_no_bung_result",
+    "check_no_bung_datetime",
     "nut_tightening_torque_2",
     "nut_tightening_torque_2_result",
     "nut_tightening_torque_2_datetime",
@@ -1677,9 +1704,9 @@ all_columns_record_header = [
     "check_cap_imagefile",
     "check_cap_result",
     "check_cap_datetime",
-    "check_bunk_cap_press_imagefile",
-    "check_bunk_cap_press_result",
-    "check_bunk_cap_press_datetime",
+    "check_bung_cap_press_imagefile",
+    "check_bung_cap_press_result",
+    "check_bung_cap_press_datetime",
     "cap_press_done",
     "cap_press_datetime",
     "free_rotation_torque_1",
@@ -1724,14 +1751,14 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    check_bunk_for_component_press_imagefile,
-    check_bunk_for_component_press_result,
-    check_bunk_for_component_press_datetime,
+    check_bung_for_component_press_imagefile,
+    check_bung_for_component_press_result,
+    check_bung_for_component_press_datetime,
     component_press_done,
     component_press_datetime,
-    check_no_bunk_imagefile,
-    check_no_bunk_result,
-    check_no_bunk_datetime,
+    check_no_bung_imagefile,
+    check_no_bung_result,
+    check_no_bung_datetime,
     nut_tightening_torque_2,
     nut_tightening_torque_2_result,
     nut_tightening_torque_2_datetime,
@@ -1741,9 +1768,9 @@ SELECT
     check_cap_imagefile,
     check_cap_result,
     check_cap_datetime,
-    check_bunk_cap_press_imagefile,
-    check_bunk_cap_press_result,
-    check_bunk_cap_press_datetime,
+    check_bung_cap_press_imagefile,
+    check_bung_cap_press_result,
+    check_bung_cap_press_datetime,
     cap_press_done,
     cap_press_datetime,
     free_rotation_torque_1,
@@ -1886,14 +1913,14 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    check_bunk_for_component_press_imagefile,
-    check_bunk_for_component_press_result,
-    check_bunk_for_component_press_datetime,
+    check_bung_for_component_press_imagefile,
+    check_bung_for_component_press_result,
+    check_bung_for_component_press_datetime,
     component_press_done,
     component_press_datetime,
-    check_no_bunk_imagefile,
-    check_no_bunk_result,
-    check_no_bunk_datetime,
+    check_no_bung_imagefile,
+    check_no_bung_result,
+    check_no_bung_datetime,
     nut_tightening_torque_2,
     nut_tightening_torque_2_result,
     nut_tightening_torque_2_datetime,
@@ -1903,9 +1930,9 @@ SELECT
     check_cap_imagefile,
     check_cap_result,
     check_cap_datetime,
-    check_bunk_cap_press_imagefile,
-    check_bunk_cap_press_result,
-    check_bunk_cap_press_datetime,
+    check_bung_cap_press_imagefile,
+    check_bung_cap_press_result,
+    check_bung_cap_press_datetime,
     cap_press_done,
     cap_press_datetime,
     free_rotation_torque_1,
@@ -2016,13 +2043,13 @@ def getDataByModelNameAndDateLimits(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
+                check_bung_for_component_press_imagefile, check_bung_for_component_press_result, check_bung_for_component_press_datetime,
                 component_press_done, component_press_datetime,
-                check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
+                check_no_bung_imagefile, check_no_bung_result, check_no_bung_datetime,
                 nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime,
                 check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime,
                 check_cap_imagefile, check_cap_result, check_cap_datetime,
-                check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
+                check_bung_cap_press_imagefile, check_bung_cap_press_result, check_bung_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
@@ -2353,14 +2380,14 @@ SELECT
     nut_tightening_torque_1,
     nut_tightening_torque_1_result,
     nut_tightening_torque_1_datetime,
-    check_bunk_for_component_press_imagefile,
-    check_bunk_for_component_press_result,
-    check_bunk_for_component_press_datetime,
+    check_bung_for_component_press_imagefile,
+    check_bung_for_component_press_result,
+    check_bung_for_component_press_datetime,
     component_press_done,
     component_press_datetime,
-    check_no_bunk_imagefile,
-    check_no_bunk_result,
-    check_no_bunk_datetime,
+    check_no_bung_imagefile,
+    check_no_bung_result,
+    check_no_bung_datetime,
     nut_tightening_torque_2,
     nut_tightening_torque_2_result,
     nut_tightening_torque_2_datetime,
@@ -2370,9 +2397,9 @@ SELECT
     check_cap_imagefile,
     check_cap_result,
     check_cap_datetime,
-    check_bunk_cap_press_imagefile,
-    check_bunk_cap_press_result,
-    check_bunk_cap_press_datetime,
+    check_bung_cap_press_imagefile,
+    check_bung_cap_press_result,
+    check_bung_cap_press_datetime,
     cap_press_done,
     cap_press_datetime,
     free_rotation_torque_1,
@@ -2473,13 +2500,13 @@ def getDataByDateLimits(
                 check_top_bearing_imagefile, check_top_bearing_result, check_top_bearing_datetime,
                 check_nut_and_platewasher_imagefile, check_nut_and_platewasher_result, check_nut_and_platewasher_datetime,
                 nut_tightening_torque_1, nut_tightening_torque_1_result, nut_tightening_torque_1_datetime,
-                check_bunk_for_component_press_imagefile, check_bunk_for_component_press_result, check_bunk_for_component_press_datetime,
+                check_bung_for_component_press_imagefile, check_bung_for_component_press_result, check_bung_for_component_press_datetime,
                 component_press_done, component_press_datetime,
-                check_no_bunk_imagefile, check_no_bunk_result, check_no_bunk_datetime,
+                check_no_bung_imagefile, check_no_bung_result, check_no_bung_datetime,
                 nut_tightening_torque_2, nut_tightening_torque_2_result, nut_tightening_torque_2_datetime,
                 check_splitpin_and_washer_imagefile, check_splitpin_and_washer_result, check_splitpin_and_washer_datetime,
                 check_cap_imagefile, check_cap_result, check_cap_datetime,
-                check_bunk_cap_press_imagefile, check_bunk_cap_press_result, check_bunk_cap_press_datetime,
+                check_bung_cap_press_imagefile, check_bung_cap_press_result, check_bung_cap_press_datetime,
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,

@@ -1,9 +1,9 @@
 """
-CheckBunk.py v2.0 - UPDATED FOR V0.7 PIPELINE
-Implements Bunk hole verification using MobileSAMv2 with v0.7 preprocessing.
+CheckNoCapBung.py v2.0 - UPDATED FOR V0.7 PIPELINE
+Implements no-cap bung hole verification using MobileSAMv2 with v0.7 preprocessing.
 
 CHANGES FROM V1:
-1. Uses BunkSegmenter with two-stage cropping (outer R=250, inner R=110)
+1. Uses BungSegmenter with two-stage cropping (outer R=250, inner R=110)
 2. Fixed gamma sequence: [7.75, 6.5, 4.0, 2.0, 1.0] instead of brightness-based selection
 3. Batch processing with early termination on definitive patterns
 4. No morphological processing (direct SAM mask filtering)
@@ -24,27 +24,27 @@ import os
 
 import time
 from pathlib import Path
-from BaseUtils import getFullyQualifiedName
+from BaseUtils import getFullyQualifiedName, saveImage
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
 from concurrent.futures import ThreadPoolExecutor
 
-# Import the v2 Bunk segmentation engine
+# Import the v2 bung segmentation engine
 try:
-    import camera.BunkSegmenter as BS_MODULE
-    from camera.BunkSegmenter import (
-        BunkSegmenter,
-        paint_bunk_masks_on_image,
+    import camera.BungSegmenter as BS_MODULE
+    from camera.BungSegmenter import (
+        BungSegmenter,
+        paint_bung_masks_on_image,
         GAMMA_SEQUENCE
     )
 
     SAM_AVAILABLE = True
 except ImportError as e:
-    logBoth('logWarning', __name__, f"Warning: BunkSegmenter not available: {e}", MessageType.RISK)
+    logBoth('logWarning', __name__, f"Warning: BungSegmenter not available: {e}", MessageType.RISK)
     SAM_AVAILABLE = False
-    BunkSegmenter = None
+    BungSegmenter = None
 
 # =============================================================================
 # PRINT CONTROL FLAGS
@@ -56,23 +56,12 @@ PRINT_RESULT_PAINTING = False
 PRINT_SUCCESS_EVALUATION = True
 
 
-def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str) -> None:
-    """Seating marks on the result picture (RGB, no text): the model's reference oval (thick yellow contour, centred on
-    the seated position) and the hole-pattern centre (thick blue cross)."""
-    dostplus = model == "DOSTPLUS"
-    seated_at = BS_MODULE.SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else BS_MODULE.SEATING_SEATED_CENTRE_DOST
-    oval = BS_MODULE.SEATING_REFERENCE_OVAL_DOSTPLUS if dostplus else BS_MODULE.SEATING_REFERENCE_OVAL_DOST
-    cv2.ellipse(image_rgb, ((float(seated_at[0]), float(seated_at[1])), (float(oval[0]), float(oval[1])),
-                            float(oval[2])), (255, 255, 0), 3)
-    centre = seating.get("hole_centre")
-    if centre is not None:
-        cv2.drawMarker(image_rgb, (int(round(centre[0])), int(round(centre[1]))), (0, 0, 255),
-                       cv2.MARKER_CROSS, 30, 4)
+from camera.CheckBung import drawSeatingMarks  # noqa: E402
 
 
-class CheckBunk:
+class CheckNoCapBung:
     """
-    Checks bunk assembly by detecting holes in the bunk region.
+    Checks no-cap bung assembly by detecting holes in the bung region.
 
     Uses MobileSAMv2 with V0.7 pipeline:
     - Two-stage circular cropping (outer R=250, inner R=110)
@@ -82,18 +71,18 @@ class CheckBunk:
     """
 
     # Class-level segmenter (singleton pattern)
-    # _segmenter: Optional[BunkSegmenter] = None
+    # _segmenter: Optional[BungSegmenter] = None
     # _segmenter_initialized = False
 
     # @classmethod
-    # def _get_segmenter(cls) -> Optional[BunkSegmenter]:
+    # def _get_segmenter(cls) -> Optional[BungSegmenter]:
     #     """Get or initialize the segmenter (singleton pattern)."""
     #     if not SAM_AVAILABLE:
     #         return None
     #
     #     if not cls._segmenter_initialized:
-    #         # cls._segmenter = BunkSegmenter(None, None)
-    #         cls._segmenter = BunkSegmenter.get_instance()
+    #         # cls._segmenter = BungSegmenter(None, None)
+    #         cls._segmenter = BungSegmenter.get_instance()
     #         cls._segmenter_initialized = True
     #
     #     return cls._segmenter
@@ -118,13 +107,13 @@ class CheckBunk:
         return result
 
     @staticmethod
-    def checkBunk(
+    def checkNoCapBung(
             anImage: np.ndarray,
             componentQRCode: str | None = None,
             bearing_geometry: Optional[Dict[str, Any]] = None
     ) -> Tuple[np.ndarray | None, bool, None | float]:
         """
-        Check bunk by detecting holes using MobileSAMv2 with LAZY EVALUATION.
+        Check no-cap bung by detecting holes using MobileSAMv2 with LAZY EVALUATION.
 
         NEW Processing Pipeline (OPTIMIZED):
         1. Determine expected count from QR code (<MODEL>.NoOfHolesInBung: DOST=4, DOSTPLUS=2)
@@ -150,7 +139,7 @@ class CheckBunk:
                 - success: True if correct hole count detected with valid geometry
                 - winning_gamma: Gamma value that produced the result
         """
-        _src = getFullyQualifiedName(__file__, CheckBunk)
+        _src = getFullyQualifiedName(__file__, CheckNoCapBung)
 
         # Resolve crop centre once — used for every return path below
         if bearing_geometry is not None:
@@ -161,50 +150,53 @@ class CheckBunk:
         def _maybe_crop(bgr_img: np.ndarray) -> np.ndarray:
             """Apply 300x300 crop if a bearing centre is available."""
             if crop_center is not None:
-                return CheckBunk._crop300(bgr_img, crop_center)
+                return CheckNoCapBung._crop300(bgr_img, crop_center)
             return bgr_img
 
         if PRINT_QR_PARSING:
-            logBoth('logDebug', _src, f"[CheckBunk v2.0] Called with QRCode={componentQRCode}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[CheckNoCapBung v2.0] Called with QRCode={componentQRCode}", MessageType.GENERAL)
 
         # Validate inputs
         if anImage is None:
             if PRINT_QR_PARSING:
-                logBoth('logError', _src, "[CheckBunk] anImage is None", MessageType.ISSUE)
+                logBoth('logError', _src, "[CheckNoCapBung] anImage is None", MessageType.ISSUE)
             return None, False, None
 
         if componentQRCode is None:
             if PRINT_QR_PARSING:
-                logBoth('logError', _src, "[CheckBunk] componentQRCode is None", MessageType.ISSUE)
+                logBoth('logError', _src, "[CheckNoCapBung] componentQRCode is None", MessageType.ISSUE)
             return _maybe_crop(anImage), False, None
 
         # Get segmenter
-        segmenter = BunkSegmenter.get_instance() if SAM_AVAILABLE else None
+        segmenter = BungSegmenter.get_instance() if SAM_AVAILABLE else None
         if segmenter is None:
             if PRINT_QR_PARSING:
-                logBoth('logError', _src, "[CheckBunk] Segmenter not available", MessageType.ISSUE)
+                logBoth('logError', _src, "[CheckNoCapBung] Segmenter not available", MessageType.ISSUE)
             return _maybe_crop(anImage), False, None
 
         # Determine expected count from QR code
         try:
             model, lhs_rhs, tonnage = getModel_LHSRHS_AndTonnage(componentQRCode)
             if PRINT_QR_PARSING:
-                logBoth('logDebug', _src, f"[CheckBunk] Model: {model}, LHS/RHS: {lhs_rhs}, Tonnage: {tonnage}", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"[CheckNoCapBung] Model: {model}, LHS/RHS: {lhs_rhs}, Tonnage: {tonnage}", MessageType.GENERAL)
+
+            if lhs_rhs == "RHS":
+                saveImage(anImage, "NoCapBung")
 
             # holes per model from <MODEL>.NoOfHolesInBung (was DOST = 4, DOSTPLUS = 2 in the code); the count chooses
-            # the hole-pattern routine in BunkSegmenter (2: pair of holes, 4: square)
+            # the hole-pattern routine in BungSegmenter (2: pair of holes, 4: square)
             expected_count = CosThetaConfigurator.getNoOfHolesInBung(model)
             if expected_count not in (2, 4):
                 if PRINT_QR_PARSING:
-                    logBoth('logError', _src, f"[CheckBunk] Unknown model or no {model}.NoOfHolesInBung (2 or 4): {model}", MessageType.ISSUE)
+                    logBoth('logError', _src, f"[CheckNoCapBung] Unknown model or no {model}.NoOfHolesInBung (2 or 4): {model}", MessageType.ISSUE)
                 return _maybe_crop(anImage), False, None
 
             if PRINT_QR_PARSING:
-                logBoth('logDebug', _src, f"[CheckBunk] Expected count: {expected_count}", MessageType.GENERAL)
+                logBoth('logDebug', _src, f"[CheckNoCapBung] Expected count: {expected_count}", MessageType.GENERAL)
 
         except Exception as e:
             if PRINT_QR_PARSING:
-                logBoth('logError', _src, f"[CheckBunk] Failed to parse QR code: {e}", MessageType.ISSUE)
+                logBoth('logError', _src, f"[CheckNoCapBung] Failed to parse QR code: {e}", MessageType.ISSUE)
                 import traceback
                 traceback.print_exc()
             return _maybe_crop(anImage), False, None
@@ -212,15 +204,15 @@ class CheckBunk:
         # Convert BGR to RGB (camera provides BGR, segmenter expects RGB)
         anImage_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
         if PRINT_IMAGE_PREPROCESSING:
-            logBoth('logDebug', _src, "[CheckBunk] Converted BGR to RGB", MessageType.GENERAL)
+            logBoth('logDebug', _src, "[CheckNoCapBung] Converted BGR to RGB", MessageType.GENERAL)
 
         # STEP 1: Determine gamma sequence (now optimized with gamma 2.0 first)
-        from camera.BunkSegmenter import get_gamma_sequence_for_model
+        from camera.BungSegmenter import get_gamma_sequence_for_model
         gamma_sequence = get_gamma_sequence_for_model(expected_count)
 
         if PRINT_IMAGE_PREPROCESSING:
-            logBoth('logDebug', _src, f"[CheckBunk] Testing gammas in order: {gamma_sequence}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"[CheckBunk] Will stop as soon as definitive pattern found", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[CheckNoCapBung] Testing gammas in order: {gamma_sequence}", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[CheckNoCapBung] Will stop as soon as definitive pattern found", MessageType.GENERAL)
 
         # Helper function for parallel preprocessing
         def preprocess_single_gamma(gamma):
@@ -236,7 +228,7 @@ class CheckBunk:
                 for idx, gamma in enumerate(gamma_sequence):
                     if PRINT_IMAGE_PREPROCESSING:
                         logBoth('logDebug', _src,
-                                f"[CheckBunk] Processing gamma {gamma} (position {idx + 1}/{len(gamma_sequence)})...",
+                                f"[CheckNoCapBung] Processing gamma {gamma} (position {idx + 1}/{len(gamma_sequence)})...",
                                 MessageType.GENERAL)
 
                     # If we have a future from previous iteration, get its result
@@ -244,11 +236,11 @@ class CheckBunk:
                     if future_next is not None:
                         preprocessed = future_next.result()
                         if PRINT_IMAGE_PREPROCESSING:
-                            logBoth('logDebug', _src, f"[CheckBunk] Used parallel-preprocessed gamma {gamma}", MessageType.GENERAL)
+                            logBoth('logDebug', _src, f"[CheckNoCapBung] Used parallel-preprocessed gamma {gamma}", MessageType.GENERAL)
                     else:
                         preprocessed = preprocess_single_gamma(gamma)
                         if PRINT_IMAGE_PREPROCESSING:
-                            logBoth('logDebug', _src, f"[CheckBunk] Preprocessed gamma {gamma}", MessageType.GENERAL)
+                            logBoth('logDebug', _src, f"[CheckNoCapBung] Preprocessed gamma {gamma}", MessageType.GENERAL)
 
                     # Start preprocessing NEXT gamma in parallel while GPU is busy
                     # (if there is a next gamma)
@@ -256,13 +248,13 @@ class CheckBunk:
                         next_gamma = gamma_sequence[idx + 1]
                         future_next = executor.submit(preprocess_single_gamma, next_gamma)
                         if PRINT_IMAGE_PREPROCESSING:
-                            logBoth('logDebug', _src, f"[CheckBunk] Started parallel preprocessing of gamma {next_gamma}", MessageType.GENERAL)
+                            logBoth('logDebug', _src, f"[CheckNoCapBung] Started parallel preprocessing of gamma {next_gamma}", MessageType.GENERAL)
                     else:
                         future_next = None
 
                     # Run GPU segmentation on current gamma
                     if PRINT_BATCH_SEGMENTATION:
-                        logBoth('logDebug', _src, f"[CheckBunk] Running GPU segmentation on gamma {gamma}...", MessageType.GENERAL)
+                        logBoth('logDebug', _src, f"[CheckNoCapBung] Running GPU segmentation on gamma {gamma}...", MessageType.GENERAL)
 
                     # Process single gamma
                     detected_count, components, found_definitive = \
@@ -274,7 +266,7 @@ class CheckBunk:
                         )
 
                     if PRINT_BATCH_SEGMENTATION:
-                        logBoth('logDebug', _src, f"[CheckBunk] Result for gamma {gamma}:", MessageType.GENERAL)
+                        logBoth('logDebug', _src, f"[CheckNoCapBung] Result for gamma {gamma}:", MessageType.GENERAL)
                         logBoth('logDebug', _src, f"  Detected count: {detected_count}", MessageType.GENERAL)
                         logBoth('logDebug', _src, f"  Expected count: {expected_count}", MessageType.GENERAL)
                         logBoth('logDebug', _src, f"  Definitive pattern: {found_definitive}", MessageType.GENERAL)
@@ -289,7 +281,7 @@ class CheckBunk:
                     if expected_count == 2 and detected_count == 4 and found_definitive:
                         if PRINT_SUCCESS_EVALUATION:
                             logBoth('logError', _src,
-                                    f"[CheckBunk] ✗ FAIL - Found 4-hole DOST pattern but expected 2-hole DOSTPLUS",
+                                    f"[CheckNoCapBung] ✗ FAIL - Found 4-hole DOST pattern but expected 2-hole DOSTPLUS",
                                     MessageType.ISSUE)
                         success = False
 
@@ -298,18 +290,18 @@ class CheckBunk:
                         if success:
                             if PRINT_SUCCESS_EVALUATION:
                                 logBoth('logInfo', _src,
-                                        f"[CheckBunk] ✓ SUCCESS - Count {detected_count} matches expected with valid geometry",
+                                        f"[CheckNoCapBung] ✓ SUCCESS - Count {detected_count} matches expected with valid geometry",
                                         MessageType.SUCCESS)
                                 logBoth('logInfo', _src,
-                                        f"[CheckBunk] >>> WINNER: Gamma {gamma} (stopped at position {idx + 1}/{len(gamma_sequence)}) <<<",
+                                        f"[CheckNoCapBung] >>> WINNER: Gamma {gamma} (stopped at position {idx + 1}/{len(gamma_sequence)}) <<<",
                                         MessageType.SUCCESS)
                         else:
                             if PRINT_SUCCESS_EVALUATION:
                                 logBoth('logError', _src,
-                                        f"[CheckBunk] ✗ FAIL - Count {detected_count} != expected {expected_count} OR invalid geometry",
+                                        f"[CheckNoCapBung] ✗ FAIL - Count {detected_count} != expected {expected_count} OR invalid geometry",
                                         MessageType.ISSUE)
                                 logBoth('logError', _src,
-                                        f"[CheckBunk] >>> DEFINITIVE FAILURE at gamma {gamma} (stopped at position {idx + 1}/{len(gamma_sequence)}) <<<",
+                                        f"[CheckNoCapBung] >>> DEFINITIVE FAILURE at gamma {gamma} (stopped at position {idx + 1}/{len(gamma_sequence)}) <<<",
                                         MessageType.ISSUE)
 
                         # Cancel any pending preprocessing (early termination!)
@@ -317,10 +309,10 @@ class CheckBunk:
                             cancelled = future_next.cancel()
                             if cancelled and PRINT_IMAGE_PREPROCESSING:
                                 logBoth('logDebug', _src,
-                                        f"[CheckBunk] Cancelled preprocessing of gamma {gamma_sequence[idx + 1]} (not needed)",
+                                        f"[CheckNoCapBung] Cancelled preprocessing of gamma {gamma_sequence[idx + 1]} (not needed)",
                                         MessageType.GENERAL)
 
-                        # Seating (after the hole pattern passed; vision.bunk.seating.check)
+                        # Seating (after the hole pattern passed; vision.bung.seating.check)
                         seating = None
                         if success and BS_MODULE.SEATING_CHECK:
                             try:
@@ -329,15 +321,15 @@ class CheckBunk:
                                 seating = dict(seated=False, reason=f"segmenter error: {e}", face_contour=None)
                             success = bool(seating["seated"])
                             logBoth('logInfo' if success else 'logError', _src,
-                                    f"[CheckBunk] Seating: {'SEATED' if success else 'NOT SEATED'} - {seating['reason']}",
+                                    f"[CheckNoCapBung] Seating: {'SEATED' if success else 'NOT SEATED'} - {seating['reason']}",
                                     MessageType.SUCCESS if success else MessageType.ISSUE)
                         logBoth('logInfo', _src,
-                                f"[CheckBunk] summary: {'OK' if success else 'NOT OK'} - model {model}, {detected_count} holes "
+                                f"[CheckNoCapBung] summary: {'OK' if success else 'NOT OK'} - model {model}, {detected_count} holes "
                                 f"(expected {expected_count}), gamma {gamma}"
                                 + (f", seating: {seating['reason']}" if seating is not None else ""), MessageType.GENERAL)
 
                         # Paint masks on original image (even for failures, to show what was detected)
-                        result_image = paint_bunk_masks_on_image(anImage_rgb, components, color=(0, 255, 0))
+                        result_image = paint_bung_masks_on_image(anImage_rgb, components, color=(0, 255, 0))
                         if seating is not None and seating.get("face_contour") is not None:
                             cv2.drawContours(result_image, [seating["face_contour"]], -1,
                                              (0, 255, 0) if success else (255, 0, 0), 2)
@@ -347,7 +339,7 @@ class CheckBunk:
                                          {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model)
 
                         if PRINT_RESULT_PAINTING:
-                            logBoth('logDebug', _src, f"[CheckBunk] Painted {len(components)} masks on image", MessageType.GENERAL)
+                            logBoth('logDebug', _src, f"[CheckNoCapBung] Painted {len(components)} masks on image", MessageType.GENERAL)
 
                         # Convert back to BGR for OpenCV, then crop
                         result_bgr = cv2.cvtColor(result_image, cv2.COLOR_RGB2BGR)
@@ -357,11 +349,11 @@ class CheckBunk:
                     # No definitive result yet, continue to next gamma
                     else:
                         if PRINT_BATCH_SEGMENTATION:
-                            logBoth('logDebug', _src, f"[CheckBunk] Gamma {gamma}: No definitive pattern - trying next gamma", MessageType.GENERAL)
+                            logBoth('logDebug', _src, f"[CheckNoCapBung] Gamma {gamma}: No definitive pattern - trying next gamma", MessageType.GENERAL)
 
                 # If we get here, no gamma produced definitive result
                 if PRINT_SUCCESS_EVALUATION:
-                    logBoth('logError', _src, f"[CheckBunk] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
+                    logBoth('logError', _src, f"[CheckNoCapBung] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
                 no_pattern = anImage_rgb.copy()
                 drawSeatingMarks(no_pattern, {}, model)          # the reference oval only (no hole pattern)
@@ -370,22 +362,23 @@ class CheckBunk:
 
         except Exception as e:
             if PRINT_BATCH_SEGMENTATION:
-                logBoth('logError', _src, f"[CheckBunk] Segmentation failed: {e}", MessageType.PROBLEM)
+                logBoth('logError', _src, f"[CheckNoCapBung] Segmentation failed: {e}", MessageType.PROBLEM)
                 import traceback
                 traceback.print_exc()
             return _maybe_crop(cv2.cvtColor(anImage_rgb, cv2.COLOR_RGB2BGR)), False, None
 
-def test_checkBunk():
-    """Test function for CheckBunk v2.0."""
 
-    print("CheckBunk v2.0 Test - V0.7 PIPELINE WITH FIXED GAMMA SEQUENCE")
+def test_checkNoCapBung():
+    """Test function for CheckNoCapBung v2.0."""
+
+    print("CheckNoCapBung v2.0 Test - V0.7 PIPELINE WITH FIXED GAMMA SEQUENCE")
     print("=" * 80)
 
     # Test folder path
     test_folder = "C:/AshokLeylandImages/DOSTPLUS/LHS/"  # Adjust as needed
 
     # Output directory
-    output_dir = "C:/Test/Bunk"
+    output_dir = "C:/Test/NoCapBung"
     os.makedirs(output_dir, exist_ok=True)
     print(f"✓ Output directory: {output_dir}")
 
@@ -397,10 +390,10 @@ def test_checkBunk():
         for ext in image_extensions:
             all_files.extend(Path(test_folder).glob(f'*{ext}'))
 
-        # Filter for bunk images
+        # Filter for bung images
         test_files = [f for f in all_files if 'bung' in f.name.lower()]
 
-        print(f"✓ Found {len(test_files)} bunk image files")
+        print(f"✓ Found {len(test_files)} bung image files")
         print(f"  Folder: {test_folder}")
     else:
         print(f"✗ Folder not found: {test_folder}")
@@ -442,7 +435,7 @@ def test_checkBunk():
         # Run check
         start_time = time.time()
 
-        result_img, success, gamma_used = CheckBunk.checkBunk(
+        result_img, success, gamma_used = CheckNoCapBung.checkNoCapBung(
             test_image,
             componentQRCode=test_qr
         )
@@ -490,4 +483,4 @@ def test_checkBunk():
 
 # Uncomment to run tests
 # if __name__ == "__main__":
-#     test_checkBunk()
+#     test_checkNoCapBung()

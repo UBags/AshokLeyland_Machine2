@@ -65,7 +65,7 @@ P.setDatabaseName("Test")
 from frontend.newwidgets.CosThetaResultsContainer import CosThetaResultsContainer
 TILES = []                     # (method name, result)
 TILE_ROTATION = {}             # tightening-torque tile -> rotationDone passed with it
-for name in [n for n in dir(CosThetaResultsContainer) if n.startswith("set") and (n.endswith("Data") or n == "setNoBunkAfterComponentPress")]:
+for name in [n for n in dir(CosThetaResultsContainer) if n.startswith("set") and (n.endswith("Data") or n == "setNoBungAfterComponentPress")]:
     orig = getattr(CosThetaResultsContainer, name)
     def wrapper(self, value, result, *args, _orig=orig, _name=name, **kwargs):
         TILES.append((_name, result))
@@ -111,9 +111,9 @@ def picture(label, seed):
 
 PICTURE_STEPS = [MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
                  MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-                 MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK,
+                 MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG,
                  MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP,
-                 MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS]
+                 MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS]
 # The 15 operator steps in Machine 2 order: (FE state, kind, value)
 SEQUENCE = [
     (MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE, "picture", None),
@@ -121,13 +121,13 @@ SEQUENCE = [
     (MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING, "picture", None),
     (MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, "picture", None),
     (MS.READ_TIGHTENING_TORQUE_1, "io", 19.084),
-    (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS, "picture", None),
+    (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS, "picture", None),
     (MS.READ_COMPONENT_PRESS_DONE, "io", -1.0),
-    (MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK, "picture", None),
+    (MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, "picture", None),
     (MS.READ_TIGHTENING_TORQUE_2, "io", 19.026),
     (MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, "picture", None),
     (MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, "picture", None),
-    (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS, "picture", None),
+    (MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, "picture", None),
     (MS.READ_CAP_PRESS_DONE, "io", -1.0),
     (MS.READ_FREE_ROTATION_TORQUE_1, "io", 2.411),
 ]
@@ -188,9 +188,9 @@ def take_record(timeout=8):
 # record tuple indices (see utils/RedisUtils.readDataInDatabaseServerFromFEServer)
 PIC_IDX = {MS.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE: 3, MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING: 6,
            MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING: 9, MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER: 12,
-           MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS: 18, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNK: 23,
+           MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS: 18, MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG: 23,
            MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER: 29, MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP: 32,
-           MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS: 35}
+           MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS: 35}
 RESULT_IDX = [4, 7, 10, 13, 16, 19, 21, 24, 27, 30, 33, 36, 38, 41]            # the 14 step results, in order
 DATETIME_IDX = [5, 8, 11, 14, 17, 20, 22, 25, 28, 31, 34, 37, 39, 42]
 TORQUE_IDX = {"torque1": 15, "torque2": 26, "freeRotation": 40}
@@ -595,8 +595,8 @@ def driver():
         print("\n=== F12. Bypass of the component press and second tightening (Machine Setting per model) ===", flush=True)
         from frontend.CosThetaStylesheets import BYPASSED_TEXT
         rc = fe.resultsContainer
-        skippedTiles = (rc.bunk_for_component_press_check_container, rc.component_press_check_container,
-                        rc.no_bunk_after_component_press_check_container, rc.tightening_torque2_check_container)
+        skippedTiles = (rc.bung_for_component_press_check_container, rc.component_press_check_container,
+                        rc.no_bung_after_component_press_check_container, rc.tightening_torque2_check_container)
         assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
         time.sleep(1.0); r.delete(fe2dbq)          # F10's abort record (not read there)
         TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear()

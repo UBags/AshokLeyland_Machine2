@@ -2,7 +2,7 @@
 process (camera/VisionCheckWorker.py), against <vendor>.vision.check.timeout.sec (2026-11-07, CHANGES section 85;
 docs/plant-pc-verification.md, step 2).
 
-Runs every picture in this folder's knuckle / hub / top bearing / nut-washer / bunk / cap image folders through
+Runs every picture in this folder's knuckle / hub / top bearing / nut-washer / bung / cap image folders through
 the check of its station (the picture resized as the camera server does), and prints per check: the number of
 pictures, the median and the largest time in the worker, the transfer to the worker and back, and the margin to the
 timeout. The OK / NOT OK of each picture is printed too, but this is a timing run, not a check of the verdicts (the
@@ -36,8 +36,8 @@ if __name__ == "__main__":
                 ("hub and bottom bearing", "hub_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING),
                 ("top bearing", "top_bearing_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_TOP_BEARING),
                 ("nut and plate washer", "nut_washer_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER),
-                ("bunk for component press", "bunk_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_COMPONENT_PRESS),
-                ("bunk for cap press", "bunk_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNK_FOR_CAP_PRESS),
+                ("bung for component press", "bung_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS),
+                ("bung for cap press", "bung_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS),
                 ("cap", "cap_images", MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP)]
     timeout = C.getInstance().getVisionCheckTimeout()
     print(f"Vision check timeout ({os.environ['COSTHETA_PLC_VENDOR']}.vision.check.timeout.sec): {timeout:g} s", flush=True)

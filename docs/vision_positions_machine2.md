@@ -40,9 +40,9 @@ its feature's type difference.
 | hub.segment.center | (645.3, 332.0) | (+2.95, -26.40) | (644.7, 336.0) | (+2.50, -23.75) |
 | hub.centre.check | (644.3, 338.0) | (+1.95, -20.40) | (643.7, 342.0) | (+1.50, -17.75) |
 | topbearing.annular.center | (642.1, 342.6) | (-0.25, -15.90) | (641.9, 347.5) | (-0.30, -12.25) |
-| nutwasher / nobunk nut.detection.center | (644.5, 341.8) | (+2.10, -16.65) | (643.5, 346.2) | (+1.35, -13.50) |
-| bunk.outer.disc.center | (642.5, 331.5) | (+0.15, -26.95) | (643.5, 336.5) | (+1.30, -23.20) |
-| bunk.seating.seated.centre.dost / .dostplus | (646, 325) / (647, 330) | | same | |
+| nutwasher / nobung nut.detection.center | (644.5, 341.8) | (+2.10, -16.65) | (643.5, 346.2) | (+1.35, -13.50) |
+| bung.outer.disc.center | (642.5, 331.5) | (+0.15, -26.95) | (643.5, 336.5) | (+1.30, -23.20) |
+| bung.seating.seated.centre.dost / .dostplus | (646, 325) / (647, 330) | | same | |
 | cap.center | (644.3, 338.0) | (+1.95, -20.40) | (643.7, 342.0) | (+1.50, -17.75) |
 
 Still to confirm with paired pictures (knuckle, hub and cap of the same component over a few full cycles): whether
@@ -58,10 +58,10 @@ is not known whether that was their spindles (side) or the hub's own seating.
 | Hub 'no bearing in bore' circle `hub.centre.check` | (644, 340) | (-1, +6) | annulus r 38-60 | only when enforceBearingAbsenceCheck=True (off in production) |
 | Top bearing search disc `topbearing.annular.center` | (642, 345) | (-3, +11) | disc r 132; start points 0,0;0,-11 (relative); prompt r 40 | 3 px below the rings' median centre |
 | Nut / washer nut search `nutwasher.nut.detection.center` | (644, 344) | (-1, +10) | disc r 80 | washer comparison uses the top bearing ring of the same cycle |
-| No-bunk nut search `nobunk.nut.detection.center` | (644, 344) | (-1, +10) | disc r 80 | same as nut / washer |
-| Bung (states 13, 24) `bunk.outer.disc.center` | (643, 334) | (-2, +0) | segmented disc r 250, holes within r 135 (110 until 17 Nov, then 125) |  |
-| Bung seated position `bunk.seating.seated.centre.dost` | (646, 325) | (+1, -9) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 241 x 249 at 122 deg | seating step |
-| Bung seated position `bunk.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
+| No-bung nut search `nobung.nut.detection.center` | (644, 344) | (-1, +10) | disc r 80 | same as nut / washer |
+| Bung (states 13, 24) `bung.outer.disc.center` | (643, 334) | (-2, +0) | segmented disc r 250, holes within r 135 (110 until 17 Nov, then 125) |  |
+| Bung seated position `bung.seating.seated.centre.dost` | (646, 325) | (+1, -9) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 241 x 249 at 122 deg | seating step |
+| Bung seated position `bung.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
 | Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it |
 
 The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`) has no position: it is a placeholder.

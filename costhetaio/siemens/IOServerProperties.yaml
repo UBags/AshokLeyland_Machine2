@@ -69,7 +69,7 @@ tags:
   PLC_PC_Station2TorqueValue:                { address: "DB500,R8",   type: float, dir: r }
   PLC_PC_Station2RotationDuringTighteningDone: { address: "DB500,X3.6", type: bool, dir: r }  # read and logged only
 
-  # --- Step 13: bunk for component press ---------------------------------------------------------------------------
+  # --- Step 13: bung for component press ---------------------------------------------------------------------------
   PLC_PC_CheckBunkForComponentPress:         { address: "DB500,X4.0", type: bool,  dir: r }
   PC_PLC_BunkForComponentPressCheckOK:       { address: "DB500,X4.1", type: bool,  dir: w }
   PC_PLC_BunkForComponentPressCheckDone:     { address: "DB500,X4.2", type: bool,  dir: w }
@@ -77,7 +77,7 @@ tags:
   # --- Steps 14-15: component press done (state READ_COMPONENT_PRESS_DONE) -----------------------------------------
   PLC_PC_ComponentPressDone:                 { address: "DB500,X3.5", type: bool,  dir: r }
 
-  # --- Step 17: no bunk --------------------------------------------------------------------------------------------
+  # --- Step 17: no bung --------------------------------------------------------------------------------------------
   PLC_PC_CheckNoBunk:                        { address: "DB500,X4.3", type: bool,  dir: r }
   PC_PLC_NoBunkCheckOK:                      { address: "DB500,X4.5", type: bool,  dir: w }
   PC_PLC_NoBunkCheckDone:                    { address: "DB500,X4.4", type: bool,  dir: w }
@@ -92,7 +92,7 @@ tags:
   PC_PLC_CapCheckOK:                         { address: "DB500,X1.3", type: bool,  dir: w }
   PC_PLC_CapCheckDone:                       { address: "DB500,X1.4", type: bool,  dir: w }
 
-  # --- Step 25: bunk for cap press ---------------------------------------------------------------------------------
+  # --- Step 25: bung for cap press ---------------------------------------------------------------------------------
   PLC_PC_CheckBunkForCapPress:               { address: "DB500,X2.4", type: bool,  dir: r }
   PC_PLC_BunkForCapPressCheckOK:             { address: "DB500,X1.5", type: bool,  dir: w }
   PC_PLC_BunkForCapPressCheckDone:           { address: "DB500,X1.6", type: bool,  dir: w }

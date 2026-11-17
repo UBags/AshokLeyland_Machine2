@@ -152,6 +152,27 @@ class CosThetaConfigurator():
         except Exception:
             return 2.0
 
+    @staticmethod
+    def _addLegacyBungKeys(props: Properties) -> list:
+        """2026-11-17 (CHANGES 125): every 'bunk' in a key became 'bung'. A properties file written before (for example
+        the one on the plant PC, if it is not replaced with the new build's) still has the old keys: each old key whose
+        new spelling is missing is added under the new spelling with the same value, so nothing falls back to a code
+        default. Returns the keys added (logged once per load)."""
+        added = []
+        try:
+            current = dict(props.getPropertyDict())
+            for key, value in current.items():
+                new = key.replace("BUNK", "BUNG").replace("Bunk", "Bung").replace("bunk", "bung")
+                if new != key and new not in current:
+                    props.setProperty(new, value)
+                    added.append(new)
+        except Exception as e:
+            print(f"Warning: could not map the old 'bunk' keys to 'bung': {e}")
+        if added:
+            print(f"Warning: {configFilePath} has {len(added)} old 'bunk' key(s); used as their 'bung' spelling "
+                  f"(e.g. {added[0]}). Replace the file with the new build's to remove this message.")
+        return added
+
     @classmethod
     def _loadConfig(cls) -> None:
         """Load the configuration file; afterwards re-load it whenever it changes (see above)."""
@@ -162,6 +183,7 @@ class CosThetaConfigurator():
                     try:
                         with open(configFilePath, 'r') as config_file:
                             CosThetaConfigurator._configs.load(config_file)
+                            CosThetaConfigurator._addLegacyBungKeys(CosThetaConfigurator._configs)
                             CosThetaConfigurator._loaded = True
                             CosThetaConfigurator._lastTimeLoaded = pathlib.Path(configFilePath).stat().st_mtime
                     except Exception as e:
@@ -185,6 +207,7 @@ class CosThetaConfigurator():
             fresh = Properties()
             with open(configFilePath, 'r') as config_file:
                 fresh.load(config_file)
+            CosThetaConfigurator._addLegacyBungKeys(fresh)
             old = dict(CosThetaConfigurator._configs.getPropertyDict())
             new = dict(fresh.getPropertyDict())
             if len(new) < CosThetaConfigurator.RELOAD_MIN_KEY_FRACTION * max(1, len(old)):
@@ -685,7 +708,7 @@ class CosThetaConfigurator():
     IMAGES_NUT_AND_PLATEWASHER_FOLDER_KEY = 'images.nut.and.platewasher.folder'
     IMAGES_SPLITPIN_AND_WASHER_FOLDER_KEY = 'images.splitpin.and.washer.folder'
     IMAGES_CAP_FOLDER_KEY = 'images.cap.folder'
-    FOLDER_FOR_BUNK_AND_NO_BUNK_KEY = 'images.bunk.and.no.bunk.folder'
+    FOLDER_FOR_BUNG_AND_NO_BUNG_KEY = 'images.bung.and.no.bung.folder'
     IMAGES_OK_FOLDER_KEY = 'images.ok.folder'
     IMAGES_NOTOK_FOLDER_KEY = 'images.notok.folder'
 
@@ -735,8 +758,8 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(CosThetaConfigurator.IMAGES_CAP_FOLDER_KEY, default="6-Cap/")
 
     @classmethod
-    def getFolderForBunkAndNoBunkImages(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.FOLDER_FOR_BUNK_AND_NO_BUNK_KEY, default="7-BunkAndNoBunk/")
+    def getFolderForBungAndNoBungImages(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.FOLDER_FOR_BUNG_AND_NO_BUNG_KEY, default="7-BungAndNoBung/")
 
     @classmethod
     def getImagesOKFolder(cls) -> str:
@@ -2753,20 +2776,20 @@ class CosThetaConfigurator():
     # ==================== Station 3 Free Rotation Done Tag (Step 6) ====================
     PLC_PC_STATION3_ROTATION_DONE_KEY = "plc.pc.station3.rotation.done.tagname"
 
-    # ==================== No Cap Bunk Tags (Step 7) ====================
-    PLC_PC_CHECK_NO_CAP_BUNK_KEY = "plc.pc.check.no.cap.bunk.tagname"
-    PC_PLC_NO_CAP_BUNK_CHECK_OK_KEY = "pc.plc.no.cap.bunk.check.ok.tagname"
-    PC_PLC_NO_CAP_BUNK_CHECK_DONE_KEY = "pc.plc.no.cap.bunk.check.done.tagname"
+    # ==================== No Cap Bung Tags (Step 7) ====================
+    PLC_PC_CHECK_NO_CAP_BUNG_KEY = "plc.pc.check.no.cap.bung.tagname"
+    PC_PLC_NO_CAP_BUNG_CHECK_OK_KEY = "pc.plc.no.cap.bung.check.ok.tagname"
+    PC_PLC_NO_CAP_BUNG_CHECK_DONE_KEY = "pc.plc.no.cap.bung.check.done.tagname"
 
     # ==================== Component Press Done Tag (Step 8) ====================
     PLC_PC_COMPONENT_PRESS_DONE_KEY = "plc.pc.component.press.done.tagname"
     # Read together with the Station 2 torque value (Siemens PLC); empty = not provided by the PLC
     PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY = "plc.pc.station2.rotation.during.tightening.done.tagname"
 
-    # ==================== No Bunk Tags (Step 9) ====================
-    PLC_PC_CHECK_NO_BUNK_KEY = "plc.pc.check.no.bunk.tagname"
-    PC_PLC_NO_BUNK_CHECK_OK_KEY = "pc.plc.no.bunk.check.ok.tagname"
-    PC_PLC_NO_BUNK_CHECK_DONE_KEY = "pc.plc.no.bunk.check.done.tagname"
+    # ==================== No Bung Tags (Step 9) ====================
+    PLC_PC_CHECK_NO_BUNG_KEY = "plc.pc.check.no.bung.tagname"
+    PC_PLC_NO_BUNG_CHECK_OK_KEY = "pc.plc.no.bung.check.ok.tagname"
+    PC_PLC_NO_BUNG_CHECK_DONE_KEY = "pc.plc.no.bung.check.done.tagname"
 
     # ==================== Split Pin and Washer Tags (Step 11) ====================
     PLC_PC_CHECK_SPLIT_PIN_AND_WASHER_KEY = "plc.pc.check.split.pin.and.washer.tagname"
@@ -2779,9 +2802,9 @@ class CosThetaConfigurator():
     PC_PLC_CAP_CHECK_DONE_KEY = "pc.plc.cap.check.done.tagname"
 
     # ==================== Check Cap (Step 13) ====================
-    PLC_PC_CHECK_BUNK_KEY = "plc.pc.check.bunk.tagname"
-    PC_PLC_BUNK_CHECK_OK_KEY = "pc.plc.bunk.check.ok.tagname"
-    PC_PLC_BUNK_CHECK_DONE_KEY = "pc.plc.bunk.check.done.tagname"
+    PLC_PC_CHECK_BUNG_KEY = "plc.pc.check.bung.tagname"
+    PC_PLC_BUNG_CHECK_OK_KEY = "pc.plc.bung.check.ok.tagname"
+    PC_PLC_BUNG_CHECK_DONE_KEY = "pc.plc.bung.check.done.tagname"
 
     # ==================== Station 3 Torque Value Set Tag (Step 14) ====================
     PLC_PC_CAP_PRESS_DONE_KEY = "plc.pc.cap.press.done.tagname"
@@ -2914,20 +2937,20 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_STATION3_ROTATION_DONE_KEY,
                                              default="PLC_PC_Station3RotationDone")
 
-    # ==================== No Cap Bunk Methods (Step 7) ====================
+    # ==================== No Cap Bung Methods (Step 7) ====================
     @classmethod
-    def getPlcPcCheckNoCapBunkTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_NO_CAP_BUNK_KEY,
+    def getPlcPcCheckNoCapBungTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_NO_CAP_BUNG_KEY,
                                              default="PLC_PC_CheckBunkForComponentPress")
 
     @classmethod
-    def getPcPlcNoCapBunkCheckOKTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNK_CHECK_OK_KEY,
+    def getPcPlcNoCapBungCheckOKTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNG_CHECK_OK_KEY,
                                              default="PC_PLC_BunkForComponentPressCheckOK")
 
     @classmethod
-    def getPcPlcNoCapBunkCheckDoneTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNK_CHECK_DONE_KEY,
+    def getPcPlcNoCapBungCheckDoneTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_CAP_BUNG_CHECK_DONE_KEY,
                                              default="PC_PLC_BunkForComponentPressCheckDone")
 
     # ==================== Component Press Done Method (Step 8) ====================
@@ -2941,20 +2964,20 @@ class CosThetaConfigurator():
         return str(CosThetaConfigurator.getValue(
             CosThetaConfigurator.PLC_PC_STATION2_ROTATION_DURING_TIGHTENING_DONE_KEY, default="PLC_PC_Station2RotationDuringTighteningDone") or "").strip()
 
-    # ==================== No Bunk Methods (Step 9) ====================
+    # ==================== No Bung Methods (Step 9) ====================
     @classmethod
-    def getPlcPcCheckNoBunkTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_NO_BUNK_KEY,
+    def getPlcPcCheckNoBungTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_NO_BUNG_KEY,
                                              default="PLC_PC_CheckNoBunk")
 
     @classmethod
-    def getPcPlcNoBunkCheckOKTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_BUNK_CHECK_OK_KEY,
+    def getPcPlcNoBungCheckOKTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_BUNG_CHECK_OK_KEY,
                                              default="PC_PLC_NoBunkCheckOK")
 
     @classmethod
-    def getPcPlcNoBunkCheckDoneTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_BUNK_CHECK_DONE_KEY,
+    def getPcPlcNoBungCheckDoneTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_NO_BUNG_CHECK_DONE_KEY,
                                              default="PC_PLC_NoBunkCheckDone")
 
     # ==================== Split Pin and Washer Methods (Step 11) ====================
@@ -2989,20 +3012,20 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_CAP_CHECK_DONE_KEY,
                                              default="PC_PLC_CapCheckDone")
 
-    # ==================== Bunk Methods (Step 13) ====================
+    # ==================== Bung Methods (Step 13) ====================
     @classmethod
-    def getPlcPcCheckBunkTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_BUNK_KEY,
+    def getPlcPcCheckBungTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PLC_PC_CHECK_BUNG_KEY,
                                              default="PLC_PC_CheckBunkForCapPress")
 
     @classmethod
-    def getPcPlcBunkCheckOKTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNK_CHECK_OK_KEY,
+    def getPcPlcBungCheckOKTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNG_CHECK_OK_KEY,
                                              default="PC_PLC_BunkForCapPressCheckOK")
 
     @classmethod
-    def getPcPlcBunkCheckDoneTagName(cls) -> str:
-        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNK_CHECK_DONE_KEY,
+    def getPcPlcBungCheckDoneTagName(cls) -> str:
+        return CosThetaConfigurator.getValue(CosThetaConfigurator.PC_PLC_BUNG_CHECK_DONE_KEY,
                                              default="PC_PLC_BunkForCapPressCheckDone")
 
     # ==================== Cap Press Done Method (Step 14) ====================
