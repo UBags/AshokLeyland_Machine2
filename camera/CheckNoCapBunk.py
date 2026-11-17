@@ -56,6 +56,9 @@ PRINT_RESULT_PAINTING = False
 PRINT_SUCCESS_EVALUATION = True
 
 
+from camera.CheckBunk import drawSeatingMarks  # noqa: E402
+
+
 class CheckNoCapBunk:
     """
     Checks no-cap bunk assembly by detecting holes in the bunk region.
@@ -330,6 +333,8 @@ class CheckNoCapBunk:
                         if seating is not None and seating.get("face_contour") is not None:
                             cv2.drawContours(result_image, [seating["face_contour"]], -1,
                                              (0, 255, 0) if success else (255, 0, 0), 2)
+                        if seating is not None:
+                            drawSeatingMarks(result_image, seating, model)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckNoCapBunk] Painted {len(components)} masks on image", MessageType.GENERAL)

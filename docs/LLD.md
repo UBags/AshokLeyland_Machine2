@@ -229,8 +229,9 @@ face centre to bore centre ≤ 9 px; silver: top face centre to outline centre �
 the cap centre. Bung (`vision.bunk.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
-(`seating.reference.oval.<model>`, centred on the seated position). Each uses its own `SamPredictor` per thread on the
-shared model.
+(`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
+red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119). Each uses its own
+`SamPredictor` per thread on the shared model.
 
 **Bung holes (`BunkSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bunk.outer.disc.center`:

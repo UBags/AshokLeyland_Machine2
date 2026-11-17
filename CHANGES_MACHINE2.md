@@ -3729,3 +3729,11 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   it, with a 0.7 px margin. The seated pictures keep passing; in the rotation run the DOST roundness of turned
   seated pictures (0.929 at least) now passes. Verifier ALL EQUIVALENT (both).
 
+## 119. Bung picture: reference oval and hole-pattern centre drawn (2026-11-17)
+
+- **User:** mark the hole-pattern centre with a thick blue cross and the reference oval with a thick contour.
+- `CheckBunk.drawSeatingMarks` (also used by CheckNoCapBunk), called whenever the seating step ran: the model's
+  reference oval centred on its seated position (yellow, 3 px) and the hole-pattern centre (blue cross, 30 px, 4 px
+  thick), beside the face outline (green / red). Shapes only, no text. Not in BunkSegmenter, so no reference commit.
+- Run: the helper on a blank picture (oval and cross drawn; CheckNoCapBunk uses the same function). Nothing else run.
+

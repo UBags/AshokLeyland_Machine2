@@ -56,6 +56,20 @@ PRINT_RESULT_PAINTING = False
 PRINT_SUCCESS_EVALUATION = True
 
 
+def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str) -> None:
+    """Seating marks on the result picture (RGB, no text): the model's reference oval (thick yellow contour, centred on
+    the seated position) and the hole-pattern centre (thick blue cross)."""
+    dostplus = model == "DOSTPLUS"
+    seated_at = BS_MODULE.SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else BS_MODULE.SEATING_SEATED_CENTRE_DOST
+    oval = BS_MODULE.SEATING_REFERENCE_OVAL_DOSTPLUS if dostplus else BS_MODULE.SEATING_REFERENCE_OVAL_DOST
+    cv2.ellipse(image_rgb, ((float(seated_at[0]), float(seated_at[1])), (float(oval[0]), float(oval[1])),
+                            float(oval[2])), (255, 255, 0), 3)
+    centre = seating.get("hole_centre")
+    if centre is not None:
+        cv2.drawMarker(image_rgb, (int(round(centre[0])), int(round(centre[1]))), (0, 0, 255),
+                       cv2.MARKER_CROSS, 30, 4)
+
+
 class CheckBunk:
     """
     Checks bunk assembly by detecting holes in the bunk region.
@@ -327,6 +341,8 @@ class CheckBunk:
                         if seating is not None and seating.get("face_contour") is not None:
                             cv2.drawContours(result_image, [seating["face_contour"]], -1,
                                              (0, 255, 0) if success else (255, 0, 0), 2)
+                        if seating is not None:
+                            drawSeatingMarks(result_image, seating, model)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckBunk] Painted {len(components)} masks on image", MessageType.GENERAL)
