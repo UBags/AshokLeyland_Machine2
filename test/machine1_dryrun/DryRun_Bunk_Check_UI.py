@@ -7,10 +7,12 @@ Both bunk checks run the same hole detection (camera/BunkSegmenter.py); choose w
   - CheckBunk.checkBunk            - state 24, bung before the cap press
   - CheckNoCapBunk.checkNoCapBunk  - state 13, bung before the component press
 The r<outer.disc.radius> disc round <vendor>.vision.bunk.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
-until a definite answer); holes count only inside r<inner.disc.radius> round the same centre.
+until a definite answer; YOLO boxes + a point every hole.grid.step px); holes count only inside r<inner.disc.radius>
+round the same centre. One "[Bung] ..." log line per gamma.
   DOST     : 4 holes forming a square (sides within square.side.length.tolerance of the median, corners
              square.min/max.interior.angle)
-  DOSTPLUS : exactly 2 holes, dostplus.hole.pair.distance.min..max apart; a DOST square found = NOT OK
+  DOSTPLUS : 2 holes dostplus.hole.pair.distance.min..max apart, opposite about the centre (the best pair
+             among the candidates); a DOST square found = NOT OK
 
   Start: model (DOST / DOSTPLUS - every picture is checked as this model; "Both" - every picture is checked as DOST
   and as DOSTPLUS), folder (default: bunk_images_20261113 next to this script, the pictures that come with git pull;
@@ -21,7 +23,8 @@ until a definite answer); holes count only inside r<inner.disc.radius> round the
   for each picture, the model checked, the number of holes found, OK / NOT OK, the time, the spacing, their centre's
   distance from the set centre and the deciding gamma. Terminal lines start "HOLES".
   Seating (vision.bunk.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
-  centre against the model's seated position and the roundness of the top-face mask (MobileSAM); the line after HOLES
+  centre against the model's seated position, the roundness of the top-face mask (MobileSAM), how well it fits an
+  ellipse and how much of it lies outside the model's reference oval; the line after HOLES
   starts "SEATING" (SEATED / NOT SEATED and both values; "not run" when the holes did not pass). On the picture the
   top-face outline is green (seated) or red.
 

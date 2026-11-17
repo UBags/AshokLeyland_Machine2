@@ -7,7 +7,7 @@
     "camera/CheckNutAndPlateWasher.py": "3d91a76",
     "camera/HexagonNutDetector.py": "4e04121",
     "camera/CheckCap.py": "f3aa0ed",
-    "camera/BunkSegmenter.py": "04e5e6e",
+    "camera/BunkSegmenter.py": "093a5fb",
     "camera/HubAndBearingSegmenter.py": "3d91a76",
     "camera/KnuckleLocator.py": "f3aa0ed",
     "camera/VisionFrame.py": "f3aa0ed"
@@ -17,7 +17,7 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1365,
+      "old_line": 1409,
       "old_literal": "100",
       "old_snippet": "distance <= 100:"
     },
@@ -25,15 +25,15 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MIN",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 1365,
+      "old_line": 1409,
       "old_literal": "75",
-      "old_snippet": "if 75 <= distance"
+      "old_snippet": "75 <= distance"
     },
     "vision.bunk.square.max.angle.std": {
       "const": "SQUARE_MAX_ANGLE_STD",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 420,
+      "old_line": 439,
       "old_literal": "20.0",
       "old_snippet": "allowed_angle_std: float = 20.0"
     },
@@ -41,7 +41,7 @@
       "const": "SQUARE_MAX_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 419,
+      "old_line": 438,
       "old_literal": "115.0",
       "old_snippet": "max_interior_angle: float = 115.0"
     },
@@ -49,7 +49,7 @@
       "const": "SQUARE_MIN_INTERIOR_ANGLE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 418,
+      "old_line": 437,
       "old_literal": "65.0",
       "old_snippet": "min_interior_angle: float = 65.0"
     },
@@ -57,7 +57,7 @@
       "const": "SQUARE_SIDE_LENGTH_TOLERANCE",
       "file": "camera/BunkSegmenter.py",
       "old_file": "camera/BunkSegmenter.py",
-      "old_line": 417,
+      "old_line": 436,
       "old_literal": "0.2",
       "old_snippet": "tolerance: float = 0.2"
     },

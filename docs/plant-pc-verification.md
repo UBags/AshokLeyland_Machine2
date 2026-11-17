@@ -139,6 +139,24 @@ whether Plan B (`docs/state_sync.md` §3) is needed.
    before the cycle ends: the record is stored (the DB server's log has `Insert attempt 1 failed ...; will retry in 5 s`
    and then the insert), with its pictures once in the day folder.
 
+## 9. Bung check: holes whatever the bung's angle, new seating tests (CHANGES 115)
+
+On the laptop first (it has the YOLO weights and a GPU), after `git pull`:
+1. `python test/machine2_dryrun/DryRun_Bung_Rotation.py` - 23 seated pictures turned in 15 degree steps; the last line
+   must say `RESULT: 1104/1104 hole patterns as expected`. The `s` marks (seating NOT SEATED on a turned picture) are
+   information only (the picture's light and the hub turn with it).
+2. `python test/machine2_dryrun/DryRun_Bunk_Check_UI.py`, model Both, the 13 Nov pictures: seated bungs OK as their
+   own model, NOT OK as the other; not seated NOT OK. Note the time per picture.
+
+On the Machine 2 PC with the new exe:
+3. **Bungs that failed before.** Put a correct bung the way that gave NOT OK before (and turn it through a full turn
+   in steps over a few cycles): OK every time.
+4. **Log.** Each bung check writes one `[Bung] <model> gamma <g>: ...` line per gamma (masks, candidates with their
+   position, distance from the disc centre and area, what was dropped and why, the decision) and the `[CheckBunk]
+   Seating: ...` line with the four seating values. For any NOT OK on a correct bung, send these lines.
+5. **Time.** The bung check's time (the `check time` in the camera server's log) - each gamma now decodes about 220
+   point prompts; it must stay well inside the 12 s timeout (expected: well under a second per gamma on the GPU).
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -152,3 +170,4 @@ whether Plan B (`docs/state_sync.md` §3) is needed.
 | 6 Knuckle frame (shift, scale, check time; wrong part NOT OK) | | | | |
 | 7 State sync after a few weeks (MISMATCH / GAP lines, cycles in sync) | | | | |
 | 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |
+| 9 Bung: rotation dry run and Bunk_Check_UI on the laptop; failing bungs now OK; [Bung] lines; check time | | | | |

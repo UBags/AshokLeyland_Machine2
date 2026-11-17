@@ -7,10 +7,12 @@ Both checks run the same hole detection (camera/BunkSegmenter.py):
   - CheckNoCapBunk.checkNoCapBunk  - state 13, bung before the component press
   - CheckBunk.checkBunk            - state 24, bung before the cap press
 The r<outer.disc.radius> disc round <vendor>.vision.bunk.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
-until a definite answer); holes count only inside r<inner.disc.radius> round the same centre (area min/max.mask.area).
+until a definite answer; YOLO boxes + a point every hole.grid.step px); holes count only inside r<inner.disc.radius>
+round the same centre (area min/max.mask.area). One "[Bung] ..." log line per gamma.
   DOST     : 4 holes forming a square (sides within square.side.length.tolerance of the median, corners
              square.min/max.interior.angle, angle spread / mean within square.max.angle.std of 90)
-  DOSTPLUS : exactly 2 holes, dostplus.hole.pair.distance.min..max apart; a DOST square found = NOT OK
+  DOSTPLUS : 2 holes dostplus.hole.pair.distance.min..max apart, opposite about the centre (the best pair
+             among the candidates); a DOST square found = NOT OK
 
 Pictures: <folder>/<MODEL>_*.jpg|png (MODEL = DOST or DOSTPLUS, from the file name; default folder: bunk_images next to
 this file). Each picture is checked

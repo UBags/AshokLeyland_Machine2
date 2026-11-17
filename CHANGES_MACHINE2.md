@@ -3621,3 +3621,72 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - `%CD%` no longer echoed inside parenthesised blocks (a `)` in the folder path would close the block early).
 - CRLF line ends kept. Not run here (no Windows `cmd` in the sandbox): checked by reading - labels, `if errorlevel` at
   run time inside blocks, no unescaped parentheses in the echoed texts.
+
+## 115. Bung check: holes found whatever the bung's angle; size filter before merging; seating by face oval (2026-11-17)
+
+- **User:** CheckBung sometimes NOT OK for well-placed correct bungs; turning the bung got it through. Asked for: inner
+  disc r125 (configurable), mask area 325-1300 (configurable), a denser point grid always instead of the sparse grid
+  "if fewer than 5 masks", size filter before merging, wrong bung only on a real 4-hole square, seating tolerance
+  15 -> 20 px, an accurate bung-face mask with an ellipse-fit test (98-102%) and a "part outside the defined oval"
+  test (> 2% rejected, configurable), a rotation test, one log line per gamma.
+- **Cause (code + measurements):** the holes were found only through YOLO box proposals. The fallback grid (one point
+  every 120 px over the 500 px crop, only when YOLO gave fewer than 5 masks) put 1 point in the r110 disc, on the bung
+  centre, and none on the hole ring (holes 40-66 px from the centre). A hole without a YOLO box was lost; YOLO's boxes
+  depend on the highlights, which move when the bung is turned. Made worse by: DOSTPLUS needing exactly 2 candidates;
+  4+ candidates when 2 expected ending the search as NOT OK; merging before the size filter; hole areas (670-1130 px)
+  close to the 1200 px limit.
+- **Grid step (user asked for 60 px):** measured with MobileSAM on the 60 pictures of 13 Nov, gamma 2.0, grid only
+  (no YOLO here): a 60 px grid over the crop has 13 points inside the disc and found 0-4 holes (all holes on 1 of the 23
+  seated bungs); a hole is about 36 px across, so a 60 px grid hits a given hole about 1 time in 4. A 15 px grid over
+  the inner disc (about 220 points, about 4 per hole) found all holes on all 23: 11 DOST 4-hole squares, 12 DOSTPLUS
+  pairs, and each NOT OK as the other model at gamma 2.0. Two cases on the 60 px grid (A01, A13) would have passed a
+  DOST bung as DOSTPLUS (two diagonal holes found, the diagonal is as long as the DOSTPLUS pair). So the step is
+  `vision.bunk.hole.grid.step` = 15 (both machines), not 60.
+- **BunkSegmenter (both bung checks):**
+  1. masks: YOLO boxes as before + one mask per point of the grid over the inner disc, always (decoded in batches of
+     32, masks outside min/max.mask.area dropped at once); the sparse grid code is kept, unused;
+  2. size filter before any merging (`_keep_masks_in_inner_disc`): each mask cut to the inner disc, 325-1300 px;
+  3. one mask per blob (`_one_mask_per_blob`): masks overlapping > 15% of the smaller form a blob; the mask found most
+     often (IoU > 0.5) is kept, never a union (a hole is not joined to a highlight); `_merge_overlapping_masks` kept,
+     unused;
+  4. shape filter as before (records why each component is dropped);
+  5. pattern (`_apply_cascade_geometric_validation`): 3 in a line -> middle dropped; >= 4 -> best square (definitive;
+     wrong bung only on a real square); 2 expected -> the pair 95-125 px apart whose midpoint is nearest the disc
+     centre, leaving out a pair that a third candidate makes into 3 corners of a square (3 of a DOST's 4 holes);
+     otherwise next gamma;
+  6. one INFO line per gamma: `[Bung] <model> gamma <g>: masks <n> YOLO + <n> grid (of <points> points every 15 px,
+     <n> masks outside 325-1300 px); part in r125 325-1300 px: <kept>, <too small>, <too large>; <n> blob(s); shape
+     filter dropped (x,y) <why>; candidates <n>: (x,y) d<px from the disc centre> a<area> ...; <decision>`.
+- **Seating (`check_bung_seating`):** face mask as before (MobileSAM at the hole-pattern centre, smallest mask of
+  radius 100-145 - on all 43 pictures with a hole pattern it was the top face); seated = all of: hole-pattern centre
+  <= `seating.hole.centre.offset.max` (siemens 15 -> 20); roundness as before; new: face area (holes filled) / fitted
+  ellipse area within `seating.ellipse.fit.area.ratio.min/max` 0.98-1.02; new: at most
+  `seating.outside.reference.oval.max` 2% of the face outside `seating.reference.oval.<model>` (cv2 rotated box
+  w,h,angle, centred on the seated position, so it follows the frame) = mean seated face + 3 px all round: DOST
+  241,249,122, DOSTPLUS 232,230,0. The reason text has all four values.
+- **Measured (13 Nov, 43 pictures with a hole pattern, production `check_bung_seating`):** 43/43 as labelled. Seated:
+  offset 0.3-9.9 px, fit 1.005-1.008, outside 0.0-0.7%. Not seated: offset 20.7-91.2, fit 0.986-1.008, outside
+  4.1-39.4%. So the ellipse fit checks that the mask is one clean oval, not the seating (a tilted face is an oval
+  too); the reference oval separates seated / not seated by itself (C14: 4.1%, offset 20.7, roundness 0.944 - caught
+  by all three).
+- **Properties (all three files in step):** siemens `bunk.inner.disc.radius` 110 -> 125, `bunk.max.mask.area` 1200 ->
+  1300, `bunk.seating.hole.centre.offset.max` 15 -> 20; new keys (both machines, Machine 1 = the Machine 2 values
+  until measured; Machine 1's seating check stays off): `bunk.hole.grid.step`, `bunk.seating.ellipse.fit.area.ratio.
+  min/max`, `bunk.seating.reference.oval.dost/.dostplus`, `bunk.seating.outside.reference.oval.max`.
+- **Reference commit 093a5fb** (new logic, values hard-coded); `baseline_per_file` of both manifests points at it,
+  the 6 extracted-literal lines moved; verifier ALL EQUIVALENT on both machines.
+- **New dry run `DryRun_Bung_Rotation.py`** (both folders): the 23 seated pictures turned about the seated centre in
+  15 degree steps through `CheckBunk.checkBunk`; the hole pattern must pass as the own model and fail as the other at
+  every angle; seating shown, not judged (the picture's light and the hub turn with it). `--no-yolo`, `--pictures`,
+  `--step`, `--own-only`, `--verbose`.
+- **Run here (CPU, no YOLO weights, so `--no-yolo`):** A01 (DOST) and B11 (DOSTPLUS) at 45 degree steps as the own
+  model and at 90 degree steps as the other model: hole patterns 24/24 as expected (all 4 / 2 holes at every angle;
+  NOT OK as the other model at every angle). The seating step said NOT SEATED for A01 at 180 and 225 degrees: face
+  roundness 0.946 / 0.940 < 0.952 (0.971 unturned) - the turned picture changes the face mask; not judged, but it
+  shows the DOST roundness minimum has little margin (seated 0.956-0.978 on the real pictures). Not changed (user's
+  setting); the reference oval now separates the 13 Nov pictures alone.
+  Verifier both ALL EQUIVALENT; DryRun_Vision_Check_Timeout 23/23 (Machine 2), 22/22 (Machine 1); DryRun_Knuckle_Frame
+  --quick 86/86.
+- **Not run here:** anything with YOLO (the real production mix of YOLO + grid), times on a GPU. On the laptop:
+  `DryRun_Bung_Rotation.py` (all 23, both models: 1104 checks) and `DryRun_Bunk_Check_UI.py`; on the plant PC: the
+  check time (about 220 point prompts per gamma) - `docs/plant-pc-verification.md` step 9.

@@ -226,9 +226,26 @@ guard was not applied). In the dry-run windows the check runs the guard itself (
 
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
 face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
-the cap centre. Bung (`vision.bunk.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 15 px from
-the model's seated position and the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS). Each uses its own
-`SamPredictor` per thread on the shared model.
+the cap centre. Bung (`vision.bunk.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
+oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
+(`seating.reference.oval.<model>`, centred on the seated position). Each uses its own `SamPredictor` per thread on the
+shared model.
+
+**Bung holes (`BunkSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
+definite answer), on the r250 disc round `bunk.outer.disc.center`:
+1. masks: one per YOLO box, plus one per point of a grid every `hole.grid.step` (15) px over the inner disc (r125),
+   always - decoded in batches of 32; masks outside `min/max.mask.area` (325-1300 px) dropped at once;
+2. size filter before any merging: each mask cut to the inner disc, kept if 325-1300 px remain;
+3. one mask per blob (masks overlapping > 15% of the smaller): the one found most often (IoU > 0.5 with others), never
+   a union - so a hole is not joined to a highlight next to it;
+4. shape filter (box 15-45 px, fill ≥ 40%);
+5. pattern: 3 in a line -> middle dropped; ≥ 4 -> best square (definitive: DOST OK, or wrong bung when 2 are expected
+   - decided only on a real square); 2 expected -> of the pairs 95-125 px apart, the one whose midpoint is nearest the
+   disc centre, leaving out a pair that a third candidate makes into 3 corners of a square (a DOST bung's diagonal is
+   as long as the DOSTPLUS pair); otherwise the next gamma.
+One INFO line per gamma, `[Bung] <model> gamma <g>: masks ... candidates n: (x,y) d<px from the disc centre> a<area>
+...; <decision>`, so a NOT OK can be traced from the log alone.
 
 **VisionCheckWorker** (`VisionCheckWorker.py`):
 
@@ -449,6 +466,7 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bunk_Check_UI` | The real check on a folder of pictures, shown one at a time |
+| `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |
 
