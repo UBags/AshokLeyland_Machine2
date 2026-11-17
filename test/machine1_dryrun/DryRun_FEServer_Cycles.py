@@ -375,6 +375,22 @@ def driver():
               len(CLEARS) == 1 and len(TILES) > n0 and state() == SEQUENCE[1][0], (len(CLEARS), TILES[n0:], state().name))
         run_steps(skip=1)
         check_full_record("F15b next component", take_record(), QR2)
+        # an abort: "Aborted" box at once, the tiles cleared after 0.75 s (not 5 s; user, 2026-11-17)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 10)
+        time.sleep(hold + 0.5)
+        TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear(); CLEARS.clear()
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps(upto=3)
+        assert wait_for(lambda: state() == SEQUENCE[3][0])
+        tAbort = time.time()
+        sendEmergencyAbortFromIOServerToFEServer(r)
+        shownAbort = wait_for(lambda: "showEmergencyAbort" in SCREENS, 3)
+        check("F15c emergency abort: 'Aborted' box at once (within 1.5 s)", shownAbort and time.time() - tAbort < 1.5,
+              f"{time.time() - tAbort:.2f} s")
+        take_record(timeout=3)
+        cleared = wait_for(lambda: CLEARS != [], 3)
+        tCleared = CLEARS[0] - tAbort if CLEARS else None
+        check("F15c ... the tiles cleared about 0.75 s later, not 5 s", cleared and tCleared <= 2.0, tCleared)
 
         # ---------------- F5 ----------------
         print("\n=== F5. Final free-rotation torque NOT OK ===", flush=True)

@@ -16,7 +16,9 @@ GET /data?db=&model=&aborts=&bypassed=&day_period=&week_period=&torque1_period=&
 GET /assets/...       bootstrap (endpoints/assets) and plotly.js (from the installed plotly package): the page needs no
                       internet access.
 
-Values not measured are stored as negative numbers (-1.0); they are left out of the torque charts. A record counts as
+Values not measured are stored as negative numbers (-1.0); they are left out of the torque charts. So are the torques
+of steps an aborted cycle never reached: the frontend records them as 0.0 with the placeholder time 1970-01-01
+(CHANGES 127; before, each aborted cycle put up to three 0.0 values into the torque charts). A record counts as
 OK when ok_notok_result is the configured OK value; an aborted cycle (aborted = true: emergency button on the machine
 or manual abort in the frontend) is counted as ABORTED, not as NOT OK, in the counts. Days and weeks are by created_on
 (the end of the cycle); weeks start on Monday. Started by OtherServices.py (startMIServer).
@@ -44,7 +46,10 @@ ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 GREEN, RED, BLUE, ORANGE, GREY, PURPLE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00", "#616161", "#6a1b9a"
 COLUMNS = ["created_on", "model_name", "ok_notok_result", "nut_tightening_torque_1", "nut_tightening_torque_2",
            "free_rotation_torque_1", "setting_tightening_torque1_setpoint", "setting_tightening_torque2_setpoint",
-           "remarks", "aborted", "abort_reason", "bypassed_press_and_tightening2"]
+           "remarks", "aborted", "abort_reason", "bypassed_press_and_tightening2",
+           "nut_tightening_torque_1_datetime", "nut_tightening_torque_2_datetime", "free_rotation_torque_1_datetime"]
+# a torque whose datetime is before this was never measured (the frontend's placeholder 1970-01-01 00:00:00)
+NOT_MEASURED_BEFORE = pd.Timestamp("1971-01-01")
 TORQUES = {  # key -> (column, title, setpoint column)
     "torque1": ("nut_tightening_torque_1", "Nut Tightening Torque 1", "setting_tightening_torque1_setpoint"),
     "torque2": ("nut_tightening_torque_2", "Nut Tightening Torque 2", "setting_tightening_torque2_setpoint"),
@@ -83,6 +88,11 @@ def loadFrame(database: str, now: datetime) -> pd.DataFrame:
     for column in COLUMNS[3:8]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame["aborted"] = frame["aborted"].fillna(False).astype(bool)
+    # torques of steps not reached (aborted cycle): 0.0 with the 1970 placeholder time -> not measured (NaN). A NULL
+    # time (bypassed torque 2 = -1.0, records from before the times were stored) is left to the "< 0" rule.
+    for column, *_ in TORQUES.values():
+        when = pd.to_datetime(frame[f"{column}_datetime"], errors="coerce")
+        frame.loc[when.notna() & (when < NOT_MEASURED_BEFORE), column] = float("nan")
     frame["bypassed"] = frame["bypassed_press_and_tightening2"].fillna(False).astype(bool)
     frame["ok"] = (frame["ok_notok_result"].fillna("") == DB.OK_VALUE) & ~frame["aborted"]
     frame["reworked"] = frame["remarks"].fillna("").str.contains("DUPLICATE", case=False)

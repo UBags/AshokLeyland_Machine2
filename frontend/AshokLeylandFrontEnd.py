@@ -223,6 +223,9 @@ class AshokLeylandFrontEnd(QMainWindow):
     finalResult: str = notok
 
     emergencyButtonPressed : bool = False
+    # an aborted cycle's tiles are cleared this soon after the "Aborted" box (as before CHANGES 123; user, 2026-11-17);
+    # a completed cycle's stay frontend.free.rotation.torque.display.sec (5 s)
+    ABORT_TILES_CLEAR_MSEC : int = 750
     abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
     # the frontend's abort (Ctrl+Alt+Z): password frontend.abort.password in the properties file, read at each use
 
@@ -1176,7 +1179,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         AshokLeylandFrontEnd.abortReason = "emergency button pressed on the machine"
         printYellow("About to call doFinalProcessing() from updateEmergencyAbortPressed()")
-        self.doFinalProcessing()
+        self.doFinalProcessing(clearTilesAfterMsec=AshokLeylandFrontEnd.ABORT_TILES_CLEAR_MSEC)
 
     def showAbortWhileWaitingForQRCode(self):
         """Emergency / manual abort while waiting for the QR code: the "Component Processing Aborted" screen (until the
@@ -1217,7 +1220,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         AshokLeylandFrontEnd.emergencyButtonPressed = True
         AshokLeylandFrontEnd.abortReason = "manual abort (Ctrl+Alt+Z) in the frontend"
         printYellow("About to call doFinalProcessing() from manualAbort()")
-        self.doFinalProcessing()
+        self.doFinalProcessing(clearTilesAfterMsec=AshokLeylandFrontEnd.ABORT_TILES_CLEAR_MSEC)
 
 # ********************************************
 
@@ -1567,7 +1570,8 @@ class AshokLeylandFrontEnd(QMainWindow):
         """End of a cycle (completed, or aborted). At once: the result box ("Component Successfully Done" / "Not
         Successfully Done" / "Aborted"), the record to the DB server, and the frontend back at the QR code. The
         tiles keep the finished cycle's values and pictures for clearTilesAfterMsec (default
-        frontend.free.rotation.torque.display.sec) and are cleared then - or earlier, when the next QR code comes.
+        frontend.free.rotation.torque.display.sec, 5 s; the aborts pass ABORT_TILES_CLEAR_MSEC, 0.75 s) and are cleared
+        then - or earlier, when the next QR code comes.
         Before CHANGES 123 the result box waited for the display time and came together with the clearing."""
         printYellow("Entered doFinalProcessing()")
         if self.currentComponentEndTime is None:

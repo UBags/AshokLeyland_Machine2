@@ -80,17 +80,31 @@ def seed():
                                              "manual abort (Ctrl+Alt+Z) in the frontend")) if aborted else None)
                     n += 1
                     bypassed = (not aborted) and n % 5 == 0     # component press + second tightening bypassed (2026-11-13)
+                    t1 = round(random.gauss(15.2, 0.25), 2) if random.random() > 0.08 else -1.0
+                    t2 = -1.0 if bypassed else round(random.gauss(19.1, 0.3), 2)
+                    rot = round(random.gauss(2.4, 0.15), 2)
+                    # each torque's time: measured -> the cycle's; bypassed torque 2 -> NULL; as the frontend records
+                    # an aborted cycle (CHANGES 127): steps not reached 0.0 with the placeholder 1970-01-01 00:00:00
+                    epoch = datetime(1970, 1, 1)
+                    w1, w2, wr = created, (None if bypassed else created), created
+                    if aborted:
+                        reached = n % 3                          # 0: before torque 1, 1: after torque 1, 2: after torque 2
+                        if reached < 1:
+                            t1, w1 = 0.0, epoch
+                        if reached < 2:
+                            t2, w2 = 0.0, epoch
+                        rot, wr = 0.0, epoch
                     cursor.execute(
                         f"INSERT INTO {TABLE} (qr_code, model_name, lhs_rhs, model_tonnage, nut_tightening_torque_1, "
                         f"nut_tightening_torque_2, free_rotation_torque_1, setting_tightening_torque1_setpoint, "
                         f"setting_tightening_torque2_setpoint, ok_notok_result, username, remarks, created_on, "
-                        f"aborted, abort_reason, bypassed_press_and_tightening2) "
-                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s, %s, %s, %s)",
-                        (f"{TAG}{n:05d}", random.choice(MODELS),
-                         round(random.gauss(15.2, 0.25), 2) if random.random() > 0.08 else -1.0,
-                         -1.0 if bypassed else round(random.gauss(19.1, 0.3), 2), round(random.gauss(2.4, 0.15), 2),
+                        f"aborted, abort_reason, bypassed_press_and_tightening2, nut_tightening_torque_1_datetime, "
+                        f"nut_tightening_torque_2_datetime, free_rotation_torque_1_datetime) "
+                        f"VALUES (%s, %s, 'LHS', '2.5T', %s, %s, %s, %s, 19.0, %s, 'admin', %s, %s, %s, %s, %s, %s, %s, %s)",
+                        (f"{TAG}{n:05d}", random.choice(MODELS), t1, t2, rot,
                          15.0 if day > 40 else 15.5, DB.OK_VALUE if ok else "NotOK",
-                         "DUPLICATE" if random.random() < 0.08 else "", created, aborted, reason, bypassed))
+                         "DUPLICATE" if random.random() < 0.08 else "", created, aborted, reason, bypassed,
+                         w1, w2, wr))
         c.commit()
     finally:
         c.close()
@@ -282,6 +296,9 @@ def bypassFilterChecks(B, M):
     check("dashboard page has the Bypassed selector", 'id="bypassed"' in requests.get(M + "/").text)
 
 
+UNREACHED_SEEN = []           # aborted cycles' 0.0 torques per model / chart (the seed must have some)
+
+
 def dashboardChecks(B):
     print("\n=== MI dashboard ===", flush=True)
     now = datetime.now()
@@ -329,15 +346,29 @@ def dashboardChecks(B):
         t1 = d["torque1"]
         start = today - timedelta(days=89)
         values = t1["data"][0]["x"] if t1["data"] else []
-        check(f"[{model}] torque 1, 90 days: {len(values)} measured values (the -1 'not measured' left out) = SQL",
-              len(values) == sqlCount("model_name = %s AND created_on >= %s AND nut_tightening_torque_1 >= 0",
-                                      (model, start)) and min(values) >= 0)
+        check(f"[{model}] torque 1, 90 days: {len(values)} measured values (the -1 'not measured' and an aborted "
+              f"cycle's 0.0 of a step not reached left out) = SQL",
+              len(values) == sqlCount("model_name = %s AND created_on >= %s AND nut_tightening_torque_1 >= 0 AND "
+                                      "(nut_tightening_torque_1_datetime IS NULL OR "
+                                      "nut_tightening_torque_1_datetime >= '1971-01-01')", (model, start))
+              and min(values) >= 0)
+        for key, column in (("torque1", "nut_tightening_torque_1"), ("torque2", "nut_tightening_torque_2"),
+                            ("rotation", "free_rotation_torque_1")):
+            r3 = requests.get(B + "/data", params={"db": "test", "model": model, f"{key}_period": "90_days"})
+            xs = r3.json()[key]["data"][0]["x"] if r3.ok and r3.json()[key]["data"] else []
+            unreached = sqlCount(f"model_name = %s AND created_on >= %s AND aborted AND {column} = 0 AND "
+                                 f"{column}_datetime < '1971-01-01'", (model, start))
+            check(f"[{model}] {key}, 90 days: the {unreached} aborted cycles' 0.0 (step not reached) not in the chart",
+                  0.0 not in xs and r3.ok, (unreached, min(xs) if xs else None))
+            UNREACHED_SEEN.append(unreached)
         setpoints = sorted(round(shape["x0"], 2) for shape in t1["layout"].get("shapes", []))
         check(f"[{model}] torque 1 setpoints in force drawn: {setpoints}", setpoints == [15.0, 15.5])
         start = today - timedelta(days=29)
         check(f"[{model}] re-assembled (DUPLICATE), 30 days = SQL",
               (sum(d["reworked_components"]["data"][0]["y"]) if d["reworked_components"]["data"] else 0) ==
               sqlCount("model_name = %s AND created_on >= %s AND remarks ILIKE %s", (model, start, "%DUPLICATE%")))
+    check("the seed has aborted cycles with torques of steps not reached (0.0, 1970)", sum(UNREACHED_SEEN) > 0,
+          UNREACHED_SEEN)
     r = requests.get(B + "/data", params={"db": "test", "model": "NO-SUCH-MODEL"})
     check("model without records: charts say 'no data'", r.ok and "no data" in r.json()["torque2"]["layout"]["title"]["text"])
     check("unknown database -> HTTP 400", requests.get(B + "/data", params={"db": "postgres"}).status_code == 400)

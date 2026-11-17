@@ -3901,3 +3901,24 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   bung also fails the offset and the oval. The test prints roundness without judging it.
 - Needs a rebuilt exe (code change).
 
+## 127. Aborts clear the tiles after 0.75 s again; MI torque charts leave out an aborted cycle's unreached torques (2026-11-17)
+
+- **Aborts (user, on CHANGES 123):** the "Aborted" box still comes at once, but an aborted cycle's tiles are cleared
+  after 0.75 s again (`AshokLeylandFrontEnd.ABORT_TILES_CLEAR_MSEC` = 750, passed by both abort paths - emergency
+  button and Ctrl+Alt+Z); a completed cycle's stay 5 s. Frontend dry run (both copies) new F15c: box 0.50 s after the
+  emergency message, tiles cleared 1.23 s after it (the emergency worker polls every second, then 0.75 s).
+- **MI dashboard review (user: anything to change for the DB changes since it was last touched, §94):**
+  - The only schema change since is CHANGES 125 (9 bung columns renamed). The dashboard reads none of them; the web
+    service exports `Persistence.all_columns_record_header`, so its JSON / CSV follow the new names by themselves.
+    **For anyone consuming the web service:** the 9 field names changed (`check_bunk_*` / `check_no_bunk_*` ->
+    `check_bung_*` / `check_no_bung_*`); nothing in this repo reads them by the old names.
+  - **Found, fixed:** the torque charts kept every value >= 0, so each aborted cycle put up to three 0.0 values into
+    them - the frontend records a step not reached with torque 0.0 and the placeholder time 1970-01-01 (CHANGES 90).
+    `AshokLeyland_MI_Light.loadFrame` now reads the three torques' `_datetime` columns and treats a torque whose time
+    is before 1971 as not measured; -1.0 (not measured, bypassed torque 2) stays out as before; NULL times (bypassed,
+    older records) are left to that rule. Counts, summary and the other tabs unchanged.
+  - `DryRun_Endpoints.py` (both copies): the seeded aborted cycles now look like real ones (steps not reached 0.0 /
+    1970; reached and normal torques carry the cycle's time); torque 1 count = SQL with that rule; per model and chart,
+    no 0.0 of an unreached step drawn. 98/98 both copies; with the old dashboard 94/98 (the 0.0 values drawn).
+- Frontend dry run 167/167. Needs a rebuilt exe; the MI dashboard (`OtherServices.py`) needs a restart.
+
