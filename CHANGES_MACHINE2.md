@@ -3736,4 +3736,9 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   reference oval centred on its seated position (yellow, 3 px) and the hole-pattern centre (blue cross, 30 px, 4 px
   thick), beside the face outline (green / red). Shapes only, no text. Not in BunkSegmenter, so no reference commit.
 - Run: the helper on a blank picture (oval and cross drawn; CheckNoCapBunk uses the same function). Nothing else run.
+- **Follow-up (user: a picture with 4 holes showed neither mark):** the marks were drawn only when the seating step
+  ran, and seating runs only after the hole pattern passed for the model checked - so not for a DOST bung checked as
+  DOSTPLUS (4 holes, wrong bung), nor when no pattern was found. Now the reference oval is drawn on every bung
+  picture, and the hole-pattern centre whenever holes were found (from the holes of the deciding gamma). Checked:
+  A01 (DOST) checked as DOSTPLUS - NOT OK, oval and cross on the picture.
 

@@ -341,8 +341,10 @@ class CheckBunk:
                         if seating is not None and seating.get("face_contour") is not None:
                             cv2.drawContours(result_image, [seating["face_contour"]], -1,
                                              (0, 255, 0) if success else (255, 0, 0), 2)
-                        if seating is not None:
-                            drawSeatingMarks(result_image, seating, model)
+                        # Always (holes passed or not, seating run or not): the reference oval, and the hole-pattern
+                        # centre of the holes found
+                        drawSeatingMarks(result_image, seating if seating is not None else
+                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckBunk] Painted {len(components)} masks on image", MessageType.GENERAL)
@@ -361,7 +363,9 @@ class CheckBunk:
                 if PRINT_SUCCESS_EVALUATION:
                     logBoth('logError', _src, f"[CheckBunk] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
-                result_bgr = cv2.cvtColor(anImage_rgb, cv2.COLOR_RGB2BGR)
+                no_pattern = anImage_rgb.copy()
+                drawSeatingMarks(no_pattern, {}, model)          # the reference oval only (no hole pattern)
+                result_bgr = cv2.cvtColor(no_pattern, cv2.COLOR_RGB2BGR)
                 return _maybe_crop(result_bgr), False, None
 
         except Exception as e:
