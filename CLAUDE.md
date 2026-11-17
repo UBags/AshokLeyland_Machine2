@@ -83,6 +83,10 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   most set `COSTHETA_PLC_VENDOR` from their folder name; `DryRun_Vision_Check_Timeout.py` and
   `DryRun_IOServer_Fault_Scenarios.py` on Machine 1 do not - run them with `COSTHETA_PLC_VENDOR=allenbradley`, else
   they run as Siemens).
+- "Bung", not "bunk", everywhere (CHANGES 125). The only "Bunk" left on purpose: the PLC's own tag names (values of
+  the 9 `*.tagname` keys, the keys of `IOServerProperties.yaml`, their defaults in `Configuration.py`), the legacy
+  `IOServer_ModbusTCP.py`, `archive/`, and the history in `CHANGES_MACHINE2.md` before §125. Old `bunk` properties keys
+  are still read (`_addLegacyBungKeys`); old `bunk` DB columns are renamed at start-up.
 - PLC tag prefixes `PC_PLC_` / `PLC_PC_` show the main writer, not exclusive ownership. The handshake (`docs/PLC_Interface_Spec.md`) is fixed by
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
@@ -139,8 +143,8 @@ No per-check times were recorded with the report; when they are, put them in the
   `*`; to convert more later, re-run the tool on a copy (its docstring has the steps).
 - **Machine 1 vision values for the segmentation knuckle method**: need Machine 1 pictures (knuckles of each type /
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
-- PLC programmer: addresses for `PC_PLC_CycleAborted` and `PC_PLC_Skip_Second_Tightening` (optional tags, not
-  written until they exist).
+- PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
+  `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

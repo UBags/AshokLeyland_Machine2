@@ -3859,3 +3859,45 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   test, not in the rename; passed on the rerun).
 - Needs a rebuilt exe and the new properties file (both in the new `MainProgram.dist`).
 
+## 126. Camera movement: every check follows the knuckle frame (audit); the bung reference ovals now follow its zoom and turn (2026-11-17)
+
+- **User:** make sure every vision check is placed relative to the knuckle (slight camera movement), especially the
+  bungs after CHANGES 115-120.
+- **Audit (code):** every absolute position a Machine 2 check uses is one of the frame's 18 targets and is read at call
+  time: hub segmentation centre (+ the segmenter instance's `annular_center`), hub centre check, top bearing ring, nut /
+  washer, no-bung nut, bung disc centre (`OUTER_DISC_CENTER`), both bung seated positions, cap. Everything else is
+  relative to those (the bung hole grid and inner disc in the disc crop; the hole-pattern centre, the seating offset and
+  the reference oval centred on the placed seated position; `drawSeatingMarks` reads the module at draw time;
+  `CheckBung` / `CheckNoCapBung` hold the module, not copies; the nut reference centre is in crop coordinates; the
+  top bearing offsets are relative). The frame is applied in the worker process before every check (`restoreState` and
+  `assessPictures`), kept only with a knuckle OK (OK needs a frame), dropped at cycle end, abort and knuckle retake.
+  The properties are in step: CHANGES 117 / 120 moved both the plain bung keys and the `frame.centre.bung.*` keys
+  (disc 643,334 = the mean of 642.5,331.5 / 643.5,336.5; seated 646,325 / 647,335), and each plain centre is the mean
+  of its two per-type frame centres.
+- **The one gap: sizes.** The frame moves centres but scaled nothing ("radii not changed", scale within 0.1 % on the 13
+  Nov pictures), while it accepts up to 5 % zoom and 3 deg. Hole areas, spacing and radii have wide bands, but the
+  bung seating oval does not: seated faces read up to 3.9 % outside it against the 6 % limit. Measured here (B12, a
+  seated DOSTPLUS, outside 4.4 % as taken): 2 % zoom -> 6.0 %, 3 % zoom -> 7.3 % = NOT OK with an unscaled oval.
+- **Fix** (`camera/VisionFrame.py`): `_OVAL_TARGETS` + `placeOval` - with a frame, `SEATING_REFERENCE_OVAL_DOST /
+  DOSTPLUS` = (width x scale, height x scale, angle + rotation) from the properties values; without one, the
+  properties values (a stale value can never compound: the base is always the registry's). Reference commit `2376cf9`
+  (= 0ff5470's VisionFrame with this logic), manifests updated; verifier ALL EQUIVALENT (both).
+- **Runs:**
+  - `DryRun_Knuckle_Frame.py --quick` (CPU, MobileSAM from ChaoningZhang/MobileSAM): A-C 82/83 - every knuckle OK
+    only with its own QR code, empty fixtures NOT OK, centres within 2.5 px of the references, camera moves placed
+    within 1.13 px worst, 55 px move NOT OK; the one FAIL was the sandbox missing `ffmpeg-python` for the
+    camera-server part; after installing it, part D 14/14 including two new checks (ovals follow the frame's zoom and
+    turn; without a frame the properties ovals come back). 7.6 s median per knuckle check on CPU.
+  - Oval unit check (no SAM): 5 frames (none; 15 / -10 px; -12 / 8 px + 1.5 deg; 3 % zoom; 5 / 5 px - 2 deg x0.98):
+    ovals exact, disc and seated centres placed; applying the same frame twice does not compound; no frame -> properties.
+  - **New `DryRun_Bung_Frame.py`** (both folders; `--no-yolo` here, no YOLO weights in the sandbox): B12 (seated
+    DOSTPLUS), A08 (seated DOST), C05 (DOSTPLUS not seated) as taken and moved (15 / -10 px; -12 / 8 px with 1.5 deg;
+    3 % zoom), frame from the pins moved the same way: **30/30** - same verdict every time, hole-pattern centre where
+    the move puts it (0.0-0.5 px), seating offset within 1.2 px, outside the oval within 0.5 points (B12 4.4 % at 3 %
+    zoom, unchanged). `--fixed-ovals` (the behaviour before this change) on B12: 3 % zoom NOT OK (7.3 %).
+- **Seen, not changed:** MobileSAM's top-face mask is not translation-invariant: the face roundness moved by up to
+  0.056 for a few pixels of camera shift (C05 0.896 -> 0.952, B12 0.995 -> 0.964), with nothing else changing. The
+  roundness test (limit 0.925) is the least stable of the four seating tests; the verdicts held because a not-seated
+  bung also fails the offset and the oval. The test prints roundness without judging it.
+- Needs a rebuilt exe (code change).
+

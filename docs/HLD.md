@@ -126,7 +126,9 @@ runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `
 
 **Frame (Machine 2, `camera/VisionFrame.py`).** From the two pins the knuckle check works out the camera's shift,
 rotation and zoom against the reference position (13 Nov 2026), and places every later check's centre (hub, top
-bearing, nut, no-bung, bung, cap) for this cycle, per type (DOST / DOSTPLUS). A camera movement over
+bearing, nut, no-bung, bung disc and seated positions, cap) for this cycle, per type (DOST / DOSTPLUS); the bung
+seating reference ovals are also scaled by the zoom and turned with the camera (CHANGES §126). Every other size stays
+as set. A camera movement over
 `vision.knuckle.frame.max.*` (40 px, 3°, 5 %) makes the knuckle check NOT OK ("set the camera again"). Without a frame
 (Machine 1, or the regions knuckle method) the centres in the properties file are used. A camera server restarted
 by the supervisor during a cycle takes the frame back from its state file (§6). The frame is

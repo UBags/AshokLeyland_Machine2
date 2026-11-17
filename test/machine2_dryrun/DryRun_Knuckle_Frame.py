@@ -217,6 +217,12 @@ def main():
     want = VisionFrame.placedCentres(frame)
     check("with the frame of a moved camera every check holds the placed centre", now == want,
           {n: (now[n], want[n]) for n in now if now[n] != want[n]})
+    # CHANGES 126: the bung reference ovals are scaled by the frame's zoom and turned by its rotation
+    ovalProps = {t: tuple(registry[f"vision.bung.seating.reference.oval.{t}"]["value"]) for t in ("dost", "dostplus")}
+    ovalNow = {"dost": tuple(BS.SEATING_REFERENCE_OVAL_DOST), "dostplus": tuple(BS.SEATING_REFERENCE_OVAL_DOSTPLUS)}
+    ovalWant = {t: VisionFrame.placeOval(frame, ovalProps[t]) for t in ovalProps}
+    check(f"with the frame the bung reference ovals follow the zoom ({frame['scale']:.4f}) and turn "
+          f"({frame['rotation']:+.2f} deg)", ovalNow == ovalWant, (ovalNow, ovalWant))
 
     class FakeSegmenter:          # the hub segmenter's single instance keeps its own copy of the centre
         annular_center = (0, 0)
@@ -229,6 +235,9 @@ def main():
     VisionFrame.applyToChecks(None)
     check("without a frame the properties values come back", read() == before and
           tuple(fake.annular_center) == props("hub.segment.center"), (read(), fake.annular_center))
+    check("without a frame the bung reference ovals are the properties values again",
+          (tuple(BS.SEATING_REFERENCE_OVAL_DOST), tuple(BS.SEATING_REFERENCE_OVAL_DOSTPLUS)) ==
+          (ovalProps["dost"], ovalProps["dostplus"]))
     HB.HubAndBearingSegmenter._instance = saved
 
     # camera server state: frame kept as cycle state, dropped at the end of a cycle and at a knuckle retake

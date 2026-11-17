@@ -10,7 +10,7 @@
     "camera/BungSegmenter.py": "0ff5470",
     "camera/HubAndBearingSegmenter.py": "3d91a76",
     "camera/KnuckleLocator.py": "f3aa0ed",
-    "camera/VisionFrame.py": "0ff5470",
+    "camera/VisionFrame.py": "2376cf9",
     "camera/CheckNoBung.py": "0ff5470"
   },
   "extracted": {
