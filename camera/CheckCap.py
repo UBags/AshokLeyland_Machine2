@@ -37,7 +37,6 @@ import glob
 import os
 import threading
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple, vBool
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -83,46 +82,62 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = 30.0
+    DELTA_THRESHOLD_TOP_DOST = 30.0
+    DELTA_THRESHOLD_NUT_DOST = 35.0
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
+    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
-    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
+    SILVER_BRIGHTNESS_RADIUS = 25
+    SILVER_BRIGHTNESS_MIN = 0.0
 
     # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
-    SEATING_CHECK = vBool("vision.cap.seating.check", False)
-    SEATING_BRASS_RADIUS_MIN = vFloat("vision.cap.seating.brass.radius.min", 75.0)    # brass cap face mask
-    SEATING_BRASS_RADIUS_MAX = vFloat("vision.cap.seating.brass.radius.max", 95.0)
-    SEATING_BORE_RADIUS_MIN = vFloat("vision.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
-    SEATING_BORE_RADIUS_MAX = vFloat("vision.cap.seating.bore.radius.max", 120.0)
-    SEATING_SILVER_RADIUS_MIN = vFloat("vision.cap.seating.silver.radius.min", 95.0)  # silver cap outline mask
-    SEATING_SILVER_RADIUS_MAX = vFloat("vision.cap.seating.silver.radius.max", 112.0)
-    SEATING_BRASS_OFFSET_MAX = vFloat("vision.cap.seating.brass.offset.max", 9.0)     # cap centre to bore centre
-    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.cap.seating.silver.face.offset.max", 9.0)  # face to outline
-    SEATING_FACE_BOX_SCALE = vFloat("vision.cap.seating.face.box.scale", 0.8)
+    SEATING_CHECK = False
+    SEATING_BRASS_RADIUS_MIN = 75.0    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = 95.0
+    SEATING_BORE_RADIUS_MIN = 104.0     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = 120.0
+    SEATING_SILVER_RADIUS_MIN = 95.0  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = 112.0
+    SEATING_BRASS_OFFSET_MAX = 9.0     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = 9.0  # face to outline
+    SEATING_FACE_BOX_SCALE = 0.8
     # silver: the cap outline centre within this of CENTER (a cap pushed right off the bore); 0 = not checked
-    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.cap.seating.silver.outline.offset.max", 0.0)
+    SEATING_SILVER_OUTLINE_OFFSET_MAX = 0.0
     # brass seating by fitted circles (CHANGES 128)
-    SEATING_BRASS_EDGE_BAND = vTuple("vision.cap.seating.brass.edge.band", (55, 112))    # radii searched for the brass cap's edge (brass -> not brass)
-    SEATING_BORE_EDGE_BAND = vTuple("vision.cap.seating.bore.edge.band", (106, 140))    # radii searched for the bore's edge round a brass cap
-    SEATING_CIRCLE_FIT_TOLERANCE = vFloat("vision.cap.seating.circle.fit.tolerance", 2.0)    # px; an edge point within this of the circle counts as on it
-    SEATING_BRASS_FIT_MIN = vFloat("vision.cap.seating.brass.fit.min", 0.5)    # share of the angles whose cap edge is on the fitted circle
-    SEATING_BORE_FIT_MIN = vFloat("vision.cap.seating.bore.fit.min", 0.3)    # share of the angles whose bore edge is on the fitted circle
+    SEATING_BRASS_EDGE_BAND = (55, 112)    # radii searched for the brass cap's edge (brass -> not brass)
+    SEATING_BORE_EDGE_BAND = (106, 140)    # radii searched for the bore's edge round a brass cap
+    SEATING_CIRCLE_FIT_TOLERANCE = 2.0    # px; an edge point within this of the circle counts as on it
+    SEATING_BRASS_FIT_MIN = 0.5    # share of the angles whose cap edge is on the fitted circle
+    SEATING_BORE_FIT_MIN = 0.3    # share of the angles whose bore edge is on the fitted circle
+    # silver seating by two rules (CHANGES 129). Rule 1: no part of the hub centre may be left uncovered - the hub circle
+    # comes from this cycle's hub + bottom bearing picture (MobileSAM, ring of points round CENTER plus a box).
+    SEATING_HUB_RING_RADIUS = 95    # px; radius of the ring of prompt points
+    SEATING_HUB_BOX_HALF = 125    # px; half side of the prompt box
+    SEATING_HUB_RADIUS_MIN = 100.0    # hub circle radius accepted
+    SEATING_HUB_RADIUS_MAX = 125.0
+    SEATING_HUB_CENTRE_INSET = 12.0    # px; hub centre = hub circle less this
+    SEATING_HUB_DARK_LEVEL = 60    # HSV value below this = uncovered (dark) hub
+    SEATING_HUB_DARK_OPEN = 9    # px; dark parts narrower than this are shadow
+    SEATING_HUB_VISIBLE_MAX = 400    # px; uncovered hub centre allowed
+    # Rule 2: the cap's top face must still be one circle (a tilted cap shows its side wall on one side and the face
+    # edge stops lying on one circle). Face edge per angle: strongest fall of brightness outward between band.min and
+    # the cap outline radius less edge.margin, round the cap outline centre; share of the angles on the fitted circle.
+    SEATING_SILVER_FACE_BAND_MIN = 60
+    SEATING_SILVER_FACE_EDGE_MARGIN = 6
+    SEATING_SILVER_FACE_FIT_MIN = 0.64
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}
@@ -316,11 +331,83 @@ class CheckCap:
             bore = None
         return cap, bore
 
+    # ---- silver cap seating (CHANGES 129) ----------------------------------------------------------------------------
+    # The silver cap is wider than the hub centre, so a seated cap covers it completely (rule 1), and a seated cap's top
+    # face projects as one circle (rule 2). The earlier test (top face centre to outline centre <= 9 px, MobileSAM face
+    # mask) rejected seated 17 Nov caps: the embossed face gives ragged masks, and the face of a seated cap already sits
+    # about 8 px from the outline centre (camera angle) - see silverFaceBySegmenter, kept.
     @staticmethod
-    def checkSeating(anImage: np.ndarray, cap_found: str) -> Dict:
-        """Step 4. Returns dict(seated, offset, limit, reason, cap, bore, face) - contours for the marked picture."""
+    def hubCircle(hubImage: np.ndarray):
+        """The hub circle in the hub + bottom bearing picture: dict(cx, cy, radius, ratio, area, contour) or None."""
         import torch
-        result = dict(seated=False, offset=None, limit=None, reason="", cap=None, bore=None, face=None)
+        cx, cy = float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])
+        a = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+        rr, h = float(CheckCap.SEATING_HUB_RING_RADIUS), float(CheckCap.SEATING_HUB_BOX_HALF)
+        points = np.c_[cx + rr * np.cos(a), cy + rr * np.sin(a)].astype(np.float32)
+        predictor = CheckCap._sam_predictor()
+        predictor.set_image(cv2.cvtColor(hubImage, cv2.COLOR_BGR2RGB))
+        with torch.inference_mode():
+            masks, _, _ = predictor.predict(point_coords=points, point_labels=np.ones(len(points)),
+                                            box=np.array([cx - h, cy - h, cx + h, cy + h], dtype=np.float32),
+                                            multimask_output=True)
+        fits = [f for f in (CheckCap._ellipse_of(m) for m in masks) if f is not None and
+                CheckCap.SEATING_HUB_RADIUS_MIN <= f["radius"] <= CheckCap.SEATING_HUB_RADIUS_MAX]
+        return max(fits, key=lambda f: f["ratio"]) if fits else None
+
+    @staticmethod
+    def hubCentreVisible(anImage: np.ndarray, capMask: np.ndarray, hub: Dict) -> int:
+        """Pixels of the hub centre (hub circle less the inset) that are dark in the cap picture and not under the cap
+        mask, after removing dark parts narrower than hub.dark.open (the shadow line round a seated cap)."""
+        h, w = anImage.shape[:2]
+        disc = np.zeros((h, w), np.uint8)
+        cv2.circle(disc, (int(round(hub["cx"])), int(round(hub["cy"]))),
+                   max(int(round(hub["radius"] - CheckCap.SEATING_HUB_CENTRE_INSET)), 1), 1, -1)
+        cap = cv2.dilate(capMask.astype(np.uint8), np.ones((5, 5), np.uint8))
+        value = cv2.cvtColor(anImage, cv2.COLOR_BGR2HSV)[:, :, 2]
+        dark = ((value < CheckCap.SEATING_HUB_DARK_LEVEL) & (disc > 0) & (cap == 0)).astype(np.uint8)
+        k = max(int(CheckCap.SEATING_HUB_DARK_OPEN), 1)
+        dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+        return int(dark.sum())
+
+    @staticmethod
+    def silverFaceCircle(anImage: np.ndarray, cap: Dict):
+        """Circle fitted to the silver cap's top-face edge round the cap outline centre: dict(cx, cy, radius, fit,
+        contour) or None. fit = share of the 360 angles whose face edge is on the circle."""
+        cx, cy = float(cap["cx"]), float(cap["cy"])
+        value = cv2.GaussianBlur(cv2.cvtColor(anImage, cv2.COLOR_BGR2HSV)[:, :, 2].astype(np.float32), (5, 5), 0)
+        polar = cv2.warpPolar(value, (CheckCap._POLAR_RADIUS, CheckCap._POLAR_ANGLES), (cx, cy),
+                              CheckCap._POLAR_RADIUS, cv2.WARP_POLAR_LINEAR)
+        fall = polar[:, :-2] - polar[:, 2:]
+        low = int(CheckCap.SEATING_SILVER_FACE_BAND_MIN)
+        high = min(int(cap["radius"]) - int(CheckCap.SEATING_SILVER_FACE_EDGE_MARGIN), fall.shape[1])
+        if high - low < 5:
+            return None
+        r = (fall[:, low:high].argmax(1) + low + 1).astype(np.float64)
+        angle = np.deg2rad(np.arange(polar.shape[0]) * 360.0 / polar.shape[0])
+        return CheckCap._fitCircle(np.c_[cx + r * np.cos(angle), cy + r * np.sin(angle)],
+                                   float(CheckCap.SEATING_CIRCLE_FIT_TOLERANCE))
+
+    @staticmethod
+    def silverFaceBySegmenter(predictor, cap: Dict):
+        """The silver cap's top face by MobileSAM (box prompt inside the outline; the test before CHANGES 129):
+        dict(cx, cy, radius, ratio, area, contour) or None. Needs predictor.set_image(cap picture) done."""
+        import torch
+        r = cap["radius"] * CheckCap.SEATING_FACE_BOX_SCALE
+        box = np.array([cap["cx"] - r, cap["cy"] - r, cap["cx"] + r, cap["cy"] + r], dtype=np.float32)
+        with torch.inference_mode():
+            masks, _, _ = predictor.predict(point_coords=np.array([[cap["cx"], cap["cy"]]], dtype=np.float32),
+                                            point_labels=np.array([1]), box=box, multimask_output=True)
+        faces = [f for f in (CheckCap._ellipse_of(m) for m in masks) if f is not None]
+        return min(faces, key=lambda f: f["area"]) if faces else None
+
+    @staticmethod
+    def checkSeating(anImage: np.ndarray, cap_found: str, hubImage: np.ndarray | None = None) -> Dict:
+        """Step 4. Returns dict(seated, offset, limit, reason, cap, bore, face, hub; silver also fit, fit_min, hub_visible)
+        - contours for the marked picture. Brass: offset = cap centre to bore centre, limit its maximum. Silver: fit = share
+        of the top-face edge on one circle (fit_min its minimum), offset = face centre to outline centre (logged only).
+        hubImage: this cycle's hub + bottom bearing picture (silver rule 1; without it rule 1 is not applied)."""
+        import torch
+        result = dict(seated=False, offset=None, limit=None, reason="", cap=None, bore=None, face=None, hub=None)
         if cap_found == DOSTPLUS:
             # brass: circles fitted to the cap edge and the bore edge (CHANGES 128; no MobileSAM)
             cap, bore = CheckCap.brassCapAndBore(anImage)
@@ -330,36 +417,50 @@ class CheckCap:
                     "" if cap is not None else " (cap)") + ("" if bore is not None else " (bore)")
                 return result
             offset = float(np.hypot(cap["cx"] - bore["cx"], cap["cy"] - bore["cy"]))
-            what = "cap centre to bore centre"
+            result["offset"] = offset
+            result["seated"] = offset <= result["limit"]
+            result["reason"] = f"cap centre to bore centre {offset:.1f} px {'<=' if result['seated'] else '>'} {result['limit']}"
+            return result
+        # silver (CHANGES 129): the cap outline (MobileSAM, point at CENTER), then rule 2 and rule 1
+        predictor = CheckCap._sam_predictor()
+        predictor.set_image(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB))
+        centre = np.array([[float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])]], dtype=np.float32)
+        with torch.inference_mode():
+            masks, _, _ = predictor.predict(point_coords=centre, point_labels=np.array([1]), multimask_output=True)
+        fits = [CheckCap._ellipse_of(m) for m in masks]
+        cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_SILVER_RADIUS_MIN, CheckCap.SEATING_SILVER_RADIUS_MAX)
+        result.update(cap=cap, fit=None, fit_min=CheckCap.SEATING_SILVER_FACE_FIT_MIN)
+        if cap is None:
+            result["reason"] = "silver cap outline not found by the segmenter"
+            return result
+        capMask = masks[next(i for i, f in enumerate(fits) if f is cap)]
+        face = CheckCap.silverFaceCircle(anImage, cap)
+        result["face"] = face
+        fit = face["fit"] if face is not None else 0.0
+        result["fit"] = fit
+        if face is not None:    # informative only (a seated cap's face already sits ~8 px from the outline centre)
+            result["offset"] = float(np.hypot(face["cx"] - cap["cx"], face["cy"] - cap["cy"]))
+        face_ok = fit >= CheckCap.SEATING_SILVER_FACE_FIT_MIN
+        reasons = [f"top face edge on one circle {fit:.2f} {'>=' if face_ok else '<'} {CheckCap.SEATING_SILVER_FACE_FIT_MIN}"
+                   + ("" if face is None else f" (face r {face['radius']:.1f}, {result['offset']:.1f} px from outline centre)")]
+        hub_ok = True
+        if hubImage is None:
+            reasons.append("hub centre not checked (no hub picture)")
         else:
-            predictor = CheckCap._sam_predictor()
-            predictor.set_image(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB))
-            centre = np.array([[float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])]], dtype=np.float32)
-            with torch.inference_mode():
-                masks, _, _ = predictor.predict(point_coords=centre, point_labels=np.array([1]), multimask_output=True)
-            fits = [CheckCap._ellipse_of(m) for m in masks]
-            cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_SILVER_RADIUS_MIN, CheckCap.SEATING_SILVER_RADIUS_MAX)
-            result.update(cap=cap, limit=CheckCap.SEATING_SILVER_FACE_OFFSET_MAX)
-            if cap is None:
-                result["reason"] = "silver cap outline not found by the segmenter"
-                return result
-            r = cap["radius"] * CheckCap.SEATING_FACE_BOX_SCALE
-            box = np.array([cap["cx"] - r, cap["cy"] - r, cap["cx"] + r, cap["cy"] + r], dtype=np.float32)
-            with torch.inference_mode():
-                masks, _, _ = predictor.predict(point_coords=np.array([[cap["cx"], cap["cy"]]], dtype=np.float32),
-                                                point_labels=np.array([1]), box=box, multimask_output=True)
-            faces = [f for f in (CheckCap._ellipse_of(m) for m in masks) if f is not None]
-            face = min(faces, key=lambda f: f["area"]) if faces else None
-            result["face"] = face
-            if face is None:
-                result["reason"] = "silver cap top face not found by the segmenter"
-                return result
-            offset = float(np.hypot(face["cx"] - cap["cx"], face["cy"] - cap["cy"]))
-            what = "top face centre to cap outline centre"
-        result["offset"] = offset
-        result["seated"] = offset <= result["limit"]
-        result["reason"] = f"{what} {offset:.1f} px {'<=' if result['seated'] else '>'} {result['limit']}"
-        if cap_found != DOSTPLUS and CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX > 0:
+            hub = CheckCap.hubCircle(hubImage)
+            result["hub"] = hub
+            if hub is None:
+                reasons.append("hub centre not checked (hub circle not found in the hub picture)")
+            else:
+                visible = CheckCap.hubCentreVisible(anImage, capMask, hub)
+                result["hub_visible"] = visible
+                hub_ok = visible <= CheckCap.SEATING_HUB_VISIBLE_MAX
+                reasons.append(f"hub centre uncovered {visible} px {'<=' if hub_ok else '>'} "
+                               f"{CheckCap.SEATING_HUB_VISIBLE_MAX} (hub r {hub['radius']:.1f}, cap outline "
+                               f"{np.hypot(cap['cx'] - hub['cx'], cap['cy'] - hub['cy']):.1f} px from hub centre)")
+        result["seated"] = face_ok and hub_ok
+        result["reason"] = "; ".join(reasons)
+        if CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX > 0:
             outline = float(np.hypot(cap["cx"] - float(CheckCap.CENTER[0]), cap["cy"] - float(CheckCap.CENTER[1])))
             outline_ok = outline <= CheckCap.SEATING_SILVER_OUTLINE_OFFSET_MAX
             result["outline_offset"] = outline
@@ -381,7 +482,8 @@ class CheckCap:
                                 seating: Dict | None = None) -> np.ndarray:
         """The picture for the frontend: shapes only, no text or values (those are logged - checkCap's summary line).
         Comparison circle (green = cap OK, red = NOT OK), silver brightness circle (cyan, thin); with the seating step:
-        the bore round a brass cap (blue), the cap (green = seated, red = not seated), a silver cap's top face (yellow)."""
+        the bore round a brass cap or the hub circle from the hub picture round a silver cap (blue), the cap (green =
+        seated, red = not seated), a silver cap's top-face circle (yellow)."""
         annotated = image.copy()
         centre = (int(CheckCap.CENTER[0]), int(CheckCap.CENTER[1]))
         color = (0, 255, 0) if is_cap_present else (0, 0, 255)
@@ -389,7 +491,7 @@ class CheckCap:
         cv2.circle(annotated, centre, int(CheckCap.SILVER_BRIGHTNESS_RADIUS), (255, 255, 0), 1)
         if seating is not None:
             seat_color = (0, 255, 0) if seating["seated"] else (0, 0, 255)
-            for key, col in (("bore", (255, 128, 0)), ("cap", seat_color), ("face", (0, 255, 255))):
+            for key, col in (("bore", (255, 128, 0)), ("hub", (255, 128, 0)), ("cap", seat_color), ("face", (0, 255, 255))):
                 if seating.get(key) is not None:
                     cv2.drawContours(annotated, [seating[key]["contour"]], -1, col, 2)
         return annotated
@@ -555,11 +657,11 @@ class CheckCap:
             seated = True
             if CheckCap.SEATING_CHECK and runSeating and right_cap and step1_passed:
                 try:
-                    seating = CheckCap.checkSeating(anImage, cap_found)
+                    seating = CheckCap.checkSeating(anImage, cap_found, hub_bottom_bearing_image)
                     seated = seating["seated"]
                 except Exception as e:
                     seated = False
-                    seating = dict(seated=False, offset=None, limit=None, cap=None, bore=None, face=None,
+                    seating = dict(seated=False, offset=None, limit=None, cap=None, bore=None, face=None, hub=None,
                                    reason=f"segmenter error: {e}")
                 logBoth('logInfo' if seated else 'logError', _src,
                         f"CheckCap seating: {'SEATED' if seated else 'NOT SEATED'} - {seating['reason']}",
