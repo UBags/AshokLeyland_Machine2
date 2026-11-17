@@ -3758,3 +3758,11 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   one properties line.
 - Verifier ALL EQUIVALENT (both). Nothing else run.
 
+## 121. PC_PLC_Skip_Second_Tightening has its Siemens address: DB500,X48.0 (2026-11-17)
+
+- **PLC programmer (via user):** DB500, 48.0. `costhetaio/siemens/IOServerProperties.yaml`: `PC_PLC_Skip_Second_Tightening:
+  { address: "DB500,X48.0", type: bool, dir: w }` (no overlap: the nearest tag below ended at R44). The bypass now runs
+  on Machine 2 (state 2 writes True / False with read-back every cycle; True -> states 13-19 skipped).
+- Fault scenarios N (both folders): N1 marks the tag missing on both vendors; N2-N4 now run on Siemens too. Not run
+  (user: fast).
+

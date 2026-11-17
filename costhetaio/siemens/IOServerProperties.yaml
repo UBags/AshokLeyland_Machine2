@@ -37,6 +37,7 @@ tags:
   # State 2 cycle settings (in DB101): side from the QR code; the rest from machine_settings in the database
   # (frontend: Machine Settings, Administrator / Supervisor). No model / component type: the PLC does not need it.
   PC_PLC_LH_RH_Selection:                    { address: "DB101,I246",  type: int,    dir: w }   # 1 = LHS, 2 = RHS
+  PC_PLC_Skip_Second_Tightening:             { address: "DB500,X48.0", type: bool,  dir: w }   # True = bypass states 13-19 (address given 2026-11-17)
   PC_PLC_TighteningTorque1Setpoint:          { address: "DB101,R200",  type: float,  dir: w }   # Nm, > 0 and < 20
   PC_PLC_TighteningTorque2Setpoint:          { address: "DB101,R204",  type: float,  dir: w }   # Nm, > 0 and < 20
   PC_PLC_RotationRPM:                        { address: "DB101,LR96",  type: float,  dir: w }   # 20 - 40 rpm (LREAL)

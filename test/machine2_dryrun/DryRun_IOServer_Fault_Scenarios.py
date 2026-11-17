@@ -1389,19 +1389,14 @@ def run_bypass():
     use_machine_settings("Test", model_name="DOSTPLUS", bypass_press_and_tightening2=False)
     try:
         # N1: no tag on the PLC -> full run, nothing written to it
-        if VENDOR == "allenbradley":
-            io._tagsMissingOnPlc.add(tag)
+        io._tagsMissingOnPlc.add(tag)
         TRACE.clear(); mark = len(WRITES); r.delete("cycleSettings:" + QR_DOST_LHS)
         plc_start_cycle(QR_DOST_LHS); SCAN.set(); finish_qr_handshake()
         run_steps()
         check("N1 setting on, PLC without the tag: full run (states 13-19 run), the tag not written",
               wrapped() and SKIPPED <= set(TRACE) and not writes_of((tag,), mark), f"trace {TRACE}")
         check("N1 ... not published as bypassed", "bypass_press_and_tightening2" not in readCycleSettingsForQRCode(r, QR_DOST_LHS))
-        if VENDOR == "allenbradley":
-            io._tagsMissingOnPlc.discard(tag)
-        else:
-            print("     (Siemens: no address in IOServerProperties.yaml - N2-N4 need the tag on the PLC: Allen-Bradley only)")
-            return
+        io._tagsMissingOnPlc.discard(tag)
         # N2: tag on the PLC -> True, jump after Torque 1
         TRACE.clear(); mark = len(WRITES); del sent[:]; pics0 = len(PICTURE_REQUESTS)
         r.delete("cycleSettings:" + QR_DOST_LHS)
