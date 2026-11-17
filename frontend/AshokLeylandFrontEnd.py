@@ -223,10 +223,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     finalResult: str = notok
 
     emergencyButtonPressed : bool = False
-    finalDisplayPending : bool = False      # completed cycle: free-rotation torque on screen, record not yet sent
     abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
     # the frontend's abort (Ctrl+Alt+Z): password frontend.abort.password in the properties file, read at each use
-    emergencyAfterCompletion : bool = False # emergency while the completed cycle's torque was on screen
 
     # Variables for determining how much time to show large version of ok and notok images
     TIME_TO_SHOW_OK_IMAGE_MSEC : int = int(CosThetaConfigurator.getInstance().getTimeToDisplayOkImages() * 1000)
@@ -256,6 +254,11 @@ class AshokLeylandFrontEnd(QMainWindow):
         # frozen, until the next QR code is scanned (it showed 0 again at once)
         self.currentComponentEndTime = None
         self.componentTimeShown = False         # a cycle has started since the frontend started
+        # end of a cycle (CHANGES 123): the record is sent and the next QR code armed at once, but the finished
+        # cycle's values and pictures stay in the tiles for frontend.free.rotation.torque.display.sec; this is the
+        # number of the clear still to come (None: nothing pending). A newer number, or a new QR code, cancels it.
+        self.pendingTilesClear = None
+        self.tilesClearCounter = 0
         self.timeStartedAsString = datetime.now().strftime("%H:%M:%S")
 
         try:
@@ -1162,16 +1165,11 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                     block=None)
         if not emergencyPressed:
             return
-        if AshokLeylandFrontEnd.finalDisplayPending:
-            # the cycle had already completed (free-rotation torque on screen, record not yet sent) and the IOServer
-            # is back at the QR code: the completed component is recorded as completed, and the emergency abort is
-            # shown instead of "Component Successfully Done" (no abort record: nothing was in process)
-            printYellow("Emergency abort after the cycle had completed: shown; the completed component is recorded as it is")
-            AshokLeylandFrontEnd.emergencyAfterCompletion = True
-            return
         if self.getCurrentState() == MachineState.READ_QR_CODE:
             # waiting for the QR code: nothing in process. Shown, so the operator sees the button was acted on; no
-            # record (the IOServer has reset the PLC handshake and is waiting for the QR code again).
+            # record (the IOServer has reset the PLC handshake and is waiting for the QR code again). Since CHANGES 123
+            # this also covers the seconds after a completed cycle while its values are still shown: that component
+            # was already recorded as it finished.
             printYellow("Emergency abort while waiting for the QR code: shown, no record")
             self.showAbortWhileWaitingForQRCode()
             return
@@ -1200,8 +1198,6 @@ class AshokLeylandFrontEnd(QMainWindow):
         return super().eventFilter(obj, event)
 
     def manualAbort(self):
-        if AshokLeylandFrontEnd.finalDisplayPending:
-            return          # the cycle has completed; its record is about to be sent (see updateEmergencyAbortPressed)
         # The frontend's own abort (2026-11-08): for when the machine's cycle was aborted and the frontend did not follow.
         # Password-protected (frontend.abort.password). It stays in the frontend: no message to the QR code or camera server,
         # no queues cleared. The IOServer is only asked to set PC_PLC_CycleAborted on the PLC; it aborts its own cycle
@@ -1250,6 +1246,10 @@ class AshokLeylandFrontEnd(QMainWindow):
     @Slot()
     def updateQRCodeDisplay(self):
         displayString = AshokLeylandFrontEnd.currentQRCodeForDisplay
+        if self.pendingTilesClear is not None:
+            # the next component came before the last one's values were cleared: clear them now (the cleared tiles
+            # must not wipe this component's results later)
+            self.clearFinishedCycleTiles(self.pendingTilesClear)
         self.hideLargeImageWindow()
         self.setQRCodeContainerDisplay(displayString=displayString)
         self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_KNUCKLE)
@@ -1559,11 +1559,16 @@ class AshokLeylandFrontEnd(QMainWindow):
         else:
             self.setCurrentState(MachineState.READ_FREE_ROTATION_TORQUE_1)
         printYellow("About to call doFinalProcessing() from normal path")
-        # the free-rotation torque stays on screen this long before "Component Successfully Done"
-        AshokLeylandFrontEnd.finalDisplayPending = True
-        self.doFinalProcessing(delayMsec=int(CosThetaConfigurator.getInstance().getFrontEndFreeRotationTorqueDisplaySecs() * 1000))
+        # "Component Successfully Done" at once; the values and pictures stay in the tiles for
+        # frontend.free.rotation.torque.display.sec (5 s) and are then cleared (CHANGES 123)
+        self.doFinalProcessing()
 
-    def doFinalProcessing(self, delayMsec: int = 750):
+    def doFinalProcessing(self, clearTilesAfterMsec: Optional[int] = None):
+        """End of a cycle (completed, or aborted). At once: the result box ("Component Successfully Done" / "Not
+        Successfully Done" / "Aborted"), the record to the DB server, and the frontend back at the QR code. The
+        tiles keep the finished cycle's values and pictures for clearTilesAfterMsec (default
+        frontend.free.rotation.torque.display.sec) and are cleared then - or earlier, when the next QR code comes.
+        Before CHANGES 123 the result box waited for the display time and came together with the clearing."""
         printYellow("Entered doFinalProcessing()")
         if self.currentComponentEndTime is None:
             self.currentComponentEndTime = datetime.now()       # the processing time stops here (shown till next scan)
@@ -1588,8 +1593,25 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         theFinalResult = all(checks)
         AshokLeylandFrontEnd.finalResult = ok if theFinalResult else notok
-        # The delay of 2000 ms ensures that it accounts for the travel time from station 4 back to station 1
-        QTimer.singleShot(max(0, delayMsec), self.setInProcessDefaultDisplay)
+        if not self.finishCycle():
+            return                                  # the cycle had already ended (nothing new on the tiles)
+        if clearTilesAfterMsec is None:
+            clearTilesAfterMsec = int(CosThetaConfigurator.getInstance().getFrontEndFreeRotationTorqueDisplaySecs() * 1000)
+        self.tilesClearCounter += 1
+        number = self.tilesClearCounter
+        self.pendingTilesClear = number
+        QTimer.singleShot(max(0, int(clearTilesAfterMsec)), lambda: self.clearFinishedCycleTiles(number))
+
+    @Slot()
+    def clearFinishedCycleTiles(self, number: Optional[int] = None):
+        """Clears the tiles and the QR code line of the finished cycle - only if this is still the clear pending
+        (a later cycle end, or a QR code that already cleared them, makes an older timer do nothing)."""
+        if number is not None and number != self.pendingTilesClear:
+            return
+        self.pendingTilesClear = None
+        self.resultsContainer.setInProcessDefaultDisplay()
+        if self.getCurrentState() == MachineState.READ_QR_CODE:
+            self.setQRCodeContainerDisplay(displayString="")
 
     def okNotokResult(self, value):
         if value is None:
@@ -1609,13 +1631,21 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     @Slot()
     def setInProcessDefaultDisplay(self):
-        printYellow(f"Entered setInProcessDefaultDisplay(), with {AshokLeylandFrontEnd.emergencyButtonPressed = }")
-        AshokLeylandFrontEnd.finalDisplayPending = False
+        """End the cycle and clear the tiles at the same moment (the behaviour before CHANGES 123; kept for callers that
+        want it - the normal path is doFinalProcessing: finishCycle now, clearFinishedCycleTiles later)."""
+        if self.finishCycle():
+            self.clearFinishedCycleTiles()
+
+    def finishCycle(self) -> bool:
+        """Result box, record to the DB server, data points reset, state back to the QR code and its read requested.
+        The tiles and the QR code line are left as they are (cleared by clearFinishedCycleTiles). Returns False if the
+        frontend was already waiting for the QR code (nothing done)."""
+        printYellow(f"Entered finishCycle(), with {AshokLeylandFrontEnd.emergencyButtonPressed = }")
 
         if self.getCurrentState() == MachineState.READ_QR_CODE:
             AshokLeylandFrontEnd.emergencyButtonPressed = False
             AshokLeylandFrontEnd.abortReason = ""
-            return
+            return False
 
         self.show()
         self.raise_()
@@ -1623,15 +1653,15 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         aborted, abortReason = AshokLeylandFrontEnd.emergencyButtonPressed, AshokLeylandFrontEnd.abortReason
         AshokLeylandFrontEnd.abortReason = ""
-        if AshokLeylandFrontEnd.emergencyButtonPressed or AshokLeylandFrontEnd.emergencyAfterCompletion:
+        if AshokLeylandFrontEnd.emergencyButtonPressed:
             self.largeImageWindow.showEmergencyAbort()
         elif AshokLeylandFrontEnd.finalResult == ok:          # finalResult is the string ok / notok; both are truthy
             self.largeImageWindow.showSuccess()
         else:
             self.largeImageWindow.showFailure()
 
-        # NOTE : This is the place where the Emergency button pressed needs to be reset to False,
-        #        because of the use of QTimer in calling setInProcessDefaultDisplay()
+        # NOTE : This is the place where the Emergency button pressed is reset to False (read above for the result
+        #        box and for the record)
         AshokLeylandFrontEnd.emergencyButtonPressed = False
 
         # bypassed steps: result 'Bypassed', no datetime (NULL), no picture, torque 2 = -1.0, rotation done NULL
@@ -1690,13 +1720,11 @@ class AshokLeylandFrontEnd(QMainWindow):
                                              abortReason=abortReason or "aborted",
                                              bypassedPressAndTightening2=bypassed
                                              )
-        AshokLeylandFrontEnd.emergencyAfterCompletion = False
         self.resetAllDataPoints()
         self.setCurrentState(MachineState.READ_QR_CODE)
-        self.resultsContainer.setInProcessDefaultDisplay()
-        self.setQRCodeContainerDisplay(displayString="")
         self.requestQRCode()
         self.resultsContainer.setInstruction(self.machineState.getCurrentInstruction())
+        return True
 
     # ********************************************
 

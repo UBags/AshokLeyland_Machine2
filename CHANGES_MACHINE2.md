@@ -3780,3 +3780,37 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - Run: the top bearing state through `assessPictures` with saving on - the picture written to `<dir>/TopBearing/`.
   Needs a rebuilt exe (code change).
 
+## 123. End of cycle: "Component Successfully Done" at once; the values and pictures stay 5 s, then are cleared (2026-11-17)
+
+- **User:** after the free-rotation torque, the values and pictures disappeared and only then did "Component
+  Successfully Completed" come; show the box at once and keep the values / pictures 5 s, independently.
+- **Cause:** both were one step. `_handleRotationTorque1` -> `doFinalProcessing(delay = frontend.free.rotation.torque.
+  display.sec, 2 s)` -> after the delay `setInProcessDefaultDisplay` showed the box, sent the record AND cleared the tiles.
+- **Now** (`frontend/AshokLeylandFrontEnd.py`): `doFinalProcessing` calls `finishCycle()` at once - result box
+  (Successfully Done / Not Successfully Done / Aborted), record to the DB server, data points reset, back to the QR code
+  and its read requested - and schedules `clearFinishedCycleTiles` after `frontend.free.rotation.torque.display.sec`
+  (now **5.0**, all three properties files; code default 5.0), which clears the tiles and the QR code line. A new QR code
+  during the hold clears them at once before the new component starts; a numbered pending clear makes a stale timer do
+  nothing. The same applies to aborts (box at once, tiles 5 s; before: both after 0.75 s).
+  `setInProcessDefaultDisplay` is kept (does both at once). `finalDisplayPending` / `emergencyAfterCompletion` are gone:
+  the frontend is back at the QR code at once, so an emergency / manual abort during the hold takes the existing
+  "waiting for the QR code" path (abort screen, no record); the finished component is already recorded as it was.
+- `utils/StateSync.py`: the end-of-cycle allowance no longer comes into play (comment updated, logic unchanged).
+- Dry run `DryRun_FEServer_Cycles.py` (machine2, both copies updated): F4c rewritten for the new order; **F15** new:
+  box 0.45 s after the torque, record at once, state READ_QR_CODE at once, tiles and QR line still shown at 1 s, cleared
+  at 5.4 s, once; F15b: a QR code 1 s into the hold clears at the scan and the old timer leaves the new component's tiles
+  alone. **165/165 PASS.**
+
+## 124. Machine Settings: password to open, password again to save (it is the confirmation); no Yes / No (2026-11-17)
+
+- **User:** password when the menu item is chosen; at Save the password again with a message that entering it confirms
+  the change; drop the Yes / No.
+- `frontend/SimplePopups.py`: `askMachineSettingsOpenPassword()` (machine.settings.password) before the dialog opens;
+  wrong / cancelled -> not opened. `confirmMachineSettingsChange` asks the same password with the changes listed and
+  "Entering the password confirms this change."; if the bypass switch changed, the bypass password follows, worded the
+  same way (kept from 2026-11-15). Wrong password -> nothing saved, the dialog stays open. `machineSettingsChanges()`
+  builds the change list. `getJustPassword` now wraps each line on its own (it joined the lines of a multi-line message).
+- Dry run F12 / F12b (both copies) rewritten: open right / wrong / cancelled, wrong password stops
+  `updateMachineSettingsDialog` before the dialog, Save prompts carry the change list and the confirmation text, no
+  Yes / No asked. In the 165 above.
+

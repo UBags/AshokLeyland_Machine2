@@ -20,9 +20,11 @@ lists every case. Lines:
 
 Why a grace period and a set of states per IOServer state: the two never change at the same moment. The frontend
 moves to the next tile when the camera's OK reaches it; the IOServer moves only after the PLC handshake (about
-0.5-1 s later). After a value or press event the frontend may be one tile ahead too. At the end of a cycle the
-frontend shows the free-rotation torque for frontend.free.rotation.torque.display.sec (2 s) while the IOServer is
-already back at the QR code (for that case the display time, plus 1 s, is added to the grace period). So for each
+0.5-1 s later). After a value or press event the frontend may be one tile ahead too. Until CHANGES 123 the
+frontend stayed at the free-rotation torque for frontend.free.rotation.torque.display.sec after the cycle while the
+IOServer was already back at the QR code (for that case the display time, plus 1 s, is added to the grace period);
+since then it returns to the QR code at once (only the tiles stay on screen), so that allowance no longer comes
+into play. So for each
 IOServer state the frontend states it may show are listed (FRONTEND_STATES_FOR), and a difference must also last
 longer than the grace period before it counts.
 """

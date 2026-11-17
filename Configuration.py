@@ -797,13 +797,14 @@ class CosThetaConfigurator():
 
     @classmethod
     def getFrontEndFreeRotationTorqueDisplaySecs(cls) -> float:
-        """Seconds the free-rotation torque (last tile) is shown before "Component Successfully Done" / "Not
-        Successfully Done" (frontend.free.rotation.torque.display.sec, 2.0). Read at each use."""
+        """Seconds a finished cycle's values and pictures stay in the tiles after "Component Successfully Done" /
+        "Not Successfully Done" / "Aborted", which is shown at once (frontend.free.rotation.torque.display.sec, 5.0;
+        CHANGES 123 - before, the result box waited this long, 2.0). Read at each use."""
         try:
             return max(0.0, float(CosThetaConfigurator.getValue(CosThetaConfigurator.FRONTEND_FREE_ROTATION_TORQUE_DISPLAY_KEY,
-                                                                default="2.0")))
+                                                                default="5.0")))
         except Exception:
-            return 2.0
+            return 5.0
 
     @classmethod
     def getFrontEndStateSyncGraceSecs(cls) -> float:

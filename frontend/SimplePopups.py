@@ -495,8 +495,10 @@ def getJustPassword(textToShow: str = "Enter password", modal: bool = False):
 
     # Edge Case: Long textToShow
     max_line_length = 60  # Prevent overly wide prompts
-    if len(textToShow) > max_line_length:
-        textToShow = "\n".join(textwrap.wrap(textToShow, width=max_line_length))
+    if any(len(line) > max_line_length for line in textToShow.split("\n")):
+        # each line wrapped on its own (textwrap.wrap of the whole text joined the lines of a multi-line message)
+        textToShow = "\n".join("\n".join(textwrap.wrap(line, width=max_line_length)) or ""
+                                for line in textToShow.split("\n"))
     text_width = max(len(line) for line in textToShow.split("\n")) if textToShow else 20
 
     layout = [
@@ -1784,9 +1786,9 @@ MACHINE_SETTINGS_FIELDS = (
 MACHINE_SETTINGS_FLAG_FIELDS = (
     ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening"),
 )
-# Passwords (user, 2026-11-13 / 2026-11-15): from the properties file, read at each Save
-#   machine.settings.password         any change
-#   machine.settings.bypass.password  in addition, when "Bypass Component Press and Second Tightening" changes
+# Passwords (user, 2026-11-13 / 2026-11-15 / 2026-11-17): from the properties file, read at each use
+#   machine.settings.password         to open the dialog, and again at Save (entering it confirms the change; no Yes / No)
+#   machine.settings.bypass.password  in addition at Save, when "Bypass Component Press and Second Tightening" changes
 
 
 def machineSettingsPassword() -> str:
@@ -1797,24 +1799,8 @@ def machineSettingsBypassPassword() -> str:
     return CosThetaConfigurator.getInstance().getMachineSettingsBypassPassword()
 
 
-def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> bool:
-    """Save: the machine settings password; if the bypass switch changes, also the bypass password; then a Yes / No
-    confirmation listing what changes."""
-    entered = getJustPassword("Enter the password to change the machine settings")
-    if entered is None or entered == "":
-        return False
-    if entered != machineSettingsPassword():
-        showErrorMessage("Wrong password: machine settings not changed")
-        return False
-    bypassChanged = any(bool(current.get(key, False)) != bool(settings.get(key, False))
-                        for key, _ in MACHINE_SETTINGS_FLAG_FIELDS)
-    if bypassChanged:
-        entered = getJustPassword("Enter the password to change\n'Bypass Component Press and Second Tightening'")
-        if entered is None or entered == "":
-            return False
-        if entered != machineSettingsBypassPassword():
-            showErrorMessage("Wrong bypass password: machine settings not changed")
-            return False
+def machineSettingsChanges(settings: dict, current: dict) -> list:
+    """The changes Save would make, one line each ("Rotation RPM: 30 -> 35")."""
     lines = []
     for key, label, kind in MACHINE_SETTINGS_FIELDS:
         old, new = current.get(key), settings.get(key)
@@ -1824,10 +1810,44 @@ def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> b
     for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
         if bool(current.get(key, False)) != bool(settings.get(key, False)):
             lines.append(f"{label}: {'Yes' if settings.get(key) else 'No'}")
+    return lines
+
+
+def askMachineSettingsOpenPassword() -> bool:
+    """Opening Machine Settings: the machine settings password. False (dialog not opened) if cancelled or wrong."""
+    entered = getJustPassword("Enter the password to open the machine settings")
+    if entered is None or entered == "":
+        return False
+    if entered != machineSettingsPassword():
+        showErrorMessage("Wrong password: machine settings not opened")
+        return False
+    return True
+
+
+def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> bool:
+    """Save: the machine settings password again, with the changes listed - entering it is the confirmation (no
+    Yes / No since 2026-11-17); if the bypass switch changes, also the bypass password, worded the same way."""
+    lines = machineSettingsChanges(settings, current)
     changes = "\n".join(lines) if lines else "(no change)"
-    answer = sg.popup_yes_no(f"Change the machine settings for {model}?\n\n{changes}",
-                             title="Confirm Machine Settings", keep_on_top=True, modal=True, font=16)
-    return answer == "Yes"
+    entered = getJustPassword(f"Change the machine settings for {model}:\n\n{changes}\n\n"
+                              f"Entering the password confirms this change.\nEnter the machine settings password:")
+    if entered is None or entered == "":
+        return False
+    if entered != machineSettingsPassword():
+        showErrorMessage("Wrong password: machine settings not changed")
+        return False
+    bypassChanged = any(bool(current.get(key, False)) != bool(settings.get(key, False))
+                        for key, _ in MACHINE_SETTINGS_FLAG_FIELDS)
+    if bypassChanged:
+        newValue = "Yes" if any(bool(settings.get(key, False)) for key, _ in MACHINE_SETTINGS_FLAG_FIELDS) else "No"
+        entered = getJustPassword(f"'Bypass Component Press and Second Tightening' -> {newValue} for {model}.\n\n"
+                                  f"Entering the password confirms this change.\nEnter the bypass password:")
+        if entered is None or entered == "":
+            return False
+        if entered != machineSettingsBypassPassword():
+            showErrorMessage("Wrong bypass password: machine settings not changed")
+            return False
+    return True
 
 
 def canChangeMachineSettings(role: str) -> bool:
@@ -1877,6 +1897,8 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
     aWindowIsInProgress = True
     saved = False
     try:
+        if not askMachineSettingsOpenPassword():
+            return False
         db_name = getDatabaseName()
         models = settingsModelNames()
         if not models:
@@ -1938,7 +1960,7 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                 for key, _ in MACHINE_SETTINGS_FLAG_FIELDS:
                     settings[key] = bool(values.get(key, False))
                 if not confirmMachineSettingsChange(model, settings, current):
-                    continue                      # wrong password / No: the dialog stays open, nothing saved
+                    continue                      # cancelled / wrong password: the dialog stays open, nothing saved
                 if insertNewMachineSettings(db_name, updated_by=currentUser, model_name=model, **settings):
                     saved = True
                     showMessage(f"Machine settings for {model} saved.\nThey apply from the next {model} component.")

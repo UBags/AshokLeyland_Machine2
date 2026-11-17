@@ -80,6 +80,11 @@ for name in ("showSuccess", "showFailure", "showEmergencyAbort"):
     def wrapper(self, _orig=orig, _name=name):
         SCREENS.append(_name); return _orig(self)
     setattr(LargeImageWindow, name, wrapper)
+CLEARS = []                    # times the tiles were cleared (CHANGES 123: 5 s after the end of a cycle)
+_origClear = CosThetaResultsContainer.setInProcessDefaultDisplay
+def _clearWrap(self):
+    CLEARS.append(time.time()); return _origClear(self)
+CosThetaResultsContainer.setInProcessDefaultDisplay = _clearWrap
 QR_SHOWN = []
 _origQR = FE.setQRCodeContainerDisplay
 def _qrWrap(self, displayString=""):
@@ -300,18 +305,76 @@ def driver():
               wait_for(lambda: "showEmergencyAbort" in SCREENS, 5), str(SCREENS))
         check("F4b ... no record sent, still waiting for the QR code",
               take_record(timeout=3) is None and state() == MS.READ_QR_CODE, state().name)
-        # F4c: emergency while the completed cycle's free-rotation torque is on screen: shown, record as completed
+        # F4c: emergency while the completed cycle's values are still on screen (CHANGES 123: the cycle was already
+        # recorded and "Component Successfully Done" shown at the free-rotation torque): recorded as completed, then
+        # the abort screen is shown (as while waiting for the QR code), no second record
         TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear()
         scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
         run_steps()
         sendEmergencyAbortFromIOServerToFEServer(r)
         rec = take_record()
-        check_full_record("F4c emergency during the 2 s torque display", rec, QR1)
-        check("F4c ... abort screen shown instead of success",
-              wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) and "showSuccess" not in SCREENS, str(SCREENS))
+        check_full_record("F4c emergency while the finished cycle's values are shown", rec, QR1)
+        check("F4c ... success shown first, then the abort screen",
+              wait_for(lambda: "showEmergencyAbort" in SCREENS, 5) and SCREENS[:1] == ["showSuccess"], str(SCREENS))
+        check("F4c ... no second record", take_record(timeout=2) is None)
         t1 = fe.componentProcessingTimeText(); time.sleep(2.2); t2 = fe.componentProcessingTimeText()
         check("F4d processing time stops at the end of the cycle and stays on screen (not 0) until the next scan",
               t1 == t2 and t1 != "0" and fe.currentComponentEndTime is not None, f"{t1} -> {t2}")
+
+        # ---------------- F15 (CHANGES 123) ----------------
+        print("\n=== F15. End of cycle: result box at once, values kept in the tiles 5 s, then cleared ===", flush=True)
+        from Configuration import CosThetaConfigurator as _CC15
+        hold = _CC15.getInstance().getFrontEndFreeRotationTorqueDisplaySecs()
+        check("F15 frontend.free.rotation.torque.display.sec is 5 s", abs(hold - 5.0) < 1e-9, hold)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 15)
+        time.sleep(hold + 0.5)                       # the last cycle's clear has happened
+        TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear(); CLEARS.clear()
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps(upto=len(SEQUENCE) - 1)
+        st, kind, value = SEQUENCE[-1]
+        assert wait_for(lambda: state() == st)
+        tile = fe.resultsContainer.free_rotation_torque_container.image_label
+        t0 = time.time()
+        sendDataFromIOServerToFEServer(r, currentMachineState=st, value=value, action=moveAheadToNextComponent, result=ok)
+        shown = wait_for(lambda: "showSuccess" in SCREENS, 3)
+        tShown = time.time() - t0
+        check("F15 'Component Successfully Done' at once (within 1 s of the free-rotation torque)", shown and tShown < 1.0,
+              f"{tShown:.2f} s")
+        rec = take_record(timeout=3)
+        check("F15 record sent at once", rec is not None and time.time() - t0 < 3.0)
+        check("F15 back to the QR code at once (waiting for the next component)", state() == MS.READ_QR_CODE, state().name)
+        time.sleep(1.0)
+        check("F15 1 s later: tiles not cleared, the free-rotation torque still shown",
+              CLEARS == [] and "2.41" in tile.text(), (CLEARS, tile.text()))
+        check("F15 ... the QR code line still shows the component", QR_SHOWN[-1] == "DOST - LHS - 2.0T : 11770 : 09.03.2025",
+              QR_SHOWN[-1:])
+        cleared = wait_for(lambda: CLEARS != [], hold + 2)
+        tCleared = CLEARS[0] - t0 if CLEARS else None
+        check("F15 tiles cleared about 5 s after the free-rotation torque", cleared and hold - 0.3 <= tCleared <= hold + 1.0,
+              tCleared)
+        check("F15 ... the free-rotation tile is empty and the QR code line cleared",
+              "2.41" not in tile.text() and QR_SHOWN[-1] == "", (tile.text(), QR_SHOWN[-1:]))
+        check("F15 ... cleared once", (time.sleep(1.0) or True) and len(CLEARS) == 1, len(CLEARS))
+        # the next component scanned while the finished one is still shown: cleared at the scan, not later
+        TILES.clear(); SCREENS.clear(); SENT_ORIGINALS.clear(); CLEARS.clear()
+        scan(QR1, "DOST - LHS - 2.0T : 11770 : 09.03.2025")
+        run_steps(upto=len(SEQUENCE) - 1)
+        assert wait_for(lambda: state() == st)
+        sendDataFromIOServerToFEServer(r, currentMachineState=st, value=value, action=moveAheadToNextComponent, result=ok)
+        take_record(timeout=3)
+        assert wait_for(lambda: state() == MS.READ_QR_CODE, 3)
+        time.sleep(1.0)
+        n0 = len(TILES)
+        tScan = time.time()
+        scan(QR2, "DOSTPLUS - RHS - 2.5T : 22881 : 15.10.2026")
+        check("F15b next QR code 1 s into the hold: tiles cleared at the scan", len(CLEARS) == 1 and CLEARS[0] - tScan < 1.0,
+              [round(c - tScan, 2) for c in CLEARS])
+        send_step(*SEQUENCE[0], seed=7)
+        time.sleep(hold + 0.5)
+        check("F15b ... the old timer does not clear the new component's tiles (knuckle tile kept)",
+              len(CLEARS) == 1 and len(TILES) > n0 and state() == SEQUENCE[1][0], (len(CLEARS), TILES[n0:], state().name))
+        run_steps(skip=1)
+        check_full_record("F15b next component", take_record(), QR2)
 
         # ---------------- F5 ----------------
         print("\n=== F5. Final free-rotation torque NOT OK ===", flush=True)
@@ -590,37 +653,55 @@ def driver():
         check("F12 ... full run, record not marked bypassed, all 14 steps OK",
               rec is not None and rec[-1] is False and all(rec[i] == ok for i in RESULT_IDX), str(rec[-3:]) if rec else None)
 
-        # Machine Settings dialog: the bypass checkbox; Save asks for the password, then Yes / No
+        # Machine Settings dialog (2026-11-17): the password to open it; at Save the password again with the changes
+        # listed - entering it is the confirmation; no Yes / No anywhere
         import frontend.SimplePopups as SP
         check("F12 Machine Settings: 'Bypass Component Press and Second Tightening' checkbox (per model)",
               ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening") in SP.MACHINE_SETTINGS_FLAG_FIELDS)
         _pw, _yn, _err = SP.getJustPassword, SP.sg.popup_yes_no, SP.showErrorMessage
-        asked = []
+        asked, prompts = [], []
         SP.showErrorMessage = lambda *a, **k: asked.append(("error", a[0] if a else ""))
         SP.sg.popup_yes_no = lambda text, **k: asked.append(("yesno", text)) or "Yes"
         new = dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=True)
         old = dict(P.DEFAULT_MACHINE_SETTINGS, bypass_press_and_tightening2=False)
-        SP.getJustPassword = lambda *a, **k: "wrong"
-        check("F12 wrong password -> not saved, no Yes / No asked", SP.confirmMachineSettingsChange("DOST", new, old) is False
+        SP.getJustPassword = lambda *a, **k: prompts.append(a[0] if a else k.get("textToShow", "")) or "wrong"
+        check("F12 wrong password -> not saved, error shown", SP.confirmMachineSettingsChange("DOST", new, old) is False
               and [k for k, _ in asked] == ["error"], str(asked))
-        asked.clear(); SP.getJustPassword = lambda *a, **k: ""
+        asked.clear(); prompts.clear(); SP.getJustPassword = lambda *a, **k: ""
         check("F12 password cancelled -> not saved, nothing shown", SP.confirmMachineSettingsChange("DOST", new, old) is False
               and asked == [], str(asked))
-        asked.clear(); SP.getJustPassword = lambda *a, **k: "admin123"
-        check("F12 admin123 + Yes -> saved; the confirmation names the change",
-              SP.confirmMachineSettingsChange("DOST", new, old) is True and asked and asked[0][0] == "yesno"
-              and "Bypass Component Press and Second Tightening: Yes" in asked[0][1], str(asked))
-        asked.clear(); SP.sg.popup_yes_no = lambda text, **k: "No"
-        check("F12 admin123 + No -> not saved", SP.confirmMachineSettingsChange("DOST", new, old) is False)
+        asked.clear(); prompts.clear()
+        SP.getJustPassword = lambda *a, **k: prompts.append(a[0] if a else k.get("textToShow", "")) or "admin123"
+        check("F12 admin123 at Save -> saved, no Yes / No; the prompt lists the change and says the password confirms it",
+              SP.confirmMachineSettingsChange("DOST", new, old) is True and asked == [] and prompts
+              and "Bypass Component Press and Second Tightening: Yes" in prompts[0]
+              and "confirms this change" in prompts[0], str((asked, prompts)))
+        # opening the dialog
+        asked.clear(); prompts.clear()
+        check("F12 open: right password -> opens", SP.askMachineSettingsOpenPassword() is True and asked == []
+              and prompts and "open" in prompts[0].lower(), str((asked, prompts)))
+        SP.getJustPassword = lambda *a, **k: "wrong"
+        check("F12 open: wrong password -> not opened, error shown", SP.askMachineSettingsOpenPassword() is False
+              and [k for k, _ in asked] == ["error"], str(asked))
+        asked.clear(); SP.getJustPassword = lambda *a, **k: ""
+        check("F12 open: cancelled -> not opened, nothing shown", SP.askMachineSettingsOpenPassword() is False
+              and asked == [], str(asked))
+        _db = SP.getDatabaseName
+        SP.getDatabaseName = lambda: (_ for _ in ()).throw(AssertionError("dialog opened"))
+        SP.getJustPassword = lambda *a, **k: "wrong"; asked.clear()
+        check("F12 open: wrong password -> updateMachineSettingsDialog returns before the dialog",
+              SP.updateMachineSettingsDialog("admin", "Administrator") is False and SP.aWindowIsInProgress is False
+              and [k for k, _ in asked] == ["error"], str(asked))
+        SP.getDatabaseName = _db
         # 2026-11-15: passwords from the properties file; the bypass switch has its own password, asked in addition
         _ms, _bp = SP.machineSettingsPassword, SP.machineSettingsBypassPassword
         SP.machineSettingsPassword, SP.machineSettingsBypassPassword = (lambda: "set-pw"), (lambda: "bypass-pw")
-        SP.sg.popup_yes_no = lambda text, **k: asked.append(("yesno", text)) or "Yes"
         answers = []
-        SP.getJustPassword = lambda *a, **k: answers.pop(0) if answers else ""
-        asked.clear(); answers[:] = ["set-pw", "bypass-pw"]
-        check("F12b bypass changed: settings password then bypass password -> saved",
-              SP.confirmMachineSettingsChange("DOST", new, old) is True and [k for k, _ in asked] == ["yesno"], str(asked))
+        SP.getJustPassword = lambda *a, **k: prompts.append(a[0] if a else "") or (answers.pop(0) if answers else "")
+        asked.clear(); prompts.clear(); answers[:] = ["set-pw", "bypass-pw"]
+        check("F12b bypass changed: settings password then bypass password (both say they confirm) -> saved",
+              SP.confirmMachineSettingsChange("DOST", new, old) is True and asked == [] and len(prompts) == 2
+              and all("confirms this change" in t for t in prompts), str((asked, prompts)))
         asked.clear(); answers[:] = ["set-pw", "set-pw"]
         check("F12b bypass changed, wrong bypass password -> not saved, 'Wrong bypass password' shown",
               SP.confirmMachineSettingsChange("DOST", new, old) is False and asked
@@ -632,6 +713,8 @@ def driver():
         asked.clear(); answers[:] = ["admin123"]
         check("F12b the properties' machine.settings.password applies (admin123 refused when it is set-pw)",
               SP.confirmMachineSettingsChange("DOST", same, old) is False, str(asked))
+        asked.clear(); answers[:] = ["set-pw"]
+        check("F12b open uses machine.settings.password too", SP.askMachineSettingsOpenPassword() is True)
         SP.machineSettingsPassword, SP.machineSettingsBypassPassword = _ms, _bp
         from Configuration import CosThetaConfigurator as _CC
         _c = _CC.getInstance()
