@@ -3742,3 +3742,19 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   picture, and the hole-pattern centre whenever holes were found (from the holes of the deciding gamma). Checked:
   A01 (DOST) checked as DOSTPLUS - NOT OK, oval and cross on the picture.
 
+## 120. DOSTPLUS seated position and oval; hole grid over the whole disc (2026-11-17)
+
+- **User (siemens, all three properties files):** DOSTPLUS seated position 5 px down: `bunk.seating.seated.centre.dostplus`
+  647,330 -> **647,335**, and the frame's `frame.centre.bunk.seating.seated.centre.dostplus` 647.0,330.0 -> 647.0,335.0
+  (the reference oval is centred there); `bunk.seating.reference.oval.dostplus` 232,230,0 -> **227,225,0** (each axis
+  5 px smaller).
+- **Grid over the whole r135 disc (user: about 30 px apart, "0 % chance of missing a 40 x 40 hole"):**
+  `hole.grid.radius.min` 20 -> **0**, `.max` 110 -> **135**, `hole.grid.step` 15 -> **20** (not 30). On a square grid
+  the point farthest from every grid point is step / sqrt 2 away (30 px: 21.2 px), so a hole is certain to hold a point
+  only if its radius is at least that - 42.4 px across at 30 px. The holes measure 29-38 px across (areas 670-1130 px,
+  boxes 35-37 px; 13 Nov). Estimated chance that a hole holds no point at 30 px: about 5 % for a 36 px hole, about
+  21 % for a 30 px one (and a point near a hole's edge gives a poor mask). 20 px: 14.1 px worst case - every hole of
+  29 px or more holds a point. Points: 145 over the disc (30 px: 69; the band of CHANGES 116: about 108). Back to 30 =
+  one properties line.
+- Verifier ALL EQUIVALENT (both). Nothing else run.
+
