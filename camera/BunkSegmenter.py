@@ -1,23 +1,22 @@
 """
-BunkSegmenter.py v2.0 - UPDATED FOR V0.7 PIPELINE
-Bunk hole detection using MobileSAMv2 segmentation with v0.7 preprocessing pipeline.
+BunkSegmenter.py - bung hole detection (both bung checks: CheckNoCapBunk, state 13; CheckBunk, state 24) and the bung
+seating step.
 
-KEY CHANGES FROM V1:
-1. Two-stage circular cropping (outer disc R=250, inner disc R=110)
-2. Fixed gamma sequence: [7.75, 6.5, 4.0, 2.0, 1.0] with batch processing
-3. Simplified processing: NO morphological opening, NO connected components
-4. Direct area filtering on SAM masks (325-1200 pixels)
-5. Retained cascade geometric validation for square detection
-
-PIPELINE:
-1. Extract outer disc (center 630,350; radius 250)
-2. Bilateral Filter (d=21, σ_color=30, σ_space=30)
-3. Gamma Correction (7.75, 6.5, 4.0, 2.0, or 1.0)
-4. Bilateral Filter (d=21, σ_color=30, σ_space=50)
-5. MobileSAMv2 Segmentation
-6. Extract inner disc (radius 110 from outer disc center)
-7. Filter masks: area 325-1200 pixels in inner disc
-8. Cascade geometric validation (square detection for 4-hole patterns)
+PIPELINE (per gamma, gammas 2.0, 7.75, 4.0, 6.5, 1.0 until a definite answer - CheckBunk / CheckNoCapBunk):
+1. Extract the outer disc (bunk.outer.disc.center, radius bunk.outer.disc.radius; the centre follows the knuckle frame)
+2. Bilateral filter (d=21, sigma_color=30, sigma_space=30), gamma correction, bilateral filter (21, 30, 50)
+3. Masks (MobileSAM): one per YOLO box, plus one per point of a grid every hole.grid.step px over the inner disc
+   (always; since CHANGES 115 - before, a sparse 120 px grid only when YOLO gave fewer than 5 masks, which put no
+   point on the hole ring, so a hole without a YOLO box was lost and the result depended on the bung's angle)
+4. Size filter before any merging: each mask cut to the inner disc (bunk.inner.disc.radius), kept if min.mask.area -
+   max.mask.area px remain
+5. One mask per blob (overlap > 15% of the smaller): the mask found most often, never a union
+6. Shape filter (box 0.5-1.5 x expected.radius.of.hole, fill >= 40%)
+7. Hole pattern: DOST 4 in a square; DOSTPLUS the best pair at dostplus.hole.pair.distance (midpoint nearest the disc
+   centre, not 3 corners of a square with a third candidate); a wrong bung only on a real 4-hole square
+8. One INFO line per gamma ("[Bung] ...": candidates, what was dropped and why, the decision)
+SEATING (check_bung_seating, after the pattern passed; bunk.seating.check): hole-pattern centre near the seated
+position, round top-face mask, the mask a clean oval, inside the model's reference oval.
 """
 
 import warnings
@@ -54,48 +53,61 @@ PRINT_BATCH_PROCESSING = False
 # =============================================================================
 
 # Two-stage cropping parameters
-OUTER_DISC_CENTER = vTuple("vision.bunk.outer.disc.center", (630, 350))  # Center in full image
-OUTER_DISC_RADIUS = vInt("vision.bunk.outer.disc.radius", 250)
+OUTER_DISC_CENTER = (630, 350)  # Center in full image
+OUTER_DISC_RADIUS = 250
 
-INNER_DISC_RADIUS = vInt("vision.bunk.inner.disc.radius", 110)  # Radius from center of outer disc
+INNER_DISC_RADIUS = 110  # Radius from center of outer disc
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
-MIN_MASK_AREA = vInt("vision.bunk.min.mask.area", 325)
-MAX_MASK_AREA = vInt("vision.bunk.max.mask.area", 1200)
+MIN_MASK_AREA = 325
+MAX_MASK_AREA = 1200
+# Point prompts every HOLE_GRID_STEP px inside the hole search disc (inner disc), always added to the YOLO box masks.
+# A hole is about 36 px across on Machine 2 (area about 1000 px), so a 15 px grid puts about 4 points in every hole
+# wherever the bung is turned; the sparse 120 px grid used before put none on the hole ring.
+HOLE_GRID_STEP = 15
+# Masks found more than once (the same hole from several points): IoU above this counts as the same mask
+HOLE_DUPLICATE_IOU = 0.5
+# Masks overlapping by more than this fraction of the smaller one belong to the same blob; one mask is kept per blob
+HOLE_BLOB_OVERLAP = 0.15
 
 # Geometric validation thresholds (retained from v1)
-EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bunk.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code
-MINIMUM_INTERIOR_ANGLE = vFloat("vision.unused.bunk.minimum.interior.angle", 65.0)  # degrees  # UNUSED by live code
-ALLOWED_STD_DEVIATION_IN_ANGLES = vFloat("vision.unused.bunk.allowed.std.deviation.in.angles", 20.0)  # degrees  # UNUSED by live code
+EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation  # UNUSED by live code
+MINIMUM_INTERIOR_ANGLE = 65.0  # degrees  # UNUSED by live code
+ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees  # UNUSED by live code
 # Expected radius of hole for morphological filtering
-EXPECTED_RADIUS_OF_HOLE = vInt("vision.bunk.expected.radius.of.hole", 30)
-SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bunk.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
-SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bunk.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
-SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bunk.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
-SQUARE_MAX_ANGLE_STD = vFloat("vision.bunk.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
-DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.bunk.dostplus.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
-DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.bunk.dostplus.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
+EXPECTED_RADIUS_OF_HOLE = 30
 # 3 holes found, one in the middle of the other two (e.g. the bung's centre punch mark taken for a hole): the middle one
 # is ignored and the other two are treated as the 2 holes, when the angle at the middle hole is within THREE_HOLE_MAX_BEND
 # of a straight line AND its distances to the other two differ by at most THREE_HOLE_MAX_DISTANCE_DIFFERENCE of their mean
-THREE_HOLE_MAX_BEND = vFloat("vision.bunk.three.hole.max.bend", 10.0)  # degrees
-THREE_HOLE_MAX_DISTANCE_DIFFERENCE = vFloat("vision.bunk.three.hole.max.distance.difference", 0.25)  # fraction of the mean distance
+THREE_HOLE_MAX_BEND = 10.0  # degrees
+THREE_HOLE_MAX_DISTANCE_DIFFERENCE = 0.25  # fraction of the mean distance
 
 # Seating (after the hole pattern passes; off = the check as before, Machine 1). A bung that is tilted or not pushed home
 # shows its side wall: its hole pattern is away from the seated position and its top-face mask (MobileSAM, prompted at
 # the hole-pattern centre) is oval. Seated when the hole-pattern centre is within seating.hole.centre.offset.max of the
 # model's seated position AND the face mask's roundness (minor / major axis) reaches the model's minimum.
-SEATING_CHECK = vBool("vision.bunk.seating.check", False)
-SEATING_SEATED_CENTRE_DOST = vTuple("vision.bunk.seating.seated.centre.dost", (630, 350))       # full image px
-SEATING_SEATED_CENTRE_DOSTPLUS = vTuple("vision.bunk.seating.seated.centre.dostplus", (630, 350))
-SEATING_HOLE_CENTRE_OFFSET_MAX = vFloat("vision.bunk.seating.hole.centre.offset.max", 15.0)       # px
-SEATING_ROUNDNESS_MIN_DOST = vFloat("vision.bunk.seating.roundness.min.dost", 0.952)
-SEATING_ROUNDNESS_MIN_DOSTPLUS = vFloat("vision.bunk.seating.roundness.min.dostplus", 0.96)
-SEATING_FACE_RADIUS_MIN = vFloat("vision.bunk.seating.face.radius.min", 100.0)                    # face mask, px
-SEATING_FACE_RADIUS_MAX = vFloat("vision.bunk.seating.face.radius.max", 145.0)
+SEATING_CHECK = False
+SEATING_SEATED_CENTRE_DOST = (630, 350)       # full image px
+SEATING_SEATED_CENTRE_DOSTPLUS = (630, 350)
+SEATING_HOLE_CENTRE_OFFSET_MAX = 15.0       # px
+SEATING_ROUNDNESS_MIN_DOST = 0.952
+SEATING_ROUNDNESS_MIN_DOSTPLUS = 0.96
+SEATING_FACE_RADIUS_MIN = 100.0                    # face mask, px
+SEATING_FACE_RADIUS_MAX = 145.0
+# The face mask must be one clean oval: its area (holes filled) / the area of the ellipse fitted to its outline within
+# ellipse.fit.area.ratio.min..max (a mask that took in part of the side wall or the hub, or lost a piece to glare, fails).
+SEATING_FIT_AREA_RATIO_MIN = 0.98
+SEATING_FIT_AREA_RATIO_MAX = 1.02
+# The face mask must lie inside the model's reference oval (cv2 rotated box: width, height, angle in degrees) centred on
+# the model's seated position: at most outside.reference.oval.max of the mask outside it. A bung lying flat but off
+# centre, or tilted (its face oval and shifted), has part of its face outside. Reference ovals = the seated faces of
+# 13 Nov (mean axes) + 3 px all round.
+SEATING_REFERENCE_OVAL_DOST = (241, 249, 122)
+SEATING_REFERENCE_OVAL_DOSTPLUS = (232, 230, 0)
+SEATING_OUTSIDE_REFERENCE_OVAL_MAX = 0.02
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """
@@ -421,10 +433,10 @@ def find_best_equidistant_subset_euclidean_robust(
         points: List[Tuple[float, float]],
         n: int,
         center: Tuple[float, float],  # Still provided but only for angular spacing check
-        tolerance: float = SQUARE_SIDE_LENGTH_TOLERANCE,
-        min_interior_angle: float = SQUARE_MIN_INTERIOR_ANGLE,
-        max_interior_angle: float = SQUARE_MAX_INTERIOR_ANGLE,
-        allowed_angle_std: float = SQUARE_MAX_ANGLE_STD
+        tolerance: float = 0.2,
+        min_interior_angle: float = 65.0,
+        max_interior_angle: float = 115.0,
+        allowed_angle_std: float = 20.0
 ) -> Tuple[Optional[List[int]], float, dict]:
     """
     ROBUST VERSION: Find best subset forming regular polygon.
@@ -681,6 +693,9 @@ class MobileSAMv2AutomaticMaskGenerator:
             max_mask_region_area: int = MAX_MASK_AREA,
             use_grid_points: bool = True,
             points_per_side: int = 32,
+            grid_center: Optional[Tuple[float, float]] = None,
+            grid_radius: Optional[float] = None,
+            grid_step: Optional[int] = None,
     ):
         """
         Args:
@@ -691,7 +706,9 @@ class MobileSAMv2AutomaticMaskGenerator:
             min_mask_region_area: Minimum mask area to keep
             max_mask_region_area: Maximum mask area to keep
             use_grid_points: If True, also use grid points
-            points_per_side: Number of points per side for grid
+            points_per_side: Number of points per side for grid (sparse grid, only when grid_step is None)
+            grid_center, grid_radius, grid_step: when grid_step is set, a point prompt every grid_step px inside the
+                disc (grid_center, grid_radius) of the image, ALWAYS added to the YOLO box masks (no sparse grid)
         """
         self.predictor = sam_predictor
         self.yolo_model = yolo_model
@@ -701,6 +718,10 @@ class MobileSAMv2AutomaticMaskGenerator:
         self.max_mask_region_area = max_mask_region_area
         self.use_grid_points = use_grid_points
         self.points_per_side = points_per_side
+        self.grid_center = grid_center
+        self.grid_radius = grid_radius
+        self.grid_step = grid_step
+        self.last_counts = {"yolo": 0, "grid": 0, "grid_points": 0, "grid_outside": 0}
 
     def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
         """
@@ -746,10 +767,20 @@ class MobileSAMv2AutomaticMaskGenerator:
                     if mask_data is not None:
                         area = mask_data['area']
                         if self.min_mask_region_area <= area <= self.max_mask_region_area:
+                            mask_data['source'] = 'yolo'
                             masks.append(mask_data)
                 except Exception as e:
                     if PRINT_SAM_SEGMENTATION:
                         logBoth('logDebug', __name__, f"Warning: Failed to generate mask for box {box}: {e}", MessageType.GENERAL)
+        self.last_counts = {"yolo": len(masks), "grid": 0, "grid_points": 0, "grid_outside": 0}
+
+        # Dense grid of point prompts over the hole search disc: always, so that every hole gets prompts whatever
+        # YOLO proposes (YOLO's boxes depend on the highlights, which move when the bung is turned)
+        if self.grid_step:
+            grid_masks, n_points = self._generate_disc_grid_masks(image)
+            masks.extend(grid_masks)
+            self.last_counts.update(grid=len(grid_masks), grid_points=n_points, grid_outside=n_points - len(grid_masks))
+            return masks
 
         # Optionally add grid-based point prompts
         if self.use_grid_points and len(masks) < 5:
@@ -824,6 +855,54 @@ class MobileSAMv2AutomaticMaskGenerator:
                     continue
 
         return masks
+
+    def disc_grid_points(self, shape: Tuple[int, int]) -> List[Tuple[int, int]]:
+        """Point prompts every grid_step px inside the disc (grid_center, grid_radius), on a grid through its centre."""
+        h, w = shape[:2]
+        cx, cy = self.grid_center if self.grid_center is not None else (w / 2.0, h / 2.0)
+        radius = self.grid_radius if self.grid_radius is not None else min(h, w) / 2.0
+        step = int(self.grid_step)
+        n = int(radius // step)
+        points = []
+        for j in range(-n, n + 1):
+            for i in range(-n, n + 1):
+                x, y = cx + i * step, cy + j * step
+                if (i * step) ** 2 + (j * step) ** 2 <= radius ** 2 and 0 <= x < w and 0 <= y < h:
+                    points.append((int(round(x)), int(round(y))))
+        return points
+
+    def _generate_disc_grid_masks(self, image: np.ndarray, batch_size: int = 32) -> Tuple[List[Dict[str, Any]], int]:
+        """One mask per point prompt of disc_grid_points (the image must already be set in the predictor), decoded in
+        batches; masks outside min/max_mask_region_area are dropped at once. Returns (masks, number of points)."""
+        points = self.disc_grid_points(image.shape)
+        masks = []
+        predictor = self.predictor
+        for start in range(0, len(points), batch_size):
+            chunk = points[start:start + batch_size]
+            coords = predictor.transform.apply_coords(np.array(chunk, dtype=np.float64), image.shape[:2])
+            coords_t = torch.as_tensor(coords, dtype=torch.float32, device=predictor.device)[:, None, :]
+            labels_t = torch.ones((len(chunk), 1), dtype=torch.int, device=predictor.device)
+            pred, scores, _ = predictor.predict_torch(coords_t, labels_t, multimask_output=False)
+            pred = pred[:, 0]
+            areas = pred.flatten(1).sum(1)
+            keep = ((areas >= self.min_mask_region_area) & (areas <= self.max_mask_region_area)).nonzero().flatten()
+            if len(keep) == 0:
+                continue
+            kept_masks = pred[keep].cpu().numpy()
+            kept_scores = scores[keep, 0].float().cpu().numpy()
+            kept_areas = areas[keep].cpu().numpy()
+            for k, idx in enumerate(keep.cpu().numpy()):
+                mask = kept_masks[k]
+                masks.append({
+                    'segmentation': mask,
+                    'area': int(kept_areas[k]),
+                    'bbox': self._mask_to_bbox(mask),
+                    'predicted_iou': float(kept_scores[k]),
+                    'stability_score': float(kept_scores[k]),
+                    'source': 'grid',
+                    'point': chunk[int(idx)],
+                })
+        return masks, len(points)
 
     def _overlaps_existing(self, new_mask: np.ndarray, existing_masks: List[Dict], threshold: float = 0.5) -> bool:
         """Check if new mask overlaps significantly with existing masks."""
@@ -909,8 +988,12 @@ class BunkSegmenter:
             min_mask_region_area=MIN_MASK_AREA,
             max_mask_region_area=MAX_MASK_AREA,
             use_grid_points=True,
-            points_per_side=32
+            points_per_side=32,
+            grid_center=(OUTER_DISC_RADIUS, OUTER_DISC_RADIUS),      # the hole search disc in the outer-disc crop
+            grid_radius=INNER_DISC_RADIUS,
+            grid_step=HOLE_GRID_STEP
         )
+        self.last_gamma_text = ""
 
         # Precompute gamma LUTs for all gamma values
         if PRINT_PREPROCESSING:
@@ -1131,10 +1214,11 @@ class BunkSegmenter:
     def _morphological_filter_components(
             self,
             components: List[Tuple[Tuple[float, float], np.ndarray]],
-            inner_disc_shape: Tuple[int, int]
+            inner_disc_shape: Tuple[int, int],
+            dropped: Optional[List[Tuple[float, float, str]]] = None
     ) -> List[Tuple[Tuple[float, float], np.ndarray]]:
         """
-        Apply morphological filtering to clean up components.
+        Apply morphological filtering to clean up components (dropped: if given, (x, y, why) per dropped component).
 
         Pipeline:
         1. Create black image
@@ -1212,12 +1296,17 @@ class BunkSegmenter:
                 logBoth('logDebug', _src, f"    Area: {area}", MessageType.GENERAL)
 
             # Check dimension constraints
+            where = (x + bbox_w / 2.0, y + bbox_h / 2.0)
             if bbox_w < min_dim or bbox_h < min_dim:
+                if dropped is not None:
+                    dropped.append((*where, f"{bbox_w}x{bbox_h} px, smaller than {min_dim}"))
                 if PRINT_MASK_FILTERING:
                     logBoth('logDebug', _src, f"    ✗ DROPPED: Dimension too small (min={min_dim})", MessageType.GENERAL)
                 continue
 
             if bbox_w > max_dim or bbox_h > max_dim:
+                if dropped is not None:
+                    dropped.append((*where, f"{bbox_w}x{bbox_h} px, larger than {max_dim}"))
                 if PRINT_MASK_FILTERING:
                     logBoth('logDebug', _src, f"    ✗ DROPPED: Dimension too large (max={max_dim})", MessageType.GENERAL)
                 continue
@@ -1227,6 +1316,8 @@ class BunkSegmenter:
             min_area = 0.4 * bbox_area
 
             if area < min_area:
+                if dropped is not None:
+                    dropped.append((*where, f"fills {area / bbox_area:.0%} of its box, < 40%"))
                 if PRINT_MASK_FILTERING:
                     logBoth('logDebug', _src, f"    ✗ DROPPED: Area {area} < 40% of bbox area ({min_area:.0f})", MessageType.GENERAL)
                 continue
@@ -1266,138 +1357,116 @@ class BunkSegmenter:
             model_type: str
     ) -> Tuple[int, List[Tuple[Tuple[float, float], np.ndarray]], bool]:
         """
-        Apply cascade geometric validation.
+        Hole pattern among the candidates (inner-disc coordinates).
+
+        1. 3 candidates with one in the middle of the other two (the centre punch mark): the middle one is ignored.
+        2. 4 or more candidates: the best 4 forming a square (side lengths and interior angles,
+           find_best_equidistant_subset_euclidean_robust). Found = definitive: 4 holes (expected 4: OK; expected 2:
+           a DOST bung, NOT OK). A wrong bung is decided only on a real square, never on a count of blobs.
+        3. Expected 2, no square: of all pairs dostplus.hole.pair.distance.min..max apart, the pair whose midpoint is
+           nearest the disc centre (the 2 holes are opposite each other about the bung centre), leaving out a pair
+           that a third candidate makes into 3 corners of a square (3 of a DOST bung's 4 holes: its diagonal is as
+           long as the DOSTPLUS pair). Found = definitive: 2 holes.
+        Anything else: not definitive (the next gamma is tried).
 
         Returns:
-            Tuple of (final_count, final_components, found_definitive_pattern)
+            Tuple of (final_count, final_components, found_definitive_pattern); the decision in words is left in
+            self.last_decision_text.
         """
-        count = len(components)
-        valid_components = components
-        found_definitive_pattern = False
-
         _src = getFullyQualifiedName(__file__, BunkSegmenter)
-
-        if PRINT_GEOMETRIC_VALIDATION:
-            logBoth('logDebug', _src, f"\n{'#' * 70}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"CASCADE GEOMETRIC VALIDATION", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"{'#' * 70}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Model type: {model_type}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Expected count: {expected_count}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Current count: {count}", MessageType.GENERAL)
-
-            # Log input components
-            logBoth('logDebug', _src, f"\nInput components for geometric validation:", MessageType.GENERAL)
-            for i, (center, contour) in enumerate(components):
-                area = cv2.contourArea(contour)
-                logBoth('logDebug', _src, f"  Component {i}: center=({center[0]:.1f}, {center[1]:.1f}), area={area:.0f}", MessageType.GENERAL)
-
-        # Reference center for inner disc
         reference_center = (INNER_DISC_RADIUS, INNER_DISC_RADIUS)
-        if PRINT_GEOMETRIC_VALIDATION:
-            logBoth('logDebug', _src, f"\nReference center for geometry: {reference_center}", MessageType.GENERAL)
+        valid_components = list(components)
+        count = len(valid_components)
+        notes = []
 
-        # 3 holes with one in the middle of the other two (e.g. the centre punch mark): ignore the middle one
         if count == 3:
             valid_components, three_hole_text = drop_middle_of_three_in_line(valid_components)
             count = len(valid_components)
             if three_hole_text:
-                logBoth('logInfo', _src, f"[Cascade] {three_hole_text}", MessageType.GENERAL)
+                notes.append(three_hole_text)
 
-        # FIRST: Check for 4-hole square pattern if count >= 4
         if count >= 4:
-            # SPECIAL CASE: If expecting 2 holes but found 4+, this is immediate fail
-            if expected_count == 2:
-                if PRINT_GEOMETRIC_VALIDATION:
-                    logBoth('logDebug', _src, f"[Cascade] Found {count} components but expected 2 (DOSTPLUS)", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"[Cascade] ✗ DEFINITIVE REJECTION: Too many holes for DOSTPLUS", MessageType.GENERAL)
-                count = 0
-                valid_components = []
-                found_definitive_pattern = True
-            else:
-                # Expected 4, proceed with square validation
-                if PRINT_GEOMETRIC_VALIDATION:
-                    logBoth('logDebug', _src, f"[Cascade] Checking for 4-hole square pattern...", MessageType.GENERAL)
-                centers = [center for center, contour in valid_components]
-
-                best_indices, best_score, diagnostics = find_best_equidistant_subset_euclidean_robust(
-                    centers, 4, reference_center
-                )
-
-                if best_indices is not None:
-                    # Found valid 4-hole square
-                    count = 4
-                    valid_components = [valid_components[i] for i in best_indices]
-                    found_definitive_pattern = True
-
-                    if PRINT_GEOMETRIC_VALIDATION:
-                        if expected_count == 4:
-                            logBoth('logDebug', _src, f"[Cascade] ✓ Found expected 4-hole square pattern!", MessageType.GENERAL)
-                        else:
-                            logBoth('logDebug', _src, f"[Cascade] ✗ Found 4-hole square but expected {expected_count} holes", MessageType.GENERAL)
+            centers = [center for center, contour in valid_components]
+            best_indices, best_score, diagnostics = find_best_equidistant_subset_euclidean_robust(
+                centers, 4, reference_center)
+            if best_indices is not None:
+                square = [valid_components[i] for i in best_indices]
+                sides = self._square_sides([c for c, _ in square])
+                if expected_count == 4:
+                    text = f"4-hole square (sides {sides}) -> OK"
                 else:
-                    # No valid square found
-                    if PRINT_GEOMETRIC_VALIDATION:
-                        logBoth('logDebug', _src, f"[Cascade] No valid 4-hole square found", MessageType.GENERAL)
+                    text = f"4-hole square (sides {sides}) = DOST bung, expected {expected_count} holes -> NOT OK"
+                self.last_decision_text = "; ".join(notes + [text])
+                return 4, square, True
+            notes.append(f"no 4-hole square among {count}")
 
-                    if expected_count == 4:
-                        if PRINT_GEOMETRIC_VALIDATION:
-                            logBoth('logDebug', _src, f"[Cascade] No valid 4-hole square (irregular geometry)", MessageType.GENERAL)
-                        # DO NOT set found_definitive_pattern = True for expected=4
-                        # This allows trying next gamma
-                        count = 0
-                        valid_components = []
-                        # found_definitive_pattern remains False
-
-        # SECOND: Try 2-hole pattern if no definitive pattern and expected==2
-        if not found_definitive_pattern and expected_count == 2:
-            if PRINT_GEOMETRIC_VALIDATION:
-                logBoth('logDebug', _src, f"[Cascade] Checking for 2-hole pattern (distance-based)...", MessageType.GENERAL)
-
-            # NEW LOGIC: Count must be EXACTLY 2
-            if count == 2:
-                centers = [center for center, contour in valid_components]
-
-                # Calculate distance between the two centers
-                c1 = centers[0]
-                c2 = centers[1]
-                distance = np.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
-
-                if PRINT_GEOMETRIC_VALIDATION:
-                    logBoth('logDebug', _src, f"  Center 1: ({c1[0]:.1f}, {c1[1]:.1f})", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"  Center 2: ({c2[0]:.1f}, {c2[1]:.1f})", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"  Distance between centers: {distance:.1f} pixels", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"  Required range: [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}] pixels", MessageType.GENERAL)
-
-                # Check if distance is in range [75, 100]
-                if DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
-                    found_definitive_pattern = True
-                    if PRINT_GEOMETRIC_VALIDATION:
-                        logBoth('logDebug', _src, f"[Cascade] ✓ Found valid 2-hole pattern (distance check passed)!", MessageType.GENERAL)
-                else:
-                    if PRINT_GEOMETRIC_VALIDATION:
-                        logBoth('logDebug', _src, f"[Cascade] ✗ Distance {distance:.1f} outside range [{DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}, {DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}]", MessageType.GENERAL)
-                        logBoth('logDebug', _src, f"[Cascade] Will try next gamma", MessageType.GENERAL)
-                    count = 0
-                    valid_components = []
-                    # found_definitive_pattern remains False - allows continuing to next gamma
+        if expected_count == 2 and count >= 2:
+            best = None
+            rejected_corner = []
+            for i, j in combinations(range(count), 2):
+                (x1, y1), (x2, y2) = valid_components[i][0], valid_components[j][0]
+                distance = float(np.hypot(x2 - x1, y2 - y1))
+                if not 75 <= distance <= 100:
+                    continue
+                corner = self._third_square_corner(valid_components, i, j)
+                if corner is not None:
+                    rejected_corner.append((i, j, corner))
+                    continue
+                mid_off = float(np.hypot((x1 + x2) / 2.0 - reference_center[0], (y1 + y2) / 2.0 - reference_center[1]))
+                if best is None or mid_off < best[0]:
+                    best = (mid_off, i, j, distance)
+            if best is not None:
+                mid_off, i, j, distance = best
+                text = (f"2-hole pair {distance:.0f} px apart (range {75}-"
+                        f"{100}), midpoint {mid_off:.0f} px from the disc centre -> OK")
+                self.last_decision_text = "; ".join(notes + [text])
+                return 2, [valid_components[i], valid_components[j]], True
+            if rejected_corner:
+                notes.append(f"{len(rejected_corner)} pair(s) in range left out: a third candidate makes 3 corners "
+                             f"of a square (DOST holes?)")
             else:
-                if PRINT_GEOMETRIC_VALIDATION:
-                    logBoth('logDebug', _src, f"[Cascade] ✗ Count is {count}, expected exactly 2", MessageType.GENERAL)
-                    logBoth('logDebug', _src, f"[Cascade] Will try next gamma", MessageType.GENERAL)
-                count = 0
-                valid_components = []
-                # found_definitive_pattern remains False - allows continuing to next gamma
+                notes.append(f"no pair {75}-{100} px apart "
+                             f"among {count}")
+        elif count < expected_count:
+            notes.append(f"{count} candidate(s), fewer than {expected_count}")
 
+        self.last_decision_text = "; ".join(notes + ["no pattern -> next gamma"])
         if PRINT_GEOMETRIC_VALIDATION:
-            logBoth('logDebug', _src, f"\n{'#'*70}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"CASCADE RESULT", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"{'#'*70}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Final count: {count}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Definitive pattern: {found_definitive_pattern}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"Match expected: {count == expected_count}", MessageType.GENERAL)
-            logBoth('logDebug', _src, f"{'#'*70}\n", MessageType.GENERAL)
+            logBoth('logDebug', _src, f"[Cascade] {self.last_decision_text}", MessageType.GENERAL)
+        if expected_count == 4 and count >= 4:
+            return 0, [], False
+        if expected_count == 2:
+            return 0, [], False
+        return count, valid_components, False
 
-        return count, valid_components, found_definitive_pattern
+    @staticmethod
+    def _square_sides(centers: List[Tuple[float, float]]) -> str:
+        order = order_polygon_vertices_robust(centers, list(range(len(centers))))
+        pts = [centers[k] for k in order]
+        sides = [np.hypot(pts[k][0] - pts[(k + 1) % 4][0], pts[k][1] - pts[(k + 1) % 4][1]) for k in range(4)]
+        return "/".join(f"{s:.0f}" for s in sides)
+
+    @staticmethod
+    def _third_square_corner(components: List[Tuple[Tuple[float, float], np.ndarray]], i: int, j: int) -> Optional[int]:
+        """Index of a candidate that makes candidates i and j (as the diagonal) into 3 corners of a square: its
+        distances to i and j within square.side.length.tolerance of their mean and the angle at it within
+        square.min/max.interior.angle. None if there is none."""
+        a = np.array(components[i][0], dtype=np.float64)
+        b = np.array(components[j][0], dtype=np.float64)
+        for k, (c, _) in enumerate(components):
+            if k in (i, j):
+                continue
+            c = np.array(c, dtype=np.float64)
+            da, db = np.linalg.norm(a - c), np.linalg.norm(b - c)
+            if da == 0 or db == 0:
+                continue
+            if abs(da - db) / ((da + db) / 2.0) > 0.2:
+                continue
+            cos_angle = np.dot(a - c, b - c) / (da * db)
+            angle = float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0))))
+            if 65.0 <= angle <= 115.0:
+                return k
+        return None
 
     def _merge_overlapping_masks(self, masks: List[Dict[str, Any]],
                                  overlap_threshold: float = 0.15) -> List[Dict[str, Any]]:
@@ -1508,6 +1577,97 @@ class BunkSegmenter:
         x1, x2 = np.where(cols)[0][[0, -1]]
         return [int(x1), int(y1), int(x2 - x1 + 1), int(y2 - y1 + 1)]
 
+    def _keep_masks_in_inner_disc(self, masks: List[Dict[str, Any]], shape: Tuple[int, int]
+                                  ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+        """Size filter BEFORE any merging: each mask is cut to the inner disc and kept only if its part inside is
+        min.mask.area..max.mask.area px. Returns (kept masks, counts of kept / too small / too large)."""
+        h, w = shape[:2]
+        inner = create_circular_mask((h, w), (OUTER_DISC_RADIUS, OUTER_DISC_RADIUS), INNER_DISC_RADIUS)
+        kept, counts = [], {"kept": 0, "too_small": 0, "too_large": 0}
+        for mask_data in masks:
+            cut = mask_data['segmentation'] & inner
+            area = int(cut.sum())
+            if area < MIN_MASK_AREA:
+                counts["too_small"] += 1
+            elif area > MAX_MASK_AREA:
+                counts["too_large"] += 1
+            else:
+                kept.append(dict(mask_data, segmentation=cut, area=area))
+                counts["kept"] += 1
+        return kept, counts
+
+    def _one_mask_per_blob(self, masks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Masks overlapping by more than HOLE_BLOB_OVERLAP of the smaller one are one blob; of each blob the mask
+        found most often (most other masks with IoU > HOLE_DUPLICATE_IOU; then the higher SAM score) is kept, the
+        others are dropped - never united, so a hole is not joined with a highlight or a chamfer next to it."""
+        n = len(masks)
+        if n <= 1:
+            return [dict(m, votes=1) for m in masks]
+        lo, hi = max(0, OUTER_DISC_RADIUS - INNER_DISC_RADIUS), OUTER_DISC_RADIUS + INNER_DISC_RADIUS + 1
+        flat = np.stack([m['segmentation'][lo:hi, lo:hi].reshape(-1) for m in masks]).astype(np.float32)
+        inter = flat @ flat.T
+        areas = np.diag(inter).copy()
+        smaller = np.minimum(areas[:, None], areas[None, :])
+        union = areas[:, None] + areas[None, :] - inter
+        overlap = np.where(smaller > 0, inter / np.maximum(smaller, 1), 0.0)
+        iou = np.where(union > 0, inter / np.maximum(union, 1), 0.0)
+        votes = (iou > HOLE_DUPLICATE_IOU).sum(axis=1)          # includes the mask itself
+        seen = [False] * n
+        result = []
+        for i in range(n):
+            if seen[i]:
+                continue
+            group, stack = [], [i]
+            seen[i] = True
+            while stack:
+                a = stack.pop()
+                group.append(a)
+                for b in np.nonzero(overlap[a] > HOLE_BLOB_OVERLAP)[0]:
+                    if not seen[b]:
+                        seen[b] = True
+                        stack.append(int(b))
+            best = max(group, key=lambda g: (votes[g], masks[g].get('predicted_iou', 0.0)))
+            result.append(dict(masks[best], votes=int(votes[best]), blob_size=len(group)))
+        return result
+
+    def _holes_in_preprocessed(self, preprocessed: np.ndarray, gamma: float, expected_count: int, model_type: str
+                               ) -> Tuple[int, List[Tuple[Tuple[float, float], np.ndarray]], bool]:
+        """One gamma: masks (YOLO boxes + dense grid) -> size filter in the inner disc -> one mask per blob ->
+        contours -> shape filter -> hole pattern. Logs one line (the candidates, what was dropped and why, the
+        decision) and leaves it in self.last_gamma_text."""
+        _src = getFullyQualifiedName(__file__, BunkSegmenter)
+        masks = self.mask_generator.generate(preprocessed)
+        gen = dict(self.mask_generator.last_counts)
+        masks, size_counts = self._keep_masks_in_inner_disc(masks, preprocessed.shape)
+        blobs = self._one_mask_per_blob(masks)
+        components, _ = self._extract_and_filter_masks_in_inner_disc(blobs, preprocessed)
+        dropped = []
+        components = self._morphological_filter_components(components, preprocessed.shape[:2], dropped)
+        candidates = list(components)
+        self.last_decision_text = ""
+        count, components, definitive = self._apply_cascade_geometric_validation(components, expected_count, model_type)
+
+        ox = OUTER_DISC_CENTER[0] - INNER_DISC_RADIUS          # inner-disc -> full picture coordinates
+        oy = OUTER_DISC_CENTER[1] - INNER_DISC_RADIUS
+
+        def where(center):
+            return f"({center[0] + ox:.0f},{center[1] + oy:.0f})"
+
+        cand_text = ", ".join(
+            f"{where(c)} d{np.hypot(c[0] - INNER_DISC_RADIUS, c[1] - INNER_DISC_RADIUS):.0f} a{cv2.contourArea(k):.0f}"
+            for c, k in candidates) or "none"
+        drop_text = ("; shape filter dropped " + ", ".join(f"({x + ox:.0f},{y + oy:.0f}) {why}" for x, y, why in dropped)
+                     if dropped else "")
+        self.last_gamma_text = (
+            f"[Bung] {model_type} gamma {gamma}: masks {gen['yolo']} YOLO + {gen['grid']} grid (of {gen['grid_points']} "
+            f"points every {HOLE_GRID_STEP} px, {gen['grid_outside']} masks outside {MIN_MASK_AREA}-{MAX_MASK_AREA} px); "
+            f"part in r{INNER_DISC_RADIUS} {MIN_MASK_AREA}-{MAX_MASK_AREA} px: "
+            f"{size_counts['kept']} kept, {size_counts['too_small']} too small, {size_counts['too_large']} too large; "
+            f"{len(blobs)} blob(s){drop_text}; candidates {len(candidates)}: {cand_text} (d = px from the disc centre "
+            f"{tuple(int(v) for v in OUTER_DISC_CENTER)}, a = area); {self.last_decision_text}")
+        logBoth('logInfo', _src, self.last_gamma_text, MessageType.GENERAL)
+        return count, components, definitive
+
     def segment_holes_batch_from_preprocessed(
         self,
         preprocessed_images: List[np.ndarray],
@@ -1553,34 +1713,8 @@ class BunkSegmenter:
                 if PRINT_BATCH_PROCESSING:
                     logBoth('logDebug', _src, f"\n[BunkSegmenter] --- Gamma {idx+1}/{len(preprocessed_images)}: {gamma} ---", MessageType.GENERAL)
 
-                # Run SAM
-                masks = self.mask_generator.generate(preprocessed)
-                if PRINT_SAM_SEGMENTATION:
-                    logBoth('logDebug', _src, f"[BunkSegmenter] SAM detected {len(masks)} raw masks", MessageType.GENERAL)
-
-                # Merge overlapping masks
-                masks = self._merge_overlapping_masks(masks, overlap_threshold=0.15)
-                if PRINT_MASK_FILTERING:
-                    logBoth('logDebug', _src, f"[BunkSegmenter] After merging: {len(masks)} masks", MessageType.GENERAL)
-
-                # Extract and filter in inner disc
-                components, count = self._extract_and_filter_masks_in_inner_disc(
-                    masks, preprocessed
-                )
-                if PRINT_MASK_FILTERING:
-                    logBoth('logDebug', _src, f"[BunkSegmenter] After inner disc filtering: {count} components", MessageType.GENERAL)
-
-                # Apply morphological filtering
-                inner_disc_shape = preprocessed.shape[:2]
-                components = self._morphological_filter_components(components, inner_disc_shape)
-                count = len(components)
-                if PRINT_MASK_FILTERING:
-                    logBoth('logDebug', _src, f"[BunkSegmenter] After morphological filtering: {count} components", MessageType.GENERAL)
-
-                # Apply cascade geometric validation
-                count, components, definitive = self._apply_cascade_geometric_validation(
-                    components, expected_count, model_type
-                )
+                count, components, definitive = self._holes_in_preprocessed(
+                    preprocessed, gamma, expected_count, model_type)
 
                 # CRITICAL FIX: Update best BEFORE early termination check
                 # Priority: definitive > count
@@ -1654,34 +1788,8 @@ class BunkSegmenter:
             logBoth('logDebug', _src, f"[BunkSegmenter] Processing single gamma {gamma}", MessageType.GENERAL)
 
         with torch.inference_mode():
-            # Run SAM segmentation
-            masks = self.mask_generator.generate(preprocessed_image)
-            if PRINT_SAM_SEGMENTATION:
-                logBoth('logDebug', _src, f"[BunkSegmenter] SAM detected {len(masks)} raw masks", MessageType.GENERAL)
-
-            # Merge overlapping masks
-            masks = self._merge_overlapping_masks(masks, overlap_threshold=0.15)
-            if PRINT_MASK_FILTERING:
-                logBoth('logDebug', _src, f"[BunkSegmenter] After merging: {len(masks)} masks", MessageType.GENERAL)
-
-            # Extract and filter in inner disc
-            components, count = self._extract_and_filter_masks_in_inner_disc(
-                masks, preprocessed_image
-            )
-            if PRINT_MASK_FILTERING:
-                logBoth('logDebug', _src, f"[BunkSegmenter] After inner disc filtering: {count} components", MessageType.GENERAL)
-
-            # Apply morphological filtering
-            inner_disc_shape = preprocessed_image.shape[:2]
-            components = self._morphological_filter_components(components, inner_disc_shape)
-            count = len(components)
-            if PRINT_MASK_FILTERING:
-                logBoth('logDebug', _src, f"[BunkSegmenter] After morphological filtering: {count} components", MessageType.GENERAL)
-
-            # Apply cascade geometric validation
-            count, components, definitive = self._apply_cascade_geometric_validation(
-                components, expected_count, model_type
-            )
+            count, components, definitive = self._holes_in_preprocessed(
+                preprocessed_image, gamma, expected_count, model_type)
 
             if PRINT_BATCH_PROCESSING:
                 logBoth('logDebug', _src, f"[BunkSegmenter] Result: count={count}, definitive={definitive}", MessageType.GENERAL)
@@ -1719,16 +1827,26 @@ def hole_pattern_centre(components: List[Tuple[Tuple[float, float], np.ndarray]]
 
 def check_bung_seating(image_rgb: np.ndarray, components: List[Tuple[Tuple[float, float], np.ndarray]],
                        model_type: str) -> Dict[str, Any]:
-    """Seating of a bung whose hole pattern passed. Returns dict(seated, reason, hole_centre, offset, roundness,
-    face_radius, face_contour (full image))."""
+    """Seating of a bung whose hole pattern passed. Seated when all four hold:
+      1. the hole-pattern centre is within seating.hole.centre.offset.max of the model's seated position;
+      2. the top-face mask (MobileSAM, prompted at the hole-pattern centre; the smallest mask whose fitted ellipse has
+         a radius of seating.face.radius.min-max) has roundness (minor / major axis) >= the model's minimum;
+      3. the face mask is one clean oval: its area (holes filled) / the fitted ellipse's area within
+         seating.ellipse.fit.area.ratio.min..max;
+      4. at most seating.outside.reference.oval.max of the face mask lies outside the model's reference oval (centred
+         on the seated position).
+    Returns dict(seated, reason, hole_centre, offset, roundness, face_radius, fit_ratio, outside, face_contour (full
+    image))."""
     result = dict(seated=False, reason="", hole_centre=None, offset=None, roundness=None, face_radius=None,
-                  face_contour=None)
+                  fit_ratio=None, outside=None, face_contour=None)
     centre = hole_pattern_centre(components)
     if centre is None:
         result["reason"] = "no holes"
         return result
-    seated_at = SEATING_SEATED_CENTRE_DOSTPLUS if model_type == "DOSTPLUS" else SEATING_SEATED_CENTRE_DOST
-    roundness_min = SEATING_ROUNDNESS_MIN_DOSTPLUS if model_type == "DOSTPLUS" else SEATING_ROUNDNESS_MIN_DOST
+    dostplus = model_type == "DOSTPLUS"
+    seated_at = SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else SEATING_SEATED_CENTRE_DOST
+    roundness_min = SEATING_ROUNDNESS_MIN_DOSTPLUS if dostplus else SEATING_ROUNDNESS_MIN_DOST
+    reference_oval = SEATING_REFERENCE_OVAL_DOSTPLUS if dostplus else SEATING_REFERENCE_OVAL_DOST
     offset = float(np.hypot(centre[0] - seated_at[0], centre[1] - seated_at[1]))
     result.update(hole_centre=centre, offset=offset)
     predictor = _seating_predictor()
@@ -1744,22 +1862,39 @@ def check_bung_seating(image_rgb: np.ndarray, components: List[Tuple[Tuple[float
         c = max(contours, key=cv2.contourArea)
         if len(c) < 5:
             continue
-        (_, _), (a, b), _ = cv2.fitEllipse(c)
+        ellipse = cv2.fitEllipse(c)
+        (_, _), (a, b), _ = ellipse
         r = (a + b) / 4.0
         if SEATING_FACE_RADIUS_MIN <= r <= SEATING_FACE_RADIUS_MAX and max(a, b) > 0:
-            faces.append((r, min(a, b) / max(a, b), c))
+            faces.append((r, min(a, b) / max(a, b), c, ellipse))
     position_ok = offset <= SEATING_HOLE_CENTRE_OFFSET_MAX
     text = (f"holes centre ({centre[0]:.0f},{centre[1]:.0f}) {offset:.1f} px from the seated position "
             f"{'<=' if position_ok else '>'} {SEATING_HOLE_CENTRE_OFFSET_MAX}")
     if not faces:
         result["reason"] = text + f"; no top-face mask of radius {SEATING_FACE_RADIUS_MIN:.0f}-{SEATING_FACE_RADIUS_MAX:.0f}"
         return result
-    r, roundness, contour = min(faces, key=lambda f: f[0])          # the top face (smallest of the face-sized masks)
+    r, roundness, contour, ellipse = min(faces, key=lambda f: f[0])     # the top face (smallest of the face-sized masks)
+    h, w = image_rgb.shape[:2]
+    face = np.zeros((h, w), np.uint8)
+    cv2.drawContours(face, [contour], -1, 1, thickness=cv2.FILLED)          # holes filled
+    face_area = int(face.sum())
+    (_, _), (a, b), _ = ellipse
+    fit_ratio = face_area / (np.pi * a * b / 4.0) if a > 0 and b > 0 else 0.0
+    reference = np.zeros((h, w), np.uint8)
+    cv2.ellipse(reference, ((float(seated_at[0]), float(seated_at[1])),
+                            (float(reference_oval[0]), float(reference_oval[1])), float(reference_oval[2])),
+                1, thickness=-1)
+    outside = float((face & (1 - reference)).sum()) / face_area if face_area else 1.0
     round_ok = roundness >= roundness_min
-    result.update(roundness=float(roundness), face_radius=float(r), face_contour=contour,
-                  seated=bool(position_ok and round_ok),
+    fit_ok = SEATING_FIT_AREA_RATIO_MIN <= fit_ratio <= SEATING_FIT_AREA_RATIO_MAX
+    outside_ok = outside <= SEATING_OUTSIDE_REFERENCE_OVAL_MAX
+    result.update(roundness=float(roundness), face_radius=float(r), fit_ratio=float(fit_ratio), outside=outside,
+                  face_contour=contour, seated=bool(position_ok and round_ok and fit_ok and outside_ok),
                   reason=text + f"; face roundness {roundness:.3f} {'>=' if round_ok else '<'} {roundness_min} "
-                                f"(face r {r:.1f})")
+                                f"(face r {r:.1f}); face / fitted ellipse {fit_ratio:.3f} "
+                                f"{'within' if fit_ok else 'outside'} {SEATING_FIT_AREA_RATIO_MIN}-"
+                                f"{SEATING_FIT_AREA_RATIO_MAX}; {outside:.1%} of the face outside the reference oval "
+                                f"{'<=' if outside_ok else '>'} {SEATING_OUTSIDE_REFERENCE_OVAL_MAX:.0%}")
     return result
 
 
