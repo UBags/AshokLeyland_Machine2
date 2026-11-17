@@ -4006,3 +4006,7 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   `DryRun_Cap_Check.py` all as expected on both machines; `DryRun_All_Checks_UI.py --auto`: cap OK (3.1 s; the YOLO
   checks cannot run in the sandbox). `checkSeating` callers in the dry runs updated (silver prints the face fit).
 - Plant PC verification step 10 added. Needs a rebuilt exe and the properties file.
+- **Follow-up (user's laptop run):** `DryRun_Cap_Silver_Seating.py` printed timm FutureWarnings and MobileSAM "Overwriting
+  tiny_vit_* in registry" UserWarnings. It imported `mobile_sam` before anything had imported `camera.ModelManager`,
+  whose import sets those two warning filters (the other dry runs import it first through the camera server). Now it
+  imports `camera.ModelManager` first (both copies); production unchanged. 6/6, no warnings.

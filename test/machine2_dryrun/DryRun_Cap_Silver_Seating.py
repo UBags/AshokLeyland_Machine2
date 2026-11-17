@@ -39,6 +39,7 @@ def main():
     if not Path(args.sam).is_file():
         print(f"MobileSAM weights not found at {args.sam}: give --sam")
         return 2
+    import camera.ModelManager  # noqa: F401 - its import sets the timm / registry warning filters (as in production)
     from mobile_sam import sam_model_registry
     from camera.CheckCap import CheckCap
     CheckCap.samModelProvider = staticmethod(lambda: sam_model_registry["vit_t"](checkpoint=args.sam).eval())
