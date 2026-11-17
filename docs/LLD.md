@@ -234,8 +234,10 @@ shared model.
 
 **Bung holes (`BunkSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bunk.outer.disc.center`:
-1. masks: one per YOLO box, plus one per point of a grid every `hole.grid.step` (15) px over the inner disc (r125),
-   always - decoded in batches of 32; masks outside `min/max.mask.area` (325-1300 px) dropped at once;
+1. masks: one per YOLO box, plus one per point of a grid every `hole.grid.step` (15) px in the band
+   `hole.grid.radius.min`-`max` (20-90 px, about 110 points; CHANGES 116), always - decoded in batches of 32 at the
+   model's low resolution; only masks whose low-resolution area can pass `min/max.mask.area` (325-1300 px, 30 % slack)
+   are brought to full size and checked exactly;
 2. size filter before any merging: each mask cut to the inner disc, kept if 325-1300 px remain;
 3. one mask per blob (masks overlapping > 15% of the smaller): the one found most often (IoU > 0.5 with others), never
    a union - so a hole is not joined to a highlight next to it;

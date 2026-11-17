@@ -3690,3 +3690,19 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Not run here:** anything with YOLO (the real production mix of YOLO + grid), times on a GPU. On the laptop:
   `DryRun_Bung_Rotation.py` (all 23, both models: 1104 checks) and `DryRun_Bunk_Check_UI.py`; on the plant PC: the
   check time (about 220 point prompts per gamma) - `docs/plant-pc-verification.md` step 9.
+
+## 116. Bung check faster: hole grid only where the holes can be; low-resolution area check first (2026-11-17)
+
+- **User's laptop run of DryRun_Bung_Rotation (§115):** correct so far (96/96 hole patterns after 2 pictures), but about
+  1.5 s per gamma: a good bung about 2 s, a bung failing every gamma about 7-8 s against the 12 s timeout. The run of
+  1104 checks would take about an hour (DOSTPLUS checked as DOST runs all 5 gammas at every angle) - not said in §115.
+- **Cause:** about 220 point prompts per gamma over the whole r125 disc, each mask brought to full size (500 x 500)
+  before its area was looked at.
+- **Change (`MobileSAMv2AutomaticMaskGenerator`):** grid points only in the band `vision.bunk.hole.grid.radius.min` -
+  `.max` (20-90 px; hole centres 40-66 px from the disc centre on the 13 Nov pictures, a hole about 36 px across):
+  108 points. Each batch is decoded at the model's low resolution (256 x 256); a mask's area is estimated there, and
+  only masks within 0.7 x min - 1.3 x max area are brought to full size and checked exactly as before.
+- **Run here (CPU, no YOLO, gamma 2.0):** A01 (DOST) and B11 (DOSTPLUS): the same candidates (positions, areas) and
+  decisions as §115; 16 s per gamma on this CPU (about 30 s before). The GPU time is the user's to measure.
+  Reference commit 0866373 (both manifests); verifier ALL EQUIVALENT on both machines. Nothing else run (user: fast).
+
