@@ -688,6 +688,32 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                                and str(CheckKnuckle.METHOD).strip().lower() == "segmentation")
     # every check looks where this cycle's frame says (the knuckle check's frame), or where the properties say
     VisionFrame.applyToChecks(ImageProcessor.visionFrame)
+    # save.all.pictures.because.its.in.trial.mode: the single-picture checks save their picture here (the 2-of-3 checks
+    # and the cap save theirs in ImageProcessor.check* / _assessCap); before 2026-11-17 these were never saved
+    singlePictureFolder = None
+    if is_knuckle_segmentation:
+        singlePictureFolder = "Knuckle"
+    elif is_hub_and_bearing:
+        singlePictureFolder = "HubAndBottomBearing"
+    elif is_top_bearing:
+        singlePictureFolder = "TopBearing"
+    elif is_nut_and_washer:
+        singlePictureFolder = "NutAndPlateWasher"
+    elif is_nocap_bunk:
+        singlePictureFolder = "BunkForComponentPress"
+    elif is_bunk:
+        singlePictureFolder = "BunkForCapPress"
+    elif is_no_bunk:
+        singlePictureFolder = "NoBunk"
+    if singlePictureFolder is not None and ImageProcessor.saveTrialPictures and imagesToBeProcessed \
+            and imagesToBeProcessed[0] is not None:
+        try:
+            saveFileWithFullPath(imagesToBeProcessed[0],
+                                 f"{ImageProcessor.mainDirForSavingPictures}{singlePictureFolder}/"
+                                 f"{getFileNameForSaving(useExtension=False, useNanoSec=True)}.png")
+        except Exception as e:
+            logBoth('logWarning', ConverterScalerAndProcessor.logSource,
+                    f"Could not save the trial picture ({singlePictureFolder}): {e}", Logger.RISK)
 
     # Defensive defaults — overwritten by all branches below
     allok = False

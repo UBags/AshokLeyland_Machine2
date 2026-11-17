@@ -3766,3 +3766,17 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - Fault scenarios N (both folders): N1 marks the tag missing on both vendors; N2-N4 now run on Siemens too. Not run
   (user: fast).
 
+## 122. Trial pictures saved for every check, not only the 2-of-3 checks and the cap (2026-11-17)
+
+- **User:** with `save.all.pictures.because.its.in.trial.mode=True` only cap and split pin pictures reach
+  `C:/Temp/TrialImages/`.
+- **Cause:** the trial save lived only in the 2-of-3 vote helpers (`ImageProcessor.checkKnuckle`, `checkSplitPinAndWasher`,
+  ...) and in `_assessCap`. Every single-picture check runs its own branch in `assessPictures` and never saved: the
+  knuckle since it moved to segmentation (CHANGES 102), and hub, top bearing, nut / washer, both bung checks and no-bung
+  always.
+- **Fix:** `assessPictures` saves the picture of every single-picture check to `<trial dir>/<Check>/` (Knuckle,
+  HubAndBottomBearing, TopBearing, NutAndPlateWasher, BunkForComponentPress, BunkForCapPress, NoBunk) before the check
+  runs; the vote checks and the cap keep their own saving (no double save). A failed save is logged, the check goes on.
+- Run: the top bearing state through `assessPictures` with saving on - the picture written to `<dir>/TopBearing/`.
+  Needs a rebuilt exe (code change).
+
