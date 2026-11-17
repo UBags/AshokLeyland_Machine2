@@ -3922,3 +3922,34 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
     no 0.0 of an unreached step drawn. 98/98 both copies; with the old dashboard 94/98 (the 0.0 values drawn).
 - Frontend dry run 167/167. Needs a rebuilt exe; the MI dashboard (`OtherServices.py`) needs a restart.
 
+## 128. Brass cap seating by fitted circles: seated brass caps no longer rejected (2026-11-17)
+
+- **User:** 117 trial pictures of 17 Nov (+ 9 from the DB server's folders), nearly all correctly placed caps; the cap
+  window rejected most of them (attachment: almost every DOSTPLUS picture "NOT SEATED - brass cap or bore not found by
+  the segmenter").
+- **Cause (measured, MobileSAM point prompt at the cap centre, as in production):** the brass cap face (SAM's first
+  mask) is found on every picture (radius 80-85). The "bore" was SAM's second mask, which on the 13 Nov pictures was the
+  bore (r 109-114); on the 17 Nov pictures it is the cap plus the dark gap round it, its outline leaking into the
+  bearing: radius 86-103 against the 104-120 window -> "bore not found" on 31 of 36 brass cycles. Where it did fall in
+  the window its centre was pulled by the leak (up to 8 px). SAM's second mask simply is not a bore detector.
+- **Now (`CheckCap.brassCapAndBore`, used by `checkSeating` for brass):** the picture unwrapped round `cap.center`
+  (1 degree x 1 px); per angle the strongest fall of R-B in `seating.brass.edge.band` (55-112: brass -> gap) and of grey
+  in `seating.bore.edge.band` (106-140: the bore edge); a circle fitted to each by RANSAC (fixed seed, tolerance
+  `seating.circle.fit.tolerance` 2 px) and refined; the cap needs `seating.brass.fit.min` 0.5 of the angles on its
+  circle and a radius in `seating.brass.radius` (75-95), the bore `seating.bore.fit.min` 0.3 and `seating.bore.radius`
+  (104-120). Seated = cap centre to bore centre <= `seating.brass.offset.max`, siemens 9.0 -> **10.5** (midway between
+  the largest seated value 7.6 and the smallest skewed 13.5). No MobileSAM for brass: 24 ms per check (CPU).
+  Silver is unchanged (MobileSAM).
+- **Measured:** cap r 82.9-84.3, bore r 107.9-115.5 on every brass picture. 17 Nov (98 brass pictures, all three per
+  cycle, user: seated): 98/98 OK, offset 0.6-7.6 px. 13 Nov seated 5/5 OK (3.5-6.5); 13 Nov skewed 4/4 NOT OK
+  (13.5-23.1).
+- New keys (both machines, all three files; allenbradley = the code defaults, seating stays off on Machine 1).
+  Reference commit 5bf40a3 (f3aa0ed's CheckCap + this logic, values written in); both manifests; verifier ALL
+  EQUIVALENT on both machines.
+- `cap_images/DOSTPLUS_cap_06-10.jpg`: five 17 Nov brass caps that were rejected before (incl. two where SAM's first
+  mask was only part of the face). `DryRun_Cap_Production_Path.py` 12/12 (10 seated brass OK, 4 skewed NOT OK; silver as
+  before).
+- **Silver not solved here** (see the reply of 2026-11-17): on the 17 Nov silver pictures 3 of 7 seated cycles fail the
+  top-face test (top face centre to outline centre 9.1, 9.1-9.4, 12.6-12.7 px against 9.0); MobileSAM's top-face mask is
+  irregular on the embossed face, and no edge-based measure tried here separated them from the 13 Nov skewed caps.
+

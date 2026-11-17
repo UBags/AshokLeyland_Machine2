@@ -224,8 +224,11 @@ the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.beari
 answer in time or the ring finder fails, the verdict is NOT OK too, with the reason (since 2026-11-15; before, the
 guard was not applied). In the dry-run windows the check runs the guard itself (a failing ring finder: NOT OK).
 
-**Seating steps (Machine 2):** cap (`vision.cap.seating.check`): MobileSAM point prompt at the cap centre; brass: cap
-face centre to bore centre ≤ 9 px; silver: top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
+**Seating steps (Machine 2):** cap (`vision.cap.seating.check`): brass (CHANGES §128, no MobileSAM): the picture unwrapped
+round the cap centre, per angle the strongest fall of R-B in `seating.brass.edge.band` (55-112 px: the cap edge) and of
+grey in `seating.bore.edge.band` (106-140 px: the bore edge), a RANSAC circle fitted to each (fit share and radius
+checked); cap centre to bore centre ≤ `seating.brass.offset.max` (10.5 px); silver (MobileSAM point prompt at the cap
+centre): top face centre to outline centre ≤ 9 px and outline centre ≤ 20 px from
 the cap centre. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
