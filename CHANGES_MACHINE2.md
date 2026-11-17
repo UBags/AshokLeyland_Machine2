@@ -4010,3 +4010,19 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   tiny_vit_* in registry" UserWarnings. It imported `mobile_sam` before anything had imported `camera.ModelManager`,
   whose import sets those two warning filters (the other dry runs import it first through the camera server). Now it
   imports `camera.ModelManager` first (both copies); production unchanged. 6/6, no warnings.
+
+## 130. Hub centre mask study window (2026-11-18)
+
+- **User:** a dry-run window to see the MobileSAM mask round the hub centre on the uploaded hub pictures, prompted by
+  points 50 and 60 px from the centre, every 30 degrees.
+- **New `test/machine*_dryrun/DryRun_Hub_Centre_Mask_UI.py`** (study tool; nothing in production changes): prompts =
+  one point every "angle step" degrees on each ring (defaults 50, 60 px and 30 deg: 24 positive points, one decoder
+  call, 3 masks) round "centre" (default `cap.center`, Machine 2 644,340); centre, radii and step editable, applied from
+  the next picture. Outlines only on the picture (mask 1 cyan, 2 magenta, 3 yellow; points blue dots; centre blue
+  cross); per mask score, area, centroid, fitted-ellipse centre, mean radius, roundness and the centroid's distance
+  from the centre in the list / terminal; time per picture; seconds between pictures, Stop, Save; `--batch` without a
+  window.
+- **Run:** `--batch` on the 38 uploaded hub pictures (13 Nov): all processed, 1.0-1.2 s each on the sandbox CPU; the
+  three masks' centres within about 6 px of 644,340; mask 2 the roundest (radius about 70-74, roundness 0.96-0.99).
+  The window itself was not driven here (the sandbox's Tk Python has no torch; the run with a stand-in model was
+  stopped at the user's request) - only compiled.
