@@ -37,7 +37,6 @@ import glob
 import os
 import threading
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple, vBool
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -83,40 +82,46 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = 30.0
+    DELTA_THRESHOLD_TOP_DOST = 30.0
+    DELTA_THRESHOLD_NUT_DOST = 35.0
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
+    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
-    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
+    SILVER_BRIGHTNESS_RADIUS = 25
+    SILVER_BRIGHTNESS_MIN = 0.0
 
     # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
-    SEATING_CHECK = vBool("vision.cap.seating.check", False)
-    SEATING_BRASS_RADIUS_MIN = vFloat("vision.cap.seating.brass.radius.min", 75.0)    # brass cap face mask
-    SEATING_BRASS_RADIUS_MAX = vFloat("vision.cap.seating.brass.radius.max", 95.0)
-    SEATING_BORE_RADIUS_MIN = vFloat("vision.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
-    SEATING_BORE_RADIUS_MAX = vFloat("vision.cap.seating.bore.radius.max", 120.0)
-    SEATING_SILVER_RADIUS_MIN = vFloat("vision.cap.seating.silver.radius.min", 95.0)  # silver cap outline mask
-    SEATING_SILVER_RADIUS_MAX = vFloat("vision.cap.seating.silver.radius.max", 112.0)
-    SEATING_BRASS_OFFSET_MAX = vFloat("vision.cap.seating.brass.offset.max", 9.0)     # cap centre to bore centre
-    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.cap.seating.silver.face.offset.max", 9.0)  # face to outline
-    SEATING_FACE_BOX_SCALE = vFloat("vision.cap.seating.face.box.scale", 0.8)
+    SEATING_CHECK = False
+    SEATING_BRASS_RADIUS_MIN = 75.0    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = 95.0
+    SEATING_BORE_RADIUS_MIN = 104.0     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = 120.0
+    SEATING_SILVER_RADIUS_MIN = 95.0  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = 112.0
+    SEATING_BRASS_OFFSET_MAX = 9.0     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = 9.0  # face to outline
+    SEATING_FACE_BOX_SCALE = 0.8
     # silver: the cap outline centre within this of CENTER (a cap pushed right off the bore); 0 = not checked
-    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.cap.seating.silver.outline.offset.max", 0.0)
+    SEATING_SILVER_OUTLINE_OFFSET_MAX = 0.0
+    # brass seating by fitted circles (CHANGES 128)
+    SEATING_BRASS_EDGE_BAND = (55, 112)    # radii searched for the brass cap's edge (brass -> not brass)
+    SEATING_BORE_EDGE_BAND = (106, 140)    # radii searched for the bore's edge round a brass cap
+    SEATING_CIRCLE_FIT_TOLERANCE = 2.0    # px; an edge point within this of the circle counts as on it
+    SEATING_BRASS_FIT_MIN = 0.5    # share of the angles whose cap edge is on the fitted circle
+    SEATING_BORE_FIT_MIN = 0.3    # share of the angles whose bore edge is on the fitted circle
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}
@@ -235,28 +240,103 @@ class CheckCap:
         ok = [f for f in fits if f is not None and low <= f["radius"] <= high]
         return min(ok, key=lambda f: abs(f["radius"] - mid)) if ok else None
 
+    # ---- brass cap seating by fitted circles (CHANGES 128) ---------------------------------------------------------
+    # MobileSAM's second mask at the cap centre was taken for the bore. On the 17 Nov production pictures it is the cap
+    # plus the dark gap round it (radius 86-103 instead of the bore's 104-120, its outline leaking into the bearing), so
+    # 31 of 36 seated brass caps were "bore not found". Now both circles come from the picture unwrapped round CENTER
+    # (angle x radius): per angle the strongest fall of R-B (brass -> not brass) in SEATING_BRASS_EDGE_BAND and the
+    # strongest fall of grey in SEATING_BORE_EDGE_BAND; a circle is fitted to each by RANSAC (deterministic).
+    _POLAR_RADIUS = 170
+    _POLAR_ANGLES = 360
+
+    @staticmethod
+    def _polar(anImage: np.ndarray) -> np.ndarray:
+        """The picture unwrapped round CENTER: rows = angle (1 degree), columns = radius (1 px)."""
+        return cv2.warpPolar(cv2.GaussianBlur(anImage, (5, 5), 0), (CheckCap._POLAR_RADIUS, CheckCap._POLAR_ANGLES),
+                             (float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])), CheckCap._POLAR_RADIUS,
+                             cv2.WARP_POLAR_LINEAR).astype(np.float64)
+
+    @staticmethod
+    def _edgePoints(profile: np.ndarray, band) -> np.ndarray:
+        """Per angle, the radius in band with the strongest fall outward; the weakest 30 % of the angles left out.
+        Returns the points (x, y) in the picture."""
+        low, high = int(band[0]), int(band[1])
+        fall = -np.gradient(cv2.GaussianBlur(profile, (1, 5), 0), axis=1)[:, low:high]
+        radius = fall.argmax(1) + low
+        strength = fall.max(1)
+        keep = strength > np.percentile(strength, 30)
+        angle = np.deg2rad(np.arange(profile.shape[0]) * 360.0 / profile.shape[0])[keep]
+        r = radius[keep].astype(np.float64)
+        return np.c_[float(CheckCap.CENTER[0]) + r * np.cos(angle), float(CheckCap.CENTER[1]) + r * np.sin(angle)]
+
+    @staticmethod
+    def _fitCircle(points: np.ndarray, tolerance: float):
+        """RANSAC circle (fixed seed, 300 tries), refined by least squares on its inliers: dict(cx, cy, radius,
+        fit = share of the points on it, contour) or None."""
+        if len(points) < 10:
+            return None
+        rng = np.random.default_rng(0)
+        best = None
+        for _ in range(300):
+            s = points[rng.choice(len(points), 3, replace=False)]
+            try:
+                c = np.linalg.solve(np.c_[2 * s, np.ones(3)], (s ** 2).sum(1))
+            except np.linalg.LinAlgError:
+                continue
+            r2 = c[2] + c[0] ** 2 + c[1] ** 2
+            if r2 <= 0:
+                continue
+            inliers = np.abs(np.hypot(*(points - c[:2]).T) - np.sqrt(r2)) < tolerance
+            if best is None or inliers.sum() > best.sum():
+                best = inliers
+        if best is None or best.sum() < 3:
+            return None
+        p = points[best]
+        c = np.linalg.lstsq(np.c_[2 * p, np.ones(len(p))], (p ** 2).sum(1), rcond=None)[0]
+        r = float(np.sqrt(max(c[2] + c[0] ** 2 + c[1] ** 2, 0.0)))
+        contour = cv2.ellipse2Poly((int(round(c[0])), int(round(c[1]))), (int(round(r)), int(round(r))), 0, 0, 360, 2)
+        return dict(cx=float(c[0]), cy=float(c[1]), radius=r, fit=float(best.mean()), contour=contour.reshape(-1, 1, 2))
+
+    @staticmethod
+    def brassCapAndBore(anImage: np.ndarray):
+        """(cap circle, bore circle) of a brass cap, each None when not found (fit share below its minimum, or radius
+        outside seating.brass.radius / seating.bore.radius)."""
+        polar = CheckCap._polar(anImage)
+        rb = polar[..., 2] - polar[..., 0]
+        grey = polar.mean(2)
+        tol = float(CheckCap.SEATING_CIRCLE_FIT_TOLERANCE)
+        cap = CheckCap._fitCircle(CheckCap._edgePoints(rb, CheckCap.SEATING_BRASS_EDGE_BAND), tol)
+        bore = CheckCap._fitCircle(CheckCap._edgePoints(grey, CheckCap.SEATING_BORE_EDGE_BAND), tol)
+        if cap is not None and not (cap["fit"] >= CheckCap.SEATING_BRASS_FIT_MIN and
+                                    CheckCap.SEATING_BRASS_RADIUS_MIN <= cap["radius"] <= CheckCap.SEATING_BRASS_RADIUS_MAX):
+            cap = None
+        if bore is not None and not (bore["fit"] >= CheckCap.SEATING_BORE_FIT_MIN and
+                                     CheckCap.SEATING_BORE_RADIUS_MIN <= bore["radius"] <= CheckCap.SEATING_BORE_RADIUS_MAX):
+            bore = None
+        return cap, bore
+
     @staticmethod
     def checkSeating(anImage: np.ndarray, cap_found: str) -> Dict:
         """Step 4. Returns dict(seated, offset, limit, reason, cap, bore, face) - contours for the marked picture."""
         import torch
-        predictor = CheckCap._sam_predictor()
-        predictor.set_image(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB))
-        centre = np.array([[float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])]], dtype=np.float32)
-        with torch.inference_mode():
-            masks, _, _ = predictor.predict(point_coords=centre, point_labels=np.array([1]), multimask_output=True)
-        fits = [CheckCap._ellipse_of(m) for m in masks]
         result = dict(seated=False, offset=None, limit=None, reason="", cap=None, bore=None, face=None)
         if cap_found == DOSTPLUS:
-            cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_BRASS_RADIUS_MIN, CheckCap.SEATING_BRASS_RADIUS_MAX)
-            bore = CheckCap._pick_by_radius([f for f in fits if f is not cap], CheckCap.SEATING_BORE_RADIUS_MIN,
-                                            CheckCap.SEATING_BORE_RADIUS_MAX)
+            # brass: circles fitted to the cap edge and the bore edge (CHANGES 128; no MobileSAM)
+            cap, bore = CheckCap.brassCapAndBore(anImage)
             result.update(cap=cap, bore=bore, limit=CheckCap.SEATING_BRASS_OFFSET_MAX)
             if cap is None or bore is None:
-                result["reason"] = "brass cap or bore not found by the segmenter"
+                result["reason"] = "brass cap edge or bore edge not found" + (
+                    "" if cap is not None else " (cap)") + ("" if bore is not None else " (bore)")
                 return result
             offset = float(np.hypot(cap["cx"] - bore["cx"], cap["cy"] - bore["cy"]))
             what = "cap centre to bore centre"
         else:
+            predictor = CheckCap._sam_predictor()
+            predictor.set_image(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB))
+            centre = np.array([[float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])]], dtype=np.float32)
+            with torch.inference_mode():
+                masks, _, _ = predictor.predict(point_coords=centre, point_labels=np.array([1]), multimask_output=True)
+            fits = [CheckCap._ellipse_of(m) for m in masks]
             cap = CheckCap._pick_by_radius(fits, CheckCap.SEATING_SILVER_RADIUS_MIN, CheckCap.SEATING_SILVER_RADIUS_MAX)
             result.update(cap=cap, limit=CheckCap.SEATING_SILVER_FACE_OFFSET_MAX)
             if cap is None:
