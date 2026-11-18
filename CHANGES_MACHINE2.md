@@ -4174,3 +4174,30 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run (sandbox, real MobileSAM, stand-in YOLO boxes):** a disc-sized mask dropped as the disc's edge, the cap then the
   first mask; DOST_cap_01 / 06 R-B -9.4 / -15.6 -> silver, first mask (r 102.5 / 103.0); DOSTPLUS_cap_01 / 06 R-B 70.6 /
   72.3 -> brass, refined mask 1 (r 83.3 / 83.8, RMS 0.40 / 0.67 px against the first mask's r 87.7 / 85.9).
+
+## 138. Hub centre mask window: the second set of prompts dropped; two-stage ellipse fit to the cap mask's outline (2026-11-18)
+
+- **User (second laptop run, 58 pictures: the disc's own edge now dropped on 12; cap mask the first mask on 32, refined
+  mask 1 on 26):** drawing the second mask does not help - drop that step; instead fit an ellipse to the first mask's
+  points: first by least squares (sum of squared distances between the points and the ellipse), then refined to have
+  the most points within 2 - 3 px of it.
+- **Now (both copies):** the refinement by point prompts is out of the flow, the window and the CSV
+  (`HubCentreSegmenter.refine` kept, unused, as are its settings keys); the cap mask is always the first mask (its
+  R-B colour still reported). New "Fit an ellipse to the cap mask" (ticked at start), on the mask's outline (its
+  largest outer contour, every pixel):
+  1. least squares: start `cv2.fitEllipseDirect`, then scipy `least_squares` (Levenberg-Marquardt) on each point's
+     true distance to the ellipse (`ellipseDistances`: the closest point by Newton on the ellipse's angle parameter);
+  2. most points within the "inlier tolerance" (default 2.5 px, 0.5 - 5): the stage-1 ellipse and 300 RANSAC ellipses
+     ("RANSAC tries", fixed seed; each through 5 outline points) compete for the most points within the tolerance;
+     the winner is refitted by least squares to its inliers while the count rises (at most 10 rounds).
+  Each stage listed (centre, semi-axes, ratio, angle, RMS distance of all points, points within the tolerance; stage 2
+  also the RMS of its inliers and how far its centre is from stage 1); stage 1 drawn thin black, stage 2 white. CSV:
+  `ell1_*`, `ell2_*` (centre, semi-axes, angle, RMS, inliers, fraction), `ell2_inlier_rms`, `ell2_rounds`,
+  `ell_centre_shift`, `t_ellipse`. `--batch`: `--no-ellipse`, `--tolerance`, `--tries`.
+- **Run:** synthetic ellipse (centre 300,300, semi-axes 103 / 99, 30 deg; 650 points, 1 px noise, a 40-deg stretch
+  pushed 8 px out): stage 1 centre (299.5, 301.6), 102.8 / 101.1, 55.9 deg (pulled by the bulge); stage 2 (300.0,
+  299.9), 103.1 / 99.0, 29.5 deg, 571 of 650 within 2.5 px. Cap pictures (real MobileSAM, stand-in YOLO box; 0.11 -
+  0.14 s per fit on CPU), points within 2.5 px stage 1 -> stage 2: DOST_cap_01 99.0 -> 99.5 %, DOST_cap_03 90.5 ->
+  91.3 %, DOST_skewed_02 61.5 -> 76.9 % (centre 3.8 px from stage 1), DOST_skewed_03 94.4 % both, DOSTPLUS_cap_01
+  75.6 -> 86.4 %, DOSTPLUS_skewed_01 77.0 -> 81.9 %. RANSAC ellipses normalised (a >= b, angle of a in 0 - 180) after
+  a first run showed ratio 1.08. Window under Xvfb with stand-ins: the controls and defaults, no refine controls.

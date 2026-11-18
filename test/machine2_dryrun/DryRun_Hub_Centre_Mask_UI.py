@@ -26,19 +26,20 @@ production changes.
      mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
      colour, listed largest first. Every value used is in the picture's line.
      "Min area" (default 1000 px): smaller masks dropped (counted in the line).
-     "Refine the largest mask with point prompts" (ticked at start, no YOLO): from the largest mask's fitted-ellipse
-     centre and radius, positive points on rings at "positive rings" x the radius (default 0.5, 0.8), negative points
-     on a ring at "negative ring" x the radius (default 1.15), every "angle step" degrees (default 30), plus ("with its
-     box") its bounding box grown by 4 px; one decoder call on the same embedding; MobileSAM's 3 masks listed with
-     score, size, fitted circle, how far the outline lies off that circle (RMS / max px), IoU with the first mask and
-     how far the circle centre moved (positive points blue, negative black). Masks of radius above 0.9 x the disc's
-     are dropped (the cut-out disc's own edge). The cap mask drawn white: brass cap (mean R-B inside the first mask,
-     picture as taken, above the cap check's brass limit) - refined mask 1; silver - the first mask (CHANGES 137). Defaults (CHANGES 136, the user's settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between
-     pictures, the rest as above.
+     Masks of radius above 0.9 x the disc's are dropped (the cut-out disc's own edge). The first (largest) mask is the
+     cap mask; its colour (mean R-B inside it, picture as taken, against the cap check's brass limit) is reported.
+     "Fit an ellipse to the cap mask" (ticked at start; CHANGES 138): the cap mask's outline points get an ellipse in
+     two stages - (1) least squares: the ellipse minimising the sum of squared distances of the outline points from it
+     (start: cv2.fitEllipseDirect, then scipy least_squares on each point's true distance to the ellipse); (2) the most
+     points on it: RANSAC (fixed seed, "RANSAC tries", default 300, ellipses through 5 outline points) and the stage-1
+     ellipse compete for the most outline points within "inlier tolerance" (default 2.5 px), the winner refitted by
+     least squares to its inliers while the count rises. Both listed (centre, semi-axes, angle, RMS of all points,
+     points within the tolerance); stage 1 drawn thin black, stage 2 white. Defaults (CHANGES 136, the user's
+     settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between pictures, the rest as above.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
      centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
   6. Every run writes <folder>/hub_centre_mask_results/details_<time>.csv (one row per picture, every value of the
-     unticked mode: settings, YOLO boxes, times, first mask, the 3 refined masks) and run_<time>.txt (every line of the
+     unticked mode: settings, YOLO boxes, times, first mask, both ellipse fits) and run_<time>.txt (every line of the
      list). "Save marked pictures" also writes each marked picture there. No text on any picture.
 
 MobileSAM: models/MobileSAM/weights/mobile_sam.pt, or --sam <mobile_sam.pt>; loaded in the background when the window
@@ -50,7 +51,7 @@ Without a window:            python test/machine2_dryrun/DryRun_Hub_Centre_Mask_
                              [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 2.0] [--save]
                              [--whole [--disc 160] [--prompts yolo|grid] [--pps 64] [--stability 0.70] [--iou 0.50]
                               [--nms 0.50] [--conf 0.15] [--min-area 1000]
-                              [--no-refine] [--refine-rings 0.5,0.8] [--refine-neg 1.15] [--refine-step 30] [--refine-no-box]]
+                              [--no-ellipse] [--tolerance 2.5] [--tries 300]]
 """
 import os
 import pathlib
@@ -74,8 +75,8 @@ POINT_COLOUR = (255, 0, 0)                                        # BGR blue
 DISC_RADIUS = 160                                                 # px; the disc cut round the centre (whole mode)
 BOX_BATCH = 64                                                    # YOLO boxes per MobileSAM decoder pass
 WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMin=0.50, nmsIou=0.50, yoloConf=0.15,
-                      discRadius=160.0, minArea=1000, refine=True, refineRings=(0.5, 0.8), refineNegative=1.15,
-                      refineStep=30.0, refineBox=True)
+                      discRadius=160.0, minArea=1000, refine=False, refineRings=(0.5, 0.8), refineNegative=1.15,
+                      refineStep=30.0, refineBox=True, ellipse=True, ellipseTolerance=2.5, ellipseTries=300)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 DISC_EDGE_FRACTION = 0.9                                          # a mask of radius above this x the disc's = the disc
 
@@ -144,7 +145,9 @@ def inRange(name, text, low, high, cast=float):
 
 def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_DEFAULTS["minArea"],
                   refine=WHOLE_DEFAULTS["refine"], refineRings="0.5,0.8", refineNegative=WHOLE_DEFAULTS["refineNegative"],
-                  refineStep=WHOLE_DEFAULTS["refineStep"], refineBox=WHOLE_DEFAULTS["refineBox"]):
+                  refineStep=WHOLE_DEFAULTS["refineStep"], refineBox=WHOLE_DEFAULTS["refineBox"],
+                  ellipse=WHOLE_DEFAULTS["ellipse"], ellipseTolerance=WHOLE_DEFAULTS["ellipseTolerance"],
+                  ellipseTries=WHOLE_DEFAULTS["ellipseTries"]):
     """The whole-mode settings, checked."""
     if prompts not in ("grid", "yolo"):
         raise ValueError("prompts must be grid or yolo")
@@ -158,7 +161,9 @@ def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_D
                 yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000),
                 minArea=inRange("min area", minArea, 0, 1000000, int), refine=bool(refine), refineRings=rings,
                 refineNegative=inRange("negative ring", refineNegative, 1.02, 2.0),
-                refineStep=inRange("refine angle step", refineStep, 5, 180), refineBox=bool(refineBox))
+                refineStep=inRange("refine angle step", refineStep, 5, 180), refineBox=bool(refineBox),
+                ellipse=bool(ellipse), ellipseTolerance=inRange("inlier tolerance", ellipseTolerance, 0.5, 10.0),
+                ellipseTries=inRange("tries", ellipseTries, 0, 5000, int))
 
 
 def _noGrad():
@@ -480,6 +485,97 @@ def processOne(segmenter, path, centre, radii, stepDeg, show="All", gamma=1.0):
     return draw(picture, masks, measures, points, centre, show), lines
 
 
+def ellipseDistances(points, e):
+    """Distance of each point from the ellipse e = (cx, cy, a, b, angle in degrees; a, b semi-axes): the closest
+    point on the ellipse by Newton on its angle parameter (10 steps)."""
+    cx, cy, a, b, ang = e
+    t = np.deg2rad(ang)
+    c, s_ = np.cos(t), np.sin(t)
+    dx, dy = points[:, 0] - cx, points[:, 1] - cy
+    u, v = c * dx + s_ * dy, -s_ * dx + c * dy
+    a, b = max(abs(a), 1e-6), max(abs(b), 1e-6)
+    th = np.arctan2(a * v, b * u)
+    for _ in range(10):
+        st, ct = np.sin(th), np.cos(th)
+        f = (a * a - b * b) * st * ct - a * u * st + b * v * ct
+        df = (a * a - b * b) * (ct * ct - st * st) - a * u * ct - b * v * st
+        th = th - f / np.where(np.abs(df) < 1e-9, 1e-9, df)
+    return np.hypot(u - a * np.cos(th), v - b * np.sin(th))
+
+
+def _cvToEllipse(box):
+    """cv2's ((cx, cy), (w, h), angle) -> (cx, cy, a, b, angle) with a >= b and the angle that of a, in 0 - 180."""
+    (cx, cy), (w, h), ang = box
+    a, b = w / 2.0, h / 2.0
+    if b > a:
+        a, b, ang = b, a, ang + 90.0
+    return (float(cx), float(cy), float(a), float(b), float(ang % 180.0))
+
+
+def leastSquaresEllipse(points, start=None):
+    """Stage 1: the ellipse minimising the sum of squared distances of the points from it (start: cv2.fitEllipseDirect,
+    then scipy least_squares on the true distances)."""
+    from scipy.optimize import least_squares
+    if start is None:
+        start = _cvToEllipse(cv2.fitEllipseDirect(points.astype(np.float32)))
+    res = least_squares(lambda e: ellipseDistances(points, e), np.array(start, float), method="lm", max_nfev=200)
+    cx, cy, a, b, ang = res.x
+    if abs(b) > abs(a):                                       # keep a the larger semi-axis
+        a, b, ang = b, a, ang + 90.0
+    return (float(cx), float(cy), abs(float(a)), abs(float(b)), float(ang % 180.0))
+
+
+def mostInliersEllipse(points, start, tolerance, tries, seed=0):
+    """Stage 2: the ellipse with the most points within tolerance of it. Candidates: the stage-1 ellipse and RANSAC
+    ellipses through 5 points (fixed seed); the winner is refitted by least squares to its inliers while that raises
+    the count. -> (ellipse, inlier mask, rounds of refitting)."""
+    rng = np.random.default_rng(seed)
+    count = lambda e: ellipseDistances(points, e) <= tolerance
+    best, bestIn = start, count(start)
+    pts32 = points.astype(np.float32)
+    for _ in range(int(tries)):
+        try:
+            e = _cvToEllipse(cv2.fitEllipse(pts32[rng.choice(len(points), 5, replace=False)]))
+        except cv2.error:
+            continue
+        if not (np.isfinite(e).all() and 0 < e[2] < 1e4 and 0 < e[3] < 1e4):
+            continue
+        inl = count(e)
+        if inl.sum() > bestIn.sum():
+            best, bestIn = e, inl
+    rounds = 0
+    while bestIn.sum() >= 6 and rounds < 10:
+        e = leastSquaresEllipse(points[bestIn], best)
+        inl = count(e)
+        if inl.sum() <= bestIn.sum():
+            break
+        best, bestIn, rounds = e, inl, rounds + 1
+    return best, bestIn, rounds
+
+
+def fitCapEllipse(mask, tolerance, tries):
+    """Both stages on the outline of mask (its largest outer contour) -> dict or None."""
+    contours, _ = cv2.findContours(mask.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None
+    points = max(contours, key=cv2.contourArea).reshape(-1, 2).astype(np.float64)
+    if len(points) < 10:
+        return None
+    t0 = time.perf_counter()
+    e1 = leastSquaresEllipse(points)
+    d1 = ellipseDistances(points, e1)
+    e2, inl2, rounds = mostInliersEllipse(points, e1, tolerance, tries)
+    d2 = ellipseDistances(points, e2)
+    return dict(points=len(points), e1=e1, rms1=float(np.sqrt((d1 ** 2).mean())), in1=int((d1 <= tolerance).sum()),
+                e2=e2, rms2=float(np.sqrt((d2 ** 2).mean())), in2=int(inl2.sum()),
+                rms2in=float(np.sqrt((d2[inl2] ** 2).mean())) if inl2.any() else None, rounds=rounds,
+                seconds=time.perf_counter() - t0)
+
+
+def _drawEllipse(img, e, colour, thickness):
+    cv2.ellipse(img, ((e[0], e[1]), (2 * e[2], 2 * e[3]), e[4]), colour, thickness, cv2.LINE_AA)
+
+
 def _iou(a, b):
     u = np.logical_or(a, b).sum()
     return float(np.logical_and(a, b).sum() / u) if u else 0.0
@@ -491,8 +587,9 @@ CSV_COLUMNS = (["picture", "gamma", "disc", "prompts", "yolo_conf", "min_stabili
                 "boxes_found", "boxes_on_disc", "passed_filters", "masks_after_merge", "masks_kept", "t_yolo", "t_embed",
                 "t_decode", "t_grid", "t_masks", "dropped_disc_edge"] + [f"first_{k}" for k in _MEAS]
                + ["cap_rb", "cap_colour", "cap_mask"]
-               + ["t_refine", "refine_positive", "refine_negative", "refine_box"]
-               + [f"ref{i}_{k}" for i in (1, 2, 3) for k in _MEAS + ("iou_first", "shift")] + ["t_total"])
+               + ["ellipse_tolerance", "ellipse_tries", "outline_points", "t_ellipse"]
+               + [f"ell{i}_{k}" for i in (1, 2) for k in ("cx", "cy", "a", "b", "angle", "rms", "inliers", "inlier_frac")]
+               + ["ell2_inlier_rms", "ell2_rounds", "ell_centre_shift", "t_total"])
 
 
 def appendCsv(path, row):
@@ -518,8 +615,8 @@ def _measureRow(prefix, meas, score=None, stability=None):
 def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None):
     """All masks on the disc round the centre -> (marked picture or None, list of lines). The disc is cut first
     (black outside it); the masks are found on that alone; each is kept to the disc; one with less than half of its
-    area inside the disc, or smaller than minArea, is dropped. With refine: the largest mask's outline gives fresh
-    point prompts (see HubCentreSegmenter.refine). csvPath: one row per picture with every value."""
+    area inside the disc, smaller than minArea, or the disc's own edge, is dropped. With ellipse: a two-stage ellipse
+    fit to the first (cap) mask's outline (fitCapEllipse). csvPath: one row per picture with every value."""
     s = dict(WHOLE_DEFAULTS, **(settings or {}))
     picture = loadPicture(path)
     if picture is None:
@@ -579,41 +676,36 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
         row.update(cap_rb=rb, cap_colour="brass" if brass else "silver")
         lines.append(f"    first mask R-B {rb:.1f} (picture as taken) -> {'brass' if brass else 'silver'} "
                      f"(brass above {brassThreshold():g}, the cap check's limit)")
-    if s["refine"] and kept:
-        res = segmenter.refine(crop, kept[0][1], s)
-        if res is None:
-            lines.append("    refine: the first mask's outline could not be fitted")
+    if s["ellipse"] and kept:
+        fit = fitCapEllipse(kept[0][1], s["ellipseTolerance"], s["ellipseTries"])
+        if fit is None:
+            lines.append("    ellipse: the cap mask's outline is too short to fit")
         else:
-            rmasks, rscores, points, labels, box, tRef = res
-            rmeas = [measure(full(m & disc), centre) for m in rmasks]
-            first = full(kept[0][1])
-            lines.append(f"    refine (first mask's outline -> {int(labels.sum())} positive points on rings "
-                         f"{', '.join(f'{f:g}' for f in s['refineRings'])} x its radius, {int((labels == 0).sum())} "
-                         f"negative at {s['refineNegative']:g} x, every {s['refineStep']:g} deg"
-                         f"{', box' if box is not None else ''}): {tRef:.2f} s")
-            row.update(t_refine=tRef, refine_positive=int(labels.sum()), refine_negative=int((labels == 0).sum()),
-                       refine_box=box is not None)
-            for k, (m, sc, me) in enumerate(zip(rmasks, rscores, rmeas)):
-                iou = _iou(full(m & disc), first)
-                shift = (float(np.hypot(me["circle"][0] - measures[0]["circle"][0], me["circle"][1] - measures[0]["circle"][1]))
-                         if me.get("circle") and measures[0].get("circle") else None)
-                lines.append(f"      refined {describe(k, float(sc), me)}; IoU with the first mask {iou:.3f}"
-                             + (f", circle centre moved {shift:.1f} px" if shift is not None else ""))
-                row.update(_measureRow(f"ref{k + 1}", me, float(sc)))
-                row.update({f"ref{k + 1}_iou_first": iou, f"ref{k + 1}_shift": shift})
-            if brass:
-                capMeas, capSource = rmeas[0], "refined mask 1"
-            for (px, py), lab in zip(points, labels):
-                cv2.circle(marked, (int(round(px + x0)), int(round(py + y0))), 3, POINT_COLOUR if lab else (0, 0, 0), -1)
+            off = lambda e: (e[0] + x0, e[1] + y0, e[2], e[3], e[4])
+            e1, e2 = off(fit["e1"]), off(fit["e2"])
+            n, tol = fit["points"], s["ellipseTolerance"]
+            shift = float(np.hypot(e2[0] - e1[0], e2[1] - e1[1]))
+            lines.append(f"    ellipse fit to the cap mask's outline ({n} points, inlier tolerance {tol:g} px): "
+                         f"{fit['seconds']:.2f} s")
+            for k, e, rms, inl in ((1, e1, fit["rms1"], fit["in1"]), (2, e2, fit["rms2"], fit["in2"])):
+                what = ("least squares" if k == 1 else
+                        f"most points within {tol:g} px ({s['ellipseTries']} RANSAC tries, {fit['rounds']} refit round(s))")
+                lines.append(f"      stage {k}, {what}: centre ({e[0]:.1f}, {e[1]:.1f}), semi-axes {e[2]:.1f} / {e[3]:.1f} "
+                             f"(ratio {e[3] / e[2]:.3f}), angle {e[4]:.1f} deg; distance of all points RMS {rms:.2f} px; "
+                             f"within {tol:g} px {inl} of {n} ({100.0 * inl / n:.1f} %)"
+                             + (f"; RMS of those {fit['rms2in']:.2f} px; centre {shift:.1f} px from stage 1" if k == 2 else ""))
+                row.update({f"ell{k}_cx": e[0], f"ell{k}_cy": e[1], f"ell{k}_a": e[2], f"ell{k}_b": e[3],
+                            f"ell{k}_angle": e[4], f"ell{k}_rms": rms, f"ell{k}_inliers": inl,
+                            f"ell{k}_inlier_frac": inl / n})
+            row.update(ellipse_tolerance=tol, ellipse_tries=s["ellipseTries"], outline_points=n,
+                       t_ellipse=fit["seconds"], ell2_inlier_rms=fit["rms2in"], ell2_rounds=fit["rounds"],
+                       ell_centre_shift=shift)
+            _drawEllipse(marked, e1, (0, 0, 0), 1)
+            _drawEllipse(marked, e2, (255, 255, 255), 2)
     if capMeas is not None:
-        lines.append(f"    cap mask (drawn white): {capSource} ({'brass: refined mask 1' if brass else 'silver: the first mask'})"
-                     + (f" - fitted circle ({capMeas['circle'][0]:.1f}, {capMeas['circle'][1]:.1f}) r {capMeas['circle'][2]:.1f}, "
-                        f"outline RMS {capMeas['edgeRms']:.2f} px" if capMeas.get("circle") else ""))
         row["cap_mask"] = capSource
-        if capMeas["contour"] is not None:
-            cv2.drawContours(marked, [capMeas["contour"]], -1, (255, 255, 255), 2)
     total = time.perf_counter() - tStart
-    lines[0] += f"; {total:.2f} s in all (with refine, measuring and drawing)"
+    lines[0] += f"; {total:.2f} s in all (with the ellipse fit, measuring and drawing)"
     row["t_total"] = total
     cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(s["discRadius"])), (200, 200, 200), 1)
     if csvPath is not None:
@@ -635,9 +727,9 @@ def runBatch():
                           argValue("--stability", d["stabilityMin"]), argValue("--iou", d["iouMin"]),
                           argValue("--nms", d["nmsIou"]), argValue("--conf", d["yoloConf"]),
                           argValue("--disc", d["discRadius"]), argValue("--min-area", d["minArea"]),
-                          "--no-refine" not in sys.argv, argValue("--refine-rings", "0.5,0.8"),
-                          argValue("--refine-neg", d["refineNegative"]), argValue("--refine-step", d["refineStep"]),
-                          "--refine-no-box" not in sys.argv)
+                          False, "0.5,0.8", d["refineNegative"], d["refineStep"], d["refineBox"],
+                          "--no-ellipse" not in sys.argv, argValue("--tolerance", d["ellipseTolerance"]),
+                          argValue("--tries", d["ellipseTries"]))
     segmenter = HubCentreSegmenter(argValue("--sam"))
     segmenter.load()
     print(f"MobileSAM on {segmenter.device}")
@@ -697,10 +789,8 @@ def runWindow():
             self.iouVar, self.nmsVar = V(f"{d['iouMin']:.2f}"), V(f"{d['nmsIou']:.2f}")
             self.confVar = V(f"{d['yoloConf']:.2f}")
             self.minAreaVar = V(str(d["minArea"]))
-            self.refineVar = tk.BooleanVar(master=root, value=d["refine"])
-            self.refineBoxVar = tk.BooleanVar(master=root, value=d["refineBox"])
-            self.refineRingsVar = V(",".join(f"{f:g}" for f in d["refineRings"]))
-            self.refineNegVar, self.refineStepVar = V(f"{d['refineNegative']:.2f}"), V(f"{d['refineStep']:g}")
+            self.ellipseVar = tk.BooleanVar(master=root, value=d["ellipse"])
+            self.tolVar, self.triesVar = V(f"{d['ellipseTolerance']:.1f}"), V(str(d["ellipseTries"]))
             self.csvPath = self.logPath = None
 
             def spin(parent, label, var, lo, hi, inc, fmt, width=5):
@@ -736,14 +826,11 @@ def runWindow():
             spin(bar4, "Box merge IoU", self.nmsVar, 0.30, 1.00, 0.05, "%.2f")
             spin(bar4, "Min area (px)", self.minAreaVar, 0, 50000, 250, "%.0f", 7)
             bar5 = ttk.Frame(root); bar5.pack(fill="x", padx=6)
-            ttk.Checkbutton(bar5, text="Refine the largest mask with point prompts", variable=self.refineVar).pack(side="left")
-            ttk.Label(bar5, text="  positive rings (x radius)").pack(side="left")
-            ttk.Entry(bar5, textvariable=self.refineRingsVar, width=9).pack(side="left", padx=(2, 10))
-            spin(bar5, "negative ring (x radius)", self.refineNegVar, 1.02, 2.0, 0.01, "%.2f")
-            spin(bar5, "angle step", self.refineStepVar, 5, 90, 5, "%.0f", 4)
-            ttk.Checkbutton(bar5, text="with its box", variable=self.refineBoxVar).pack(side="left")
+            ttk.Checkbutton(bar5, text="Fit an ellipse to the cap mask", variable=self.ellipseVar).pack(side="left")
+            spin(bar5, "  inlier tolerance (px)", self.tolVar, 0.5, 5.0, 0.5, "%.1f")
+            spin(bar5, "RANSAC tries", self.triesVar, 0, 2000, 100, "%.0f", 6)
             ttk.Label(root, text="Around the centre: mask 1 cyan, 2 magenta, 3 yellow, points blue.  Unticked: each mask "
-                                 "its own colour, disc grey; refined mask white, its positive points blue, negative black."
+                                 "its own colour, disc grey; ellipse fit: stage 1 (least squares) thin black, stage 2 (most points) white."
                       ).pack(fill="x", padx=6)
 
             self.blank = ImageTk.PhotoImage(Image.new("RGB", (VIEW_W, VIEW_H)))
@@ -808,9 +895,9 @@ def runWindow():
         def whole(self):
             return wholeSettings("yolo" if self.promptsVar.get() == "YOLO boxes" else "grid", self.ppsVar.get(),
                                  self.stabilityVar.get(), self.iouVar.get(), self.nmsVar.get(), self.confVar.get(),
-                                 self.discVar.get(), self.minAreaVar.get(), self.refineVar.get(),
-                                 self.refineRingsVar.get(), self.refineNegVar.get(), self.refineStepVar.get(),
-                                 self.refineBoxVar.get())
+                                 self.discVar.get(), self.minAreaVar.get(), False, "0.5,0.8",
+                                 WHOLE_DEFAULTS["refineNegative"], WHOLE_DEFAULTS["refineStep"], WHOLE_DEFAULTS["refineBox"],
+                                 self.ellipseVar.get(), self.tolVar.get(), self.triesVar.get())
 
         def start(self):
             if not self.modelReady or self.modelError:
