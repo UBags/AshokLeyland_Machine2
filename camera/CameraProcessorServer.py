@@ -752,6 +752,7 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                     test_image = imagesToBeProcessed[0]
 
                     ImageProcessor.currentPictures[hubAndBottomBearingPictureKeyString] = test_image
+                    ImageProcessor.hubCentre = None
 
                     chosenProcessedImage, allok, winning_gamma = \
                         CheckHubAndBottomBearing.checkHubAndBottomBearing(
@@ -759,6 +760,8 @@ def assessPictures(currentMachineState: MachineState, imagesToBeProcessed: list)
                             ImageProcessor.currentComponentQRCodeValue,
                             use_smart_gamma=True  # Enable smart ordering
                         )
+                    # the hub's centre, kept with the cycle for the cap check (CHANGES 143)
+                    ImageProcessor.hubCentre = CheckHubAndBottomBearing.lastHubCentre if allok else None
 
                     chosenOriginalImage = test_image
 
@@ -1035,7 +1038,8 @@ def _assessCap(imagesToBeProcessed: list):
     passed, firstFailed = [], None
     for index, picture in enumerate(pictures):
         processed, ok = CheckCap.checkCap(anImage=picture, currentPictures=IP.currentPictures,
-                                          componentQRCode=IP.currentComponentQRCodeValue, runSeating=False)
+                                          componentQRCode=IP.currentComponentQRCodeValue, runSeating=False,
+                                          hubCentre=IP.hubCentre)
         if ok:
             passed.append(index)
         elif firstFailed is None:
@@ -1049,7 +1053,8 @@ def _assessCap(imagesToBeProcessed: list):
     picture = pictures[passed[0]]
     IP.currentPictures[capPictureKeyString] = picture
     processed, ok = CheckCap.checkCap(anImage=picture, currentPictures=IP.currentPictures,
-                                      componentQRCode=IP.currentComponentQRCodeValue, runSeating=True)
+                                      componentQRCode=IP.currentComponentQRCodeValue, runSeating=True,
+                                      hubCentre=IP.hubCentre)
     logBoth('logInfo', logSource, f"CheckCap: whole check (with seating) on picture {passed[0] + 1}: "
             f"{'OK' if ok else 'NOT OK'}", Logger.SUCCESS if ok else Logger.ISSUE)
     return bool(ok), processed if processed is not None else picture, picture
@@ -1105,6 +1110,10 @@ class ImageProcessor():
     # from the spindle, the bosses' pins and the lower arm; None = the centres in the properties file. Dropped at the
     # end of a cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle retake.
     visionFrame: Dict[str, Any] | None = None
+    # The hub's centre in this cycle's hub + bottom bearing picture (CheckHubAndBottomBearing.lastHubCentre: centre of
+    # the circle through the 4 / 5 holes or bolts found), for the cap seating step (CHANGES 143). Set by a hub check
+    # that passed, None after one that did not; dropped at the end of a cycle.
+    hubCentre: Dict[str, Any] | None = None
 
     # this lock is needed because 3 threads simultaneously call this function, and only 1 message is in the queue
     getQRCodeLock = threading.Lock()
@@ -1112,7 +1121,7 @@ class ImageProcessor():
     # the knuckle check (prepareForKnuckleCheck) and turns this off, so a check never waits on the QR queue.
     fetchQRCodeInChecks: bool = True
     _STATE_ATTRIBUTES = ("currentComponentQRCodeValue", "currentModelName", "currentSide", "bearingCentreAndRadii",
-                         "bearingProfileQRCode", "visionFrame")
+                         "bearingProfileQRCode", "visionFrame", "hubCentre")
 
     @classmethod
     def snapshotState(cls) -> Dict[str, Any]:
@@ -1180,7 +1189,8 @@ class ImageProcessor():
         logBoth('logCritical', ImageProcessor.logSource,
                 f"Camera server restarted: cycle state taken from {why} - QR code {ImageProcessor.currentComponentQRCodeValue}, "
                 f"pictures {kept}, bearing ring {'yes' if ImageProcessor.bearingCentreAndRadii else 'no'}, knuckle frame "
-                f"{'yes' if ImageProcessor.visionFrame else 'no'}", Logger.SUCCESS)
+                f"{'yes' if ImageProcessor.visionFrame else 'no'}, hub centre {'yes' if ImageProcessor.hubCentre else 'no'}",
+                Logger.SUCCESS)
         return True
 
     @classmethod
@@ -1191,6 +1201,7 @@ class ImageProcessor():
         ImageProcessor.currentSide = None
         ImageProcessor.clearCurrentPictures()
         ImageProcessor.clearBearingCentreAndRadii()
+        ImageProcessor.hubCentre = None
         ImageProcessor.setVisionFrame(None)
         ImageProcessor.persistState()
 
@@ -1443,7 +1454,7 @@ class ImageProcessor():
             return CheckCap.checkCap(anImage=anImage,
                                      currentPictures=ImageProcessor.currentPictures,
                                      componentQRCode=ImageProcessor.currentComponentQRCodeValue,
-                                     gamma=gamma)
+                                     gamma=gamma, hubCentre=ImageProcessor.hubCentre)
         except Exception as e:
             logBoth('logCritical', ImageProcessor.logSource,
                     f"Exception in ImageProcessor.checkCap: {e}",

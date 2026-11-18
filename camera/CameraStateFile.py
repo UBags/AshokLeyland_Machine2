@@ -6,7 +6,7 @@ CameraStateFile - the camera server's cycle state kept in a file, so that a came
 supervisor in the middle of a cycle carries on with that cycle (user, 2026-11-15).
 
 What is kept: everything ImageProcessor keeps for the cycle (ImageProcessor._STATE_ATTRIBUTES: QR code, model, side,
-top bearing ring, knuckle frame) and the earlier pictures of the component (ImageProcessor.currentPictures, as PNG).
+top bearing ring, knuckle frame, hub centre) and the earlier pictures of the component (ImageProcessor.currentPictures, as PNG).
 The camera server writes the file after every check and at the end of every cycle (completed or aborted: the state is
 then empty). It is read only when the camera server is started with the file's path: MainProgram passes None at its own
 start (a new run starts clean) and the path when the supervisor restarts the camera server.

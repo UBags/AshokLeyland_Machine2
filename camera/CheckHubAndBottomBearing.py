@@ -26,7 +26,6 @@ from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
-from camera.VisionConfig import vInt
 from concurrent.futures import ThreadPoolExecutor
 
 # Import the core segmentation engine (STANDALONE VERSION v2.0)
@@ -44,11 +43,14 @@ except ImportError as e:
     HubAndBearingSegmenter = None  # Prevents NameError
 
 # "No bearing in centre" check: annulus (full-image pixels) whose mean gray value (after gamma 3.0) must stay below the limit
-HUB_CENTRE_CHECK_X = vInt("vision.hub.centre.check.x", 635)
-HUB_CENTRE_CHECK_Y = vInt("vision.hub.centre.check.y", 350)
-HUB_CENTRE_CHECK_OUTER_RADIUS = vInt("vision.hub.centre.check.outer.radius", 60)
-HUB_CENTRE_CHECK_INNER_RADIUS = vInt("vision.hub.centre.check.inner.radius", 20)
-HUB_CENTRE_CHECK_MAX_MEAN = vInt("vision.hub.centre.check.max.mean", 140)
+HUB_CENTRE_CHECK_X = 635
+HUB_CENTRE_CHECK_Y = 350
+HUB_CENTRE_CHECK_OUTER_RADIUS = 60
+HUB_CENTRE_CHECK_INNER_RADIUS = 20
+HUB_CENTRE_CHECK_MAX_MEAN = 140
+# The hub's centre from the winning group (CHANGES 143): a circle through the group's mask centres. Its radius tells
+# bolts from holes (both models: holes about 147 px from the centre, bolts about 182 px on Machine 2 pictures).
+HUB_CENTRE_BOLT_MIN_DISTANCE = 165.0
 
 
 def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
@@ -112,6 +114,31 @@ class CheckHubAndBottomBearing:
 
     # Gamma correction LUT (gamma = 3.0)
     _gamma_lut = None
+
+    # The hub's centre found by the last checkHubAndBottomBearing() that passed (None after one that did not):
+    # dict(cx, cy, radius, kind 'holes' / 'bolts', count, spread) in full-picture pixels (CHANGES 143). The camera
+    # server keeps it with the cycle (ImageProcessor.hubCentre) for the cap check.
+    lastHubCentre: Optional[Dict] = None
+
+    @staticmethod
+    def hubCentreFromGroup(group, annularCentre, outerRadius) -> Optional[Dict]:
+        """The hub's centre from the winning group's (contour, centre) tuples, whose centres are in the segmenter's
+        cropped (annular) picture: least-squares circle through them, in full-picture pixels. None with fewer than 3."""
+        centres = [c for _, c in (group or []) if c is not None]
+        if len(centres) < 3:
+            return None
+        x0 = max(0, int(annularCentre[0]) - int(outerRadius))     # the crop's corner (extract_annular_region)
+        y0 = max(0, int(annularCentre[1]) - int(outerRadius))
+        p = np.asarray(centres, dtype=np.float64) + (x0, y0)
+        try:
+            sol = np.linalg.lstsq(np.c_[2 * p, np.ones(len(p))], (p ** 2).sum(1), rcond=None)[0]
+        except np.linalg.LinAlgError:
+            return None
+        cx, cy = float(sol[0]), float(sol[1])
+        radius = float(np.sqrt(max(sol[2] + cx ** 2 + cy ** 2, 0.0)))
+        d = np.hypot(p[:, 0] - cx, p[:, 1] - cy)
+        return dict(cx=cx, cy=cy, radius=radius, kind="bolts" if radius >= HUB_CENTRE_BOLT_MIN_DISTANCE else "holes",
+                    count=len(p), spread=float(d.std()))
 
     @classmethod
     def _get_gamma_lut(cls) -> np.ndarray:
@@ -210,6 +237,7 @@ class CheckHubAndBottomBearing:
         - Detected model doesn't match expected (mismatch detection - v2.0)
         """
         _src = getFullyQualifiedName(__file__, CheckHubAndBottomBearing)
+        CheckHubAndBottomBearing.lastHubCentre = None
 
         logBoth('logDebug', _src,
                 f"CheckHubAndBottomBearing.checkHubAndBottomBearing() called with "
@@ -343,6 +371,14 @@ class CheckHubAndBottomBearing:
                                             f"[LazyEval] Cancelled preprocessing of gamma {gamma_values[idx + 1]} (not needed)",
                                             MessageType.GENERAL)
 
+                            hub = CheckHubAndBottomBearing.hubCentreFromGroup(
+                                winning_group, segmenter.annular_center, segmenter.annular_outer_radius)
+                            CheckHubAndBottomBearing.lastHubCentre = hub
+                            if hub is not None:
+                                logBoth('logInfo', _src,
+                                        f"[CheckHubAndBottomBearing] hub centre ({hub['cx']:.1f}, {hub['cy']:.1f}) from "
+                                        f"{hub['count']} {hub['kind']} (circle r {hub['radius']:.1f}, spread {hub['spread']:.1f} px)",
+                                        MessageType.GENERAL)
                             result_image = paint_masks_on_image(anImage_rgb, winning_group, color=(0, 255, 0))
 
                             # Clear GPU after finding winner
