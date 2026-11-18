@@ -37,7 +37,6 @@ import glob
 import os
 import threading
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple, vBool
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -83,76 +82,100 @@ class CheckCap:
 
     # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
-    CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    CENTER = (635, 360)               # centre of the circle the check looks at
+    RADIUS_DOST = 100
+    RADIUS_DOSTPLUS = 70
+    RB_THRESHOLD_DOST = -1.0            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = 15.0    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = 30.0
+    DELTA_THRESHOLD_TOP_DOST = 30.0
+    DELTA_THRESHOLD_NUT_DOST = 35.0
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = 35.0
+    DELTA_THRESHOLD_TOP_DOSTPLUS = 50.0
+    DELTA_THRESHOLD_NUT_DOSTPLUS = 35.0
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
-    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
+    SILVER_BRIGHTNESS_RADIUS = 25
+    SILVER_BRIGHTNESS_MIN = 0.0
 
     # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
-    SEATING_CHECK = vBool("vision.cap.seating.check", False)
-    SEATING_BRASS_RADIUS_MIN = vFloat("vision.cap.seating.brass.radius.min", 75.0)    # brass cap face mask
-    SEATING_BRASS_RADIUS_MAX = vFloat("vision.cap.seating.brass.radius.max", 95.0)
-    SEATING_BORE_RADIUS_MIN = vFloat("vision.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
-    SEATING_BORE_RADIUS_MAX = vFloat("vision.cap.seating.bore.radius.max", 120.0)
-    SEATING_SILVER_RADIUS_MIN = vFloat("vision.cap.seating.silver.radius.min", 95.0)  # silver cap outline mask
-    SEATING_SILVER_RADIUS_MAX = vFloat("vision.cap.seating.silver.radius.max", 112.0)
-    SEATING_BRASS_OFFSET_MAX = vFloat("vision.cap.seating.brass.offset.max", 9.0)     # cap centre to bore centre
-    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.cap.seating.silver.face.offset.max", 9.0)  # face to outline
-    SEATING_FACE_BOX_SCALE = vFloat("vision.cap.seating.face.box.scale", 0.8)
+    SEATING_CHECK = False
+    SEATING_BRASS_RADIUS_MIN = 75.0    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = 95.0
+    SEATING_BORE_RADIUS_MIN = 104.0     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = 120.0
+    SEATING_SILVER_RADIUS_MIN = 95.0  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = 112.0
+    SEATING_BRASS_OFFSET_MAX = 9.0     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = 9.0  # face to outline
+    SEATING_FACE_BOX_SCALE = 0.8
     # silver: the cap outline centre within this of CENTER (a cap pushed right off the bore); 0 = not checked
-    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.cap.seating.silver.outline.offset.max", 0.0)
+    SEATING_SILVER_OUTLINE_OFFSET_MAX = 0.0
     # brass seating by fitted circles (CHANGES 128)
-    SEATING_BRASS_EDGE_BAND = vTuple("vision.cap.seating.brass.edge.band", (55, 112))    # radii searched for the brass cap's edge (brass -> not brass)
-    SEATING_BORE_EDGE_BAND = vTuple("vision.cap.seating.bore.edge.band", (106, 140))    # radii searched for the bore's edge round a brass cap
-    SEATING_CIRCLE_FIT_TOLERANCE = vFloat("vision.cap.seating.circle.fit.tolerance", 2.0)    # px; an edge point within this of the circle counts as on it
-    SEATING_BRASS_FIT_MIN = vFloat("vision.cap.seating.brass.fit.min", 0.5)    # share of the angles whose cap edge is on the fitted circle
-    SEATING_BORE_FIT_MIN = vFloat("vision.cap.seating.bore.fit.min", 0.3)    # share of the angles whose bore edge is on the fitted circle
+    SEATING_BRASS_EDGE_BAND = (55, 112)    # radii searched for the brass cap's edge (brass -> not brass)
+    SEATING_BORE_EDGE_BAND = (106, 140)    # radii searched for the bore's edge round a brass cap
+    SEATING_CIRCLE_FIT_TOLERANCE = 2.0    # px; an edge point within this of the circle counts as on it
+    SEATING_BRASS_FIT_MIN = 0.5    # share of the angles whose cap edge is on the fitted circle
+    SEATING_BORE_FIT_MIN = 0.3    # share of the angles whose bore edge is on the fitted circle
     # silver seating by two rules (CHANGES 129). Rule 1: no part of the hub centre may be left uncovered - the hub circle
     # comes from this cycle's hub + bottom bearing picture (MobileSAM, ring of points round CENTER plus a box).
-    SEATING_HUB_RING_RADIUS = vInt("vision.cap.seating.hub.ring.radius", 95)    # px; radius of the ring of prompt points
-    SEATING_HUB_BOX_HALF = vInt("vision.cap.seating.hub.box.half", 125)    # px; half side of the prompt box
-    SEATING_HUB_RADIUS_MIN = vFloat("vision.cap.seating.hub.radius.min", 100.0)    # hub circle radius accepted
-    SEATING_HUB_RADIUS_MAX = vFloat("vision.cap.seating.hub.radius.max", 125.0)
-    SEATING_HUB_CENTRE_INSET = vFloat("vision.cap.seating.hub.centre.inset", 12.0)    # px; hub centre = hub circle less this
-    SEATING_HUB_DARK_LEVEL = vInt("vision.cap.seating.hub.dark.level", 60)    # HSV value below this = uncovered (dark) hub
-    SEATING_HUB_DARK_OPEN = vInt("vision.cap.seating.hub.dark.open", 9)    # px; dark parts narrower than this are shadow
-    SEATING_HUB_VISIBLE_MAX = vInt("vision.cap.seating.hub.visible.max", 400)    # px; uncovered hub centre allowed
+    SEATING_HUB_RING_RADIUS = 95    # px; radius of the ring of prompt points
+    SEATING_HUB_BOX_HALF = 125    # px; half side of the prompt box
+    SEATING_HUB_RADIUS_MIN = 100.0    # hub circle radius accepted
+    SEATING_HUB_RADIUS_MAX = 125.0
+    SEATING_HUB_CENTRE_INSET = 12.0    # px; hub centre = hub circle less this
+    SEATING_HUB_DARK_LEVEL = 60    # HSV value below this = uncovered (dark) hub
+    SEATING_HUB_DARK_OPEN = 9    # px; dark parts narrower than this are shadow
+    SEATING_HUB_VISIBLE_MAX = 400    # px; uncovered hub centre allowed
     # Rule 2: the cap's top face must still be one circle (a tilted cap shows its side wall on one side and the face
     # edge stops lying on one circle). Face edge per angle: strongest fall of brightness outward between band.min and
     # the cap outline radius less edge.margin, round the cap outline centre; share of the angles on the fitted circle.
-    SEATING_SILVER_FACE_BAND_MIN = vInt("vision.cap.seating.silver.face.band.min", 60)
-    SEATING_SILVER_FACE_EDGE_MARGIN = vInt("vision.cap.seating.silver.face.edge.margin", 6)
-    SEATING_SILVER_FACE_FIT_MIN = vFloat("vision.cap.seating.silver.face.fit.min", 0.64)
+    SEATING_SILVER_FACE_BAND_MIN = 60
+    SEATING_SILVER_FACE_EDGE_MARGIN = 6
+    SEATING_SILVER_FACE_FIT_MIN = 0.64
     # Hub-centre distance (CHANGES 143), brass and silver: the cap's centre - the stage-2 ellipse centre of the cap mask
     # (camera/CapMaskFinder.py, the method frozen in CHANGES 139 - 142) - must lie within hub.distance.max of the hub's
     # centre found by this cycle's hub check (circle through its 4 / 5 holes or bolts, ImageProcessor.hubCentre) moved
     # by the offset for what the hub check found (holes on the disc face, bolt tips higher up: the camera sees the
     # three heights - holes, bolt tips, cap face - from a slight angle). The part comes back to the same place for the
     # hub and cap pictures (servo, sensors; user, 2026-11-18). Without a hub centre the rule is not applied (logged).
-    SEATING_HUB_DISTANCE_CHECK = vBool("vision.cap.seating.hub.distance.check", False)
-    SEATING_HUB_DISTANCE_MAX = vFloat("vision.cap.seating.hub.distance.max", 5.0)    # px
+    SEATING_HUB_DISTANCE_CHECK = False
+    SEATING_HUB_DISTANCE_MAX = 5.0    # px
     # px (x, y) added to the hub centre, per hub kind and per model (CHANGES 147): the silver and the brass cap face sit at
     # different heights, so the camera's slight angle moves each by its own amount against the holes and the bolt tips
-    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST = vTuple("vision.cap.seating.hub.distance.offset.holes.dost", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS = vTuple("vision.cap.seating.hub.distance.offset.holes.dostplus", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST = vTuple("vision.cap.seating.hub.distance.offset.bolts.dost", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS = vTuple("vision.cap.seating.hub.distance.offset.bolts.dostplus", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST = (0.0, 0.0)
+    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS = (0.0, 0.0)
+    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST = (0.0, 0.0)
+    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS = (0.0, 0.0)
+    # Where the hub centre for the distance rule comes from (CHANGES 152):
+    #   "cap"      - the circle through the hub's holes round the cap, in the cap picture itself (hubHoles): hub and cap in
+    #                one picture, so where the part sits on the fixture and any camera move cancel out
+    #   "hubcheck" - this cycle's hub check (ImageProcessor.hubCentre, CHANGES 143), with the offsets above
+    # The hub picture is of the part at another moment and often from a part that sat elsewhere: against one fixed hub
+    # picture the seated DOST caps spread over 12 px (three part positions), in their own picture within 3.3 px.
+    SEATING_HUB_SOURCE = "cap"
+    # The holes (dark, at r ~150) - never the bolts (bright stud tops at r 182 - 196): dark blobs only, searched in the
+    # band round CENTER, the circle through them must have a radius in holes.radius, all the holes of the model
+    # (DOST 4, DOSTPLUS 5) evenly spaced. Not found -> the cap is NOT seated (a cap off the bore covers holes).
+    SEATING_HUB_HOLES_BAND = (128, 168)    # px from CENTER
+    SEATING_HUB_HOLES_DARK_PERCENTILES = [6.0, 9.0, 12.0]    # darkest % of the band, tried in turn
+    SEATING_HUB_HOLES_AREA = (150, 2500)    # px, one hole's dark blob
+    SEATING_HUB_HOLES_OPEN = 5    # px; opening that drops thin dark lines
+    SEATING_HUB_HOLES_BLOBS_KEEP = 8    # largest blobs tried
+    SEATING_HUB_HOLES_RADIUS = (140.0, 160.0)    # px, hole circle
+    SEATING_HUB_HOLES_SPREAD_MAX = 3.0    # px, holes off the circle (sd)
+    SEATING_HUB_HOLES_GAP_MAX = 15.0    # deg, a gap off 360 / count
+    SEATING_HUB_HOLES_COUNT_DOST = 4
+    SEATING_HUB_HOLES_COUNT_DOSTPLUS = 5
+    # px (x, y) added to the hole circle's centre (source "cap"), per model: the cap face and the holes are at different
+    # heights, seen from a slight angle
+    SEATING_HUB_DISTANCE_OFFSET_CAP_DOST = (0.0, 0.0)
+    SEATING_HUB_DISTANCE_OFFSET_CAP_DOSTPLUS = (0.0, 0.0)
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}
@@ -425,9 +448,76 @@ class CheckCap:
         return ModelManager.get_instance().get_yolo_model()
 
     @staticmethod
+    def hubHoles(anImage: np.ndarray, model: str | None) -> Dict:
+        """The hub's holes round the cap in the cap picture (CHANGES 152): dict(found, cx, cy, radius, spread, gap, count,
+        percentile, points, blobs, reason). Dark blobs in the band round CENTER (the darkest percentile of the band; the
+        next percentile is tried when the holes are not all found), the count of the model's holes most evenly spaced on
+        a circle; found only with the circle radius in holes.radius, spread and angle gaps within their limits. Then
+        once more with the band round the circle found, so that a part sitting off CENTER does not cut holes at the
+        band's edge (their centres would be pulled inward)."""
+        n = int(CheckCap.SEATING_HUB_HOLES_COUNT_DOSTPLUS if model == DOSTPLUS else CheckCap.SEATING_HUB_HOLES_COUNT_DOST)
+        grey = cv2.GaussianBlur(cv2.cvtColor(anImage, cv2.COLOR_BGR2GRAY), (5, 5), 0)
+        result = dict(found=False, count=n, reason="no dark blobs")
+        for percentile in CheckCap.SEATING_HUB_HOLES_DARK_PERCENTILES:
+            result = CheckCap._holesAround(grey, (float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])), n,
+                                           float(percentile))
+            if result["found"]:
+                again = CheckCap._holesAround(grey, (result["cx"], result["cy"]), n, float(percentile))
+                return again if again["found"] else result
+        return result
+
+    @staticmethod
+    def _holesAround(grey: np.ndarray, centre, n: int, percentile: float) -> Dict:
+        """One try of hubHoles: the band round centre, the darkest percentile of it."""
+        import itertools
+        h, w = grey.shape
+        yy, xx = np.mgrid[:h, :w]
+        r = np.hypot(xx - centre[0], yy - centre[1])
+        band = (r > float(CheckCap.SEATING_HUB_HOLES_BAND[0])) & (r < float(CheckCap.SEATING_HUB_HOLES_BAND[1]))
+        k = max(int(CheckCap.SEATING_HUB_HOLES_OPEN), 1)
+        lowR, highR = float(CheckCap.SEATING_HUB_HOLES_RADIUS[0]), float(CheckCap.SEATING_HUB_HOLES_RADIUS[1])
+        dark = ((grey <= np.percentile(grey[band], percentile)) & band).astype(np.uint8)
+        dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
+        count, _, stats, centroids = cv2.connectedComponentsWithStats(dark)
+        blobs = sorted([(int(stats[i, 4]), (float(centroids[i][0]), float(centroids[i][1]))) for i in range(1, count)
+                        if CheckCap.SEATING_HUB_HOLES_AREA[0] < stats[i, 4] < CheckCap.SEATING_HUB_HOLES_AREA[1]],
+                       reverse=True)[:int(CheckCap.SEATING_HUB_HOLES_BLOBS_KEEP)]
+        result = dict(found=False, count=n, percentile=percentile, blobs=len(blobs))
+        if len(blobs) < n:
+            result["reason"] = f"{len(blobs)} dark blobs, {n} holes needed"
+            return result
+        best = None
+        for points in itertools.combinations([c for _, c in blobs], n):
+            p = np.asarray(points, dtype=np.float64)
+            sol = np.linalg.lstsq(np.c_[2 * p, np.ones(n)], (p ** 2).sum(1), rcond=None)[0]
+            cx, cy = float(sol[0]), float(sol[1])
+            radius = float(np.sqrt(max(sol[2] + cx * cx + cy * cy, 0.0)))
+            q = p - (cx, cy)
+            spread = float(np.hypot(q[:, 0], q[:, 1]).std())
+            angles = np.sort(np.degrees(np.arctan2(q[:, 1], q[:, 0])))
+            gap = float(np.abs(np.diff(np.r_[angles, angles[0] + 360.0]) - 360.0 / n).max())
+            score = spread + gap / 5.0
+            if best is None or score < best[0]:
+                best = (score, points, cx, cy, radius, spread, gap)
+        _, points, cx, cy, radius, spread, gap = best
+        bad = []
+        if not lowR <= radius <= highR:
+            bad.append(f"circle r {radius:.1f} outside {lowR:g} - {highR:g}")
+        if spread > CheckCap.SEATING_HUB_HOLES_SPREAD_MAX:
+            bad.append(f"spread {spread:.1f} > {CheckCap.SEATING_HUB_HOLES_SPREAD_MAX}")
+        if gap > CheckCap.SEATING_HUB_HOLES_GAP_MAX:
+            bad.append(f"angle gap off by {gap:.0f} > {CheckCap.SEATING_HUB_HOLES_GAP_MAX} deg")
+        result.update(found=not bad, cx=cx, cy=cy, radius=radius, spread=spread, gap=gap, points=points,
+                      reason="; ".join(bad))
+        return result
+
+    @staticmethod
     def hubOffset(kind: str | None, model: str | None):
-        """The (dx, dy) added to the hub centre for this hub kind (holes / bolts) and model (DOST / DOSTPLUS)."""
+        """The (dx, dy) added to the hub centre for this hub kind (holes / bolts from the hub check; "cap holes" from the
+        cap picture) and model (DOST / DOSTPLUS)."""
         plus = model == DOSTPLUS
+        if kind == "cap holes":
+            return CheckCap.SEATING_HUB_DISTANCE_OFFSET_CAP_DOSTPLUS if plus else CheckCap.SEATING_HUB_DISTANCE_OFFSET_CAP_DOST
         if kind == "bolts":
             return CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS if plus else CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST
         return CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS if plus else CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST
@@ -435,15 +525,29 @@ class CheckCap:
     @staticmethod
     def hubCentreDistance(anImage: np.ndarray, hubCentre: Dict | None, model: str | None = DOST) -> Dict:
         """The hub-centre distance rule (CHANGES 143): dict(applied, ok, distance, limit, reason, cap (CapMaskFinder's
-        result), target (hub centre + offset)). applied False: rule switched off, or no hub centre (ok True)."""
+        result), target (hub centre + offset), hub (the hub centre used)). Hub source "cap" (CHANGES 152): the hub's holes
+        in this picture - not found -> NOT seated; hubCentre is not used. Source "hubcheck": hubCentre from this cycle's
+        hub check; applied False (ok True) without one. applied False also with the rule switched off."""
         from camera import CapMaskFinder
         out = dict(applied=False, ok=True, distance=None, limit=CheckCap.SEATING_HUB_DISTANCE_MAX, reason="",
-                   cap=None, target=None)
+                   cap=None, target=None, hub=None)
         if not CheckCap.SEATING_HUB_DISTANCE_CHECK:
             return out
-        if not hubCentre:
+        if str(CheckCap.SEATING_HUB_SOURCE).strip().lower() == "cap":
+            holes = CheckCap.hubHoles(anImage, model)
+            out["applied"] = True
+            if not holes["found"]:
+                out.update(ok=False, reason=f"cap to hub centre: the hub's {holes['count']} holes round the cap not found "
+                                            f"({holes['reason']}; darkest {holes.get('percentile')} %)")
+                return out
+            hubCentre = dict(cx=holes["cx"], cy=holes["cy"], radius=holes["radius"], kind="cap holes",
+                             count=holes["count"], spread=holes["spread"], gap=holes["gap"])
+            out["hub"] = hubCentre
+        elif not hubCentre:
             out["reason"] = "cap to hub centre not checked (no hub centre from this cycle's hub check)"
             return out
+        else:
+            out["hub"] = hubCentre
         out["applied"] = True
         cap = CapMaskFinder.findCap(anImage, CheckCap.CENTER, CheckCap._sam_predictor(), CheckCap._yolo_model())
         out["cap"] = cap
@@ -458,9 +562,16 @@ class CheckCap:
         out.update(ok=ok, distance=distance, target=(tx, ty),
                    reason=(f"cap centre ({cx:.1f}, {cy:.1f}) to hub centre ({tx:.1f}, {ty:.1f}) {distance:.1f} px "
                            f"{'<=' if ok else '>'} {CheckCap.SEATING_HUB_DISTANCE_MAX} (hub from {hubCentre.get('count')} "
-                           f"{hubCentre.get('kind')}, {model} offset ({float(dx):g}, {float(dy):g}), cap "
+                           f"{hubCentre.get('kind')}{CheckCap._holesNote(hubCentre)}, {model} offset ({float(dx):g}, {float(dy):g}), cap "
                            f"{cx - tx:+.1f} / {cy - ty:+.1f} px; {CapMaskFinder.describe(cap)})"))
         return out
+
+    @staticmethod
+    def _holesNote(hub: Dict) -> str:
+        """' (circle r 151.2, spread 0.4, gap 2 deg)' for the holes found in the cap picture, else ''."""
+        if hub.get("kind") != "cap holes":
+            return ""
+        return f" (circle r {hub['radius']:.1f}, spread {hub['spread']:.1f}, gap {hub['gap']:.0f} deg)"
 
     @staticmethod
     def checkSeating(anImage: np.ndarray, cap_found: str, hubImage: np.ndarray | None = None,
@@ -477,7 +588,12 @@ class CheckCap:
             result["seated"] = bool(result["seated"]) and rule["ok"]
             result["hub_distance"] = rule["distance"]
             result["hub_target"] = rule["target"]
-            result["hub_centre"] = hubCentre
+            result["hub_centre"] = rule["hub"]
+            hub = rule["hub"] or {}
+            if hub.get("kind") == "cap holes":        # the hole circle in the cap picture (blue, thin)
+                result["hub_holes"] = dict(contour=cv2.ellipse2Poly((int(round(hub["cx"])), int(round(hub["cy"]))),
+                                                                    (int(round(hub["radius"])),) * 2, 0, 0, 360, 4)
+                                           .reshape(-1, 1, 2).astype(np.int32))
             fit = (rule["cap"] or {}).get("fit")
             result["cap_ellipse"] = dict(contour=CapMaskFinder.ellipseContour(fit["e2"])) if fit else None
         return result
@@ -574,9 +690,9 @@ class CheckCap:
         if seating is not None:
             seat_color = (0, 255, 0) if seating["seated"] else (0, 0, 255)
             for key, col in (("bore", (255, 128, 0)), ("hub", (255, 128, 0)), ("cap", seat_color), ("face", (0, 255, 255)),
-                             ("cap_ellipse", seat_color)):
+                             ("cap_ellipse", seat_color), ("hub_holes", (255, 128, 0))):
                 if seating.get(key) is not None:
-                    cv2.drawContours(annotated, [seating[key]["contour"]], -1, col, 2)
+                    cv2.drawContours(annotated, [seating[key]["contour"]], -1, col, 1 if key == "hub_holes" else 2)
             if seating.get("hub_target") is not None:     # the hub's centre (+ offset): a blue cross, no text
                 tx, ty = seating["hub_target"]
                 cv2.drawMarker(annotated, (int(round(tx)), int(round(ty))), (255, 128, 0), cv2.MARKER_CROSS, 16, 2)
@@ -593,7 +709,8 @@ class CheckCap:
         runSeating False: steps 1-3 only (no MobileSAM) - the camera server runs them on each of its three pictures,
         then the whole check (with seating) once, on a picture that passed them (2026-11-15).
         hubCentre: this cycle's hub centre (ImageProcessor.hubCentre, from the hub check) for the seating step's
-        hub-centre distance (CHANGES 143); None = that rule is not applied.
+        hub-centre distance (CHANGES 143), used with hub source "hubcheck"; with source "cap" (CHANGES 152) the hub
+        centre comes from the holes round the cap in anImage and hubCentre is not used.
 
         Two-step verification:
         1. Compare with base images - cap should show significant brightness increase
