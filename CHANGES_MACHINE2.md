@@ -4064,3 +4064,41 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   itself (r 298), the hub flange (r 248, 2.6 px from the centre), studs, holes, small marks; still no mask of the hub's
   centre opening from the generator. Window under Xvfb with stand-ins: the disc line, a corner mask dropped, ticked
   mode unchanged.
+
+## 134. Hub centre mask window: YOLO box prompts, adjustable filters, faster grid, window stays live (2026-11-18)
+
+- **User:** (a) the whole-disc mode is far too slow and the time per picture is not seen; (b) at gamma 3 the cap mask
+  is sometimes missing; (c) the hub's centre opening is never found. Then: build the four proposed fixes, with the
+  YOLO box prompts as in the hub check, and a stability spinner (default 0.90, step 0.02, 0.70 - 1.00).
+- **Found (sandbox, real MobileSAM):**
+  - (a) about 95 % of the generator's time is the decoder run once per grid point (32 x 32 = 1,024 prompts); the
+    picture's embedding about 1 s. The window also did the work on its own thread, so it froze until the picture was
+    done.
+  - (c) single-point prompts inside the bore do give the opening's mask (r about 75), but with stability 0.93 - 0.94;
+    the generator's default stability limit 0.95 dropped every one, at every gamma. With 0.90 it comes through.
+  - (b) not reproduced on DOST_cap_06 / 01 / 08 at gamma 3 (the cap mask came from many grid points and survived
+    every filter, e.g. 101 cap-shaped masks before box merging, 2 after, on cap_06); the cap masks' stability is
+    0.96 - 0.99, so the 0.95 limit is the likely loss on pictures where gamma 3 weakens the cap's edge.
+- **Now (`DryRun_Hub_Centre_Mask_UI.py`, both copies; a study tool, production unchanged):**
+  1. Each picture is worked on in a background thread; the status line shows the picture and its time so far, the
+     list its time when done; Stop takes effect after the picture in work.
+  2. Grid points: "Points per side" spinner 16 - 64 (step 8, default 32); only grid points inside the disc are used
+     (`point_grids`; 208 of 256 at 16 x 16); 256 points per decoder pass on a GPU (64 on a CPU).
+  3. Filters as spinners, used by both prompt modes and written in each picture's line: "Min stability" 0.70 - 1.00,
+     step 0.02, default 0.90; "Min predicted IoU" 0.50 - 1.00, step 0.02, default 0.88; "Box merge IoU" 0.30 - 1.00,
+     step 0.05, default 0.70.
+  4. "Prompts: YOLO boxes" (MobileSAMv2, as `MobileSAMv2AutomaticMaskGenerator` of the hub check): the object-aware YOLO
+     model from `ModelManager` proposes boxes on the cut-out disc ("YOLO confidence" 0.05 - 0.95, default 0.25; its box
+     NMS 0.7); boxes centred outside the disc are left out; the boxes go to MobileSAM as box prompts, 64 per decoder
+     pass (`predict_torch`, one mask per box, logits kept); SAM's stability score and predicted IoU filter them and
+     overlapping boxes are merged (torchvision `batched_nms`), as for the grid. The line gives the boxes found, on the
+     disc, passing the filters and after merging, and YOLO's own time.
+  `--batch`: `--prompts grid|yolo --pps --stability --iou --nms --conf`.
+- **Run:** grid 16 x 16 on hub 151821100: 33 s on the sandbox CPU (157 s at 32 x 32 before); with stability 0.90 the
+  opening is found (mask r 76.0, 3.5 px from the centre, roundness 0.966); with 0.94 it is not. YOLO path with a
+  stand-in detector (the sandbox has no YOLO weights) and the real MobileSAM: 1.2 - 1.4 s per picture on CPU; a box
+  round the bore gives the opening (r 76.3); a box round the cap on DOST_cap_06 at gamma 3 gives the cap (r 103.4);
+  a box centred off the disc left out. Window under Xvfb with stand-ins 6/6: stability spinner 0.90 / 0.70 - 1.00 /
+  step 0.02; the window stays live with the time ticking; the generator built with the spinner values and the points
+  inside the disc; an error in YOLO mode goes to the list and the window carries on.
+- **Not run here:** the real YOLO model (weights on the laptop only) - its boxes, their number and the GPU time.

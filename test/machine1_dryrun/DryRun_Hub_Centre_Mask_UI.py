@@ -1,41 +1,42 @@
 """
-DryRun_Hub_Centre_Mask_UI - MobileSAM masks round the hub centre on hub pictures (state 5, hub + bottom bearing),
-prompted by points on rings round the centre. A study window: nothing in production changes.
-
-Prompts: one point every "Angle step" degrees (default 30, starting at 0 = to the right, going clockwise on the
-picture) on each ring of "Ring radii" px (default 50 and 60) round the "Centre" (default the cap check's centre
-`cap.center`, which sits on the hub bore: Machine 2 644,340). Defaults: 2 rings x 12 = 24 points, all positive, one
-MobileSAM decoder call, 3 masks back (multimask). Centre, radii and step can be changed at any time (they apply from
-the next picture).
+DryRun_Hub_Centre_Mask_UI - MobileSAM masks round the hub centre on hub (and cap) pictures. A study window: nothing in
+production changes.
 
   1. "Folder..." (every jpg / jpeg / png / bmp in it, by name) or "Picture...", then Start. Default folder:
-     test/machine2_dryrun/hub_images.
-  2. "Seconds between pictures" (1 - 10, starts at 3), changeable during the run; Stop ends it.
-     "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 1.0 = picture as taken): the picture is brightened before MobileSAM
-     sees it, as the checks do (each pixel 255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened.
-     Applies from the next picture.
-  3. "Find masks only around the centre" (ticked at start): the ring prompts above. Unticked: masks all over the
-     picture: first a disc of "Disc radius" (default 300 px) round the centre is cut out (black outside it, thin
-     white circle on the marked picture); MobileSAM's automatic mask generator then runs on that alone (a 32 x 32 grid
-     of point prompts over the disc's square; its own filters at their defaults: predicted IoU >= 0.88, stability
-     score >= 0.95, overlapping boxes merged at IoU 0.7, no minimum area); each mask is kept to the disc and one with
-     less than half of it inside the disc (the black corners) is dropped. Each mask outlined in its own colour,
-     listed largest first. Slower: several seconds per picture on the laptop GPU, minutes on a CPU. Applies from the
-     next picture.
-  4. "Masks shown" (around the centre only): All, or mask 1 / 2 / 3 (MobileSAM's order: small to large). Outline colours: mask 1 cyan,
-     mask 2 magenta, mask 3 yellow; prompt points blue dots; centre a small blue cross. No text on the picture.
-  5. Per picture and mask, in the list at the bottom and in the terminal: SAM score, area, centroid, the fitted
-     ellipse's centre, mean radius and roundness (minor / major axis), the centroid's distance from the centre given,
-     and the picture's time (embedding + decoder).
-  6. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/.
+     test/machine2_dryrun/hub_images. "Seconds between pictures" (1 - 10, starts at 3); Stop ends the run. The work runs
+     off the window's thread: the status line shows the picture and its time so far; each picture's time goes to the list.
+  2. "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 1.0 = as taken): the picture is brightened before MobileSAM sees it,
+     as the checks do (255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened. Both modes.
+  3. "Find masks only around the centre" (ticked at start): ring prompts - one point every "Angle step" degrees
+     (default 30, from 0 = right, clockwise) on each ring of "Ring radii" px (default 50, 60) round "Centre" (default
+     `cap.center`, Machine 2 644,340); one decoder call, MobileSAM's 3 masks (small to large). "Masks shown": All or
+     mask 1 / 2 / 3. Outlines: mask 1 cyan, 2 magenta, 3 yellow; prompt points blue dots; centre blue cross.
+  4. Unticked: all masks on a disc of "Disc radius" (default 300) round the centre. The disc is cut out first (black
+     outside it; thin white circle on the marked picture) and everything runs on it alone. "Prompts":
+       - Grid points: MobileSAM's automatic mask generator, "Points per side" x "Points per side" (16 - 64, default 32)
+         over the disc's square, only the points inside the disc used (about 21 % fewer); 256 points per decoder pass
+         on a GPU, 64 on a CPU. Time grows with the number of points.
+       - YOLO boxes (MobileSAMv2, as the hub check's MobileSAMv2AutomaticMaskGenerator): the object-aware YOLO model
+         (models/MobileSAM/MobileSAMv2/weight/ObjectAwareModel.pt, through ModelManager) proposes boxes on the disc
+         ("YOLO confidence", default 0.25; its own box NMS 0.7); boxes whose centre lies outside the disc are left out;
+         one MobileSAM decoder pass per 64 boxes, one mask per box. Tens of prompts instead of hundreds: much faster.
+     Filters, both: "Min stability" (0.70 - 1.00, step 0.02, default 0.90; SAM's own stability score of the mask),
+     "Min predicted IoU" (0.50 - 1.00, step 0.02, default 0.88), "Box merge IoU" (0.30 - 1.00, step 0.05, default
+     0.70: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
+     mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
+     colour, listed largest first. Every value used is in the picture's line.
+  5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
+     centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
+  6. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/. No text on any picture.
 
 MobileSAM: models/MobileSAM/weights/mobile_sam.pt, or --sam <mobile_sam.pt>; loaded in the background when the window
-opens (GPU if there is one). No Redis, PLC or camera needed.
+opens (GPU if there is one). YOLO boxes need the YOLO weights (the laptop has them). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--whole [--disc 300]] [--save]
-                             (--whole: masks on the disc round the centre)
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--save]
+                             [--whole [--disc 300] [--prompts grid|yolo] [--pps 32] [--stability 0.90] [--iou 0.88]
+                              [--nms 0.70] [--conf 0.25]]
 """
 import os
 import pathlib
@@ -56,8 +57,10 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 VIEW_W, VIEW_H = 1120, 630
 MASK_COLOURS = ((255, 255, 0), (255, 0, 255), (0, 255, 255))     # BGR: cyan, magenta, yellow
 POINT_COLOUR = (255, 0, 0)                                        # BGR blue
-AUTO_POINTS_PER_SIDE = 32                                         # the automatic generator's grid (its default)
 DISC_RADIUS = 300                                                 # px; the disc cut round the centre (whole mode)
+BOX_BATCH = 64                                                    # YOLO boxes per MobileSAM decoder pass
+WHOLE_DEFAULTS = dict(prompts="grid", pointsPerSide=32, stabilityMin=0.90, iouMin=0.88, nmsIou=0.70, yoloConf=0.25,
+                      discRadius=float(DISC_RADIUS))
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 
 
@@ -100,13 +103,48 @@ def parseStep(text):
     return step
 
 
-class HubCentreSegmenter:
-    """One MobileSAM predictor; segment(picture, centre, radii, step) -> (masks, scores, points, seconds)."""
+def parseGamma(text):
+    gamma = float(text)
+    if not 1.0 <= gamma <= 6.0:
+        raise ValueError("gamma must be 1.0 - 6.0")
+    return gamma
 
-    def __init__(self, samPath=None, predictor=None, generator=None):
+
+def inRange(name, text, low, high, cast=float):
+    value = cast(float(text))
+    if not low - 1e-9 <= value <= high + 1e-9:
+        raise ValueError(f"{name} must be {low} - {high}")
+    return value
+
+
+def wholeSettings(prompts, pps, stability, iou, nms, conf, disc):
+    """The whole-mode settings, checked."""
+    if prompts not in ("grid", "yolo"):
+        raise ValueError("prompts must be grid or yolo")
+    return dict(prompts=prompts, pointsPerSide=inRange("points per side", pps, 16, 64, int),
+                stabilityMin=inRange("min stability", stability, 0.70, 1.00),
+                iouMin=inRange("min predicted IoU", iou, 0.50, 1.00), nmsIou=inRange("box merge IoU", nms, 0.30, 1.00),
+                yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000))
+
+
+def _noGrad():
+    try:
+        import torch
+        return torch.inference_mode()
+    except ImportError:                                      # stand-in models in tests
+        import contextlib
+        return contextlib.nullcontext()
+
+
+class HubCentreSegmenter:
+    """MobileSAM predictor plus, when needed, the automatic generator (grid) and the YOLO model (boxes)."""
+
+    def __init__(self, samPath=None, predictor=None, generatorFactory=None, yolo=None):
         self.samPath = str(samPath or DEFAULT_SAM)
         self.predictor = predictor
-        self.generator = generator
+        self.generatorFactory = generatorFactory             # tests: (settings, pointGrid) -> object with generate()
+        self.yolo = yolo
+        self._generator, self._generatorKey = None, None
         self.device = "given"
 
     def load(self):
@@ -121,38 +159,109 @@ class HubCentreSegmenter:
         model = sam_model_registry["vit_t"](checkpoint=self.samPath).to(self.device).eval()
         self.predictor = SamPredictor(model)
 
+    # ---- ring prompts round the centre ----
     def segment(self, picture, centre, radii, stepDeg):
         points = promptPoints(centre, radii, stepDeg)
         t0 = time.perf_counter()
         self.predictor.set_image(cv2.cvtColor(picture, cv2.COLOR_BGR2RGB))
         tEmbed = time.perf_counter() - t0
-        try:
-            import torch
-            ctx = torch.inference_mode()
-        except ImportError:                                  # stand-in predictor in tests
-            import contextlib
-            ctx = contextlib.nullcontext()
-        with ctx:
+        with _noGrad():
             masks, scores, _ = self.predictor.predict(point_coords=points, point_labels=np.ones(len(points)),
                                                       multimask_output=True)
         return masks, np.asarray(scores, dtype=float), points, (tEmbed, time.perf_counter() - t0 - tEmbed)
 
-    def segmentWhole(self, picture):
-        """Masks all over the picture (MobileSAM's automatic mask generator, its default filters), largest first:
-        (list of the generator's dicts, seconds)."""
-        if self.generator is None:
-            from mobile_sam import SamAutomaticMaskGenerator
-            self.generator = SamAutomaticMaskGenerator(self.predictor.model, points_per_side=AUTO_POINTS_PER_SIDE)
+    # ---- all masks on the disc ----
+    def segmentWhole(self, crop, disc, s):
+        """Masks on the cut-out disc (crop is black outside it): (list of dicts with segmentation, area,
+        predicted_iou, stability_score; seconds; a note on the prompts)."""
         t0 = time.perf_counter()
-        try:
-            import torch
-            ctx = torch.inference_mode()
-        except ImportError:
-            import contextlib
-            ctx = contextlib.nullcontext()
-        with ctx:
-            found = self.generator.generate(cv2.cvtColor(picture, cv2.COLOR_BGR2RGB))
-        return sorted(found, key=lambda d: -int(d["area"])), time.perf_counter() - t0
+        if s["prompts"] == "yolo":
+            found, note = self._yoloMasks(crop, disc, s)
+        else:
+            found, note = self._gridMasks(crop, disc, s)
+        return found, time.perf_counter() - t0, note
+
+    @staticmethod
+    def pointGrid(shape, disc, n):
+        """The n x n grid of the automatic generator (normalised x, y), only the points inside the disc."""
+        h, w = shape[:2]
+        offset = 1.0 / (2 * n)
+        side = np.linspace(offset, 1 - offset, n)
+        pts = np.stack(np.meshgrid(side, side), axis=-1).reshape(-1, 2)
+        keep = disc[np.clip((pts[:, 1] * h).astype(int), 0, h - 1), np.clip((pts[:, 0] * w).astype(int), 0, w - 1)]
+        return pts[keep]
+
+    def _gridMasks(self, crop, disc, s):
+        grid = self.pointGrid(crop.shape, disc, s["pointsPerSide"])
+        perPass = 256 if self.device == "cuda" else 64
+        key = (s["pointsPerSide"], s["stabilityMin"], s["iouMin"], s["nmsIou"], crop.shape[:2])
+        if self._generator is None or self._generatorKey != key:
+            if self.generatorFactory is not None:
+                self._generator = self.generatorFactory(s, grid)
+            else:
+                from mobile_sam import SamAutomaticMaskGenerator
+                self._generator = SamAutomaticMaskGenerator(
+                    self.predictor.model, points_per_side=None, point_grids=[grid], points_per_batch=perPass,
+                    pred_iou_thresh=s["iouMin"], stability_score_thresh=s["stabilityMin"], box_nms_thresh=s["nmsIou"])
+            self._generatorKey = key
+        with _noGrad():
+            found = self._generator.generate(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+        return found, (f"grid {s['pointsPerSide']} x {s['pointsPerSide']}, {len(grid)} points inside the disc, "
+                       f"{perPass} per pass")
+
+    def _yoloModel(self):
+        if self.yolo is None:
+            from camera.ModelManager import ModelManager
+            self.yolo = ModelManager.get_instance().get_yolo_model()
+        return self.yolo
+
+    def _yoloMasks(self, crop, disc, s):
+        """MobileSAMv2: YOLO boxes on the disc as box prompts, batched through MobileSAM; SAM's stability and
+        predicted IoU filters and box merging as for the grid."""
+        import torch
+        from torchvision.ops import batched_nms
+        from mobile_sam.utils.amg import batched_mask_to_box, calculate_stability_score
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        t0 = time.perf_counter()
+        results = self._yoloModel().predict(rgb, conf=s["yoloConf"], iou=0.7, verbose=False)
+        boxes = (results[0].boxes.xyxy.cpu().numpy() if len(results) and results[0].boxes is not None
+                 else np.zeros((0, 4)))
+        tYolo = time.perf_counter() - t0
+        h, w = disc.shape
+        if len(boxes):
+            cxs = np.clip(((boxes[:, 0] + boxes[:, 2]) / 2).astype(int), 0, w - 1)
+            cys = np.clip(((boxes[:, 1] + boxes[:, 3]) / 2).astype(int), 0, h - 1)
+            onDisc = boxes[disc[cys, cxs]]
+        else:
+            onDisc = boxes
+        note = (f"YOLO boxes: {len(boxes)} found (confidence >= {s['yoloConf']:.2f}, {tYolo:.2f} s), "
+                f"{len(onDisc)} centred on the disc")
+        if len(onDisc) == 0:
+            return [], note
+        self.predictor.set_image(rgb)
+        model = self.predictor.model
+        allMasks, allIou, allStab = [], [], []
+        with torch.inference_mode():
+            for i in range(0, len(onDisc), BOX_BATCH):
+                b = torch.as_tensor(onDisc[i:i + BOX_BATCH], dtype=torch.float, device=self.predictor.device)
+                tb = self.predictor.transform.apply_boxes_torch(b, rgb.shape[:2])
+                logits, iou, _ = self.predictor.predict_torch(point_coords=None, point_labels=None, boxes=tb,
+                                                              multimask_output=False, return_logits=True)
+                logits, iou = logits[:, 0], iou[:, 0]
+                allStab.append(calculate_stability_score(logits, model.mask_threshold, 1.0))
+                allMasks.append(logits > model.mask_threshold)
+                allIou.append(iou)
+            masks, iou, stab = torch.cat(allMasks), torch.cat(allIou), torch.cat(allStab)
+            keep = (iou >= s["iouMin"]) & (stab >= s["stabilityMin"]) & (masks.flatten(1).sum(1) > 0)
+            passed = int(keep.sum())
+            masks, iou, stab = masks[keep], iou[keep], stab[keep]
+            if len(masks):
+                mboxes = batched_mask_to_box(masks).float()
+                k = batched_nms(mboxes, iou, torch.zeros(len(masks), device=masks.device), s["nmsIou"])
+                masks, iou, stab = masks[k], iou[k], stab[k]
+        found = [dict(segmentation=m.cpu().numpy(), area=int(m.sum()), predicted_iou=float(q), stability_score=float(st))
+                 for m, q, st in zip(masks, iou, stab)]
+        return found, note + f", {passed} passed the filters, {len(found)} after box merging"
 
 
 def measure(mask, centre):
@@ -202,13 +311,6 @@ def draw(picture, masks, measures, points, centre, show="All"):
     return marked
 
 
-def parseGamma(text):
-    gamma = float(text)
-    if not 1.0 <= gamma <= 6.0:
-        raise ValueError("gamma must be 1.0 - 6.0")
-    return gamma
-
-
 def applyGamma(picture, gamma):
     """255 x (v / 255) ^ (1 / gamma), as the checks do: gamma > 1 brightens; 1.0 leaves the picture as it is."""
     if abs(gamma - 1.0) < 1e-9:
@@ -248,40 +350,6 @@ def cutDisc(picture, centre, radius):
     return crop, disc.astype(bool), (x0, y0)
 
 
-def processWhole(segmenter, path, centre, gamma=1.0, discRadius=DISC_RADIUS):
-    """Masks on the disc of discRadius round the centre -> (marked picture or None, list of lines). The disc is cut
-    first (black outside it); the automatic generator runs on that alone; each mask is kept to the disc, and a mask
-    with less than half of its area inside the disc (the black corners) is dropped."""
-    picture = loadPicture(path)
-    if picture is None:
-        return None, [f"{path.name}: could not read the picture"]
-    picture = applyGamma(picture, gamma)
-    crop, disc, (x0, y0) = cutDisc(picture, centre, discRadius)
-    found, secs = segmenter.segmentWhole(crop)
-    kept, dropped = [], 0
-    for d in found:
-        seg = d["segmentation"].astype(bool)
-        inside = seg & disc
-        if inside.sum() * 2 < seg.sum() or not inside.any():
-            dropped += 1
-            continue
-        full = np.zeros(picture.shape[:2], bool)
-        full[y0:y0 + inside.shape[0], x0:x0 + inside.shape[1]] = inside
-        kept.append((d, full))
-    kept.sort(key=lambda t: -int(t[1].sum()))
-    measures = [measure(full, centre) for _, full in kept]
-    lines = [f"{path.name}: disc r {discRadius:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks "
-             f"(automatic generator, {AUTO_POINTS_PER_SIDE} x {AUTO_POINTS_PER_SIDE} points on the disc's square; "
-             f"predicted IoU >= 0.88, stability >= 0.95, box NMS 0.7; {dropped} dropped: less than half inside the "
-             f"disc); gamma {gamma:.1f}; time {secs:.2f} s"]
-    for i, ((d, _), meas) in enumerate(zip(kept, measures)):
-        text = describe(i, float(d.get("predicted_iou", 0.0)), meas).replace(": score", ": predicted IoU", 1)
-        lines.append(f"    {text}, stability {float(d.get('stability_score', 0.0)):.3f}")
-    marked = drawWhole(picture, measures)
-    cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(discRadius)), (255, 255, 255), 1)
-    return marked, lines
-
-
 def loadPicture(path):
     image = cv2.imread(str(path))
     if image is None:
@@ -297,7 +365,7 @@ def picturesIn(target):
 
 
 def processOne(segmenter, path, centre, radii, stepDeg, show="All", gamma=1.0):
-    """-> (marked picture or None, list of lines)."""
+    """Ring prompts round the centre -> (marked picture or None, list of lines)."""
     picture = loadPicture(path)
     if picture is None:
         return None, [f"{path.name}: could not read the picture"]
@@ -311,12 +379,52 @@ def processOne(segmenter, path, centre, radii, stepDeg, show="All", gamma=1.0):
     return draw(picture, masks, measures, points, centre, show), lines
 
 
+def processWhole(segmenter, path, centre, gamma=1.0, settings=None):
+    """All masks on the disc round the centre -> (marked picture or None, list of lines). The disc is cut first
+    (black outside it); the masks are found on that alone; each is kept to the disc, and one with less than half of
+    its area inside the disc is dropped."""
+    s = dict(WHOLE_DEFAULTS, **(settings or {}))
+    picture = loadPicture(path)
+    if picture is None:
+        return None, [f"{path.name}: could not read the picture"]
+    picture = applyGamma(picture, gamma)
+    crop, disc, (x0, y0) = cutDisc(picture, centre, s["discRadius"])
+    found, secs, note = segmenter.segmentWhole(crop, disc, s)
+    kept, dropped = [], 0
+    for d in found:
+        seg = np.asarray(d["segmentation"]).astype(bool)
+        inside = seg & disc
+        if inside.sum() * 2 < seg.sum() or not inside.any():
+            dropped += 1
+            continue
+        full = np.zeros(picture.shape[:2], bool)
+        full[y0:y0 + inside.shape[0], x0:x0 + inside.shape[1]] = inside
+        kept.append((d, full))
+    kept.sort(key=lambda t: -int(t[1].sum()))
+    measures = [measure(full, centre) for _, full in kept]
+    lines = [f"{path.name}: disc r {s['discRadius']:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks; "
+             f"{note}; filters: stability >= {s['stabilityMin']:.2f}, predicted IoU >= {s['iouMin']:.2f}, box merge "
+             f"IoU {s['nmsIou']:.2f}; {dropped} dropped (less than half inside the disc); gamma {gamma:.1f}; "
+             f"time {secs:.2f} s"]
+    for i, ((d, _), meas) in enumerate(zip(kept, measures)):
+        lines.append(f"    {describe(i, float(d.get('predicted_iou', 0.0)), meas)}, "
+                     f"stability {float(d.get('stability_score', 0.0)):.3f}")
+    marked = drawWhole(picture, measures)
+    cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(s["discRadius"])), (255, 255, 255), 1)
+    return marked, lines
+
+
 def runBatch():
     target = argValue("--batch")
     centre = parseCentre(argValue("--centre")) if "--centre" in sys.argv else defaultCentre()
     radii = parseRadii(argValue("--radii", "50,60"))
     step = parseStep(argValue("--step", "30"))
     gamma = parseGamma(argValue("--gamma", "1.0"))
+    d = WHOLE_DEFAULTS
+    whole = wholeSettings(argValue("--prompts", d["prompts"]), argValue("--pps", d["pointsPerSide"]),
+                          argValue("--stability", d["stabilityMin"]), argValue("--iou", d["iouMin"]),
+                          argValue("--nms", d["nmsIou"]), argValue("--conf", d["yoloConf"]),
+                          argValue("--disc", d["discRadius"]))
     segmenter = HubCentreSegmenter(argValue("--sam"))
     segmenter.load()
     print(f"MobileSAM on {segmenter.device}")
@@ -324,7 +432,7 @@ def runBatch():
     outDir = (pathlib.Path(target) if pathlib.Path(target).is_dir() else pathlib.Path(target).parent) / "hub_centre_mask_results"
     for path in files:
         if "--whole" in sys.argv:
-            marked, lines = processWhole(segmenter, path, centre, gamma, float(argValue("--disc", str(DISC_RADIUS))))
+            marked, lines = processWhole(segmenter, path, centre, gamma, whole)
         else:
             marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
         print("\n".join(lines), flush=True)
@@ -345,8 +453,9 @@ def runWindow():
             self.root, self.segmenter = root, segmenter
             self.files, self.index, self.running, self.after = [], 0, False, None
             self.modelReady, self.modelError = False, None
+            self.job = None                                   # (thread, started, result, path) of the picture in work
             self.folder = HERE.parent / "machine2_dryrun" / "hub_images"
-            root.title("Hub centre masks - MobileSAM, ring prompts")
+            root.title("Hub centre masks - MobileSAM")
             bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=4)
             ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left")
             ttk.Button(bar, text="Picture...", command=self.choosePicture).pack(side="left", padx=4)
@@ -356,37 +465,52 @@ def runWindow():
             self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
             self.stopButton.pack(side="right", padx=4)
 
-            bar2 = ttk.Frame(root); bar2.pack(fill="x", padx=6)
+            d = WHOLE_DEFAULTS
             c = defaultCentre()
-            self.centreVar = tk.StringVar(master=root, value=f"{c[0]:g},{c[1]:g}")
-            self.radiiVar = tk.StringVar(master=root, value="50,60")
-            self.stepVar = tk.StringVar(master=root, value="30")
+            V = lambda v: tk.StringVar(master=root, value=v)
+            self.centreVar, self.radiiVar, self.stepVar = V(f"{c[0]:g},{c[1]:g}"), V("50,60"), V("30")
             self.secondsVar = tk.IntVar(master=root, value=3)
-            self.gammaVar = tk.StringVar(master=root, value="1.0")
-            self.centreOnlyVar = tk.BooleanVar(master=root, value=True)
-            self.discVar = tk.StringVar(master=root, value=str(DISC_RADIUS))
-            self.showVar = tk.StringVar(master=root, value="All")
+            self.gammaVar, self.showVar = V("1.0"), V("All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
+            self.centreOnlyVar = tk.BooleanVar(master=root, value=True)
+            self.discVar, self.promptsVar = V(f"{d['discRadius']:g}"), V("Grid points")
+            self.ppsVar, self.stabilityVar = V(str(d["pointsPerSide"])), V(f"{d['stabilityMin']:.2f}")
+            self.iouVar, self.nmsVar = V(f"{d['iouMin']:.2f}"), V(f"{d['nmsIou']:.2f}")
+            self.confVar = V(f"{d['yoloConf']:.2f}")
+
+            def spin(parent, label, var, lo, hi, inc, fmt, width=5):
+                ttk.Label(parent, text=label).pack(side="left")
+                ttk.Spinbox(parent, from_=lo, to=hi, increment=inc, format=fmt, textvariable=var,
+                            width=width).pack(side="left", padx=(2, 10))
+
+            bar2 = ttk.Frame(root); bar2.pack(fill="x", padx=6)
             for label, var, width in (("Centre x,y", self.centreVar, 10), ("Ring radii (px)", self.radiiVar, 10),
                                       ("Angle step (deg)", self.stepVar, 5)):
                 ttk.Label(bar2, text=label).pack(side="left")
                 ttk.Entry(bar2, textvariable=var, width=width).pack(side="left", padx=(2, 10))
             ttk.Label(bar2, text="Seconds between pictures").pack(side="left")
             ttk.Spinbox(bar2, from_=1, to=10, textvariable=self.secondsVar, width=4).pack(side="left", padx=(2, 10))
-            ttk.Label(bar2, text="Gamma").pack(side="left")
-            ttk.Spinbox(bar2, from_=1.0, to=6.0, increment=0.2, format="%.1f", textvariable=self.gammaVar,
-                        width=5).pack(side="left", padx=(2, 10))
+            spin(bar2, "Gamma", self.gammaVar, 1.0, 6.0, 0.2, "%.1f")
             ttk.Label(bar2, text="Masks shown").pack(side="left")
             ttk.Combobox(bar2, textvariable=self.showVar, values=["All", "Mask 1", "Mask 2", "Mask 3"], width=8,
                          state="readonly").pack(side="left", padx=(2, 10))
             ttk.Checkbutton(bar2, text="Save marked pictures", variable=self.saveVar).pack(side="left")
-            bar3 = ttk.Frame(root); bar3.pack(fill="x", padx=6)
+
+            bar3 = ttk.Frame(root); bar3.pack(fill="x", padx=6, pady=(2, 0))
             ttk.Checkbutton(bar3, text="Find masks only around the centre", variable=self.centreOnlyVar).pack(side="left")
-            ttk.Label(bar3, text="   Disc radius (unticked)").pack(side="left")
-            ttk.Entry(bar3, textvariable=self.discVar, width=6).pack(side="left", padx=2)
-            ttk.Label(bar3, text="   Around the centre: mask 1 cyan, mask 2 magenta, mask 3 yellow; prompt points blue "
-                                 "dots; centre blue cross.  Unticked: masks on the disc, each its own colour (slower)."
-                      ).pack(side="left")
+            ttk.Label(bar3, text="   Unticked:  Disc radius").pack(side="left")
+            ttk.Entry(bar3, textvariable=self.discVar, width=6).pack(side="left", padx=(2, 10))
+            ttk.Label(bar3, text="Prompts").pack(side="left")
+            ttk.Combobox(bar3, textvariable=self.promptsVar, values=["Grid points", "YOLO boxes"], width=11,
+                         state="readonly").pack(side="left", padx=(2, 10))
+            spin(bar3, "Points per side", self.ppsVar, 16, 64, 8, "%.0f", 4)
+            spin(bar3, "YOLO confidence", self.confVar, 0.05, 0.95, 0.05, "%.2f")
+            bar4 = ttk.Frame(root); bar4.pack(fill="x", padx=6)
+            spin(bar4, "Min stability", self.stabilityVar, 0.70, 1.00, 0.02, "%.2f")
+            spin(bar4, "Min predicted IoU", self.iouVar, 0.50, 1.00, 0.02, "%.2f")
+            spin(bar4, "Box merge IoU", self.nmsVar, 0.30, 1.00, 0.05, "%.2f")
+            ttk.Label(bar4, text="Around the centre: mask 1 cyan, 2 magenta, 3 yellow, points blue.  Unticked: each "
+                                 "mask its own colour, disc white.").pack(side="left", padx=6)
 
             self.blank = ImageTk.PhotoImage(Image.new("RGB", (VIEW_W, VIEW_H)))
             self.canvas = tk.Label(root, image=self.blank, background="black"); self.canvas.pack(padx=6)
@@ -440,11 +564,18 @@ def runWindow():
             except Exception:
                 self.log(f"Gamma '{self.gammaVar.get()}' not 1.0 - 6.0: 1.0 used"); return 1.0
 
+        def whole(self):
+            return wholeSettings("yolo" if self.promptsVar.get() == "YOLO boxes" else "grid", self.ppsVar.get(),
+                                 self.stabilityVar.get(), self.iouVar.get(), self.nmsVar.get(), self.confVar.get(),
+                                 self.discVar.get())
+
         def start(self):
             if not self.modelReady or self.modelError:
                 messagebox.showinfo("Hub centre masks", self.status.get()); return
+            if self.job is not None:
+                return
             try:
-                self.settings()
+                self.settings(); self.whole()
                 self.files = picturesIn(self.folder)
             except Exception as e:
                 messagebox.showerror("Hub centre masks", str(e)); return
@@ -458,12 +589,16 @@ def runWindow():
             self.running = False
             if self.after:
                 self.root.after_cancel(self.after); self.after = None
-            self.finish(stopped=True)
+            if self.job is None:
+                self.finish(stopped=True)
+            else:
+                self.status.set(self.status.get() + " - stopping after this picture")
 
         def close(self):
             self.running = False; self.root.destroy()
 
         def step(self):
+            """Start the next picture in a worker thread; poll() picks up its result."""
             if not self.running:
                 return
             if self.index >= len(self.files):
@@ -473,23 +608,35 @@ def runWindow():
                 centre, radii, stepDeg = self.settings()
             except Exception as e:
                 self.log(f"Settings: {e} - using the defaults"); centre, radii, stepDeg = defaultCentre(), [50.0, 60.0], 30.0
-            self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} ...")
-            self.root.update_idletasks()
+            gamma, show, centreOnly = self.gamma(), self.showVar.get(), self.centreOnlyVar.get()
             try:
-                if self.centreOnlyVar.get():
-                    marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get(),
-                                               self.gamma())
-                else:
-                    self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - masks on the disc ...")
-                    self.root.update_idletasks()
-                    try:
-                        disc = float(self.discVar.get()); assert disc > 0
-                    except Exception:
-                        self.log(f"Disc radius '{self.discVar.get()}' not a positive number: {DISC_RADIUS} used")
-                        disc = float(DISC_RADIUS)
-                    marked, lines = processWhole(self.segmenter, path, centre, self.gamma(), disc)
+                whole = self.whole()
             except Exception as e:
-                marked, lines = None, [f"{path.name}: error {e}"]
+                self.log(f"Settings: {e} - using the defaults"); whole = dict(WHOLE_DEFAULTS)
+            result = {}
+
+            def work():
+                try:
+                    if centreOnly:
+                        result["out"] = processOne(self.segmenter, path, centre, radii, stepDeg, show, gamma)
+                    else:
+                        result["out"] = processWhole(self.segmenter, path, centre, gamma, whole)
+                except Exception as e:
+                    result["out"] = (None, [f"{path.name}: error {type(e).__name__}: {e}"])
+
+            thread = threading.Thread(target=work, daemon=True)
+            self.job = (thread, time.perf_counter(), result, path)
+            thread.start()
+            self.poll()
+
+        def poll(self):
+            thread, started, result, path = self.job
+            if thread.is_alive():
+                self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - "
+                                f"{time.perf_counter() - started:.1f} s ...")
+                self.root.after(200, self.poll); return
+            self.job = None
+            marked, lines = result.get("out", (None, [f"{path.name}: no result"]))
             for line in lines:
                 self.log(line)
             if marked is not None:
@@ -498,8 +645,10 @@ def runWindow():
                     out = (self.folder if self.folder.is_dir() else self.folder.parent) / "hub_centre_mask_results"
                     out.mkdir(exist_ok=True)
                     cv2.imwrite(str(out / (path.stem + "_masks.png")), marked)
-            self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name}")
+            self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - {time.perf_counter() - started:.1f} s")
             self.index += 1
+            if not self.running:
+                self.finish(stopped=True); return
             if self.index >= len(self.files):
                 self.finish(); return
             try:
