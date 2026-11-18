@@ -30,6 +30,15 @@ printed and written to files.
      run_<time>.txt (everything shown) and details_<time>.csv (one row per cap); "Save marked pictures" adds the
      check's marked pictures there.
 
+  8. Pairing by cycle (CHANGES 150): "Hub folder (pair by time)..." (batch: --hub-folder <folder>) instead of one
+     hub picture. Each cap picture is measured against the hub picture of its own cycle: the latest picture in the hub
+     folder taken before the cap picture and at most --pair-max-secs (300) before it, by the time in the file names
+     (trial pictures "2026-11-17-17-04-00-749671-0.png", camera pictures "<ip>_01_20261113152706609.jpeg"). The hub
+     check runs once per hub picture (kept); that picture is also the cap check's step-3 hub picture. A cap with no hub
+     picture of its cycle gets no distance. This is how the camera server runs it, so offsets and limits measured this
+     way are the ones production needs; one hub picture for caps of other parts only measures how far those parts sat
+     from that one part. The summary also lists the caps the colour rules said NOT SEATED against the suggested limit.
+
 Settings: <vendor>.vision.cap.* / vision.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). Models through ModelManager (MobileSAM, YOLO): needs models/ (the laptop).
 
@@ -37,11 +46,13 @@ Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Hub_Distance
 Without a window:            python test/machine2_dryrun/DryRun_Cap_Hub_Distance_UI.py --batch --caps <folder>
                                [--model DOST|DOSTPLUS] [--hub <hub picture> | --hub-centre x,y,holes|bolts]
                                [--top <picture>] [--nut <picture>] [--max 5.0] [--offset-holes dx,dy]
-                               [--offset-bolts dx,dy] [--save]
+                               [--offset-bolts dx,dy] [--save] [--hub-folder <folder> [--pair-max-secs 300]]
 """
 import csv
+import datetime
 import os
 import pathlib
+import re
 import statistics
 import sys
 import threading
@@ -65,7 +76,62 @@ LIMIT_MARGIN = 1.5                           # px added to the largest seated de
 CSV_COLUMNS = ["picture", "model", "verdict", "seconds", "colour_seated", "seating_run", "distance_ok", "measured_only",
                "cap_found", "cap_cx", "cap_cy", "hub_kind", "hub_cx", "hub_cy", "offset_dx", "offset_dy", "target_cx",
                "target_cy", "dx", "dy", "distance", "limit", "mask_area", "mask_stability", "mask_iou", "outline_points",
-               "in1", "in2", "ratio", "rms2", "seating_reason", "reason"]
+               "in1", "in2", "ratio", "rms2", "seating_reason", "reason", "hub_picture", "hub_seconds_before"]
+PAIR_MAX_SECS = 300.0                        # a cycle's hub picture is at most this long before its cap picture
+_TRIAL_NAME = re.compile(r"(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{1,6})")
+_CAMERA_NAME = re.compile(r"_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{1,3})(?:\D|$)")
+
+
+def pictureTime(path):
+    """The time a picture was taken, from its file name (trial or camera picture name), in seconds; None if unknown."""
+    name = pathlib.Path(path).stem
+    m = _TRIAL_NAME.search(name)
+    if m:
+        frac = int(m.group(7)) / 1e6           # microseconds, written without leading zeros
+    else:
+        m = _CAMERA_NAME.search(name)
+        if not m:
+            return None
+        frac = int(m.group(7)) / 1000.0         # milliseconds, written without leading zeros
+    y, mo, d, h, mi, se = (int(v) for v in m.groups()[:6])
+    try:
+        return datetime.datetime(y, mo, d, h, mi, se).timestamp() + frac
+    except ValueError:
+        return None
+
+
+class HubPairer:
+    """The hub picture of each cap picture's cycle: the latest one in the hub folder taken before the cap picture and at
+    most maxSecs before it. The hub check runs once per hub picture (kept)."""
+
+    def __init__(self, folder, maxSecs=PAIR_MAX_SECS):
+        self.maxSecs = float(maxSecs)
+        self.hubs = sorted((t, p) for p in picturesIn(folder) for t in [pictureTime(p)] if t is not None)
+        self.results = {}
+
+    def hubPathFor(self, capPath):
+        """(hub picture, seconds before the cap) or (None, reason)."""
+        t = pictureTime(capPath)
+        if t is None:
+            return None, "no time in the cap picture's name"
+        before = [(ht, hp) for ht, hp in self.hubs if ht <= t]
+        if not before:
+            return None, "no hub picture before it"
+        ht, hp = before[-1]
+        if t - ht > self.maxSecs:
+            return None, f"no hub picture of this cycle (latest {t - ht:.0f} s before, limit {self.maxSecs:.0f} s)"
+        return hp, t - ht
+
+    def hubFor(self, checks, capPath, model):
+        """(hub path, hub check result or None, seconds before or reason)."""
+        hp, info = self.hubPathFor(capPath)
+        if hp is None:
+            return None, None, info
+        key = (str(hp), model)
+        if key not in self.results:
+            picture = readPicture(hp)
+            self.results[key] = None if picture is None else dict(runHubCheck(checks, picture, model), picture=picture)
+        return hp, self.results[key], info
 
 
 def picturesIn(folder):
@@ -294,8 +360,20 @@ def summarise(rows, maxDistance):
             d = float(np.hypot(r["dx"] + r["offset_dx"] - mdx, r["dy"] + r["offset_dy"] - mdy))
             out.append(f"    skewed {r['picture']}: {d:.2f} px with the suggested offset "
                        f"({'caught' if d > max(dev) + LIMIT_MARGIN else 'NOT caught'} by the suggested max)")
-    out.append("The hub picture is not of the same part as the caps unless they were taken in one cycle: the figures "
-               "are only as good as that pairing.")
+        notSeated = [r for r in measured if r.get("hub_kind") == kind and not r.get("colour_seated")
+                     and r.get("seating_run")]
+        for r in notSeated:                        # the colour rules said NOT SEATED: does the distance agree?
+            d = float(np.hypot(r["dx"] + r["offset_dx"] - mdx, r["dy"] + r["offset_dy"] - mdy))
+            out.append(f"    colour NOT SEATED {r['picture']}: {d:.2f} px with the suggested offset "
+                       f"({'also caught' if d > max(dev) + LIMIT_MARGIN else 'NOT caught'} by the suggested max)")
+    paired = [r for r in rows if r.get("hub_picture")]
+    if paired:
+        out.append(f"paired by cycle: {len(paired)} caps measured against the hub picture of their own cycle "
+                   f"({len({r['hub_picture'] for r in paired})} hub pictures); "
+                   f"{sum(1 for r in rows if not r.get('hub_picture'))} without one")
+    else:
+        out.append("The hub picture is not of the same part as the caps unless they were taken in one cycle: the "
+                   "figures are only as good as that pairing (use Hub folder (pair by time) for real figures).")
     return out
 
 
@@ -322,16 +400,33 @@ class Run:
                 {k: (f"{v:.3f}" if isinstance(v, float) else v) for k, v in row.items()})
 
 
-def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets):
+def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets, pairer=None):
     picture = readPicture(path)
     if picture is None:
         row = dict(picture=path.name, model=model, verdict="UNREADABLE")
         return row, [f"{path.name}: could not be read"], None
+    pairLines, pairCols = [], {}
+    if pairer is not None:                       # the hub picture of this cap's cycle (CHANGES 150)
+        hp, hubRes, info = pairer.hubFor(checks, path, model)
+        hubCentre = None
+        if hp is None:
+            pairLines.append(f"    paired hub: {info} - distance not measured")
+        elif hubRes is None:
+            pairLines.append(f"    paired hub: {hp.name} could not be read")
+            pairCols = dict(hub_picture=hp.name, hub_seconds_before=float(info))
+        else:
+            hubCentre = hubRes["hub"]
+            bases = dict(bases, hub=hubRes["picture"])
+            pairLines.append(f"    paired hub: {hp.name}, {info:.1f} s before; " + hubRes["lines"][0]
+                             + (f"; centre ({hubCentre['cx']:.1f}, {hubCentre['cy']:.1f}) from {hubCentre['count']} "
+                                f"{hubCentre['kind']}" if hubCentre else " - no hub centre"))
+            pairCols = dict(hub_picture=hp.name, hub_seconds_before=float(info))
     catcher.last = None
     res = runCap(checks, picture, model, hubCentre, bases, maxDistance, offsets[0], offsets[1])
     cap = (res["rule"] or {}).get("cap") or catcher.last
     row, lines = describeCap(path.name, model, res, hubCentre, maxDistance, offsets, cap)
-    return row, lines, res["marked"]
+    row.update(pairCols)
+    return row, lines[:1] + pairLines + lines[1:], res["marked"]
 
 
 def basesFor(model, hubPicture, topPath, nutPath):
@@ -370,11 +465,16 @@ def runBatch():
                parsePair(argValue("--offset-bolts", ",".join(map(str, capClass.hubOffset("bolts", model))))))
     bases, note = basesFor(model, hubPicture, argValue("--top"), argValue("--nut"))
     header += [note, f"max distance {maxDistance:g} px, offset holes {offsets[0]}, bolts {offsets[1]}"]
+    pairer = None
+    if "--hub-folder" in sys.argv:
+        pairer = HubPairer(argValue("--hub-folder"), float(argValue("--pair-max-secs", PAIR_MAX_SECS)))
+        header.append(f"pairing by cycle: hub folder {argValue('--hub-folder')} ({len(pairer.hubs)} pictures with a "
+                      f"time in the name), hub picture at most {pairer.maxSecs:.0f} s before the cap picture")
     run = Run(argValue("--caps"))
     print("\n".join(header), flush=True)
     run.write(header)
     for path in picturesIn(argValue("--caps")):
-        row, lines, marked = capPass(checks, catcher, path, model, hub, bases, maxDistance, offsets)
+        row, lines, marked = capPass(checks, catcher, path, model, hub, bases, maxDistance, offsets, pairer)
         run.add(row)
         run.write(lines)
         print("\n".join(lines), flush=True)
@@ -398,7 +498,7 @@ def runWindow():
             root.title("Cap seating: hub-centre distance (CHANGES 143)")
             self.model = tk.StringVar(master=root, value="DOST")
             self.model.trace_add("write", self.fillOffsets)
-            self.hubPath = self.capsFolder = self.topPath = self.nutPath = None
+            self.hubPath = self.capsFolder = self.topPath = self.nutPath = self.hubFolder = None
             self.hubPicture = None
             self.hx, self.hy = tk.StringVar(master=root), tk.StringVar(master=root)
             self.hkind = tk.StringVar(master=root, value="holes")
@@ -412,6 +512,7 @@ def runWindow():
             self.ready, self.loadError = False, ""
             self.running, self.job, self.files, self.index, self.run = False, None, [], 0, None
             self.pending = []                                  # results from the work thread, shown by poll()
+            self.pairer = None
             self.lock = threading.Lock()
 
             bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=3)
@@ -425,6 +526,7 @@ def runWindow():
             ttk.Entry(bar, textvariable=self.hy, width=7).pack(side="left")
             ttk.Combobox(bar, textvariable=self.hkind, values=["holes", "bolts"], width=6,
                          state="readonly").pack(side="left", padx=(4, 10))
+            ttk.Button(bar, text="Hub folder (pair by time)...", command=self.chooseHubFolder).pack(side="left", padx=(0, 10))
             ttk.Button(bar, text="Top bearing...", command=lambda: self.chooseBase("top")).pack(side="left")
             ttk.Button(bar, text="Nut / washer...", command=lambda: self.chooseBase("nut")).pack(side="left", padx=4)
             bar2 = ttk.Frame(root); bar2.pack(fill="x", padx=6, pady=3)
@@ -477,7 +579,8 @@ def runWindow():
 
         def _capWork(self, path, model, hub, bases, maxDistance, offsets):
             try:
-                row, lines, marked = capPass(self.checks, self.catcher, path, model, hub, bases, maxDistance, offsets)
+                row, lines, marked = capPass(self.checks, self.catcher, path, model, hub, bases, maxDistance, offsets,
+                                             self.pairer)
             except Exception as e:
                 row, lines, marked = (dict(picture=path.name, model=model, verdict="ERROR", reason=str(e)),
                                       [f"{path.name}: error {type(e).__name__}: {e}"], None)
@@ -520,6 +623,14 @@ def runWindow():
             self.status.set(f"Hub check on {os.path.basename(self.hubPath)} as {self.model.get()}...")
             threading.Thread(target=self._hubWork, args=(self.hubPicture, self.model.get()), daemon=True).start()
 
+        def chooseHubFolder(self):
+            """Pair each cap with the hub picture of its own cycle (CHANGES 150); cancel = back to one hub picture."""
+            folder = filedialog.askdirectory(parent=self.root, initialdir=str(DATA / "hub_images"))
+            self.hubFolder = folder or None
+            n = len(HubPairer(folder).hubs) if folder else 0
+            self.status.set(f"Pairing by cycle with {folder}: {n} hub pictures with a time in the name" if folder
+                            else "Pairing off: one hub picture for all caps")
+
         def chooseBase(self, kind):
             path = filedialog.askopenfilename(parent=self.root, filetypes=[("Pictures", "*.jpg *.jpeg *.png *.bmp")])
             if path:
@@ -555,14 +666,22 @@ def runWindow():
                 self.status.set("No pictures in the caps folder"); return
             self.run = Run(self.capsFolder)
             self.listbox.delete(0, "end")
+            self.pairer = HubPairer(self.hubFolder) if self.hubFolder else None
+            if self.pairer is not None:
+                self.listbox.insert("end", f"pairing by cycle: {len(self.pairer.hubs)} hub pictures in {self.hubFolder}")
+                self.log([f"=== pairing by cycle: hub folder {self.hubFolder} ({len(self.pairer.hubs)} pictures), hub "
+                          f"picture at most {self.pairer.maxSecs:.0f} s before the cap picture"])
             hub = self.hubCentre()
-            self.listbox.insert("end", "hub centre " + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub else
-                                                        "none - the distance is not measured"))
+            if self.pairer is None:
+                self.listbox.insert("end", "hub centre " + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub
+                                                            else "none - the distance is not measured"))
             self.bases, note = basesFor(self.model.get(), self.hubPicture, self.topPath, self.nutPath)
             self.log([f"=== Machine {os.environ['COSTHETA_PLC_VENDOR']}, model {self.model.get()}, caps {self.capsFolder} "
                       f"({len(self.files)} pictures)",
-                      f"hub picture {self.hubPath or '(none)'}; hub centre "
-                      + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub else "none - the distance is not measured"),
+                      ("each cap against the hub picture of its own cycle" if self.pairer is not None else
+                       f"hub picture {self.hubPath or '(none)'}; hub centre "
+                       + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub else
+                          "none - the distance is not measured")),
                       note])
             self.running = True
             self.startButton.configure(state="disabled"); self.stopButton.configure(state="normal")

@@ -4468,3 +4468,34 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from `details_20261118-175424.csv` and
   `details_20261118-175837.csv`. `DryRun_Cap_Hub_Distance` not re-run: C1 / C2 set their own offsets or use the DOST
   holes offset, which did not change.
+
+## 150. DOST holes runs 180531 / 181057 explained; cap / hub window pairs each cap with its own cycle's hub picture (2026-11-18)
+
+- **User (laptop):** DOST, holes, one hub picture (`..._20261113152706609`, centre (644.1, 341.9)), offset 0.3,0.5.
+  Run 180531 (17 Nov caps): all silver caps should be OK. Run 181057 (13 Nov `Machine 2/Cap`): the first 6 silver caps
+  OK, all next ones NOT OK.
+- **Found:**
+  - 180531: the 18 seated caps of 17:04 - 18:44 are OK (3.05 - 4.77 px); the 3 of 19:19:43 are NOT OK (13.2 - 14.4 px).
+  - 181057: the 6 seated caps are NOT OK by the distance (10.2 - 12.1 px, raw dy -9.75 .. -11.6); the other 10 are
+    NOT OK by the colour rules already (face fit 0.45 - 0.59, or no cap found), so they need nothing from the distance.
+  - Against this one hub picture the 27 seated caps spread over 12 px: the smallest circle holding them all has radius
+    6.12 at (-1.2, -7.9). The skewed cap `..._152441953` is 4.6 px from that point - inside it. So no offset and max
+    give the expected verdicts on both files with one hub picture.
+  - Cause: the high / low positions of the DOST part (CHANGES 149). The 13 Nov caps and cycle 19:19:43 are of the high
+    position, the hub picture and the 18 caps of the low one. The hub pictures of different parts also differ by
+    about 3 px (centres 338.8 vs 341.9 on DOST holes). In production every cap is measured against the hub picture of
+    its own cycle, so the part's position cancels out; the window did not do that.
+- **Changed:** `DryRun_Cap_Hub_Distance_UI.py` (both folders) - pairing by cycle:
+  - window button "Hub folder (pair by time)..."; batch `--hub-folder DIR [--pair-max-secs 300]`;
+  - each cap picture gets the latest picture in the hub folder taken before it and at most 300 s before it, by the
+    time in the file names (trial `2026-11-17-17-04-00-749671-0.png`, camera `<ip>_01_20261113152706609.jpeg`);
+  - the hub check runs once per hub picture (kept); its centre is the cap's hub centre and the picture is the cap
+    check's step-3 hub picture; a cap with no hub picture of its cycle gets no distance (line says why);
+  - csv columns `hub_picture`, `hub_seconds_before`; the run file has a `paired hub:` line per cap;
+  - the summary also lists the caps the colour rules said NOT SEATED against the suggested max, and says how many caps
+    were paired.
+  No change to the offsets (DOST holes stays 0.3,0.5) or to `camera/`.
+- **Run:** pairing unit test 15/15 per folder (name times, latest-before choice, 300 s limit, one hub check per
+  picture, fallback to the single hub centre without pairing, summary); window test under Xvfb 11/11 per folder
+  (single-hub run unchanged; pairing run passes the pairer to every cap, no single hub line). Real checks need YOLO
+  (laptop): not run here.

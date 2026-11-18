@@ -186,6 +186,10 @@ On the Machine 2 PC with the new exe:
    that sat about 10 px higher), DOST holes 0.3,0.5 (CHANGES 148: 18 seated
    silver caps, one hub picture; the 0.3,-5.2 worked out in CHANGES 147 was wrong). CHANGES 96 measured the stud circle's centre about 7 px above the hole circle's on the same hub: watch
    for seated caps NOT OK with `from N holes` on DOST or `from N bolts` on DOSTPLUS - those need their own offset.
+   Pairing by cycle (CHANGES 150): `DryRun_Cap_Hub_Distance_UI.py` "Hub folder (pair by time)..." (`--hub-folder`)
+   measures each cap against the hub picture of its own cycle (latest hub picture <= 300 s before, by file-name time),
+   as production does. Offsets and max should be re-checked this way: one hub picture for caps of other parts mixes in
+   where each part sat (DOST: two positions about 10 px apart, CHANGES 149).
 
 ## Results
 
