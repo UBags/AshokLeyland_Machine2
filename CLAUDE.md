@@ -155,7 +155,10 @@ No per-check times were recorded with the report; when they are, put them in the
   holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
   carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
   limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
-- Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
+- **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `CheckCap.hubHoles` in the
+  bung picture + `vision.bung.seating.hub.offset.<model>` (4.9,-13.7 / 4.2,-16.0); `position.source=fixed` = before. The
+  user's good / bad labels of 2026-11-18 call A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
+  off the hub centre like the bad ones: open question (CHANGES 153). Confirm the hole step on the laptop (YOLO).
 
 ## 9. Testing
 

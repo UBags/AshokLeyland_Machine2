@@ -1,0 +1,437 @@
+{
+ "A01": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   651.0560753987754,
+   322.5641267968943
+  ]
+ },
+ "A02": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "A03": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   649.8770103946272,
+   330.448286620636
+  ]
+ },
+ "A04": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   646.6450746134101,
+   330.8270875471885
+  ]
+ },
+ "A05": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   613.7930941580262,
+   353.73275429627495
+  ]
+ },
+ "A06": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   687.5592636155624,
+   308.25320229078125
+  ]
+ },
+ "A07": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   646.2769205136934,
+   316.72813091524597
+  ]
+ },
+ "A08": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   647.4472250401636,
+   316.45352668766225
+  ]
+ },
+ "A09": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   648.5433927695318,
+   318.12661730532875
+  ]
+ },
+ "A10": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   649.4973199283925,
+   317.6395823031979
+  ]
+ },
+ "A11": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   650.237663585895,
+   318.35694852960626
+  ]
+ },
+ "A12": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   650.5466306619776,
+   319.62551433457213
+  ]
+ },
+ "A13": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   650.9309838279664,
+   320.90763326339606
+  ]
+ },
+ "A14": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   650.5837646366252,
+   322.5837132876677
+  ]
+ },
+ "A15": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   650.2972779865528,
+   324.1501625861216
+  ]
+ },
+ "A16": {
+  "model": "DOST",
+  "user_label": "good",
+  "hole_centre": [
+   649.9249473647164,
+   325.0658147503675
+  ]
+ },
+ "A17": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": [
+   598.6096765291721,
+   397.08218182190797
+  ]
+ },
+ "A18": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": [
+   588.572091754631,
+   267.918729590734
+  ]
+ },
+ "A19": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "A20": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B01": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B02": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B03": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B04": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B05": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B06": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": [
+   703.6436927069069,
+   329.87441982336105
+  ]
+ },
+ "B07": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": [
+   675.8326992756989,
+   262.9579389909212
+  ]
+ },
+ "B08": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B09": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "B10": {
+  "model": "DOST",
+  "user_label": "bad",
+  "hole_centre": [
+   582.5821137166602,
+   345.8871030068941
+  ]
+ },
+ "B11": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   652.8203470575118,
+   321.8822445069982
+  ]
+ },
+ "B12": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   651.4459377897197,
+   322.3450846767935
+  ]
+ },
+ "B13": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   651.529419734689,
+   326.14427961952174
+  ]
+ },
+ "B14": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   650.2494301083204,
+   323.52954475436087
+  ]
+ },
+ "B15": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   650.5813029227885,
+   327.1227602714282
+  ]
+ },
+ "B16": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   650.5296127857413,
+   327.0165363080392
+  ]
+ },
+ "B17": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   650.0551040188842,
+   328.314495998276
+  ]
+ },
+ "B18": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   648.8733065953654,
+   330.60590391581854
+  ]
+ },
+ "B19": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   648.538190314983,
+   330.66306890248165
+  ]
+ },
+ "B20": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   647.321716805456,
+   330.90765380767346
+  ]
+ },
+ "C01": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   661.6476371353137,
+   360.13092576723375
+  ]
+ },
+ "C02": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "C03": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   607.5692534418172,
+   318.79275800356993
+  ]
+ },
+ "C04": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "C05": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   679.2674586696387,
+   330.5798989093561
+  ]
+ },
+ "C06": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   642.2025539561514,
+   294.7135898182524
+  ]
+ },
+ "C07": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   671.3665444868894,
+   304.61760623712064
+  ]
+ },
+ "C08": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "C09": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   686.9759698225913,
+   335.57913267772716
+  ]
+ },
+ "C10": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   666.7385753391329,
+   298.27928352954575
+  ]
+ },
+ "C11": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   617.5145721338047,
+   310.79233692744816
+  ]
+ },
+ "C12": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": null
+ },
+ "C13": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   640.1008953012947,
+   289.4928438983193
+  ]
+ },
+ "C14": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": [
+   649.4510717804891,
+   309.1869866592611
+  ]
+ },
+ "C15": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   645.9646910988708,
+   278.99173868193145
+  ]
+ },
+ "C16": {
+  "model": "DOSTPLUS",
+  "user_label": "good",
+  "hole_centre": null
+ },
+ "C17": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   624.7516107145447,
+   287.3977899926545
+  ]
+ },
+ "C18": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   668.2083724520882,
+   258.3550632823751
+  ]
+ },
+ "C19": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   613.9865485396405,
+   261.53687578546925
+  ]
+ },
+ "C20": {
+  "model": "DOSTPLUS",
+  "user_label": "bad",
+  "hole_centre": [
+   626.3494613079333,
+   296.77801389598466
+  ]
+ }
+}

@@ -156,6 +156,11 @@ On the Machine 2 PC with the new exe:
    Seating: ...` line with the four seating values. For any NOT OK on a correct bung, send these lines.
 5. **Time.** The bung check's time (the `check time` in the camera server's log) - each gamma now decodes about 220
    point prompts; it must stay well inside the 12 s timeout (expected: well under a second per gamma on the GPU).
+6. **Seated position from the hub's holes (CHANGES 153).** The `[CheckBung] Seating:` line now reads `holes centre
+   (x,y) d px from the seated position (x,y; hub from 4 holes (x, y) r .. spread .. gap .. deg, DOST offset (4.9,
+   -13.7)) <= 20.0; ...`; a bung lying over the hub's holes gives `seated position unknown: the hub's 4 holes round
+   the bung not found (...)` and NOT OK. Laptop: `DryRun_Bung_Hub_Holes.py` (6/6). Send the seating lines of a shift.
+   To go back: `siemens.vision.bung.seating.position.source=fixed`.
 
 ## 10. Cap seating: brass by fitted circles, silver by two rules, both by the hub-centre distance (CHANGES 128, 129, 143)
 

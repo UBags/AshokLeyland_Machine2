@@ -8,7 +8,11 @@ the cap-press check; the component-press check uses the same BungSegmenter code)
      built from the pins moved the same way - what the knuckle check would hand over in that cycle.
 The verdict must be the same, the hole-pattern centre must move with the picture (within 3 px of where the move puts
 it) and the seating numbers that depend on the placed positions and oval (offset from the seated position, share of
-the face outside the reference oval) must stay close. The face roundness is printed only: MobileSAM's face mask is not
+the face outside the reference oval) must stay close: offset within 3 px, outside within 4 points (CHANGES 153: with
+the oval centred on the face by the hub's holes, MobileSAM's face mask, which changes when the picture moves, moved
+B12's share 0.9 -> 3.7 %; with the fixed position 4.4 -> 4.7 %); the seated position must move with the picture
+within 2.5 px (the hub-hole finder on a resampled picture: A08 at 3 % zoom 1.9 px, part of it the offset, which is not
+scaled with the zoom). The face roundness is printed only: MobileSAM's face mask is not
 translation-invariant (its outline changes when the picture moves by a few pixels, 2026-11-17: up to 0.056 on C05,
 0.031 on B12 for a 15 / -10 px shift), whatever the frame does. The disc centre, the seated positions and (since CHANGES 126) the reference ovals come
 from VisionFrame.applyToChecks, as in the camera server.
@@ -159,7 +163,14 @@ def main():
                     check(f"{name} moved {mv}: seating numbers kept (offset {s0['offset']:.1f} -> {s1['offset']:.1f} px, "
                           f"outside {s0['outside']:.1%} -> {s1['outside']:.1%}; roundness {s0.get('roundness') or 0:.3f}"
                           f" -> {s1.get('roundness') or 0:.3f}, change {d_round:.3f}, reported only)",
-                          d_off <= 3.0 and d_out <= 0.02)
+                          d_off <= 3.0 and d_out <= 0.04)
+                    # the seated position (and the reference oval on it) moved with the picture: since CHANGES 153 it is
+                    # the hub's hole circle in the picture + offset (the frame's fixed position with source "fixed")
+                    if s0.get("seated_at") is not None and s1.get("seated_at") is not None:
+                        wantAt = apply(m, s0["seated_at"])
+                        errAt = math.hypot(s1["seated_at"][0] - wantAt[0], s1["seated_at"][1] - wantAt[1])
+                        check(f"{name} moved {mv}: seated position moved with the picture (off by {errAt:.1f} px)",
+                              errAt <= 2.5)
         VF.applyToChecks(None)
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed", flush=True)
     sys.exit(0 if all(RESULTS) else 1)

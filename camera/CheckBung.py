@@ -58,12 +58,23 @@ PRINT_SUCCESS_EVALUATION = True
 
 def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str) -> None:
     """Seating marks on the result picture (RGB, no text): the model's reference oval (thick yellow contour, centred on
-    the seated position) and the hole-pattern centre (thick blue cross)."""
+    the seated position), the hole-pattern centre (thick blue cross) and, with the seated position from the hub's holes
+    (CHANGES 153), the hub's hole circle (thin blue). The seated position is the seating step's, else worked out here
+    (BungSegmenter.seated_position); none found (hub's holes covered): no oval."""
     dostplus = model == "DOSTPLUS"
-    seated_at = BS_MODULE.SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else BS_MODULE.SEATING_SEATED_CENTRE_DOST
     oval = BS_MODULE.SEATING_REFERENCE_OVAL_DOSTPLUS if dostplus else BS_MODULE.SEATING_REFERENCE_OVAL_DOST
-    cv2.ellipse(image_rgb, ((float(seated_at[0]), float(seated_at[1])), (float(oval[0]), float(oval[1])),
-                            float(oval[2])), (255, 255, 0), 3)
+    seated_at, hub = seating.get("seated_at"), seating.get("hub")
+    if seated_at is None and "seated_at" not in seating:
+        try:
+            place = BS_MODULE.seated_position(image_rgb, model)
+            seated_at, hub = place["point"], place["hub"]
+        except Exception:
+            seated_at, hub = None, None
+    if hub is not None and hub.get("found"):
+        cv2.circle(image_rgb, (int(round(hub["cx"])), int(round(hub["cy"]))), int(round(hub["radius"])), (0, 128, 255), 1)
+    if seated_at is not None:
+        cv2.ellipse(image_rgb, ((float(seated_at[0]), float(seated_at[1])), (float(oval[0]), float(oval[1])),
+                                float(oval[2])), (255, 255, 0), 3)
     centre = seating.get("hole_centre")
     if centre is not None:
         cv2.drawMarker(image_rgb, (int(round(centre[0])), int(round(centre[1]))), (0, 0, 255),

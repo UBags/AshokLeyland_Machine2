@@ -262,7 +262,10 @@ spread ≤ 3 px and every angle gap within 15° of 360 / count; then once more w
 caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
 move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
-the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
+the model's seated position (CHANGES §153, `seating.position.source=hubholes`: `BungSegmenter.seated_position` = the
+hub's hole circle round the bung in the bung picture itself, `CheckCap.hubHoles` with the model's 4 / 5 holes, plus
+`seating.hub.offset.<dost|dostplus>` (Machine 2 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
+seated centres below, as before), the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
 red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119). Each uses its own
@@ -480,6 +483,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
+| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.9,-13.7 and 4.2,-16.0 (Machine 1: 0,0) | 3 |
 | `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.2,-0.1 and -0.6,-5.3 (Machine 1: 0,0) | 3 |
 | `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
@@ -513,6 +517,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Cap_Hub_Distance.py` | Cap seating by the hub-centre distance (CHANGES §143; §152: H6 / H7 the holes in the cap picture, C3 / C4 hub source cap; Machine 1: H6 / H7 skipped): hub centre from 4 / 5 holes or bolts, kept with the cycle (worker, state file, end of cycle), production cap mask = the frozen window's, the rule within / not within, checkCap OK / NOT OK by the hub centre |
 | `DryRun_Cap_Hub_Distance_UI.py` | Window / `--batch` (CHANGES §144; §152: Hub source "cap holes" - no hub picture needed): hub check on a chosen hub picture -> hub centre; cap check with it on every picture of a caps folder; every value and the suggested offset / max from the seated caps; `--hub-folder` / Hub folder (pair by time) (§150): each cap against the hub picture of its own cycle; `--hub-from-cap` / Hub from the cap picture (§151): the hub check on the cap picture itself |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` | The real check on a folder of pictures, shown one at a time |
+| `DryRun_Bung_Hub_Holes.py` | Bung seated position from the hub's holes in the bung picture (CHANGES §153): the 60 bung pictures of 13 Nov with stored hole-pattern centres; good SEATED, bad NOT SEATED, holes hidden NOT SEATED, picture moved, source fixed |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |

@@ -4603,3 +4603,55 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   with source `hubcheck`; new `CircleBoxYolo` stand-in (sandbox only). `DryRun_Cap_Production_Path.py` and
   `DryRun_Cap_Silver_Seating.py` now give the cap mask a YOLO (ModelManager's, else the stand-in): the distance rule
   now runs on every seating (before, without a hub centre it was skipped there).
+
+## 153. Bung seating: the seated position from the hub's holes in the bung picture itself (2026-11-19)
+
+- **User:** the cap check works with the hub centre from the holes in the same picture (CHANGES 152); do the same for
+  the bung checks, on the current checkBung() method; 31 "Good Bung" and 36 "Bad Bung" pictures (13 Nov) attached.
+- **What the bung check used:** no hub picture - the hole-pattern centre was compared with a fixed seated position per
+  model (`seating.seated.centre.<model>`, placed by the knuckle frame), and the reference oval was centred there. So
+  where the part sat on the fixture and how the hub sat on it went straight into the offset (seated bungs 3.9 - 14.4 px).
+- **Now (`BungSegmenter.seated_position`, `vision.bung.seating.position.source=hubholes`):** the seated position is the
+  circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the bung in the bung picture - `CheckCap.hubHoles`, the
+  cap check's finder unchanged (dark blobs at r 128 - 168 round `cap.center`, gates on radius 140 - 160, spread and
+  angle gaps; then once more round the circle found) - plus `vision.bung.seating.hub.offset.<dost|dostplus>`. The
+  hub's holes not found (a bung lying over them) -> NOT seated, "seated position unknown: the hub's 4 holes round the
+  bung not found (...)". The four seating tests are unchanged (hole-pattern centre <= 20 px, roundness >= 0.925, clean
+  oval, <= 6 % outside the reference oval - now centred on this seated position). `fixed` = before. The seating line
+  names the hub circle and the offset; the bung picture shows the hub's hole circle (thin blue) and the oval on the new
+  position (`CheckBung.drawSeatingMarks`, also when the seating step did not run).
+- **Measured (production hole step with the point grid alone - no YOLO weights here, 18 - 160 s per picture on this
+  CPU - then the production seating step):** 60 of the 67 pictures are the `bung_images_20261113/` set (renamed); 7 are
+  new. The hub's holes were found on every good picture with the model's count, never with the other model's count.
+  Hole-pattern centre - hub hole centre on the 25 good bungs that sit centred: DOST (+2.4..+7.4, -17.9..-9.6), DOSTPLUS
+  (-0.2..+8.7, -19.9..-11.3) -> offsets **4.9,-13.7 / 4.2,-16.0** (centre of the smallest circle round them, radius 4.4
+  / 5.9; the spread is the hole pattern turning with the bung - the user turned them between pictures).
+- **Verdicts with the new position:**
+  - the 25 centred good bungs: SEATED, offset 2.5 - 6.0 px (was 3.9 - 14.4 with the fixed position), outside the oval
+    0.7 - 4.0 %;
+  - all 36 bad: NOT OK - 16 have no hole pattern, 7 the hub's holes covered (seated position unknown), 13 NOT SEATED
+    (offset 29.5 - 84.8 px, outside 10.8 - 36.3 %, roundness 0.825 - 0.954);
+  - **6 good not OK:** 153611663 (C16) and 153625563 have no hole pattern here (grid only; C16 had none with YOLO either
+    in the laptop run of CHANGES 100); 15340549 (A05), 153549580 (C14), 153622275, 153628901: the bung sits off the
+    hub centre inside the bore (offset 18.0 / 41.9 / 34.2 / 26.9 px, outside 6.3 / 18.4 / 18.2 / 13.5 %, roundness 0.944 /
+    0.923 / 0.930 / 0.933). They measure like the bad ones (e.g. 153628901 vs bad 153358747: 26.9 / 29.9 px, 13.5 / 12.9 %,
+    0.933 / 0.896) and look alike; CHANGES 100 labelled A05, C14, C16 not seated. Left NOT OK: a limit that passes them
+    passes bad bungs too. Question to the user.
+- Properties (three files): `<vendor>.vision.bung.seating.position.source=hubholes`, `.seating.hub.offset.dost/.dostplus`
+  (siemens 4.9,-13.7 / 4.2,-16.0, allenbradley 0,0; bung seating stays off on Machine 1). Reference commit `95967fc`
+  (0ff5470's BungSegmenter + this logic, values written in); both manifests (the 6 extracted lines moved by 10).
+  Verifier ALL EQUIVALENT on both machines.
+- **Dry runs:** new `DryRun_Bung_Hub_Holes.py` (both folders) with `bung_images_20261113/hole_centres.json` (the
+  hole-pattern centres and the user's labels): Machine 2 6/6 (H1 hub holes, S1 23 good SEATED, S2 20 bad with a hole
+  pattern NOT SEATED, S3 holes hidden NOT SEATED, S4 picture moved 12 / -9 px - seated position and offset move with
+  it, S5 source fixed), Machine 1 skipped (seating off). `DryRun_Bung_Frame.py` (both folders): new check that the
+  seated position moves with the picture; the share outside the oval may now change by up to 4 points (was 2): with the
+  oval centred on the face, B12's share went 0.9 -> 3.7 % on a 15 / -10 px move (fixed position: 4.4 -> 4.7 %) because
+  MobileSAM's face mask changes with the picture (roundness 0.995 -> 0.964, CHANGES 126) - verdicts unchanged. The
+  seated position may be 2.5 px from where the move puts it: A08 zoomed 3 % gives 1.9 px (the hole finder on a
+  resampled picture, and the offset, which does not scale with the zoom). Machine 2, MobileSAM on the CPU, no YOLO:
+  **39 / 39**. `Verify_Vision_Config_Equivalence.py`: ALL EQUIVALENT on both machines. Not run here:
+  `DryRun_Bung_Check.py` / `DryRun_Bung_Check_UI.py` (need `models/` with YOLO - laptop), `DryRun_Bung_Rotation.py`
+  (judges the hole pattern only, which did not change).
+- **Margin to watch:** the oval test (6 %) has the least room: seated up to 4.0 % here, and a moved picture added up to
+  2.8 points on B12. Not changed; the seating lines of a shift will show it.

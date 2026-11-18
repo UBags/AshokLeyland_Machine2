@@ -7,7 +7,7 @@
     "camera/CheckNutAndPlateWasher.py": "3d91a76",
     "camera/HexagonNutDetector.py": "4e04121",
     "camera/CheckCap.py": "e81a162",
-    "camera/BungSegmenter.py": "0ff5470",
+    "camera/BungSegmenter.py": "95967fc",
     "camera/HubAndBearingSegmenter.py": "3d91a76",
     "camera/KnuckleLocator.py": "f3aa0ed",
     "camera/VisionFrame.py": "2376cf9",
@@ -19,7 +19,7 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 1436,
+      "old_line": 1446,
       "old_literal": "100",
       "old_snippet": "distance <= 100:"
     },
@@ -27,7 +27,7 @@
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MIN",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 1436,
+      "old_line": 1446,
       "old_literal": "75",
       "old_snippet": "75 <= distance"
     },
@@ -35,7 +35,7 @@
       "const": "SQUARE_MAX_ANGLE_STD",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 443,
+      "old_line": 453,
       "old_literal": "20.0",
       "old_snippet": "allowed_angle_std: float = 20.0"
     },
@@ -43,7 +43,7 @@
       "const": "SQUARE_MAX_INTERIOR_ANGLE",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 442,
+      "old_line": 452,
       "old_literal": "115.0",
       "old_snippet": "max_interior_angle: float = 115.0"
     },
@@ -51,7 +51,7 @@
       "const": "SQUARE_MIN_INTERIOR_ANGLE",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 441,
+      "old_line": 451,
       "old_literal": "65.0",
       "old_snippet": "min_interior_angle: float = 65.0"
     },
@@ -59,7 +59,7 @@
       "const": "SQUARE_SIDE_LENGTH_TOLERANCE",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
-      "old_line": 440,
+      "old_line": 450,
       "old_literal": "0.2",
       "old_snippet": "tolerance: float = 0.2"
     },
