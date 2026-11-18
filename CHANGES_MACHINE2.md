@@ -4390,3 +4390,35 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   properties files). Largest seated distance over the three runs: 2.2 / 3.3 / 3.5 px (with 0.3,-2.7: 2.0 / 4.6 / 4.8 px,
   too near the 5 px limit). Bolts stay 0.3,-2.7 (DOST data from one hub picture only). Max stays 5.0.
 - **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from the three CSVs (above).
+
+## 147. Hub-centre offsets per hub kind and model; DOSTPLUS bolts -0.6,2.2 (2026-11-18)
+
+- **User (laptop):** `DryRun_Cap_Hub_Distance_UI` as DOSTPLUS with hub picture `..._20261113153829194` (centre (644.0,
+  336.9) from 5 bolts) on the 117 production pictures of 17 Nov: 46 of 93 brass caps OK, 47 NOT OK - all 47 SEATED by
+  the colour rules, failed only by the distance (5.2 .. 7.2 px) against the bolts offset 0.3,-2.7.
+- **Found:** raw cap - hub (offset taken out) for the 93 seated brass caps: dx -2.30 .. +1.43, dy -0.21 .. +4.57 (median
+  +0.61, +2.38). The DOST silver caps of CHANGES 145 against a DOST bolts hub: dy -2.25 .. -4.11. One bolts offset
+  cannot hold both: the best common centre (0.0, 0.25) leaves 4.4 px of the 5.0 for spread; -0.6,2.2 would put the DOST
+  caps at up to 6.5 px. The silver and brass cap faces (and the DOST / DOSTPLUS bolts) are not at the same heights, so
+  the camera's slight angle shifts them differently.
+- **Changed:** `CheckCap` offsets per hub kind and model - keys `vision.cap.seating.hub.distance.offset.holes.dost`,
+  `.holes.dostplus`, `.bolts.dost`, `.bolts.dostplus` (replacing `.offset.holes` / `.offset.bolts`); `CheckCap.hubOffset
+  (kind, model)`; `hubCentreDistance(anImage, hubCentre, model=DOST)`, called by `checkSeating` with the model found on
+  the cap; the seating line names the model. Reference commit `cc8a42c` (both manifests).
+- **Values (siemens, three properties files):** DOSTPLUS bolts -0.6,2.2 (the centre that minimises the largest distance
+  of the 93 caps), DOSTPLUS holes 0.1,-1.4 (CHANGES 146), DOST bolts 0.3,-2.7 (CHANGES 145), DOST holes 0.3,-5.2 - not
+  measured: DOST bolts minus the 2.5 px by which the bolt circle sits above the hole circle on the DOSTPLUS hub pair of
+  13 Nov. Allenbradley: all 0,0 (check off). Max stays 5.0.
+- **Measured with the new value:** the 93 seated brass caps of this run at 0.46 .. 2.95 px from the target, all OK; the
+  24 NOT OK left are the 21 silver caps checked as DOSTPLUS and the check without a cap, as before.
+- **Caveat:** each bolts value comes from one hub picture, and two hub pictures of the same DOSTPLUS hub differed by
+  2.6 px (CHANGES 146); hub and cap pictures of the same cycle are still needed to separate this from part-to-part spread.
+- **Dry runs:** `DryRun_Cap_Hub_Distance_UI.py` sets the chosen model's pair, its offset boxes follow the Model choice,
+  `--offset-holes` / `--offset-bolts` default to the model's values, the summary names the key per model;
+  `DryRun_Cap_Hub_Distance.py` C1 also checks that DOSTPLUS takes its own holes offset and not its bolts offset; C2
+  now puts the hub at the cap centre minus the configured DOST holes offset (it had assumed an offset near zero and
+  failed with 0.3,-5.2).
+- **Run:** verifier ALL EQUIVALENT on both machines; `DryRun_Cap_Hub_Distance` Machine 2 11/11, Machine 1 9/9;
+  `DryRun_Cap_Production_Path` 12/12 (Machine 2); `DryRun_Camera_State_File` 19/19 on both; `DryRun_Cap_Check` Machine 1
+  all as expected (Machine 2 needs the YOLO weights: laptop); window test of `DryRun_Cap_Hub_Distance_UI` 8/8 on both
+  (xvfb, checks stood in). Distances recomputed from `details_20261118-163312.csv` (above).

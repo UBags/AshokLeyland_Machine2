@@ -20,10 +20,10 @@ Checks
      same boxes: same mask area, same stage-2 ellipse centre - on every cap picture
   C0b the same cap outline in the cut-out disc and in the full picture gives the same ellipse (20 ragged synthetic
      ellipses, shifted as the disc is cut): the cause of a 0.7 px difference on DOST_cap_08 on the laptop (CHANGES 144)
-  C1 the rule: hub centre at the cap centre + (3, 0) px -> within; + (8, 0) -> NOT within; the bolts offset used for
-     bolts, the holes offset for holes; no hub centre -> not applied (and said so); switched off -> not applied
-  C2 checkCap with the seating step (Machine 2): a seated cap with the hub centre on its centre OK; the same cap with
-     the hub centre 10 px away NOT OK (cap not seated); without a hub centre as before
+  C1 the rule: hub centre at the cap centre + (3, 0) px -> within; + (8, 0) -> NOT within; the offset of the hub kind
+     and the model is used (per model since CHANGES 147); no hub centre -> not applied (and said so); switched off -> not applied
+  C2 checkCap with the seating step (Machine 2): a seated cap with the hub centre + the configured DOST holes offset on its
+     centre OK; 10 px further away NOT OK (cap not seated); without a hub centre as before
 MobileSAM weights needed (models/MobileSAM/weights/mobile_sam.pt or --sam). The YOLO model comes from ModelManager when
 its weights are there (the laptop); otherwise stand-in boxes (squares of half-side 80 - 120 px round the disc centre
 and 20 px either side) are used and the run says so - C0 then proves the port, not YOLO.
@@ -228,28 +228,35 @@ def main() -> int:
     seatedName = "DOST_cap_01.jpg"
     seatedPic = rd(data / "cap_images" / seatedName)
     cc = found[seatedName]["centre"]
-    saved = (CheckCap.SEATING_HUB_DISTANCE_CHECK, CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES,
-             CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS)
+    names = ("SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST", "SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST",
+             "SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS", "SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS")
+    saved = (CheckCap.SEATING_HUB_DISTANCE_CHECK,) + tuple(getattr(CheckCap, n) for n in names)
     try:
         CheckCap.SEATING_HUB_DISTANCE_CHECK = True
-        CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES, CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS = (0.0, 0.0), (0.0, 0.0)
-        near = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 3, cy=cc[1], kind="holes", count=4))
-        far = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="holes", count=4))
-        CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS = (8.0, 0.0)
-        bolts = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="bolts", count=5))
-        holes = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="holes", count=4))
-        none = CheckCap.hubCentreDistance(seatedPic, None)
+        for n in names:
+            setattr(CheckCap, n, (0.0, 0.0))
+        near = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 3, cy=cc[1], kind="holes", count=4), "DOST")
+        far = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="holes", count=4), "DOST")
+        CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST = (8.0, 0.0)
+        CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS = (8.0, 0.0)
+        bolts = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="bolts", count=5), "DOST")
+        holes = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="holes", count=4), "DOST")
+        holesPlus = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="holes", count=5), "DOSTPLUS")
+        boltsPlus = CheckCap.hubCentreDistance(seatedPic, dict(cx=cc[0] - 8, cy=cc[1], kind="bolts", count=5), "DOSTPLUS")
+        none = CheckCap.hubCentreDistance(seatedPic, None, "DOST")
         CheckCap.SEATING_HUB_DISTANCE_CHECK = False
-        off = CheckCap.hubCentreDistance(seatedPic, dict(cx=0.0, cy=0.0, kind="holes", count=4))
+        off = CheckCap.hubCentreDistance(seatedPic, dict(cx=0.0, cy=0.0, kind="holes", count=4), "DOST")
     finally:
-        CheckCap.SEATING_HUB_DISTANCE_CHECK, CheckCap.SEATING_HUB_DISTANCE_OFFSET_HOLES, \
-            CheckCap.SEATING_HUB_DISTANCE_OFFSET_BOLTS = saved
-    check("C1 3 px within, 8 px not; bolts offset for bolts, holes offset for holes; no hub centre / off: not applied",
+        CheckCap.SEATING_HUB_DISTANCE_CHECK = saved[0]
+        for n, v in zip(names, saved[1:]):
+            setattr(CheckCap, n, v)
+    check("C1 3 px within, 8 px not; the offset of the hub kind and the model (DOST bolts, DOSTPLUS holes); no hub centre / off: not applied",
           near["applied"] and near["ok"] and abs(near["distance"] - 3) < 0.01 and far["applied"] and not far["ok"]
           and bolts["ok"] and abs(bolts["distance"]) < 0.01 and not holes["ok"]
+          and holesPlus["ok"] and abs(holesPlus["distance"]) < 0.01 and not boltsPlus["ok"]
           and not none["applied"] and none["ok"] and "no hub centre" in none["reason"]
           and not off["applied"] and off["ok"],
-          [(r.get("applied"), r.get("ok"), r.get("distance")) for r in (near, far, bolts, holes, none, off)])
+          [(r.get("applied"), r.get("ok"), r.get("distance")) for r in (near, far, bolts, holes, holesPlus, boltsPlus, none, off)])
     print(f"      {near['reason']}")
 
     def full(hub):
@@ -261,8 +268,9 @@ def main() -> int:
         IP.hubCentre = hub
         ok, _, _ = cps.assessPictures(MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, [seatedPic] * 6)
         return ok
-    okOn = full(dict(cx=cc[0], cy=cc[1], kind="holes", count=4))
-    okFar = full(dict(cx=cc[0] - 10, cy=cc[1], kind="holes", count=4))
+    ox, oy = CheckCap.hubOffset("holes", "DOST")       # the configured offset: hub + offset lands on the cap centre
+    okOn = full(dict(cx=cc[0] - ox, cy=cc[1] - oy, kind="holes", count=4))
+    okFar = full(dict(cx=cc[0] - ox - 10, cy=cc[1] - oy, kind="holes", count=4))
     okNone = full(None)
     check("C2 checkCap (camera server path): hub centre on the cap OK, 10 px away NOT OK, none as before (OK)",
           okOn and not okFar and okNone, (okOn, okFar, okNone))

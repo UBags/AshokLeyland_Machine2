@@ -178,10 +178,12 @@ On the Machine 2 PC with the new exe:
    (or bolts, circle r, spread); the cap check's seating line adds `cap centre (x, y) to hub centre (x, y) d px <= 5.0
    (... cap +dx / +dy px; ...)`. The 5 px limit and the zero offsets are not measured yet (no hub and cap pictures of
    the same part): send these lines for a shift of seated caps. If seated caps sit at a steady dx / dy (camera angle:
-   holes, bolt tips and the cap face are at three heights), that goes into `siemens.vision.cap.seating.hub.distance.offset.holes`
-   / `.bolts`; to stop the rule, `siemens.vision.cap.seating.hub.distance.check=False`.
-   Offsets: holes 0.1,-1.4 (CHANGES 146: two DOSTPLUS hub pictures, 105 seated brass caps), bolts 0.3,-2.7 (CHANGES
-   145: one DOST hub picture). CHANGES 96 measured the stud circle's centre about 7 px above the hole circle's on the same hub: watch
+   holes, bolt tips and the cap face are at three heights), that goes into `siemens.vision.cap.seating.hub.distance.offset.<holes|bolts>.<model>`
+   ; to stop the rule, `siemens.vision.cap.seating.hub.distance.check=False`.
+   Offsets per hub kind and model (CHANGES 147, keys `...offset.<holes|bolts>.<dost|dostplus>`): DOSTPLUS holes 0.1,-1.4
+   (CHANGES 146), DOSTPLUS bolts -0.6,2.2 (CHANGES 147: 93 seated brass caps, one hub picture), DOST bolts 0.3,-2.7
+   (CHANGES 145: 6 silver caps, one hub picture), DOST holes 0.3,-5.2 (not measured: DOST bolts minus the 2.5 px
+   holes-vs-bolts shift of the DOSTPLUS hub pair) - send a DOST holes run. CHANGES 96 measured the stud circle's centre about 7 px above the hole circle's on the same hub: watch
    for seated caps NOT OK with `from N holes` on DOST or `from N bolts` on DOSTPLUS - those need their own offset.
 
 ## Results

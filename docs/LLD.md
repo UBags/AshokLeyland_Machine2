@@ -244,7 +244,7 @@ yellow. Then, brass and silver (CHANGES §143, `vision.cap.seating.hub.distance.
 least-squares circle through the winning group's 4 / 5 mask centres (`CheckHubAndBottomBearing.hubCentreFromGroup`,
 cropped-picture centres moved by the segmenter's crop corner; circle radius ≥ `vision.hub.centre.bolt.min.distance` 165 px
 = bolts, else holes), kept as `ImageProcessor.hubCentre` (state attribute: sent to the worker, in the state file, dropped
-at the end of a cycle and at a hub check that fails) - plus `seating.hub.distance.offset.holes` / `.bolts` (0, 0) must lie
+at the end of a cycle and at a hub check that fails) - plus `seating.hub.distance.offset.<holes|bolts>.<dost|dostplus>` (per hub kind and model, CHANGES 147; (0, 0)) must lie
 within `seating.hub.distance.max` (5 px) of the cap's centre: the stage-2 ellipse centre of the cap mask found by
 `camera/CapMaskFinder.py` (the method frozen in CHANGES §139-142: gamma 2.0, disc r 160 round `cap.center`, YOLO boxes
 conf 0.15 as box prompts, stability ≥ 0.70, predicted IoU ≥ 0.50, box merge 0.50, area 15000-50000 px after the disc's
@@ -470,7 +470,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.holes` / `.offset.bolts` | True / 5.0 / 0,0 / 0,0 (Machine 1: False) | 3 |
+| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` | True / 5.0 / Machine 2: holes 0.3,-5.2 (DOST, derived) and 0.1,-1.4 (DOSTPLUS), bolts 0.3,-2.7 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)

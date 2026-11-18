@@ -16,8 +16,9 @@ printed and written to files.
   4. The cap check's step 3 (brightening) needs the hub, top bearing and nut / washer pictures of the same part: the
      hub picture chosen in 2 (else the model's first in hub_images/), and the model's first top bearing and nut
      pictures in this machine's dry-run folders, or those chosen with "Top bearing..." / "Nut / washer...".
-  5. "Max distance" (0.5 - 20 px) and the holes / bolts offsets (dx, dy px added to the hub centre) are used from the
-     next picture on (they start at this machine's vision.cap.seating.hub.distance.* values). The hub-centre rule is
+  5. "Max distance" (0.5 - 20 px) and the holes / bolts offsets (dx, dy px added to the hub centre) of the chosen model
+     are used from the next picture on (they start at this machine's vision.cap.seating.hub.distance.offset.<holes|bolts>.
+     <model> values and follow the Model choice; per model since CHANGES 147). The hub-centre rule is
      always applied here (also on Machine 1, whose seating step is off: there only the measurement is shown).
   6. Per cap: verdict and time; the colour rules' seating verdict, the distance verdict, the cap centre (stage-2
      ellipse), the hub centre + offset, distance, dx / dy, cap mask area / stability / predicted IoU, outline points
@@ -151,8 +152,11 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
     """The cap check as the camera server calls it, with the hub centre -> dict(ok, marked, row values, lines)."""
     capClass = checks.loadCap()
     module = checks.capModule
+    plus = model == "DOSTPLUS"                  # the offsets are per model (CHANGES 147): set this model's pair
+    holesName = "SEATING_HUB_DISTANCE_OFFSET_HOLES_" + ("DOSTPLUS" if plus else "DOST")
+    boltsName = "SEATING_HUB_DISTANCE_OFFSET_BOLTS_" + ("DOSTPLUS" if plus else "DOST")
     saved = (capClass.SEATING_HUB_DISTANCE_CHECK, capClass.SEATING_HUB_DISTANCE_MAX,
-             capClass.SEATING_HUB_DISTANCE_OFFSET_HOLES, capClass.SEATING_HUB_DISTANCE_OFFSET_BOLTS)
+             getattr(capClass, holesName), getattr(capClass, boltsName))
     realSeating, realColour = capClass.checkSeating, capClass._seatingByColour
     seen = {}
 
@@ -168,8 +172,8 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
     try:
         capClass.SEATING_HUB_DISTANCE_CHECK = True
         capClass.SEATING_HUB_DISTANCE_MAX = float(maxDistance)
-        capClass.SEATING_HUB_DISTANCE_OFFSET_HOLES = tuple(float(v) for v in offsetHoles)
-        capClass.SEATING_HUB_DISTANCE_OFFSET_BOLTS = tuple(float(v) for v in offsetBolts)
+        setattr(capClass, holesName, tuple(float(v) for v in offsetHoles))
+        setattr(capClass, boltsName, tuple(float(v) for v in offsetBolts))
         capClass._seatingByColour = staticmethod(colour)
         capClass.checkSeating = staticmethod(seating)
         current = {module.hubAndBottomBearingPictureKeyString: bases["hub"],
@@ -181,13 +185,14 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
         secs = time.perf_counter() - t0
         rule, measuredOnly = None, False
         if "seating" not in seen and hubCentre:                  # stopped before the seating step: measure anyway
-            rule, measuredOnly = capClass.hubCentreDistance(picture, hubCentre), True
+            rule, measuredOnly = capClass.hubCentreDistance(picture, hubCentre, model), True
         elif hubCentre:
             rule = dict(cap=None, target=seen["seating"].get("hub_target"), distance=seen["seating"].get("hub_distance"))
             rule["ok"] = rule["distance"] is not None and rule["distance"] <= float(maxDistance)
     finally:
-        (capClass.SEATING_HUB_DISTANCE_CHECK, capClass.SEATING_HUB_DISTANCE_MAX,
-         capClass.SEATING_HUB_DISTANCE_OFFSET_HOLES, capClass.SEATING_HUB_DISTANCE_OFFSET_BOLTS) = saved
+        capClass.SEATING_HUB_DISTANCE_CHECK, capClass.SEATING_HUB_DISTANCE_MAX = saved[0], saved[1]
+        setattr(capClass, holesName, saved[2])
+        setattr(capClass, boltsName, saved[3])
         capClass.checkSeating, capClass._seatingByColour = realSeating, realColour
     return dict(ok=bool(ok), marked=marked if marked is not None else picture, seconds=secs, colour=seen.get("colour"),
                 seating=seen.get("seating"), rule=rule, measuredOnly=measuredOnly, messages=list(checks.messages))
@@ -280,7 +285,8 @@ def summarise(rows, maxDistance):
         out.append(f"hub from {kind}, {len(seated)} seated caps (cap centre - hub centre, no offset):")
         out.append(f"    dx {stat(dx)}")
         out.append(f"    dy {stat(dy)}")
-        out.append(f"    suggested offset.{kind} = {mdx:.1f},{mdy:.1f}; with it the seated caps lie "
+        models = sorted({r["model"] for r in seated})
+        out.append(f"    suggested offset.{kind}.{'/'.join(m.lower() for m in models)} = {mdx:.1f},{mdy:.1f}; with it the seated caps lie "
                    f"{min(dev):.2f} - {max(dev):.2f} px from the hub centre -> suggested max = {max(dev) + LIMIT_MARGIN:.1f} "
                    f"(largest + {LIMIT_MARGIN:g})")
         skewed = [r for r in measured if r.get("hub_kind") == kind and "skewed" in r["picture"].lower()]
@@ -360,8 +366,8 @@ def runBatch():
         hub = dict(cx=float(x), cy=float(y), kind=kind, count=None, radius=None, spread=None)
         header.append(f"hub centre typed: ({float(x):.1f}, {float(y):.1f}) {kind}")
     maxDistance = float(argValue("--max", capClass.SEATING_HUB_DISTANCE_MAX))
-    offsets = (parsePair(argValue("--offset-holes", ",".join(map(str, capClass.SEATING_HUB_DISTANCE_OFFSET_HOLES)))),
-               parsePair(argValue("--offset-bolts", ",".join(map(str, capClass.SEATING_HUB_DISTANCE_OFFSET_BOLTS)))))
+    offsets = (parsePair(argValue("--offset-holes", ",".join(map(str, capClass.hubOffset("holes", model))))),
+               parsePair(argValue("--offset-bolts", ",".join(map(str, capClass.hubOffset("bolts", model))))))
     bases, note = basesFor(model, hubPicture, argValue("--top"), argValue("--nut"))
     header += [note, f"max distance {maxDistance:g} px, offset holes {offsets[0]}, bolts {offsets[1]}"]
     run = Run(argValue("--caps"))
@@ -391,6 +397,7 @@ def runWindow():
             self.root, self.checks, self.catcher = root, Checks(), CapCatcher()
             root.title("Cap seating: hub-centre distance (CHANGES 143)")
             self.model = tk.StringVar(master=root, value="DOST")
+            self.model.trace_add("write", self.fillOffsets)
             self.hubPath = self.capsFolder = self.topPath = self.nutPath = None
             self.hubPicture = None
             self.hx, self.hy = tk.StringVar(master=root), tk.StringVar(master=root)
@@ -452,8 +459,8 @@ def runWindow():
             try:
                 self.catcher.install()
                 capClass = self.checks.loadCap()
-                vals = (capClass.SEATING_HUB_DISTANCE_MAX, capClass.SEATING_HUB_DISTANCE_OFFSET_HOLES,
-                        capClass.SEATING_HUB_DISTANCE_OFFSET_BOLTS)
+                vals = (capClass.SEATING_HUB_DISTANCE_MAX,
+                        {m: (capClass.hubOffset("holes", m), capClass.hubOffset("bolts", m)) for m in ("DOST", "DOSTPLUS")})
             except Exception as e:
                 err, vals = err or f"{type(e).__name__}: {e}", None
             with self.lock:
@@ -524,6 +531,13 @@ def runWindow():
             if folder:
                 self.capsFolder = folder
                 self.status.set(f"Caps folder {folder}: {len(picturesIn(folder))} pictures")
+
+        def fillOffsets(self, *args):
+            """The holes / bolts offsets of the chosen model from the properties (offsets are per model, CHANGES 147)."""
+            pair = getattr(self, "configOffsets", {}).get(self.model.get())
+            if pair:
+                self.ohx.set(f"{float(pair[0][0]):g}"); self.ohy.set(f"{float(pair[0][1]):g}")
+                self.obx.set(f"{float(pair[1][0]):g}"); self.oby.set(f"{float(pair[1][1]):g}")
 
         def hubCentre(self):
             try:
@@ -600,8 +614,8 @@ def runWindow():
                     self.ready, self.loadError = not err, err
                     if vals:
                         self.maxVar.set(f"{float(vals[0]):.1f}")
-                        self.ohx.set(f"{float(vals[1][0]):g}"); self.ohy.set(f"{float(vals[1][1]):g}")
-                        self.obx.set(f"{float(vals[2][0]):g}"); self.oby.set(f"{float(vals[2][1]):g}")
+                        self.configOffsets = vals[1]
+                        self.fillOffsets()
                     self.status.set("Models loaded: choose a hub picture and a caps folder" if not err
                                     else f"Models not loaded: {err}")
                     if self.ready and any(i[0] == "hubwait" for i in items):
