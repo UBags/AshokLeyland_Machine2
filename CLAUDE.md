@@ -65,6 +65,11 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   their module is imported (CHANGES 154; block "TUNING VALUES" of the properties files); the code default equals the
   properties value - `DryRun_Tuning_Keys.py` checks it. Names, keys, states, queue names and labels stay in the code.
 - `costhetaio/siemens/IOServerProperties.yaml`: Siemens rack / slot / PDU and tag addresses.
+- Frontend languages (CHANGES 156): English, Kannada, Tamil, Hindi on the main screen and its dialogs only; catalogues
+  `Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` (Babel; English text = message id); the choice in
+  `Internal/frontend_language.txt` (not in git). Mark new frontend texts with `tr` / `trf` / `N_` / `bind`, then run
+  `test/i18n/update_frontend_catalogues.py` and translate the new entries; results, button keys, logs and the DB stay
+  English. The Indic translations are drafts awaiting a native speaker's review.
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.
@@ -128,6 +133,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 8 Picture clean-up lines, invalid QR notice + siren, MainProgram lines in the log, DB retry (CHANGES 110) | Not reported yet |
 | 9 Bung check: rotation dry run on the laptop, failing bungs now OK, `[Bung]` lines, check time (CHANGES 115) | Not reported yet |
 | 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time; hub-centre distance lines (CHANGES 128, 129, 143) | Not reported yet |
+| 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -175,7 +181,7 @@ No per-check times were recorded with the report; when they are, put them in the
   cannot be judged there - say so rather than guessing.
 - Most used: `Verify_Vision_Config_Equivalence.py` (both folders), `DryRun_IOServer_Fault_Scenarios.py`,
   `DryRun_Knuckle_Frame.py --quick`, `DryRun_Vision_Check_Timeout.py`, `DryRun_Cap_Check.py`,
-  `DryRun_Cap_Production_Path.py`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`,
+  `DryRun_Cap_Production_Path.py`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`, `DryRun_Frontend_Languages.py`,
   `DryRun_All_Checks_UI.py` (window; `--auto` without one).
 - Sandbox notes: Python 3.13 has torch / OpenCV but no tkinter; Python 3.12 has Tk (and PySide6 under Xvfb) but no
   torch - windows are driven on 3.12 with the camera modules stood in, the real checks on 3.13 without a window.

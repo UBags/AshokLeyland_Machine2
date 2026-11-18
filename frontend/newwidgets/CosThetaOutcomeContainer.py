@@ -13,6 +13,7 @@ from numpy import ndarray
 from typing import Union
 import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - its stylesheets are the CosThetaStylesheets ones (imported above); kept for its import-time effects
 from Configuration import CosThetaConfigurator
+from frontend.FrontendI18n import tr, bind, N_
 from frontend.frontendutils.CosThetaImageUtils import convertNDArrayToPixmap, getPixmapImage, resize_pixmap
 import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
 import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
@@ -37,7 +38,7 @@ class CosThetaOutcomeContainer(QFrame):
     SECOND_LINE_MIN_POINT_SIZE = CosThetaConfigurator.getTuning("frontend.outcome.second.line.min.point.size", 8, minimum=4)
 
     def __init__(self, title : str, imageHint : str, bg_color = Qt.GlobalColor.black, fg_color = Qt.GlobalColor.white,
-                 default_status = "Result Awaited", forceTopLabelFontSizeTo : int = 0,
+                 default_status = N_("Result Awaited"), forceTopLabelFontSizeTo : int = 0,
                  forceMiddleLabelFontSizeTo : int = 0, forceBottomLabelFontSizeTo : int = 0):
 
         super().__init__()
@@ -57,12 +58,17 @@ class CosThetaOutcomeContainer(QFrame):
         self.forceMiddleLabelFontSizeTo = forceMiddleLabelFontSizeTo
         self.forceBottomLabelFontSizeTo = forceBottomLabelFontSizeTo
 
-        self.title_label = QLabel(title)  # Container's title
+        self.title_label = QLabel(title)  # Container's title (English; shown in the chosen language, CHANGES 156)
+        self.title = title
+        bind(self.title_label, title)
         self.title_label.setContentsMargins(0,0,0,0)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.title_label.setStyleSheet(titleLabelStylesheet.format(QColor(fg_color).name())) # Set the background and foreground color of the container's label
 
-        self.image_label = QLabel(imageHint)  # Image label
+        self.image_label = QLabel(tr(imageHint))  # Image label
+        self._showingHint = True              # the image label shows the hint (re-shown in a new language)
+        self._displayText = None              # the text in the number display (re-shown in a new language)
+        self._twoLineArgs = None              # the last two-line display (its second line is a text)
         self.image_label.setContentsMargins(0,0,0,0)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setStyleSheet(emptyImageStylesheet)
@@ -70,7 +76,7 @@ class CosThetaOutcomeContainer(QFrame):
         # print(f"{self.image_label.width() = }, {self.image_label.height() = }")
 
         initialResult : str = self.default_status
-        self.result_label = QLabel(initialResult)  # Container's title
+        self.result_label = QLabel(tr(initialResult))  # Container's title
         self.result_label.setContentsMargins(0,0,0,0)
         self.result_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if initialResult.lower() == 'ok':
@@ -147,6 +153,17 @@ class CosThetaOutcomeContainer(QFrame):
     #     self.setDefaultImage(defaultImage)
     #     self.setDefault()
 
+    def retranslate(self) -> None:
+        """Show the tile's texts again in the language now chosen (the title is bound; CHANGES 156)."""
+        self.result_label.setText(tr(self.currentStatus))
+        if self._showingHint:
+            self.image_label.setText(tr(self.imageHint))
+        elif self._twoLineArgs is not None:
+            mainText, secondLine, colour = self._twoLineArgs
+            self.setTwoLineTextAndResult(mainText, secondLine, self.currentStatus, colour)
+        elif self._displayText is not None:
+            self.image_label.setText(tr(self._displayText))
+
     def setTitlePointSize(self, pointSize: int):
         """Fixed size of the title (black bar); set once after the first render, the same for all 14 tiles."""
         font = QFont(self.title_label.font())
@@ -172,7 +189,8 @@ class CosThetaOutcomeContainer(QFrame):
         return self.currentPixmap
 
     def getResult(self):
-        return self.result_label.text()
+        # the result in English ("OK" / "Not OK" / ...), whatever language the label shows (CHANGES 156)
+        return self.currentStatus
 
     def setResult(self, result : Union[str, bool]):
         if isinstance(result, bool):
@@ -186,7 +204,7 @@ class CosThetaOutcomeContainer(QFrame):
             elif (result.lower().strip() == "notok") or (result.lower().strip() == "not ok"):
                 result = "Not OK"
         # self.result_label.setPixmap(self.getResultImage(result))
-        self.result_label.setText(result)
+        self.result_label.setText(tr(result))     # shown in the chosen language; currentStatus stays English
         self.currentStatus = result
         # printPlain(f"About to do comparison of result with value {result.lower()}")
         if result.lower() == 'ok':
@@ -212,6 +230,7 @@ class CosThetaOutcomeContainer(QFrame):
         pix = resize_pixmap(pix, max(1, area.width()), max(1, area.height()))
         self.image_label.setPixmap(pix)
         self.currentPixmap = pix
+        self._showingHint, self._twoLineArgs, self._displayText = False, None, None
         self.update()
 
     def setImageAndResult(self, image : QImage | QPixmap | ndarray | str, result : str):
@@ -229,7 +248,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setStyleSheet(emptyImageStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.EMPTY_IMAGE_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(self.imageHint)
+        self.image_label.setText(tr(self.imageHint))
+        self._showingHint, self._twoLineArgs, self._displayText = True, None, None
         self.setResult(self.default_status)
         self.update()
 
@@ -258,7 +278,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(f"{text}")
+        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
+        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
         self.update()
 
     def setTextAndResult(self, text: str | float | int, result : str):
@@ -276,7 +297,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(f"{text}")
+        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
+        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
         self.setResult(result)
         self.update()
 
@@ -288,6 +310,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.RichText)
+        self._showingHint, self._twoLineArgs, self._displayText = False, (mainText, secondLine, secondLineColor), None
+        secondLine = tr(secondLine)             # e.g. "Rotation Done", in the chosen language
         mainSize = CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT.pointSize()
         secondSize = self._secondLinePointSize(str(secondLine))
         self.image_label.setText(
@@ -331,7 +355,8 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setStyleSheet(numberDisplayStylesheet)
         self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
         self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(f"{text}")
+        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
+        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
         self.setResult(result)
         self.update()
 

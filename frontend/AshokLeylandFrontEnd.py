@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 
 # PySide6 imports - QtWidgets
 from PySide6.QtWidgets import (
+    QComboBox,
     QApplication,
     QMainWindow,
     QWidget,
@@ -77,6 +78,9 @@ from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
 from frontend.newwidgets.CosThetaResultsContainer import CosThetaResultsContainer
+from frontend.FrontendI18n import (installIndicFonts, tr, trf, N_, bind, addListener, useSavedLanguage, setLanguage, currentLanguage,
+                                   loadNote, LANGUAGES)
+from frontend.FrontendNotices import translateNotice
 from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageContainer
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
 
@@ -112,6 +116,7 @@ from statemachine.StateMachine import (
 )
 
 app = getAppInstance()
+installIndicFonts(('Courier', 'Segoe UI', CosThetaConfigurator.getInstance().getFontFace(), app.font().family()))
 populateMonitorDimensions()  # needs to be called to ensure that a QtGui context is there for some calls to work
 
 class AshokLeylandFrontEnd(QMainWindow):
@@ -265,6 +270,9 @@ class AshokLeylandFrontEnd(QMainWindow):
         self.tilesClearCounter = 0
         self.timeStartedAsString = datetime.now().strftime("%H:%M:%S")
 
+        # the main screen's language: the one chosen last time (Internal/frontend_language.txt; CHANGES 156)
+        language = useSavedLanguage()
+        printBlue(f"Frontend language: {language} - {loadNote(language)}")
         try:
             self.labelHeight = CosThetaConfigurator.getInstance().getLabelInitialHeight()
             self.initializeUI()
@@ -275,7 +283,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             self.connectToRedis()
             self.showMaximized()
             QApplication.processEvents()
-            self.resultsContainer.calculateAndSetIdealFontForInstructionLabel()
+            self.resultsContainer.fitInstructionFont(self.machineState.getAllInstructions())
             self.calculateAndSetIdealFontForModeLabel()
             self.calculateAndSetIdealFontForQRCodeLabel()
             self.calculateAndSetIdealFontForDateTimeLabel()
@@ -298,6 +306,7 @@ class AshokLeylandFrontEnd(QMainWindow):
             printBlue("Started FE Server")
             printBoldBlue("*****************")
             self.setFixedWidth(AshokLeylandFrontEnd.CURRENT_WIDTH)
+            addListener(self.onLanguageChanged)     # texts built at run time, and the font sizes, again
             self.setFixedHeight(AshokLeylandFrontEnd.CURRENT_HEIGHT)
         except Exception as e:
             print(e)
@@ -357,7 +366,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     def initializeUI(self):
         """Initialize the window and display its contents to the screen."""
 
-        self.setWindowTitle(AshokLeylandFrontEnd.windowTitle)
+        bind(self, AshokLeylandFrontEnd.windowTitle, "setWindowTitle")
 
         self.setupWidgets()
         self.setupMenu()
@@ -366,20 +375,21 @@ class AshokLeylandFrontEnd(QMainWindow):
     def setupWidgets(self):
 
         cMode = self.mode.upper()
-        central_widget = QGroupBox(f"IN {cMode.upper()} MODE")
+        central_widget = QGroupBox(trf("IN {mode} MODE", mode=tr(cMode.upper())))
+        self.centralGroupBox = central_widget
         self.setCentralWidget(central_widget)
         grid_layout = QGridLayout(central_widget)
         grid_layout.setContentsMargins(0, 0, 0, 0)
         grid_layout.setSpacing(0)  # No space between widgets
 
         # ********************************** START MODE GROUP BOX *********************************
-        modeGroupBox = QGroupBox("Mode")
+        modeGroupBox = bind(QGroupBox("Mode"), "Mode", "setTitle")
         modeLayout = QHBoxLayout()
         modeLayout.setContentsMargins(0, 0, 0, 0)
         modeLayout.setSpacing(0)  # No space between widgets
         modeGroupBox.setLayout(modeLayout)
 
-        self.modeText = self.mode.upper() + " - Knuckle, Hub, and Disc Assembly"
+        self.modeText = trf("{mode} - Knuckle, Hub, and Disc Assembly", mode=tr(self.mode.upper()))
 
         self.modeLabel = QLabel(self.modeText)  # Container's title
         self.modeLabel.setContentsMargins(0,0,0,0)
@@ -404,6 +414,19 @@ class AshokLeylandFrontEnd(QMainWindow):
         modeLayout.addWidget(CosThetaQVLine(), 0)
         modeLayout.addWidget(self.qrCodeLabel, 1)
 
+        # Language of the main screen (CHANGES 156): English / Kannada / Tamil / Hindi, each in its own script; the
+        # choice is kept in Internal/frontend_language.txt for the next start
+        self.languageSelector = QComboBox()
+        for code, name in LANGUAGES:
+            self.languageSelector.addItem(name, code)
+        self.languageSelector.setCurrentIndex(max(0, self.languageSelector.findData(currentLanguage())))
+        self.languageSelector.setFont(QFont('Segoe UI', pointSize=max(10, CosThetaConfigurator.getInstance().getInitialFontsize() - 2),
+                                            weight=QFont.Weight.Bold))
+        self.languageSelector.setToolTip("English / ಕನ್ನಡ / தமிழ் / हिन्दी")
+        self.languageSelector.currentIndexChanged.connect(self.languageChosen)
+        modeLayout.addWidget(CosThetaQVLine(), 0)
+        modeLayout.addWidget(self.languageSelector, 0)
+
         # Notices from the IOServer / camera server (e.g. "Database down: continue till end of cycle"), top right,
         # flashing while there are any (FrontendNoticeWorker reads them; hidden when there are none)
         self.noticeLabel = QLabel("")
@@ -427,31 +450,31 @@ class AshokLeylandFrontEnd(QMainWindow):
         # ********************************** START CONNECTION GROUP BOX *********************************
 
         self._statusFont = QFont('Courier', pointSize=int(20), weight=QFont.Weight.Bold)
-        self.cameraServerConnectionStatusContainer = ToggleMessageContainer(okText ="Camera connected",
-                                                                            notokText = "Camera not connected",
+        self.cameraServerConnectionStatusContainer = ToggleMessageContainer(okText=N_("Camera connected"),
+                                                                            notokText=N_("Camera not connected"),
                                                                             okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             minimumWidth = 50,
                                                                             labelHeight = self.labelHeight, name='CAMERACONNECTION', forceUseOfFontSize=26)
-        self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText ="I/O Module connected",
-                                                                        notokText = "I/O Module not connected",
+        self.ioServerConnectionStatusContainer = ToggleMessageContainer(okText=N_("I/O Module connected"),
+                                                                        notokText=N_("I/O Module not connected"),
                                                                         okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='IOCONNECTION',
                                                                         forceUseOfFontSize=26)
-        self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText ="Database connected",
-                                                                        notokText = "Database not connected",
+        self.dbServerConnectionStatusContainer = ToggleMessageContainer(okText=N_("Database connected"),
+                                                                        notokText=N_("Database not connected"),
                                                                         okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                         font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         notokforegroundColor = QColor(Qt.GlobalColor.white),
                                                                         minimumWidth = 50,
                                                                         labelHeight = self.labelHeight, name='DBCONNECTION',
                                                                         forceUseOfFontSize=26)
-        self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText ="QRCode Scanner connected",
-                                                                            notokText = "QRCode Scanner not connected",
+        self.qrCodeServerConnectionStatusContainer = ToggleMessageContainer(okText=N_("QRCode Scanner connected"),
+                                                                            notokText=N_("QRCode Scanner not connected"),
                                                                             okStyleSheet = connectionOkLabelStylesheet, notokStyleSheet = notokLabelStylesheet,
                                                                             font = self._statusFont, okforegroundColor = QColor(Qt.GlobalColor.white),
                                                                             notokforegroundColor = QColor(Qt.GlobalColor.white),
@@ -459,7 +482,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                                                                             labelHeight = self.labelHeight, name='QRCODE',
                                                                             forceUseOfFontSize=26)
 
-        connectionStatusesGroupBox = QGroupBox("CONNECTION STATUS OF DEVICES")
+        connectionStatusesGroupBox = bind(QGroupBox("CONNECTION STATUS OF DEVICES"), "CONNECTION STATUS OF DEVICES", "setTitle")
         connectionStatusLayout = QHBoxLayout()
         connectionStatusesGroupBox.setLayout(connectionStatusLayout)
         connectionStatusLayout.setContentsMargins(0, 0, 0, 0)
@@ -485,21 +508,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         # ********************************** START GENERAL INFO GROUP BOX *********************************
 
         self.dateTimeFont = QFont('Segoe UI', pointSize=int(12), weight=QFont.Weight.Bold)
-        self.dateTimeText = (
-            'Today is {}. Started: {}; Running time: {}    '
-            '; Components produced : This week - {}; This month - {}\n'
-            'User: {}; Current component processing time: {}    '
-            '; Components produced today - {}'
-        )
         currentComponentProcessingStarted : bool = (AshokLeylandFrontEnd.currentQRCode is not None) and (AshokLeylandFrontEnd.currentQRCode != "")
-        currentDatetimeText = self.dateTimeText.format(datetime.now().strftime('%d-%m-%Y %a'),
-                                                       self.timeStartedAsString,
-                                                       (':'.join(str(datetime.now() - self.timeStarted).split(':')[:3])).split('.')[0],
-                                                       0,
-                                                       0,
-                                                       f'{self.username} - {self.role}',
-                                                       (':'.join(str(datetime.now() - self.currentComponentStartTime).split(':')[:3])).split('.')[0] if currentComponentProcessingStarted else "0",
-                                                       0)
+        currentDatetimeText = self.dateTimeTextFor(
+            0, 0, 0, (':'.join(str(datetime.now() - self.currentComponentStartTime).split(':')[:3])).split('.')[0]
+            if currentComponentProcessingStarted else "0")
         # printLight(currentDatetimeText)
         self.dateTimeStatus = SimpleMessageContainer(
             text=currentDatetimeText,
@@ -514,7 +526,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         general_info_layout_left.setAlignment(Qt.AlignmentFlag.AlignCenter)
         general_info_layout_left.addWidget(self.dateTimeStatus)
 
-        self.creatorString = "Created by CosTheta Technologies and Ashok Leyland"
+        self.creatorString = tr("Created by CosTheta Technologies and Ashok Leyland")
         self.creatorFont = QFont('Segoe UI', pointSize=int(12), weight=QFont.Weight.Bold, italic=True)
         self.creatorFont.setItalic(True)
         self.creatorStatus = SimpleMessageContainer(text = self.creatorString,
@@ -560,7 +572,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         general_info_layout_right.addWidget(self.creatorStatus)
         general_info_layout_right.addWidget(self.cosThetaLogoLabel)
 
-        generalInfoGroupBox = QGroupBox("DATE / RUNNING DURATION PANEL")
+        generalInfoGroupBox = bind(QGroupBox("DATE / RUNNING DURATION PANEL"), "DATE / RUNNING DURATION PANEL", "setTitle")
         general_info_layout = QHBoxLayout()
         generalInfoGroupBox.setLayout(general_info_layout)
         general_info_layout.setContentsMargins(0, 0, 0, 0)
@@ -640,7 +652,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         "QRCode Scanner not connected", fits its tile. Call after the window has been shown."""
         tiles = [self.cameraServerConnectionStatusContainer, self.qrCodeServerConnectionStatusContainer,
                  self.ioServerConnectionStatusContainer, self.dbServerConnectionStatusContainer]
-        longest = max(((t, text) for t in tiles for text in (t._okText, t._notokText)), key=lambda x: len(x[1]))
+        longest = max(((t, tr(text)) for t in tiles for text in (t._okText, t._notokText)), key=lambda x: len(x[1]))
         size = largestFittingPointSize(longest[0].label(), longest[1])
         for t in tiles:
             t.setFixedPointSize(size)
@@ -666,64 +678,64 @@ class AshokLeylandFrontEnd(QMainWindow):
     def setupMenu(self):
         """Set up menubar."""
         # Create actions for mode menu
-        changePassword_act = QAction(' Change Own Password ', self)
+        changePassword_act = bind(QAction('Change Own Password', self), 'Change Own Password', fmt=' {} ')
         changePassword_act.setShortcut(' Ctrl+Alt+P ')
         changePassword_act.triggered.connect(lambda: self._runDialog(changePasswordForSelf, currentUser=self.username, currentRole=self.role))
 
-        exit_act = QAction(' Exit ', self)
+        exit_act = bind(QAction('Exit', self), 'Exit', fmt=' {} ')
         exit_act.setShortcut(' Ctrl+Alt+E ')
         exit_act.triggered.connect(self.goToClose)
 
-        addnewuser_act = QAction(' Add New User ', self)
+        addnewuser_act = bind(QAction('Add New User', self), 'Add New User', fmt=' {} ')
         addnewuser_act.setShortcut(' Ctrl+Alt+N ')
         addnewuser_act.triggered.connect(lambda: self._runDialog(createAccount, currentUser=self.username, currentRole=self.role))
 
-        manageuserpasswords_act = QAction(' Manage Other Users Passwords ', self)
+        manageuserpasswords_act = bind(QAction('Manage Other Users Passwords', self), 'Manage Other Users Passwords', fmt=' {} ')
         manageuserpasswords_act.setShortcut(' Ctrl+Alt+M ')
         manageuserpasswords_act.triggered.connect(lambda: self._runDialog(changePassword, currentUser=self.username, currentRole=self.role))
 
-        changerole_act = QAction(' Change User Role ', self)
+        changerole_act = bind(QAction('Change User Role', self), 'Change User Role', fmt=' {} ')
         changerole_act.setShortcut(' Ctrl+Alt+R ')
         changerole_act.triggered.connect(lambda: self._runDialog(changeRole, currentUser=self.username, currentRole=self.role))
 
-        activateuser_act = QAction(' Activate an Inactive User ', self)
+        activateuser_act = bind(QAction('Activate an Inactive User', self), 'Activate an Inactive User', fmt=' {} ')
         activateuser_act.setShortcut(' Ctrl+Alt+C ')
         activateuser_act.triggered.connect(lambda: self._runDialog(activateUser, currentUser=self.username, currentRole=self.role))
 
-        inactivateuser_act = QAction(' Inactivate User ', self)
+        inactivateuser_act = bind(QAction('Inactivate User', self), 'Inactivate User', fmt=' {} ')
         inactivateuser_act.setShortcut(' Ctrl+Alt+I ')
         inactivateuser_act.triggered.connect(lambda: self._runDialog(inactivateUser, currentUser=self.username, currentRole=self.role))
 
-        createreportbymodelname_act = QAction(' Create Production Report By Model Name', self)
+        createreportbymodelname_act = bind(QAction('Create Production Report By Model Name', self), 'Create Production Report By Model Name', fmt=' {} ')
         createreportbymodelname_act.setShortcut(' Ctrl+Alt+S ')
         createreportbymodelname_act.triggered.connect(lambda: self._runDialog(createProductionReportByModelName))
 
-        createreportbymodelnameforperiod_act = QAction(' Create Production Report By Model Name For a Period', self)
+        createreportbymodelnameforperiod_act = bind(QAction('Create Production Report By Model Name For a Period', self), 'Create Production Report By Model Name For a Period', fmt=' {} ')
         createreportbymodelnameforperiod_act.setShortcut(' Ctrl+Alt+F ')
         createreportbymodelnameforperiod_act.triggered.connect(lambda: self._runDialog(createProductionReportByModelNameAndDateLimits))
 
-        createreportbymodelnamefortoday_act = QAction(' Create Production Report By Model Name For Today', self)
+        createreportbymodelnamefortoday_act = bind(QAction('Create Production Report By Model Name For Today', self), 'Create Production Report By Model Name For Today', fmt=' {} ')
         createreportbymodelnamefortoday_act.setShortcut(' Ctrl+Alt+A ')
         createreportbymodelnamefortoday_act.triggered.connect(lambda: self._runDialog(createProductionReportOfTodayByModelName))
 
-        createreportforaperiodforallmodels_act = QAction(' Create Production Report for a Period for all Models', self)
+        createreportforaperiodforallmodels_act = bind(QAction('Create Production Report for a Period for all Models', self), 'Create Production Report for a Period for all Models', fmt=' {} ')
         createreportforaperiodforallmodels_act.setShortcut(' Ctrl+Alt+D ')
         createreportforaperiodforallmodels_act.triggered.connect(lambda: self._runDialog(createProductionReportByDateLimits))
 
-        createreportfortodayforallmodels_act = QAction(' Create Full Production Report for Today for all Models', self)
+        createreportfortodayforallmodels_act = bind(QAction('Create Full Production Report for Today for all Models', self), 'Create Full Production Report for Today for all Models', fmt=' {} ')
         createreportfortodayforallmodels_act.setShortcut(' Ctrl+Alt+D ')
         createreportfortodayforallmodels_act.triggered.connect(lambda: self._runDialog(createProductionReportOfToday))
 
-        info_act = QAction(' About ', self)
+        info_act = bind(QAction('About', self), 'About', fmt=' {} ')
         info_act.setShortcut(' Ctrl+Alt+A ')
         info_act.triggered.connect(self.goToInfo)
 
-        help_act = QAction(' Help ', self)
+        help_act = bind(QAction('Help', self), 'Help', fmt=' {} ')
         help_act.setShortcut(' Ctrl+Alt+H ')
         help_act.triggered.connect(self.goToHelp)
 
         # Add Manual Abort action
-        manual_abort_act = QAction(' (Z)Manual Abort ', self)
+        manual_abort_act = bind(QAction('(Z)Manual Abort', self), '(Z)Manual Abort', fmt=' {} ')
         manual_abort_act.setShortcut('Ctrl+Alt+Z')
         manual_abort_act.triggered.connect(self.manualAbort)
 
@@ -733,25 +745,25 @@ class AshokLeylandFrontEnd(QMainWindow):
         menu_bar.setNativeMenuBar(False)
         #
         # # Create Actions menu and add actions
-        action_menu = menu_bar.addMenu(' Actions ')
+        action_menu = bind(menu_bar.addMenu('Actions'), 'Actions', 'setTitle', fmt=' {} ')
         action_menu.addAction(exit_act)
         action_menu.addAction(changePassword_act)
         action_menu.addSeparator()
         action_menu.addAction(manual_abort_act)
 
         # Create Admin menu and add actions
-        admin_menu = menu_bar.addMenu(' Administration ')
+        admin_menu = bind(menu_bar.addMenu('Administration'), 'Administration', 'setTitle', fmt=' {} ')
         admin_menu.addAction(addnewuser_act)
         admin_menu.addAction(manageuserpasswords_act)
         admin_menu.addAction(changerole_act)
 
         # Create Activate/Inactivate menu and add actions
-        activate_inactivate_menu = menu_bar.addMenu(' Activate / Inactivate ')
+        activate_inactivate_menu = bind(menu_bar.addMenu('Activate / Inactivate'), 'Activate / Inactivate', 'setTitle', fmt=' {} ')
         activate_inactivate_menu.addAction(activateuser_act)
         activate_inactivate_menu.addAction(inactivateuser_act)
 
         # Create Report menu and add actions
-        send_report_menu = menu_bar.addMenu(' Report ')
+        send_report_menu = bind(menu_bar.addMenu('Report'), 'Report', 'setTitle', fmt=' {} ')
         send_report_menu.addAction(createreportbymodelname_act)
         send_report_menu.addAction(createreportbymodelnameforperiod_act)
         send_report_menu.addAction(createreportbymodelnamefortoday_act)
@@ -761,16 +773,16 @@ class AshokLeylandFrontEnd(QMainWindow):
         send_report_menu.addSeparator()
 
         # Create Information menu and add actions
-        info_menu = menu_bar.addMenu(' Information ')
+        info_menu = bind(menu_bar.addMenu('Information'), 'Information', 'setTitle', fmt=' {} ')
         info_menu.addAction(help_act)
         info_menu.addAction(info_act)
 
         # Machine Settings (Administrator / Supervisor): rotation RPM, torque setpoints, rotation counts written to the
         # PLC in state 2 (stored in machine_settings; used when cycle.settings.source=database)
-        machine_settings_act = QAction(' Machine Settings ', self)
+        machine_settings_act = bind(QAction('Machine Settings', self), 'Machine Settings', fmt=' {} ')
         machine_settings_act.setShortcut(' Ctrl+Alt+U ')
         machine_settings_act.triggered.connect(lambda: self._runDialog(updateMachineSettingsDialog, currentUser=self.username, currentRole=self.role))
-        machine_settings_menu = menu_bar.addMenu(' Machine Settings ')
+        machine_settings_menu = bind(menu_bar.addMenu('Machine Settings'), 'Machine Settings', 'setTitle', fmt=' {} ')
         machine_settings_menu.addAction(machine_settings_act)
         if not canChangeMachineSettings(self.role):
             machine_settings_act.setDisabled(True)
@@ -798,7 +810,7 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def goToClose(self):
         # print("Entered goToClose()")
-        ret = QMessageBox.question(self, 'Close Application', "Are you sure you want to exit the application ?",
+        ret = QMessageBox.question(self, tr('Close Application'), tr("Are you sure you want to exit the application ?"),
                                    buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, defaultButton=QMessageBox.StandardButton.No)
         if ret == QMessageBox.StandardButton.No:
             return
@@ -834,22 +846,63 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def goToInfo(self):
         # print("Entered goToInfo()")
-        QMessageBox.question(self, 'Information', "Software Version: v 1.0\n\n" +
-                             "This application is built by CosTheta Technologies Pvt Ltd. " +
-                             "All copyright belongs to CosTheta Technologies Pvt Ltd.\n\n" +
-                             "This application does quality inspection and recording of \n" +
-                             "a) capsules for 3 bottles on right and left disc\n" +
-                             "b) acceptance and rejection of bottles\n", QMessageBox.StandardButton.Ok)
+        # (the text described another CosTheta application - capsules and bottles - until CHANGES 156)
+        QMessageBox.question(self, tr('Information'),
+                             tr("Software Version: v 1.0\n\n"
+                                "This application is built by CosTheta Technologies Pvt Ltd. "
+                                "All copyright belongs to CosTheta Technologies Pvt Ltd.\n\n"
+                                "This application inspects and records the assembly of the front axle knuckle, hub and "
+                                "disc: every vision check, torque and press of each component, with its QR code.\n"),
+                             QMessageBox.StandardButton.Ok)
         return
 
     def goToHelp(self):
         # print("Entered goToHelp()")
-        QMessageBox.question(self, 'Help about using the menu', "When any of the menu choices are being used, \n" +
-                             "the remaining menu items will be clickable.\n\n" +
-                             "However, clicking on any other menu item will not be acted upon \n" +
-                             "by the system till the currently-in-use menu action is completed \n" +
-                             "or cancelled.\n", QMessageBox.StandardButton.Ok)
+        QMessageBox.question(self, tr('Help about using the menu'),
+                             tr("When any of the menu choices are being used, \n"
+                                "the remaining menu items will be clickable.\n\n"
+                                "However, clicking on any other menu item will not be acted upon \n"
+                                "by the system till the currently-in-use menu action is completed \n"
+                                "or cancelled.\n"), QMessageBox.StandardButton.Ok)
         return
+
+    @Slot(int)
+    def languageChosen(self, index: int) -> None:
+        """The language dropdown of the main screen (CHANGES 156): switch and keep the choice for the next start."""
+        code = self.languageSelector.itemData(index)
+        if code and code != currentLanguage():
+            setLanguage(code)               # bound texts change at once; onLanguageChanged does the rest
+            printBlue(f"Frontend language changed to {code} - {loadNote(code)}")
+
+    def onLanguageChanged(self) -> None:
+        """Texts built at run time, shown again in the language now chosen, and the font sizes fitted to them."""
+        try:
+            self.centralGroupBox.setTitle(trf("IN {mode} MODE", mode=tr(self.mode.upper())))
+            self.modeText = trf("{mode} - Knuckle, Hub, and Disc Assembly", mode=tr(self.mode.upper()))
+            self.modeLabel.setText(self.modeText)
+            self.creatorString = tr("Created by CosTheta Technologies and Ashok Leyland")
+            self.creatorStatus.updateStatus(self.creatorString)
+            self.setQRCodeContainerDisplay(displayString=getattr(self, "qrCodeDisplayString", ""))
+            self.updateTimeDurationStatus(None)
+            for tile in (self.cameraServerConnectionStatusContainer, self.qrCodeServerConnectionStatusContainer,
+                         self.ioServerConnectionStatusContainer, self.dbServerConnectionStatusContainer):
+                tile.retranslate()
+            self.resultsContainer.retranslate()
+            self.showNotices(getattr(self, "_remoteNotices", []))
+            index = self.languageSelector.findData(currentLanguage())
+            if index >= 0 and index != self.languageSelector.currentIndex():
+                self.languageSelector.blockSignals(True)
+                self.languageSelector.setCurrentIndex(index)
+                self.languageSelector.blockSignals(False)
+            QApplication.processEvents()
+            self.calculateAndSetIdealFontForModeLabel()
+            self.calculateAndSetIdealFontForDateTimeLabel()
+            self.calculateAndSetIdealFontForCreatorLabel()
+            self.calculateAndSetIdealFontForConnectionStatus()
+            self.resultsContainer.calculateAndSetIdealFontsForTitlesAndResults()
+            self.resultsContainer.fitInstructionFont(self.machineState.getAllInstructions())
+        except Exception as e:
+            printRed(f"Frontend: could not show the texts in the new language: {e}")
 
     def closeEvent(self, event):
         sp = event.spontaneous()
@@ -1040,7 +1093,7 @@ class AshokLeylandFrontEnd(QMainWindow):
         which cannot travel through Redis reliably). Shown together, flashing (red / white) every 0.5 s."""
         self._remoteNotices = list(notices)
         notices = list(getattr(self, "_localNotices", [])) + self._remoteNotices
-        text = "\n".join(notices)
+        text = "\n".join(translateNotice(n) for n in notices)     # in the chosen language (CHANGES 156)
         if not notices:
             if self.noticeLabel.isVisible():
                 self._noticeFlashTimer.stop()
@@ -1098,17 +1151,18 @@ class AshokLeylandFrontEnd(QMainWindow):
         if counts is not None:
             self.productionCounts = counts
         _countToday, _countWeek, _countMonth = getattr(self, "productionCounts", (0, 0, 0))
-        currentDatetimeText = self.dateTimeText.format(
-            datetime.now().strftime('%d-%m-%Y %a'),
-            self.timeStartedAsString,
-            (':'.join(str(datetime.now() - self.timeStarted).split(':')[:3])).split('.')[0],
-            _countWeek,
-            _countMonth,
-            f'{self.username} - {self.role}',
-            self.componentProcessingTimeText(),
-            _countToday,
-        )
-        self.dateTimeStatus.updateStatus(currentDatetimeText)
+        self.dateTimeStatus.updateStatus(self.dateTimeTextFor(_countToday, _countWeek, _countMonth,
+                                                              self.componentProcessingTimeText()))
+
+    def dateTimeTextFor(self, countToday, countWeek, countMonth, processingTime) -> str:
+        """The date / running-time panel's text in the chosen language."""
+        return trf("Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - "
+                   "{week}; This month - {month}\nUser: {user}; Current component processing time: {processing}    "
+                   "; Components produced today - {todayCount}",
+                   today=datetime.now().strftime('%d-%m-%Y %a'), started=self.timeStartedAsString,
+                   running=(':'.join(str(datetime.now() - self.timeStarted).split(':')[:3])).split('.')[0],
+                   week=countWeek, month=countMonth, user=f'{self.username} - {tr(self.role)}',
+                   processing=processingTime, todayCount=countToday)
 
     # ********************************************
 
@@ -1206,12 +1260,12 @@ class AshokLeylandFrontEnd(QMainWindow):
         # Password-protected (frontend.abort.password). It stays in the frontend: no message to the QR code or camera server,
         # no queues cleared. The IOServer is only asked to set PC_PLC_CycleAborted on the PLC; it aborts its own cycle
         # only if that write succeeds (no address yet: it logs and carries on).
-        entered = self._runDialog(getJustPassword, textToShow="Frontend abort (this screen only).\nEnter the password:")
+        entered = self._runDialog(getJustPassword, textToShow=tr("Frontend abort (this screen only).\nEnter the password:"))
         if not entered:
             return                                          # cancelled
         if entered != CosThetaConfigurator.getInstance().getFrontendAbortPassword():
             printYellow("Frontend abort: wrong password, nothing done")
-            self._runDialog(showErrorMessage, "Wrong password - nothing aborted", auto_close_duration=3)
+            self._runDialog(showErrorMessage, tr("Wrong password - nothing aborted"), auto_close_duration=3)
             return
         if self.getCurrentState() == MachineState.READ_QR_CODE:
             self.showAbortWhileWaitingForQRCode()       # nothing in process: shown, no record, nothing sent
@@ -1241,11 +1295,12 @@ class AshokLeylandFrontEnd(QMainWindow):
         if (displayString is None) or (displayString == ""):
             self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_no_qr_code.format(
                 QColor(Qt.GlobalColor.black).name()))
-            self.qrCodeLabel.setText("QR CODE : ")
+            self.qrCodeLabel.setText(tr("QR CODE : "))
         else:
             self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_qr_code.format(
                 QColor(Qt.GlobalColor.black).name()))
-            self.qrCodeLabel.setText(f"QR CODE : {displayString}")
+            self.qrCodeLabel.setText(f"{tr('QR CODE : ')}{displayString}")
+        self.qrCodeDisplayString = displayString        # shown again in a new language
 
     @Slot()
     def updateQRCodeDisplay(self):
@@ -1524,7 +1579,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     def _handleComponentPressDone(self):
         if AshokLeylandFrontEnd.currentComponentPressDone == ok:
             self.resultsContainer.setComponentPressData(
-                value="Done", result=ok
+                value=N_("Done"), result=ok
             )
             self.setCurrentState(MachineState.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG)
             self.requestPictureAndResult()
@@ -1548,7 +1603,7 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def _handleCapPressResult(self):
         if AshokLeylandFrontEnd.currentCapPressDone == ok:
-            self.resultsContainer.setCapPressResultData(value="Done", result=ok)
+            self.resultsContainer.setCapPressResultData(value=N_("Done"), result=ok)
             self.setCurrentState(MachineState.READ_FREE_ROTATION_TORQUE_1)
         else:
             self.resultsContainer.setCapPressResultDefault()
@@ -2273,7 +2328,7 @@ class LargeImageWindow(QWidget):
 
     def __init__(self, parent = None):
         super().__init__(parent)
-        self.setWindowTitle("Large Image Display")
+        bind(self, "Large Image Display", "setWindowTitle")
         self.setWindowFlags(Qt.WindowType.WindowCloseButtonHint | Qt.WindowType.Dialog)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.width = int(AshokLeylandFrontEnd.CURRENT_WIDTH * 0.5)
@@ -2314,20 +2369,24 @@ class LargeImageWindow(QWidget):
         pixMapImage = resize_pixmap(pixmap=pixMapImage, width=self.width-35, height=self.height-35, keepAspectRatio=True)
         self.label.setPixmap(pixMapImage)
 
+    def _resultImage(self, text: str, backgroundColor):
+        return createImage(text=tr(text), imageDimensions=(self.width - 35, self.height - 35),
+                           fontColor=QColor(15, 15, 15), replaceChar=[' ', ' '], backgroundColor=backgroundColor)
+
     def showSuccess(self):
-        self.setPixmap(self.successImage)
+        self.setPixmap(self._resultImage("Component Successfully Done", QColor(125, 210, 185)))
         self.show()
         self.raise_()
         self.activateWindow()
 
     def showFailure(self):
-        self.setPixmap(self.failureImage)
+        self.setPixmap(self._resultImage("Component Not Successfully Done", QColor(210, 90, 90)))
         self.show()
         self.raise_()
         self.activateWindow()
 
     def showEmergencyAbort(self):
-        self.setPixmap(self.emergencyImage)
+        self.setPixmap(self._resultImage("Component Processing Aborted", QColor(210, 90, 90)))
         self.show()
         self.raise_()
         self.activateWindow()

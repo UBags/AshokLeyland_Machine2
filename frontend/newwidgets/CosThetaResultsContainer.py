@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QSizePolicy, QSpacerI
 from numpy import ndarray
 from frontend.newwidgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer
 from Configuration import CosThetaConfigurator
+from frontend.FrontendI18n import tr, N_
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
 from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
 import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaLabelUtils import *"; nothing used from it, imported for its import-time effects
@@ -37,43 +38,43 @@ class CosThetaResultsContainer(QFrame):
         self.setContentsMargins(0,0,0,0)
 
         """Set up the containers and main layout for the window."""
-        self.knuckle_check_container = CosThetaOutcomeContainer(title = "Knuckle Check", imageHint="Knuckle\nCheck",
+        self.knuckle_check_container = CosThetaOutcomeContainer(title=N_("Knuckle Check"), imageHint=N_("Knuckle\nCheck"),
                                                                 bg_color = Qt.GlobalColor.black, fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # =QColor(16, 201, 78))  # Green
-        self.hub_and_bottom_bearing_check_container = CosThetaOutcomeContainer(title ="Hub Check", imageHint="Hub Check",
+        self.hub_and_bottom_bearing_check_container = CosThetaOutcomeContainer(title=N_("Hub Check"), imageHint=N_("Hub Check"),
                                                                                bg_color = Qt.GlobalColor.black,
                                                                                fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.top_bearing_check_container = CosThetaOutcomeContainer(title ="Top Bearing Check", imageHint="Second\nBearing\nCheck",
+        self.top_bearing_check_container = CosThetaOutcomeContainer(title=N_("Top Bearing Check"), imageHint=N_("Second\nBearing\nCheck"),
                                                                     bg_color = Qt.GlobalColor.black,
                                                                     fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.nut_and_plate_washer_check_container = CosThetaOutcomeContainer(title = "Nut & Washer Check",imageHint="Nut &\nPlate Washer\nCheck",
+        self.nut_and_plate_washer_check_container = CosThetaOutcomeContainer(title=N_("Nut & Washer Check"),imageHint=N_("Nut &\nPlate Washer\nCheck"),
                                                                              bg_color = Qt.GlobalColor.black,
                                                                              fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.tightening_torque1_check_container = CosThetaOutcomeContainer(title = "Tightening Torque 1",imageHint="Tightening\nTorque 1",
+        self.tightening_torque1_check_container = CosThetaOutcomeContainer(title=N_("Tightening Torque 1"),imageHint=N_("Tightening\nTorque 1"),
                                                                            bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bung_for_component_press_check_container = CosThetaOutcomeContainer(title ="Bung - Comp Press", imageHint="Place\nBung for\n Component Press",
+        self.bung_for_component_press_check_container = CosThetaOutcomeContainer(title=N_("Bung - Comp Press"), imageHint=N_("Place\nBung for\n Component Press"),
                                                                                  bg_color = Qt.GlobalColor.black,
                                                                                  fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.component_press_check_container = CosThetaOutcomeContainer(title ="Component Press", imageHint="Component\nPress",
+        self.component_press_check_container = CosThetaOutcomeContainer(title=N_("Component Press"), imageHint=N_("Component\nPress"),
                                                                         bg_color = Qt.GlobalColor.black,
                                                                         fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.no_bung_after_component_press_check_container = CosThetaOutcomeContainer(title ="Remove bung", imageHint="Remove\nBung",
+        self.no_bung_after_component_press_check_container = CosThetaOutcomeContainer(title=N_("Remove bung"), imageHint=N_("Remove\nBung"),
                                                                                       bg_color = Qt.GlobalColor.black,
                                                                                       fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.tightening_torque2_check_container = CosThetaOutcomeContainer(title ="Tightening Torque 2",imageHint="Tightening\nTorque 2",
+        self.tightening_torque2_check_container = CosThetaOutcomeContainer(title=N_("Tightening Torque 2"),imageHint=N_("Tightening\nTorque 2"),
                                                                            bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.splitpin_and_washer_check_container = CosThetaOutcomeContainer(title = "Split Pin & Washer", imageHint="Split Pin\nAnd\nWasher\nCheck",
+        self.splitpin_and_washer_check_container = CosThetaOutcomeContainer(title=N_("Split Pin & Washer"), imageHint=N_("Split Pin\nAnd\nWasher\nCheck"),
                                                                            bg_color = Qt.GlobalColor.black,
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.cap_check_container = CosThetaOutcomeContainer(title = "Cap Check", bg_color = Qt.GlobalColor.black, imageHint="Cap\nCheck",
+        self.cap_check_container = CosThetaOutcomeContainer(title=N_("Cap Check"), bg_color = Qt.GlobalColor.black, imageHint=N_("Cap\nCheck"),
                                                                            fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.bung_check_container = CosThetaOutcomeContainer(title ="Bung Check", bg_color = Qt.GlobalColor.black, imageHint="Bung\nCheck",
+        self.bung_check_container = CosThetaOutcomeContainer(title=N_("Bung Check"), bg_color = Qt.GlobalColor.black, imageHint=N_("Bung\nCheck"),
                                                              fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
-        self.cap_press_result_container = CosThetaOutcomeContainer(title = "Cap Press Result", bg_color = Qt.GlobalColor.black, imageHint="Cap\nPress\nResult",
+        self.cap_press_result_container = CosThetaOutcomeContainer(title=N_("Cap Press Result"), bg_color = Qt.GlobalColor.black, imageHint=N_("Cap\nPress\nResult"),
                                                                    fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers) # QColor(10, 194, 228))  # Blue
         # Machine 2: final free-rotation torque at station 3 gets its own tile (M1 wrote it into Cap Press Result)
-        self.free_rotation_torque_container = CosThetaOutcomeContainer(title = "Free Rotation Torque", bg_color = Qt.GlobalColor.black, imageHint="Free\nRotation\nTorque",
+        self.free_rotation_torque_container = CosThetaOutcomeContainer(title=N_("Free Rotation Torque"), bg_color = Qt.GlobalColor.black, imageHint=N_("Free\nRotation\nTorque"),
                                                                        fg_color = Qt.GlobalColor.white, forceTopLabelFontSizeTo=CosThetaResultsContainer.topLabelFontSizeInOutcomeContainers)
 
         self.labelHeight = CosThetaConfigurator.getInstance().getLabelInitialHeight()
@@ -156,13 +157,14 @@ class CosThetaResultsContainer(QFrame):
 
     # Call after self.show() and QApplication.processEvents() (the tiles have their real size)
     def calculateAndSetIdealFontsForTitlesAndResults(self):
-        """One fixed size for all 14 titles: the largest at which the longest title, "Free Rotation Torque", fits its
-        tile; one fixed size for all 14 result labels: the largest at which "Result Awaited" fits."""
+        """One fixed size for all 14 titles: the largest at which every title fits its tile; one fixed size for all 14
+        result labels: the largest at which every result text (Result Awaited, OK, Not OK, Bypassed) fits. Each text
+        is measured (CHANGES 156): in Kannada, Tamil and Hindi the number of characters does not follow the drawn
+        width, so the text with the most characters is not always the widest."""
         tiles = self.outcomeContainers()
-        longestTitle = max((t.title_label.text() for t in tiles), key=len)
-        titleTile = next(t for t in tiles if t.title_label.text() == longestTitle)
-        titleSize = largestFittingPointSize(titleTile.title_label, longestTitle)
-        resultSize = largestFittingPointSize(tiles[0].result_label, tiles[0].default_status)   # "Result Awaited"
+        titleSize = min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles)
+        resultSize = min(largestFittingPointSize(tiles[0].result_label, tr(status))
+                         for status in (tiles[0].default_status, "OK", "Not OK", "Bypassed"))
         for t in tiles:
             t.setTitlePointSize(titleSize)
             t.setResultPointSize(resultSize)
@@ -205,7 +207,7 @@ class CosThetaResultsContainer(QFrame):
         rotationDone None (PLC does not provide it): the torque value alone."""
         if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
             self.tightening_torque1_check_container.setTwoLineTextAndResult(
-                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result,
+                f"{value}", N_("Rotation Done") if rotationDone else N_("Rotation Not Done"), result,
                 secondLineColor="" if rotationDone else CosThetaResultsContainer.ROTATION_NOT_DONE_COLOR)
         elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque1_check_container.setTextAndResult(f"{value}", result)
@@ -251,7 +253,7 @@ class CosThetaResultsContainer(QFrame):
         rotationDone None (PLC does not provide it): the torque value alone."""
         if (isinstance(value, str) or isinstance(value, float) or isinstance(value, int)) and rotationDone is not None:
             self.tightening_torque2_check_container.setTwoLineTextAndResult(
-                f"{value}", "Rotation Done" if rotationDone else "Rotation Not Done", result,
+                f"{value}", N_("Rotation Done") if rotationDone else N_("Rotation Not Done"), result,
                 secondLineColor="" if rotationDone else CosThetaResultsContainer.ROTATION_NOT_DONE_COLOR)
         elif isinstance(value, str) or isinstance(value, float) or isinstance(value, int):
             self.tightening_torque2_check_container.setTextAndResult(f"{value}", result)
@@ -293,7 +295,23 @@ class CosThetaResultsContainer(QFrame):
             self.cap_press_result_container.setDefault()
 
     def setInstruction(self, value):
-        self.instructionLabel.setText(f"{value}")
+        self._instructionSource = f"{value}"            # English (state.<N>.instruction); shown in the chosen language
+        self.instructionLabel.setText(tr(self._instructionSource))
+
+    def retranslate(self) -> None:
+        """The tiles and the instruction again in the language now chosen (CHANGES 156)."""
+        for tile in self.outcomeContainers():
+            tile.retranslate()
+        self.instructionLabel.setText(tr(getattr(self, "_instructionSource", self.instructionLabel.text())))
+
+    def fitInstructionFont(self, instructions) -> None:
+        """The instruction's font size for the longest instruction in the chosen language (it is set for the longest
+        one and kept, so that the size does not change from state to state)."""
+        shown = [tr(i) for i in instructions if i] or [self.instructionLabel.text()]
+        current = self.instructionLabel.text()
+        self.instructionLabel.setText(f"  {max(shown, key=len)}  ")
+        self.calculateAndSetIdealFontForInstructionLabel()
+        self.instructionLabel.setText(current)
 
     # ****************************************
 
@@ -346,7 +364,8 @@ class CosThetaResultsContainer(QFrame):
             tile.setBypassed()
 
     def setInstructionDefault(self):
-        self.instructionLabel.setText("Instruction Label")
+        self._instructionSource = "Instruction Label"
+        self.instructionLabel.setText(tr(self._instructionSource))
 
     # ****************************************
 

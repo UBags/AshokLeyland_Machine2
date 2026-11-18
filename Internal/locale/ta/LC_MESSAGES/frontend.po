@@ -1,0 +1,1256 @@
+# Frontend texts of the Ashok Leyland hub and disc assembly machine (CHANGES 156)
+msgid ""
+msgstr ""
+"Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-11-19 00:00+0000\n"
+"PO-Revision-Date: 2026-11-19 00:00+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: ta\n"
+"Language-Team: ta <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: frontend/AshokLeylandFrontEnd.py:378 frontend/AshokLeylandFrontEnd.py:880
+#, python-brace-format
+msgid "IN {mode} MODE"
+msgstr "{mode} பயன்முறையில்"
+
+#: frontend/AshokLeylandFrontEnd.py:386
+msgid "Mode"
+msgstr "பயன்முறை"
+
+#: frontend/AshokLeylandFrontEnd.py:392 frontend/AshokLeylandFrontEnd.py:881
+#, python-brace-format
+msgid "{mode} - Knuckle, Hub, and Disc Assembly"
+msgstr "{mode} - நக்கிள், ஹப் மற்றும் டிஸ்க் பொருத்துதல்"
+
+#: frontend/AshokLeylandFrontEnd.py:453
+msgid "Camera connected"
+msgstr "கேமரா இணைக்கப்பட்டது"
+
+#: frontend/AshokLeylandFrontEnd.py:454
+msgid "Camera not connected"
+msgstr "கேமரா இணைக்கப்படவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:460
+msgid "I/O Module connected"
+msgstr "I/O மாட்யூல் இணைக்கப்பட்டது"
+
+#: frontend/AshokLeylandFrontEnd.py:461
+msgid "I/O Module not connected"
+msgstr "I/O மாட்யூல் இணைக்கப்படவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:468
+msgid "Database connected"
+msgstr "தரவுத்தளம் இணைக்கப்பட்டது"
+
+#: frontend/AshokLeylandFrontEnd.py:469
+msgid "Database not connected"
+msgstr "தரவுத்தளம் இணைக்கப்படவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:476
+msgid "QRCode Scanner connected"
+msgstr "QR குறியீடு ஸ்கேனர் இணைக்கப்பட்டது"
+
+#: frontend/AshokLeylandFrontEnd.py:477
+msgid "QRCode Scanner not connected"
+msgstr "QR குறியீடு ஸ்கேனர் இணைக்கப்படவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:485
+msgid "CONNECTION STATUS OF DEVICES"
+msgstr "சாதனங்களின் இணைப்பு நிலை"
+
+#: frontend/AshokLeylandFrontEnd.py:529 frontend/AshokLeylandFrontEnd.py:883
+msgid "Created by CosTheta Technologies and Ashok Leyland"
+msgstr "காஸ்தீட்டா டெக்னாலஜீஸ் மற்றும் அசோக் லேலண்ட் உருவாக்கியது"
+
+#: frontend/AshokLeylandFrontEnd.py:575
+msgid "DATE / RUNNING DURATION PANEL"
+msgstr "தேதி / இயங்கும் நேரம் பலகம்"
+
+#: frontend/AshokLeylandFrontEnd.py:681
+msgid "Change Own Password"
+msgstr "சொந்த கடவுச்சொல்லை மாற்று"
+
+#: frontend/AshokLeylandFrontEnd.py:685 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Exit"
+msgstr "வெளியேறு"
+
+#: frontend/AshokLeylandFrontEnd.py:689
+msgid "Add New User"
+msgstr "புதிய பயனரைச் சேர்"
+
+#: frontend/AshokLeylandFrontEnd.py:693
+msgid "Manage Other Users Passwords"
+msgstr "பிற பயனர்களின் கடவுச்சொற்களை நிர்வகி"
+
+#: frontend/AshokLeylandFrontEnd.py:697
+msgid "Change User Role"
+msgstr "பயனர் பங்கை மாற்று"
+
+#: frontend/AshokLeylandFrontEnd.py:701
+msgid "Activate an Inactive User"
+msgstr "செயலற்ற பயனரைச் செயல்படுத்து"
+
+#: frontend/AshokLeylandFrontEnd.py:705 frontend/SimplePopups.py:1145
+msgid "Inactivate User"
+msgstr "பயனரைச் செயலிழக்கச் செய்"
+
+#: frontend/AshokLeylandFrontEnd.py:709
+msgid "Create Production Report By Model Name"
+msgstr "மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
+
+#: frontend/AshokLeylandFrontEnd.py:713
+msgid "Create Production Report By Model Name For a Period"
+msgstr "ஒரு காலத்திற்கு மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
+
+#: frontend/AshokLeylandFrontEnd.py:717
+msgid "Create Production Report By Model Name For Today"
+msgstr "இன்றைக்கு மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
+
+#: frontend/AshokLeylandFrontEnd.py:721
+msgid "Create Production Report for a Period for all Models"
+msgstr "அனைத்து மாடல்களுக்கும் ஒரு காலத்திற்கான உற்பத்தி அறிக்கை உருவாக்கு"
+
+#: frontend/AshokLeylandFrontEnd.py:725
+msgid "Create Full Production Report for Today for all Models"
+msgstr "அனைத்து மாடல்களுக்கும் இன்றைய முழு உற்பத்தி அறிக்கை உருவாக்கு"
+
+#: frontend/AshokLeylandFrontEnd.py:729
+msgid "About"
+msgstr "பற்றி"
+
+#: frontend/AshokLeylandFrontEnd.py:733
+msgid "Help"
+msgstr "உதவி"
+
+#: frontend/AshokLeylandFrontEnd.py:738
+msgid "(Z)Manual Abort"
+msgstr "(Z)கைமுறை ரத்து"
+
+#: frontend/AshokLeylandFrontEnd.py:748
+msgid "Actions"
+msgstr "செயல்கள்"
+
+#: frontend/AshokLeylandFrontEnd.py:755
+msgid "Administration"
+msgstr "நிர்வாகம்"
+
+#: frontend/AshokLeylandFrontEnd.py:761
+msgid "Activate / Inactivate"
+msgstr "செயல்படுத்து / செயலிழக்கச் செய்"
+
+#: frontend/AshokLeylandFrontEnd.py:766
+msgid "Report"
+msgstr "அறிக்கை"
+
+#: frontend/AshokLeylandFrontEnd.py:776 frontend/AshokLeylandFrontEnd.py:850
+msgid "Information"
+msgstr "தகவல்"
+
+#: frontend/AshokLeylandFrontEnd.py:782 frontend/AshokLeylandFrontEnd.py:785 frontend/SimplePopups.py:1942
+#: frontend/SimplePopups.py:1947
+msgid "Machine Settings"
+msgstr "இயந்திர அமைப்புகள்"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Close Application"
+msgstr "பயன்பாட்டை மூடு"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Are you sure you want to exit the application ?"
+msgstr "பயன்பாட்டிலிருந்து வெளியேற உறுதியா ?"
+
+#: frontend/AshokLeylandFrontEnd.py:851
+msgid ""
+"Software Version: v 1.0\n"
+"\n"
+"This application is built by CosTheta Technologies Pvt Ltd. All copyright belongs to CosTheta Technologies Pvt Ltd.\n"
+"\n"
+"This application inspects and records the assembly of the front axle knuckle, hub and disc: every vision check, "
+"torque and press of each component, with its QR code.\n"
+msgstr ""
+"மென்பொருள் பதிப்பு: v 1.0\n"
+"\n"
+"இந்தப் பயன்பாட்டை காஸ்தீட்டா டெக்னாலஜீஸ் பிரை. லிட். உருவாக்கியது. அனைத்துப் பதிப்புரிமையும் காஸ்தீட்டா டெக்னாலஜீஸ் "
+"பிரை. லிட்.-க்கு உரியது.\n"
+"\n"
+"இந்தப் பயன்பாடு முன் அச்சின் நக்கிள், ஹப் மற்றும் டிஸ்க் பொருத்துதலை ஆய்வு செய்து பதிவு செய்கிறது: ஒவ்வொரு பாகத்தின் "
+"ஒவ்வொரு காட்சி ஆய்வு, டார்க் மற்றும் பிரஸ், அதன் QR குறியீட்டுடன்.\n"
+
+#: frontend/AshokLeylandFrontEnd.py:861
+msgid "Help about using the menu"
+msgstr "மெனுவைப் பயன்படுத்துவது பற்றிய உதவி"
+
+#: frontend/AshokLeylandFrontEnd.py:862
+msgid ""
+"When any of the menu choices are being used, \n"
+"the remaining menu items will be clickable.\n"
+"\n"
+"However, clicking on any other menu item will not be acted upon \n"
+"by the system till the currently-in-use menu action is completed \n"
+"or cancelled.\n"
+msgstr ""
+"எந்த மெனு தேர்வும் பயன்பாட்டில் இருக்கும்போது, \n"
+"மீதமுள்ள மெனு உருப்படிகளைக் கிளிக் செய்யலாம்.\n"
+"\n"
+"ஆனால் தற்போது பயன்பாட்டில் உள்ள மெனு செயல் முடியும் வரை \n"
+"அல்லது ரத்து செய்யப்படும் வரை, வேறு எந்த மெனு உருப்படியின் கிளிக்கிற்கும் \n"
+"அமைப்பு பதிலளிக்காது.\n"
+
+#: frontend/AshokLeylandFrontEnd.py:1159
+#, python-brace-format
+msgid ""
+"Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
+"month - {month}\n"
+"User: {user}; Current component processing time: {processing}    ; Components produced today - {todayCount}"
+msgstr ""
+"இன்று {today}. தொடக்கம்: {started}; இயங்கும் நேரம்: {running}    ; உற்பத்தியான பாகங்கள் : இந்த வாரம் - {week}; இந்த "
+"மாதம் - {month}\n"
+"பயனர்: {user}; தற்போதைய பாகத்தின் செயலாக்க நேரம்: {processing}    ; இன்று உற்பத்தியான பாகங்கள் - {todayCount}"
+
+#: frontend/AshokLeylandFrontEnd.py:1263
+msgid ""
+"Frontend abort (this screen only).\n"
+"Enter the password:"
+msgstr ""
+"முன்பக்க ரத்து (இந்தத் திரை மட்டும்).\n"
+"கடவுச்சொல்லை உள்ளிடவும்:"
+
+#: frontend/AshokLeylandFrontEnd.py:1268 frontend/FrontendNotices.py:56
+msgid "Wrong password - nothing aborted"
+msgstr "தவறான கடவுச்சொல் - எதுவும் ரத்து செய்யப்படவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:1298 frontend/AshokLeylandFrontEnd.py:1302
+msgid "QR CODE : "
+msgstr "QR குறியீடு : "
+
+#: frontend/AshokLeylandFrontEnd.py:1582 frontend/AshokLeylandFrontEnd.py:1606 frontend/FrontendI18n.py:234
+msgid "Done"
+msgstr "முடிந்தது"
+
+#: frontend/AshokLeylandFrontEnd.py:2331
+msgid "Large Image Display"
+msgstr "பெரிய படக் காட்சி"
+
+#: frontend/FrontendI18n.py:234 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
+msgid "OK"
+msgstr "சரி"
+
+#: frontend/FrontendI18n.py:234
+msgid "Not OK"
+msgstr "சரி இல்லை"
+
+#: frontend/FrontendI18n.py:234
+msgid "Bypassed"
+msgstr "தவிர்க்கப்பட்டது"
+
+#: frontend/FrontendI18n.py:234 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+msgid "Result Awaited"
+msgstr "முடிவுக்காகக் காத்திருக்கிறது"
+
+#: frontend/FrontendI18n.py:234
+msgid "TEST"
+msgstr "சோதனை"
+
+#: frontend/FrontendI18n.py:235
+msgid "PRODUCTION"
+msgstr "உற்பத்தி"
+
+#: frontend/FrontendI18n.py:235
+msgid "Operator"
+msgstr "ஆப்பரேட்டர்"
+
+#: frontend/FrontendI18n.py:235
+msgid "Supervisor"
+msgstr "சூப்பர்வைசர்"
+
+#: frontend/FrontendI18n.py:235
+msgid "Administrator"
+msgstr "நிர்வாகி"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "Yes"
+msgstr "ஆம்"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "No"
+msgstr "இல்லை"
+
+#: frontend/FrontendNotices.py:22
+#, python-brace-format
+msgid "Picture NOT OK: {reason}"
+msgstr "படம் சரி இல்லை: {reason}"
+
+#: frontend/FrontendNotices.py:23
+#, python-brace-format
+msgid "Cycle aborted: {reason}"
+msgstr "சுழற்சி ரத்து செய்யப்பட்டது: {reason}"
+
+#: frontend/FrontendNotices.py:25
+#, python-brace-format
+msgid "Bypass not possible ({tag} not on the PLC): full run"
+msgstr "தவிர்ப்பு சாத்தியமில்லை ({tag} PLC-இல் இல்லை): முழு இயக்கம்"
+
+#: frontend/FrontendNotices.py:27
+#, python-brace-format
+msgid "no answer from the camera server in {secs} s"
+msgstr "{secs} வினாடிகளில் கேமரா சர்வரிடமிருந்து பதில் இல்லை"
+
+#: frontend/FrontendNotices.py:28
+#, python-brace-format
+msgid "check timed out after {secs} s"
+msgstr "{secs} வினாடிகளுக்குப் பிறகு ஆய்வின் நேரம் முடிந்தது"
+
+#: frontend/FrontendNotices.py:30
+#, python-brace-format
+msgid ""
+"check timed out after {secs} s ({count} in a row: vision checks too slow on this PC - check the GPU, then restart the"
+" application)"
+msgstr ""
+"{secs} வினாடிகளுக்குப் பிறகு ஆய்வின் நேரம் முடிந்தது (தொடர்ந்து {count}: இந்த PC-இல் காட்சி ஆய்வுகள் மிக மெதுவாக "
+"உள்ளன - GPU-வைச் சரிபார்த்து, பின் பயன்பாட்டை மறுதொடக்கம் செய்யவும்)"
+
+#: frontend/FrontendNotices.py:33
+#, python-brace-format
+msgid "camera stream stalled: no new frame in {secs} s ({pictures} picture)"
+msgstr "கேமரா ஸ்ட்ரீம் நின்றது: {secs} வினாடிகளில் புதிய ஃப்ரேம் இல்லை ({pictures} படம்)"
+
+#: frontend/FrontendNotices.py:34
+#, python-brace-format
+msgid "abort from the frontend ({reason})"
+msgstr "முன்பக்கத்திலிருந்து ரத்து ({reason})"
+
+#: frontend/FrontendNotices.py:36
+#, python-brace-format
+msgid "PLC restarted while the connection was lost ({why})"
+msgstr "இணைப்பு துண்டிக்கப்பட்டிருந்தபோது PLC மறுதொடக்கம் ஆனது ({why})"
+
+#: frontend/FrontendNotices.py:37
+#, python-brace-format
+msgid "check failed ({error})"
+msgstr "ஆய்வு தோல்வியடைந்தது ({error})"
+
+#: frontend/FrontendNotices.py:39
+#, python-brace-format
+msgid "bearing-ring guard: no answer in {secs} s after the check"
+msgstr "பேரிங்-ரிங் காவல்: ஆய்வுக்குப் பிறகு {secs} வினாடிகளில் பதில் இல்லை"
+
+#: frontend/FrontendNotices.py:41
+#, python-brace-format
+msgid "bearing-ring guard: ring finder failed ({error})"
+msgstr "பேரிங்-ரிங் காவல்: ரிங் கண்டறிதல் தோல்வியடைந்தது ({error})"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera server down"
+msgstr "கேமரா சர்வர் செயலிழந்தது"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera not connected"
+msgstr "கேமரா இணைக்கப்படவில்லை"
+
+#: frontend/FrontendNotices.py:46
+msgid "no picture from the camera"
+msgstr "கேமராவிலிருந்து படம் இல்லை"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision check worker starting"
+msgstr "காட்சி ஆய்வு வொர்க்கர் தொடங்குகிறது"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision dependencies missing"
+msgstr "காட்சி ஆய்வுக்குத் தேவையானவை இல்லை"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped; restarting"
+msgstr "காட்சி ஆய்வு வொர்க்கர் நின்றது; மறுதொடக்கம் செய்யப்படுகிறது"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped during the check; restarting"
+msgstr "ஆய்வின்போது காட்சி ஆய்வு வொர்க்கர் நின்றது; மறுதொடக்கம் செய்யப்படுகிறது"
+
+#: frontend/FrontendNotices.py:49
+msgid "heartbeat server down"
+msgstr "ஹார்ட்பீட் சர்வர் செயலிழந்தது"
+
+#: frontend/FrontendNotices.py:49
+msgid "frontend down"
+msgstr "முன்பக்கம் செயலிழந்தது"
+
+#: frontend/FrontendNotices.py:49
+msgid "manual abort (Ctrl+Alt+Z) in the frontend"
+msgstr "முன்பக்கத்தில் கைமுறை ரத்து (Ctrl+Alt+Z)"
+
+#: frontend/FrontendNotices.py:50
+msgid "no reason given"
+msgstr "காரணம் கொடுக்கப்படவில்லை"
+
+#: frontend/FrontendNotices.py:50
+msgid "first"
+msgstr "முதல்"
+
+#: frontend/FrontendNotices.py:50
+msgid "second"
+msgstr "இரண்டாவது"
+
+#: frontend/FrontendNotices.py:50
+msgid "third"
+msgstr "மூன்றாவது"
+
+#: frontend/FrontendNotices.py:50
+msgid "first, second"
+msgstr "முதல், இரண்டாவது"
+
+#: frontend/FrontendNotices.py:50
+msgid "second, third"
+msgstr "இரண்டாவது, மூன்றாவது"
+
+#: frontend/FrontendNotices.py:51
+msgid "first, second, third"
+msgstr "முதல், இரண்டாவது, மூன்றாவது"
+
+#: frontend/FrontendNotices.py:53
+msgid "Machine settings not updated: previous settings used"
+msgstr "இயந்திர அமைப்புகள் புதுப்பிக்கப்படவில்லை: முந்தைய அமைப்புகள் பயன்படுத்தப்பட்டன"
+
+#: frontend/FrontendNotices.py:54
+msgid "Heartbeat server down: cycle aborted; next cycle on hold"
+msgstr "ஹார்ட்பீட் சர்வர் செயலிழந்தது: சுழற்சி ரத்து; அடுத்த சுழற்சி நிறுத்தி வைக்கப்பட்டது"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: continue till end of cycle"
+msgstr "தரவுத்தளம் செயலிழந்தது: சுழற்சி முடியும் வரை தொடரவும்"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: next cycle on hold"
+msgstr "தரவுத்தளம் செயலிழந்தது: அடுத்த சுழற்சி நிறுத்தி வைக்கப்பட்டது"
+
+#: frontend/FrontendNotices.py:56
+msgid "QR Code not valid"
+msgstr "QR குறியீடு செல்லாது"
+
+#: frontend/FrontendNotices.py:56
+msgid "Redis is not storing data: restart the PC"
+msgstr "Redis தரவைச் சேமிக்கவில்லை: PC-ஐ மறுதொடக்கம் செய்யவும்"
+
+#: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
+#: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
+#: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1946
+msgid "Cancel"
+msgstr "ரத்து"
+
+#: frontend/SimplePopups.py:209 frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007
+#: frontend/SimplePopups.py:1023 frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206
+#: frontend/SimplePopups.py:1333 frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Submit"
+msgstr "சமர்ப்பி"
+
+#: frontend/SimplePopups.py:222
+msgid "Cancelling this operation"
+msgstr "இந்தச் செயல்பாடு ரத்து செய்யப்படுகிறது"
+
+#: frontend/SimplePopups.py:232
+msgid "No value provided. Please re-enter and submit."
+msgstr "மதிப்பு கொடுக்கப்படவில்லை. மீண்டும் உள்ளிட்டுச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:235
+#, python-brace-format
+msgid "{what} provided is {value}. Are you sure to proceed ahead ?"
+msgstr "கொடுக்கப்பட்ட {what} {value}. தொடர உறுதியா ?"
+
+#: frontend/SimplePopups.py:242
+msgid "Please re-enter and submit."
+msgstr "மீண்டும் உள்ளிட்டுச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:590
+msgid "Create Username"
+msgstr "பயனர் பெயரை உருவாக்கு"
+
+#: frontend/SimplePopups.py:591
+msgid "First Name"
+msgstr "முதல் பெயர்"
+
+#: frontend/SimplePopups.py:592
+msgid "Middle Name"
+msgstr "நடுப் பெயர்"
+
+#: frontend/SimplePopups.py:593
+msgid "Last Name"
+msgstr "கடைசிப் பெயர்"
+
+#: frontend/SimplePopups.py:594
+msgid "Create Password"
+msgstr "கடவுச்சொல்லை உருவாக்கு"
+
+#: frontend/SimplePopups.py:595
+msgid "Re-enter Password"
+msgstr "கடவுச்சொல்லை மீண்டும் உள்ளிடவும்"
+
+#: frontend/SimplePopups.py:597
+msgid "E-mail"
+msgstr "மின்னஞ்சல்"
+
+#: frontend/SimplePopups.py:598
+msgid "Mobile"
+msgstr "கைபேசி"
+
+#: frontend/SimplePopups.py:599 frontend/SimplePopups.py:602
+msgid "Role"
+msgstr "பங்கு"
+
+#: frontend/SimplePopups.py:607
+msgid "Create New Account"
+msgstr "புதிய கணக்கை உருவாக்கு"
+
+#: frontend/SimplePopups.py:627
+msgid "Cancelling user addition."
+msgstr "பயனர் சேர்ப்பு ரத்து செய்யப்படுகிறது."
+
+#: frontend/SimplePopups.py:643
+#, python-brace-format
+msgid "Username {username} already exists. Please change and submit."
+msgstr "பயனர் பெயர் {username} ஏற்கனவே உள்ளது. மாற்றிச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:668
+msgid "Username has to be at least 5 characters. Please re-enter and submit."
+msgstr "பயனர் பெயர் குறைந்தது 5 எழுத்துகள் இருக்க வேண்டும். மீண்டும் உள்ளிட்டுச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:682
+msgid "The 2 password entries do not match. Please re-enter and submit."
+msgstr "இரண்டு கடவுச்சொல் உள்ளீடுகளும் பொருந்தவில்லை. மீண்டும் உள்ளிட்டுச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:696
+msgid "The password must have at least 6 characters."
+msgstr "கடவுச்சொல் குறைந்தது 6 எழுத்துகள் இருக்க வேண்டும்."
+
+#: frontend/SimplePopups.py:710
+msgid "At least 1 of first, middle, or last name is needed."
+msgstr "முதல், நடு அல்லது கடைசிப் பெயரில் குறைந்தது 1 தேவை."
+
+#: frontend/SimplePopups.py:713
+#, python-brace-format
+msgid ""
+"Username : {username}\n"
+"First Name : {firstname}\n"
+"Middle Name : {middlename}\n"
+"Last Name: {lastname}\n"
+"email : {email}\n"
+"Mobile : {mobile}\n"
+"Role : {role}"
+msgstr ""
+"பயனர் பெயர் : {username}\n"
+"முதல் பெயர் : {firstname}\n"
+"நடுப் பெயர் : {middlename}\n"
+"கடைசிப் பெயர்: {lastname}\n"
+"மின்னஞ்சல் : {email}\n"
+"கைபேசி : {mobile}\n"
+"பங்கு : {role}"
+
+#: frontend/SimplePopups.py:731 frontend/SimplePopups.py:755
+msgid "Account could not be created. Likely reason is a database access problem."
+msgstr "கணக்கை உருவாக்க முடியவில்லை. தரவுத்தள அணுகல் சிக்கல் காரணமாக இருக்கலாம்."
+
+#: frontend/SimplePopups.py:736
+msgid "Account could not be created. User id already exists"
+msgstr "கணக்கை உருவாக்க முடியவில்லை. பயனர் அடையாளம் ஏற்கனவே உள்ளது"
+
+#: frontend/SimplePopups.py:770
+msgid "Please re-enter / re-check and submit."
+msgstr "மீண்டும் உள்ளிட்டு / சரிபார்த்துச் சமர்ப்பிக்கவும்."
+
+#: frontend/SimplePopups.py:896
+msgid "Current Password"
+msgstr "தற்போதைய கடவுச்சொல்"
+
+#: frontend/SimplePopups.py:898 frontend/SimplePopups.py:1003 frontend/SimplePopups.py:1019
+msgid "Enter New Password"
+msgstr "புதிய கடவுச்சொல்லை உள்ளிடவும்"
+
+#: frontend/SimplePopups.py:900 frontend/SimplePopups.py:1005 frontend/SimplePopups.py:1021
+msgid "Re-enter New Password"
+msgstr "புதிய கடவுச்சொல்லை மீண்டும் உள்ளிடவும்"
+
+#: frontend/SimplePopups.py:905
+#, python-brace-format
+msgid "Change Password for user : {user}"
+msgstr "பயனருக்கான கடவுச்சொல்லை மாற்று : {user}"
+
+#: frontend/SimplePopups.py:928 frontend/SimplePopups.py:1085
+#, python-brace-format
+msgid "Changing password for {user}"
+msgstr "{user}-க்கான கடவுச்சொல் மாற்றப்படுகிறது"
+
+#: frontend/SimplePopups.py:938 frontend/SimplePopups.py:1080
+msgid "Minimum length of password should be 6 characters. Enter data again."
+msgstr "கடவுச்சொல்லின் குறைந்தபட்ச நீளம் 6 எழுத்துகள். மீண்டும் உள்ளிடவும்."
+
+#: frontend/SimplePopups.py:944
+msgid "Current password does not match. Enter data again."
+msgstr "தற்போதைய கடவுச்சொல் பொருந்தவில்லை. மீண்டும் உள்ளிடவும்."
+
+#: frontend/SimplePopups.py:950 frontend/SimplePopups.py:1074
+msgid "The 2 new passwords do not match. Enter data again."
+msgstr "இரண்டு புதிய கடவுச்சொற்களும் பொருந்தவில்லை. மீண்டும் உள்ளிடவும்."
+
+#: frontend/SimplePopups.py:956
+msgid "The new password should not be same as previous password. Enter data again."
+msgstr "புதிய கடவுச்சொல் முந்தைய கடவுச்சொல்லாக இருக்கக் கூடாது. மீண்டும் உள்ளிடவும்."
+
+#: frontend/SimplePopups.py:991
+msgid "No users available in database for changing password"
+msgstr "கடவுச்சொல் மாற்ற தரவுத்தளத்தில் பயனர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1000 frontend/SimplePopups.py:1015
+msgid "Username"
+msgstr "பயனர் பெயர்"
+
+#: frontend/SimplePopups.py:1011
+msgid "No operators available in database for changing password"
+msgstr "கடவுச்சொல் மாற்ற தரவுத்தளத்தில் ஆப்பரேட்டர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1026 frontend/SimplePopups.py:1141 frontend/SimplePopups.py:1350
+#, python-brace-format
+msgid "Unknown Role : {role}"
+msgstr "தெரியாத பங்கு : {role}"
+
+#: frontend/SimplePopups.py:1038
+msgid "Change Password for users : "
+msgstr "பயனர்களுக்கான கடவுச்சொல்லை மாற்று : "
+
+#: frontend/SimplePopups.py:1115 frontend/SimplePopups.py:1130
+msgid "No users registered in database"
+msgstr "தரவுத்தளத்தில் பதிவுசெய்த பயனர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1123 frontend/SimplePopups.py:1134 frontend/SimplePopups.py:1203 frontend/SimplePopups.py:1328
+#: frontend/SimplePopups.py:1341
+msgid "Username : "
+msgstr "பயனர் பெயர் : "
+
+#: frontend/SimplePopups.py:1161
+#, python-brace-format
+msgid "Inactivate user {username}. Are you sure ?"
+msgstr "பயனர் {username}-ஐச் செயலிழக்கச் செய்யவா. உறுதியா ?"
+
+#: frontend/SimplePopups.py:1168
+#, python-brace-format
+msgid "Inactivating user {username}"
+msgstr "பயனர் {username} செயலிழக்கச் செய்யப்படுகிறார்"
+
+#: frontend/SimplePopups.py:1173
+#, python-brace-format
+msgid "Leaving {username} activated"
+msgstr "{username} செயல்பாட்டிலேயே விடப்படுகிறார்"
+
+#: frontend/SimplePopups.py:1196
+msgid "Currently there are no inactive users"
+msgstr "தற்போது செயலற்ற பயனர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1208
+msgid "Activate User"
+msgstr "பயனரைச் செயல்படுத்து"
+
+#: frontend/SimplePopups.py:1224
+#, python-brace-format
+msgid "Activate user {username}. Are you sure ?"
+msgstr "பயனர் {username}-ஐச் செயல்படுத்தவா. உறுதியா ?"
+
+#: frontend/SimplePopups.py:1231
+#, python-brace-format
+msgid "Activating user {username}"
+msgstr "பயனர் {username} செயல்படுத்தப்படுகிறார்"
+
+#: frontend/SimplePopups.py:1238
+#, python-brace-format
+msgid "Leaving {username} inactivated"
+msgstr "{username} செயலற்ற நிலையிலேயே விடப்படுகிறார்"
+
+#: frontend/SimplePopups.py:1319
+msgid "No users available in database for changing role"
+msgstr "பங்கை மாற்ற தரவுத்தளத்தில் பயனர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1331 frontend/SimplePopups.py:1345
+msgid "Change Role to :"
+msgstr "பங்கை இதற்கு மாற்று :"
+
+#: frontend/SimplePopups.py:1337
+msgid "No operators available in database for changing role"
+msgstr "பங்கை மாற்ற தரவுத்தளத்தில் ஆப்பரேட்டர்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1354
+msgid "Change Role"
+msgstr "பங்கை மாற்று"
+
+#: frontend/SimplePopups.py:1373
+#, python-brace-format
+msgid "Change role of user {username} to {role}"
+msgstr "பயனர் {username}-இன் பங்கை {role} ஆக மாற்று"
+
+#: frontend/SimplePopups.py:1378
+#, python-brace-format
+msgid "Changing role for {username}"
+msgstr "{username}-இன் பங்கு மாற்றப்படுகிறது"
+
+#: frontend/SimplePopups.py:1387
+#, python-brace-format
+msgid "Role not changed for {username}"
+msgstr "{username}-இன் பங்கு மாற்றப்படவில்லை"
+
+#: frontend/SimplePopups.py:1412
+msgid "Production Report Needed From Date : "
+msgstr "உற்பத்தி அறிக்கை தேவைப்படும் தொடக்கத் தேதி : "
+
+#: frontend/SimplePopups.py:1413 frontend/SimplePopups.py:1416 frontend/SimplePopups.py:1495 frontend/SimplePopups.py:1498
+msgid "Select Date"
+msgstr "தேதியைத் தேர்ந்தெடு"
+
+#: frontend/SimplePopups.py:1415
+msgid "Production Report Needed To Date : "
+msgstr "உற்பத்தி அறிக்கை தேவைப்படும் இறுதித் தேதி : "
+
+#: frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500 frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650
+#: frontend/SimplePopups.py:1713
+msgid "Clear"
+msgstr "அழி"
+
+#: frontend/SimplePopups.py:1421
+msgid " Generate production report for a period"
+msgstr " ஒரு காலத்திற்கான உற்பத்தி அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1433 frontend/SimplePopups.py:1518 frontend/SimplePopups.py:1601 frontend/SimplePopups.py:1669
+#: frontend/SimplePopups.py:1727
+msgid ""
+"Cancelling.\n"
+"No report generated."
+msgstr ""
+"ரத்து செய்யப்படுகிறது.\n"
+"எந்த அறிக்கையும் உருவாக்கப்படவில்லை."
+
+#: frontend/SimplePopups.py:1447 frontend/SimplePopups.py:1533
+msgid "'To Date' cannot be less than 'From Date'"
+msgstr "'இறுதித் தேதி' 'தொடக்கத் தேதி'-யை விட முந்தையதாக இருக்கக் கூடாது"
+
+#: frontend/SimplePopups.py:1451
+#, python-brace-format
+msgid ""
+"Generate summary report for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"காலத்திற்கான சுருக்க அறிக்கையை உருவாக்கு (இரு நாட்களும் உட்பட):\n"
+"தொடக்கத் தேதி : {fromDate}\n"
+"இறுதித் தேதி : {toDate}"
+
+#: frontend/SimplePopups.py:1460 frontend/SimplePopups.py:1547 frontend/SimplePopups.py:1615 frontend/SimplePopups.py:1683
+#: frontend/SimplePopups.py:1740
+#, python-brace-format
+msgid "Report saved to {file}"
+msgstr "அறிக்கை இங்கு சேமிக்கப்பட்டது: {file}"
+
+#: frontend/SimplePopups.py:1465 frontend/SimplePopups.py:1467 frontend/SimplePopups.py:1552 frontend/SimplePopups.py:1554
+#: frontend/SimplePopups.py:1620 frontend/SimplePopups.py:1622 frontend/SimplePopups.py:1688 frontend/SimplePopups.py:1690
+#: frontend/SimplePopups.py:1745 frontend/SimplePopups.py:1747
+msgid "Report generation failed.\n"
+msgstr "அறிக்கை உருவாக்கம் தோல்வியடைந்தது.\n"
+
+#: frontend/SimplePopups.py:1470 frontend/SimplePopups.py:1557 frontend/SimplePopups.py:1626 frontend/SimplePopups.py:1693
+#: frontend/SimplePopups.py:1750
+msgid ""
+"Cancelling.\n"
+"Please choose dates again."
+msgstr ""
+"ரத்து செய்யப்படுகிறது.\n"
+"தேதிகளை மீண்டும் தேர்ந்தெடுக்கவும்."
+
+#: frontend/SimplePopups.py:1490 frontend/SimplePopups.py:1577
+msgid "Choose Model for which you want to generate report : "
+msgstr "அறிக்கை உருவாக்க வேண்டிய மாடலைத் தேர்ந்தெடு : "
+
+#: frontend/SimplePopups.py:1494
+msgid "From Date : "
+msgstr "தொடக்கத் தேதி : "
+
+#: frontend/SimplePopups.py:1497
+msgid "To Date : "
+msgstr "இறுதித் தேதி : "
+
+#: frontend/SimplePopups.py:1503
+msgid " Generate production report for a model for a period"
+msgstr " ஒரு மாடலுக்கு ஒரு காலத்திற்கான உற்பத்தி அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1537
+#, python-brace-format
+msgid ""
+"Generate report for model {model} for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"மாடல் {model}-க்கு காலத்திற்கான அறிக்கையை உருவாக்கு (இரு நாட்களும் உட்பட):\n"
+"தொடக்கத் தேதி : {fromDate}\n"
+"இறுதித் தேதி : {toDate}"
+
+#: frontend/SimplePopups.py:1584
+msgid " Generate production report for a model"
+msgstr " ஒரு மாடலுக்கான உற்பத்தி அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1607
+#, python-brace-format
+msgid "Generate report for model {model}"
+msgstr "மாடல் {model}-க்கு அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1646
+msgid "Choose Model for which you want to generate today's report : "
+msgstr "இன்றைய அறிக்கை உருவாக்க வேண்டிய மாடலைத் தேர்ந்தெடு : "
+
+#: frontend/SimplePopups.py:1653
+msgid " Generate today's production report for a model"
+msgstr " ஒரு மாடலுக்கான இன்றைய உற்பத்தி அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1675
+#, python-brace-format
+msgid "Generate today's report for model {model}"
+msgstr "மாடல் {model}-க்கு இன்றைய அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1712
+msgid "Generate today's full production report "
+msgstr "இன்றைய முழு உற்பத்தி அறிக்கையை உருவாக்கு "
+
+#: frontend/SimplePopups.py:1716
+msgid " Generate today's production report for ALL models"
+msgstr " அனைத்து மாடல்களுக்குமான இன்றைய உற்பத்தி அறிக்கையை உருவாக்கு"
+
+#: frontend/SimplePopups.py:1784
+msgid "Rotation RPM (20 - 40)"
+msgstr "சுழற்சி RPM (20 - 40)"
+
+#: frontend/SimplePopups.py:1785
+msgid "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"
+msgstr "இறுக்கும் டார்க் 1 செட்பாயிண்ட், Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1786
+msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
+msgstr "இறுக்கும் டார்க் 2 செட்பாயிண்ட், Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1787
+msgid "No. of Rotations 1 CCW (1 - 4)"
+msgstr "சுழற்சிகளின் எண்ணிக்கை 1 CCW (1 - 4)"
+
+#: frontend/SimplePopups.py:1788
+msgid "No. of Rotations 1 CW (1 - 4)"
+msgstr "சுழற்சிகளின் எண்ணிக்கை 1 CW (1 - 4)"
+
+#: frontend/SimplePopups.py:1794
+msgid "Bypass Component Press and Second Tightening"
+msgstr "காம்போனென்ட் பிரஸ் மற்றும் இரண்டாவது இறுக்குதலைத் தவிர்"
+
+#: frontend/SimplePopups.py:1825
+msgid "Enter the password to open the machine settings"
+msgstr "இயந்திர அமைப்புகளைத் திறக்க கடவுச்சொல்லை உள்ளிடவும்"
+
+#: frontend/SimplePopups.py:1829
+msgid "Wrong password: machine settings not opened"
+msgstr "தவறான கடவுச்சொல்: இயந்திர அமைப்புகள் திறக்கப்படவில்லை"
+
+#: frontend/SimplePopups.py:1838
+msgid "(no change)"
+msgstr "(மாற்றம் இல்லை)"
+
+#: frontend/SimplePopups.py:1839
+#, python-brace-format
+msgid ""
+"Change the machine settings for {model}:\n"
+"\n"
+"{changes}\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the machine settings password:"
+msgstr ""
+"{model}-க்கான இயந்திர அமைப்புகளை மாற்று:\n"
+"\n"
+"{changes}\n"
+"\n"
+"கடவுச்சொல்லை உள்ளிடுவது இந்த மாற்றத்தை உறுதிப்படுத்தும்.\n"
+"இயந்திர அமைப்புகளின் கடவுச்சொல்லை உள்ளிடவும்:"
+
+#: frontend/SimplePopups.py:1844
+msgid "Wrong password: machine settings not changed"
+msgstr "தவறான கடவுச்சொல்: இயந்திர அமைப்புகள் மாற்றப்படவில்லை"
+
+#: frontend/SimplePopups.py:1850
+#, python-brace-format
+msgid ""
+"'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the bypass password:"
+msgstr ""
+"'காம்போனென்ட் பிரஸ் மற்றும் இரண்டாவது இறுக்குதலைத் தவிர்' -> {value}, {model}-க்கு.\n"
+"\n"
+"கடவுச்சொல்லை உள்ளிடுவது இந்த மாற்றத்தை உறுதிப்படுத்தும்.\n"
+"தவிர்ப்புக் கடவுச்சொல்லை உள்ளிடவும்:"
+
+#: frontend/SimplePopups.py:1855
+msgid "Wrong bypass password: machine settings not changed"
+msgstr "தவறான தவிர்ப்புக் கடவுச்சொல்: இயந்திர அமைப்புகள் மாற்றப்படவில்லை"
+
+#: frontend/SimplePopups.py:1881
+#, python-brace-format
+msgid "{name}: at most 2 decimals"
+msgstr "{name}: அதிகபட்சம் 2 தசம இடங்கள்"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid whole number"
+msgstr "{name}: '{text}' சரியான முழு எண் அல்ல"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid number"
+msgstr "{name}: '{text}' சரியான எண் அல்ல"
+
+#: frontend/SimplePopups.py:1902
+msgid "Only an Administrator or a Supervisor can change the machine settings"
+msgstr "நிர்வாகி அல்லது சூப்பர்வைசர் மட்டுமே இயந்திர அமைப்புகளை மாற்ற முடியும்"
+
+#: frontend/SimplePopups.py:1912
+msgid "No models found in qrcode.partmapping.N of the properties file"
+msgstr "properties கோப்பின் qrcode.partmapping.N-இல் மாடல்கள் இல்லை"
+
+#: frontend/SimplePopups.py:1923
+#, python-brace-format
+msgid "In force for {model} since {since} (set by {user})"
+msgstr "{model}-க்கு {since} முதல் நடைமுறையில் ({user} அமைத்தது)"
+
+#: frontend/SimplePopups.py:1925
+#, python-brace-format
+msgid "Default settings for {model}"
+msgstr "{model}-க்கான இயல்புநிலை அமைப்புகள்"
+
+#: frontend/SimplePopups.py:1928
+msgid "Model"
+msgstr "மாடல்"
+
+#: frontend/SimplePopups.py:1945
+msgid "New settings apply from the next component of the chosen model."
+msgstr "புதிய அமைப்புகள் தேர்ந்தெடுத்த மாடலின் அடுத்த பாகத்திலிருந்து பொருந்தும்."
+
+#: frontend/SimplePopups.py:1946
+msgid "Save"
+msgstr "சேமி"
+
+#: frontend/SimplePopups.py:1946
+msgid "Reset"
+msgstr "மீட்டமை"
+
+#: frontend/SimplePopups.py:1974
+#, python-brace-format
+msgid ""
+"Machine settings for {model} saved.\n"
+"They apply from the next {model} component."
+msgstr ""
+"{model}-க்கான இயந்திர அமைப்புகள் சேமிக்கப்பட்டன.\n"
+"அவை அடுத்த {model} பாகத்திலிருந்து பொருந்தும்."
+
+#: frontend/SimplePopups.py:1976
+msgid "Could not save the machine settings"
+msgstr "இயந்திர அமைப்புகளைச் சேமிக்க முடியவில்லை"
+
+#: frontend/SimplePopups.py:1979
+#, python-brace-format
+msgid "Machine settings: {error}"
+msgstr "இயந்திர அமைப்புகள்: {error}"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid "Knuckle Check"
+msgstr "நக்கிள் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid ""
+"Knuckle\n"
+"Check"
+msgstr ""
+"நக்கிள்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:43
+msgid "Hub Check"
+msgstr "ஹப் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid "Top Bearing Check"
+msgstr "மேல் பேரிங் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid ""
+"Second\n"
+"Bearing\n"
+"Check"
+msgstr ""
+"இரண்டாவது\n"
+"பேரிங்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid "Nut & Washer Check"
+msgstr "நட் & வாஷர் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid ""
+"Nut &\n"
+"Plate Washer\n"
+"Check"
+msgstr ""
+"நட் &\n"
+"பிளேட் வாஷர்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid "Tightening Torque 1"
+msgstr "இறுக்கும் டார்க் 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid ""
+"Tightening\n"
+"Torque 1"
+msgstr ""
+"இறுக்கும்\n"
+"டார்க் 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid "Bung - Comp Press"
+msgstr "பங் - காம்ப் பிரஸ்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid ""
+"Place\n"
+"Bung for\n"
+" Component Press"
+msgstr ""
+"காம்போனென்ட் பிரஸ்ஸுக்கு\n"
+"பங்\n"
+" வைக்கவும்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid "Component Press"
+msgstr "காம்போனென்ட் பிரஸ்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid ""
+"Component\n"
+"Press"
+msgstr ""
+"காம்போனென்ட்\n"
+"பிரஸ்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid "Remove bung"
+msgstr "பங் அகற்று"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid ""
+"Remove\n"
+"Bung"
+msgstr ""
+"பங்\n"
+"அகற்று"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid "Tightening Torque 2"
+msgstr "இறுக்கும் டார்க் 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid ""
+"Tightening\n"
+"Torque 2"
+msgstr ""
+"இறுக்கும்\n"
+"டார்க் 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid "Split Pin & Washer"
+msgstr "ஸ்ப்ளிட் பின் & வாஷர்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid ""
+"Split Pin\n"
+"And\n"
+"Washer\n"
+"Check"
+msgstr ""
+"ஸ்ப்ளிட் பின்\n"
+"மற்றும்\n"
+"வாஷர்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid "Cap Check"
+msgstr "கேப் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid ""
+"Cap\n"
+"Check"
+msgstr ""
+"கேப்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid "Bung Check"
+msgstr "பங் ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid ""
+"Bung\n"
+"Check"
+msgstr ""
+"பங்\n"
+"ஆய்வு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid "Cap Press Result"
+msgstr "கேப் பிரஸ் முடிவு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid ""
+"Cap\n"
+"Press\n"
+"Result"
+msgstr ""
+"கேப்\n"
+"பிரஸ்\n"
+"முடிவு"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid "Free Rotation Torque"
+msgstr "தடையற்ற சுழற்சி டார்க்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid ""
+"Free\n"
+"Rotation\n"
+"Torque"
+msgstr ""
+"தடையற்ற\n"
+"சுழற்சி\n"
+"டார்க்"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Done"
+msgstr "சுழற்சி முடிந்தது"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Not Done"
+msgstr "சுழற்சி செய்யப்படவில்லை"
+
+#. window.title
+#: ApplicationConfiguration.properties
+msgid "Ashok Leyland - Vision System for Acceptance / Rejection of Front Axle Knuckle-Hub-Disc Assembly"
+msgstr "அசோக் லேலண்ட் - முன் அச்சு நக்கிள்-ஹப்-டிஸ்க் பொருத்துதலை ஏற்க / நிராகரிக்க காட்சி அமைப்பு"
+
+#. state.1.instruction
+#. state.2.instruction
+#: ApplicationConfiguration.properties
+msgid "Place KNUCKLE on Fixture. Scan QR CODE on the Knuckle"
+msgstr "நக்கிளை ஃபிக்ஸ்சரில் வைக்கவும். நக்கிளில் உள்ள QR குறியீட்டை ஸ்கேன் செய்யவும்"
+
+#. state.3.instruction
+#. state.4.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS to take picture of KNUCKLE and evaluate"
+msgstr "நக்கிளைப் படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.5.instruction
+#. state.6.instruction
+#: ApplicationConfiguration.properties
+msgid "Put assembled HUB, with bottom BEARING on KNUCKLE. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "கீழ் பேரிங்குடன் பொருத்திய ஹப்பை நக்கிளில் வைக்கவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.7.instruction
+#. state.8.instruction
+#: ApplicationConfiguration.properties
+msgid "Place top BEARING on the HUB. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "மேல் பேரிங்கை ஹப்பில் வைக்கவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.9.instruction
+#. state.10.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Place PLATE-WASHER and screw the NUT FOR 5-6 TURNS. Mark the top of bolts with BLUE. PRESS both buttons to take "
+"picture and evaluate"
+msgstr ""
+"பிளேட்-வாஷரை வைத்து நட்டை 5-6 சுற்றுகள் திருகவும். போல்ட்களின் மேல்பகுதியை நீல நிறத்தில் குறிக்கவும். படம் எடுத்து "
+"மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.11.instruction
+#. state.12.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 1st round of NUT TIGHTENING"
+msgstr ""
+"பாகம் கர்டனைக் கடக்கும் வரை இரு பொத்தான்களையும் அழுத்தவும். நட் இறுக்குதலின் 1வது சுற்றுக்கான டார்க் அளவீட்டுக்காகக் "
+"காத்திருக்கிறது"
+
+#. state.13.instruction
+#. state.14.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "பாகத்தின் மேல் பங்கை வைக்கவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.15.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting COMPONENT PRESS completion"
+msgstr "காம்போனென்ட் பிரஸ் முடிவதற்காகக் காத்திருக்கிறது"
+
+#. state.16.instruction
+#. state.17.instruction
+#: ApplicationConfiguration.properties
+msgid "Remove BUNG from COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "பாகத்திலிருந்து பங்கை அகற்றவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.18.instruction
+#. state.19.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 2nd round of NUT TIGHTENING"
+msgstr ""
+"பாகம் கர்டனைக் கடக்கும் வரை இரு பொத்தான்களையும் அழுத்தவும். நட் இறுக்குதலின் 2வது சுற்றுக்கான டார்க் அளவீட்டுக்காகக் "
+"காத்திருக்கிறது"
+
+#. state.20.instruction
+#. state.21.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Assemble WASHER and SPLIT PIN. Mark Washer in YELLOW and Split Pin in BLUE. PRESS BOTH BUTTONS to take picture and "
+"evaluate"
+msgstr ""
+"வாஷர் மற்றும் ஸ்ப்ளிட் பின்னைப் பொருத்தவும். வாஷரை மஞ்சள் நிறத்திலும் ஸ்ப்ளிட் பின்னை நீல நிறத்திலும் குறிக்கவும். "
+"படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.22.instruction
+#. state.23.instruction
+#: ApplicationConfiguration.properties
+msgid "Place CAP on SPLIT PIN. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ஸ்ப்ளிட் பின் மேல் கேப்பை வைக்கவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.24.instruction
+#. state.25.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on CAP. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "கேப் மேல் பங்கை வைக்கவும். படம் எடுத்து மதிப்பிட இரு பொத்தான்களையும் அழுத்தவும்"
+
+#. state.26.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting CAP PRESS completion"
+msgstr "கேப் பிரஸ் முடிவதற்காகக் காத்திருக்கிறது"
+
+#. state.27.instruction
+#. state.28.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting READING TORQUE after FREE ROTATION"
+msgstr "தடையற்ற சுழற்சிக்குப் பிறகான டார்க் அளவீட்டுக்காகக் காத்திருக்கிறது"
+

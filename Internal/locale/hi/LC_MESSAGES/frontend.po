@@ -1,0 +1,1251 @@
+# Frontend texts of the Ashok Leyland hub and disc assembly machine (CHANGES 156)
+msgid ""
+msgstr ""
+"Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-11-19 00:00+0000\n"
+"PO-Revision-Date: 2026-11-19 00:00+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: hi\n"
+"Language-Team: hi <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: frontend/AshokLeylandFrontEnd.py:378 frontend/AshokLeylandFrontEnd.py:880
+#, python-brace-format
+msgid "IN {mode} MODE"
+msgstr "{mode} मोड में"
+
+#: frontend/AshokLeylandFrontEnd.py:386
+msgid "Mode"
+msgstr "मोड"
+
+#: frontend/AshokLeylandFrontEnd.py:392 frontend/AshokLeylandFrontEnd.py:881
+#, python-brace-format
+msgid "{mode} - Knuckle, Hub, and Disc Assembly"
+msgstr "{mode} - नकल, हब और डिस्क असेंबली"
+
+#: frontend/AshokLeylandFrontEnd.py:453
+msgid "Camera connected"
+msgstr "कैमरा जुड़ा है"
+
+#: frontend/AshokLeylandFrontEnd.py:454
+msgid "Camera not connected"
+msgstr "कैमरा नहीं जुड़ा"
+
+#: frontend/AshokLeylandFrontEnd.py:460
+msgid "I/O Module connected"
+msgstr "I/O मॉड्यूल जुड़ा है"
+
+#: frontend/AshokLeylandFrontEnd.py:461
+msgid "I/O Module not connected"
+msgstr "I/O मॉड्यूल नहीं जुड़ा"
+
+#: frontend/AshokLeylandFrontEnd.py:468
+msgid "Database connected"
+msgstr "डेटाबेस जुड़ा है"
+
+#: frontend/AshokLeylandFrontEnd.py:469
+msgid "Database not connected"
+msgstr "डेटाबेस नहीं जुड़ा"
+
+#: frontend/AshokLeylandFrontEnd.py:476
+msgid "QRCode Scanner connected"
+msgstr "QR कोड स्कैनर जुड़ा है"
+
+#: frontend/AshokLeylandFrontEnd.py:477
+msgid "QRCode Scanner not connected"
+msgstr "QR कोड स्कैनर नहीं जुड़ा"
+
+#: frontend/AshokLeylandFrontEnd.py:485
+msgid "CONNECTION STATUS OF DEVICES"
+msgstr "उपकरणों की कनेक्शन स्थिति"
+
+#: frontend/AshokLeylandFrontEnd.py:529 frontend/AshokLeylandFrontEnd.py:883
+msgid "Created by CosTheta Technologies and Ashok Leyland"
+msgstr "कॉसथीटा टेक्नोलॉजीज़ और अशोक लेलैंड द्वारा निर्मित"
+
+#: frontend/AshokLeylandFrontEnd.py:575
+msgid "DATE / RUNNING DURATION PANEL"
+msgstr "तारीख / चालू अवधि पैनल"
+
+#: frontend/AshokLeylandFrontEnd.py:681
+msgid "Change Own Password"
+msgstr "अपना पासवर्ड बदलें"
+
+#: frontend/AshokLeylandFrontEnd.py:685 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Exit"
+msgstr "बाहर निकलें"
+
+#: frontend/AshokLeylandFrontEnd.py:689
+msgid "Add New User"
+msgstr "नया उपयोगकर्ता जोड़ें"
+
+#: frontend/AshokLeylandFrontEnd.py:693
+msgid "Manage Other Users Passwords"
+msgstr "अन्य उपयोगकर्ताओं के पासवर्ड प्रबंधित करें"
+
+#: frontend/AshokLeylandFrontEnd.py:697
+msgid "Change User Role"
+msgstr "उपयोगकर्ता की भूमिका बदलें"
+
+#: frontend/AshokLeylandFrontEnd.py:701
+msgid "Activate an Inactive User"
+msgstr "निष्क्रिय उपयोगकर्ता को सक्रिय करें"
+
+#: frontend/AshokLeylandFrontEnd.py:705 frontend/SimplePopups.py:1145
+msgid "Inactivate User"
+msgstr "उपयोगकर्ता को निष्क्रिय करें"
+
+#: frontend/AshokLeylandFrontEnd.py:709
+msgid "Create Production Report By Model Name"
+msgstr "मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:713
+msgid "Create Production Report By Model Name For a Period"
+msgstr "एक अवधि के लिए मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:717
+msgid "Create Production Report By Model Name For Today"
+msgstr "आज के लिए मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:721
+msgid "Create Production Report for a Period for all Models"
+msgstr "सभी मॉडलों के लिए एक अवधि की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:725
+msgid "Create Full Production Report for Today for all Models"
+msgstr "सभी मॉडलों के लिए आज की पूरी उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:729
+msgid "About"
+msgstr "परिचय"
+
+#: frontend/AshokLeylandFrontEnd.py:733
+msgid "Help"
+msgstr "सहायता"
+
+#: frontend/AshokLeylandFrontEnd.py:738
+msgid "(Z)Manual Abort"
+msgstr "(Z)मैनुअल रद्द"
+
+#: frontend/AshokLeylandFrontEnd.py:748
+msgid "Actions"
+msgstr "क्रियाएँ"
+
+#: frontend/AshokLeylandFrontEnd.py:755
+msgid "Administration"
+msgstr "प्रशासन"
+
+#: frontend/AshokLeylandFrontEnd.py:761
+msgid "Activate / Inactivate"
+msgstr "सक्रिय / निष्क्रिय"
+
+#: frontend/AshokLeylandFrontEnd.py:766
+msgid "Report"
+msgstr "रिपोर्ट"
+
+#: frontend/AshokLeylandFrontEnd.py:776 frontend/AshokLeylandFrontEnd.py:850
+msgid "Information"
+msgstr "जानकारी"
+
+#: frontend/AshokLeylandFrontEnd.py:782 frontend/AshokLeylandFrontEnd.py:785 frontend/SimplePopups.py:1942
+#: frontend/SimplePopups.py:1947
+msgid "Machine Settings"
+msgstr "मशीन सेटिंग्स"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Close Application"
+msgstr "एप्लिकेशन बंद करें"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Are you sure you want to exit the application ?"
+msgstr "क्या आप वाकई एप्लिकेशन से बाहर निकलना चाहते हैं ?"
+
+#: frontend/AshokLeylandFrontEnd.py:851
+msgid ""
+"Software Version: v 1.0\n"
+"\n"
+"This application is built by CosTheta Technologies Pvt Ltd. All copyright belongs to CosTheta Technologies Pvt Ltd.\n"
+"\n"
+"This application inspects and records the assembly of the front axle knuckle, hub and disc: every vision check, "
+"torque and press of each component, with its QR code.\n"
+msgstr ""
+"सॉफ़्टवेयर संस्करण: v 1.0\n"
+"\n"
+"यह एप्लिकेशन कॉसथीटा टेक्नोलॉजीज़ प्रा. लि. द्वारा बनाया गया है। सभी कॉपीराइट कॉसथीटा टेक्नोलॉजीज़ प्रा. लि. के हैं।\n"
+"\n"
+"यह एप्लिकेशन फ्रंट एक्सल के नकल, हब और डिस्क की असेंबली की जाँच और रिकॉर्डिंग करता है: हर कंपोनेंट की हर विज़न जाँच, "
+"टॉर्क और प्रेस, उसके QR कोड के साथ।\n"
+
+#: frontend/AshokLeylandFrontEnd.py:861
+msgid "Help about using the menu"
+msgstr "मेनू के उपयोग में सहायता"
+
+#: frontend/AshokLeylandFrontEnd.py:862
+msgid ""
+"When any of the menu choices are being used, \n"
+"the remaining menu items will be clickable.\n"
+"\n"
+"However, clicking on any other menu item will not be acted upon \n"
+"by the system till the currently-in-use menu action is completed \n"
+"or cancelled.\n"
+msgstr ""
+"जब कोई मेनू विकल्प उपयोग में हो, \n"
+"तब बाकी मेनू आइटम क्लिक किए जा सकते हैं।\n"
+"\n"
+"लेकिन जब तक वर्तमान मेनू क्रिया पूरी \n"
+"या रद्द नहीं होती, तब तक किसी अन्य मेनू आइटम पर क्लिक करने पर \n"
+"सिस्टम कोई कार्रवाई नहीं करेगा।\n"
+
+#: frontend/AshokLeylandFrontEnd.py:1159
+#, python-brace-format
+msgid ""
+"Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
+"month - {month}\n"
+"User: {user}; Current component processing time: {processing}    ; Components produced today - {todayCount}"
+msgstr ""
+"आज {today} है। शुरुआत: {started}; चालू समय: {running}    ; उत्पादित कंपोनेंट : इस सप्ताह - {week}; इस महीने - {month}"
+"\n"
+"उपयोगकर्ता: {user}; वर्तमान कंपोनेंट का प्रोसेसिंग समय: {processing}    ; आज उत्पादित कंपोनेंट - {todayCount}"
+
+#: frontend/AshokLeylandFrontEnd.py:1263
+msgid ""
+"Frontend abort (this screen only).\n"
+"Enter the password:"
+msgstr ""
+"फ्रंटएंड रद्द (केवल यह स्क्रीन)।\n"
+"पासवर्ड दर्ज करें:"
+
+#: frontend/AshokLeylandFrontEnd.py:1268 frontend/FrontendNotices.py:56
+msgid "Wrong password - nothing aborted"
+msgstr "गलत पासवर्ड - कुछ भी रद्द नहीं हुआ"
+
+#: frontend/AshokLeylandFrontEnd.py:1298 frontend/AshokLeylandFrontEnd.py:1302
+msgid "QR CODE : "
+msgstr "QR कोड : "
+
+#: frontend/AshokLeylandFrontEnd.py:1582 frontend/AshokLeylandFrontEnd.py:1606 frontend/FrontendI18n.py:234
+msgid "Done"
+msgstr "पूर्ण"
+
+#: frontend/AshokLeylandFrontEnd.py:2331
+msgid "Large Image Display"
+msgstr "बड़ी छवि प्रदर्शन"
+
+#: frontend/FrontendI18n.py:234 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
+msgid "OK"
+msgstr "ठीक"
+
+#: frontend/FrontendI18n.py:234
+msgid "Not OK"
+msgstr "ठीक नहीं"
+
+#: frontend/FrontendI18n.py:234
+msgid "Bypassed"
+msgstr "बायपास किया गया"
+
+#: frontend/FrontendI18n.py:234 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+msgid "Result Awaited"
+msgstr "परिणाम की प्रतीक्षा"
+
+#: frontend/FrontendI18n.py:234
+msgid "TEST"
+msgstr "टेस्ट"
+
+#: frontend/FrontendI18n.py:235
+msgid "PRODUCTION"
+msgstr "प्रोडक्शन"
+
+#: frontend/FrontendI18n.py:235
+msgid "Operator"
+msgstr "ऑपरेटर"
+
+#: frontend/FrontendI18n.py:235
+msgid "Supervisor"
+msgstr "सुपरवाइज़र"
+
+#: frontend/FrontendI18n.py:235
+msgid "Administrator"
+msgstr "एडमिनिस्ट्रेटर"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "Yes"
+msgstr "हाँ"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "No"
+msgstr "नहीं"
+
+#: frontend/FrontendNotices.py:22
+#, python-brace-format
+msgid "Picture NOT OK: {reason}"
+msgstr "चित्र ठीक नहीं: {reason}"
+
+#: frontend/FrontendNotices.py:23
+#, python-brace-format
+msgid "Cycle aborted: {reason}"
+msgstr "साइकिल रद्द हुई: {reason}"
+
+#: frontend/FrontendNotices.py:25
+#, python-brace-format
+msgid "Bypass not possible ({tag} not on the PLC): full run"
+msgstr "बायपास संभव नहीं ({tag} PLC पर नहीं है): पूरा रन"
+
+#: frontend/FrontendNotices.py:27
+#, python-brace-format
+msgid "no answer from the camera server in {secs} s"
+msgstr "{secs} सेकंड में कैमरा सर्वर से कोई उत्तर नहीं"
+
+#: frontend/FrontendNotices.py:28
+#, python-brace-format
+msgid "check timed out after {secs} s"
+msgstr "{secs} सेकंड बाद जाँच का समय समाप्त"
+
+#: frontend/FrontendNotices.py:30
+#, python-brace-format
+msgid ""
+"check timed out after {secs} s ({count} in a row: vision checks too slow on this PC - check the GPU, then restart the"
+" application)"
+msgstr ""
+"{secs} सेकंड बाद जाँच का समय समाप्त (लगातार {count}: इस PC पर विज़न जाँच बहुत धीमी है - GPU जाँचें, फिर एप्लिकेशन "
+"दोबारा शुरू करें)"
+
+#: frontend/FrontendNotices.py:33
+#, python-brace-format
+msgid "camera stream stalled: no new frame in {secs} s ({pictures} picture)"
+msgstr "कैमरा स्ट्रीम रुकी: {secs} सेकंड में कोई नया फ़्रेम नहीं ({pictures} चित्र)"
+
+#: frontend/FrontendNotices.py:34
+#, python-brace-format
+msgid "abort from the frontend ({reason})"
+msgstr "फ्रंटएंड से रद्द ({reason})"
+
+#: frontend/FrontendNotices.py:36
+#, python-brace-format
+msgid "PLC restarted while the connection was lost ({why})"
+msgstr "कनेक्शन टूटने के दौरान PLC दोबारा शुरू हुआ ({why})"
+
+#: frontend/FrontendNotices.py:37
+#, python-brace-format
+msgid "check failed ({error})"
+msgstr "जाँच विफल ({error})"
+
+#: frontend/FrontendNotices.py:39
+#, python-brace-format
+msgid "bearing-ring guard: no answer in {secs} s after the check"
+msgstr "बेयरिंग-रिंग गार्ड: जाँच के बाद {secs} सेकंड में कोई उत्तर नहीं"
+
+#: frontend/FrontendNotices.py:41
+#, python-brace-format
+msgid "bearing-ring guard: ring finder failed ({error})"
+msgstr "बेयरिंग-रिंग गार्ड: रिंग खोज विफल ({error})"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera server down"
+msgstr "कैमरा सर्वर बंद है"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera not connected"
+msgstr "कैमरा नहीं जुड़ा"
+
+#: frontend/FrontendNotices.py:46
+msgid "no picture from the camera"
+msgstr "कैमरे से कोई चित्र नहीं"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision check worker starting"
+msgstr "विज़न जाँच वर्कर शुरू हो रहा है"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision dependencies missing"
+msgstr "विज़न जाँच की आवश्यक चीज़ें नहीं हैं"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped; restarting"
+msgstr "विज़न जाँच वर्कर रुका; दोबारा शुरू हो रहा है"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped during the check; restarting"
+msgstr "जाँच के दौरान विज़न जाँच वर्कर रुका; दोबारा शुरू हो रहा है"
+
+#: frontend/FrontendNotices.py:49
+msgid "heartbeat server down"
+msgstr "हार्टबीट सर्वर बंद है"
+
+#: frontend/FrontendNotices.py:49
+msgid "frontend down"
+msgstr "फ्रंटएंड बंद है"
+
+#: frontend/FrontendNotices.py:49
+msgid "manual abort (Ctrl+Alt+Z) in the frontend"
+msgstr "फ्रंटएंड में मैनुअल रद्द (Ctrl+Alt+Z)"
+
+#: frontend/FrontendNotices.py:50
+msgid "no reason given"
+msgstr "कोई कारण नहीं दिया"
+
+#: frontend/FrontendNotices.py:50
+msgid "first"
+msgstr "पहला"
+
+#: frontend/FrontendNotices.py:50
+msgid "second"
+msgstr "दूसरा"
+
+#: frontend/FrontendNotices.py:50
+msgid "third"
+msgstr "तीसरा"
+
+#: frontend/FrontendNotices.py:50
+msgid "first, second"
+msgstr "पहला, दूसरा"
+
+#: frontend/FrontendNotices.py:50
+msgid "second, third"
+msgstr "दूसरा, तीसरा"
+
+#: frontend/FrontendNotices.py:51
+msgid "first, second, third"
+msgstr "पहला, दूसरा, तीसरा"
+
+#: frontend/FrontendNotices.py:53
+msgid "Machine settings not updated: previous settings used"
+msgstr "मशीन सेटिंग्स अपडेट नहीं हुईं: पिछली सेटिंग्स उपयोग की गईं"
+
+#: frontend/FrontendNotices.py:54
+msgid "Heartbeat server down: cycle aborted; next cycle on hold"
+msgstr "हार्टबीट सर्वर बंद: साइकिल रद्द; अगली साइकिल रोकी गई"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: continue till end of cycle"
+msgstr "डेटाबेस बंद: साइकिल के अंत तक जारी रखें"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: next cycle on hold"
+msgstr "डेटाबेस बंद: अगली साइकिल रोकी गई"
+
+#: frontend/FrontendNotices.py:56
+msgid "QR Code not valid"
+msgstr "QR कोड मान्य नहीं"
+
+#: frontend/FrontendNotices.py:56
+msgid "Redis is not storing data: restart the PC"
+msgstr "Redis डेटा संग्रहीत नहीं कर रहा: PC दोबारा शुरू करें"
+
+#: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
+#: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
+#: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1946
+msgid "Cancel"
+msgstr "रद्द करें"
+
+#: frontend/SimplePopups.py:209 frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007
+#: frontend/SimplePopups.py:1023 frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206
+#: frontend/SimplePopups.py:1333 frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Submit"
+msgstr "जमा करें"
+
+#: frontend/SimplePopups.py:222
+msgid "Cancelling this operation"
+msgstr "यह कार्य रद्द किया जा रहा है"
+
+#: frontend/SimplePopups.py:232
+msgid "No value provided. Please re-enter and submit."
+msgstr "कोई मान नहीं दिया गया। कृपया फिर से दर्ज करके जमा करें।"
+
+#: frontend/SimplePopups.py:235
+#, python-brace-format
+msgid "{what} provided is {value}. Are you sure to proceed ahead ?"
+msgstr "दिया गया {what} {value} है। क्या आप आगे बढ़ना चाहते हैं ?"
+
+#: frontend/SimplePopups.py:242
+msgid "Please re-enter and submit."
+msgstr "कृपया फिर से दर्ज करके जमा करें।"
+
+#: frontend/SimplePopups.py:590
+msgid "Create Username"
+msgstr "उपयोगकर्ता नाम बनाएँ"
+
+#: frontend/SimplePopups.py:591
+msgid "First Name"
+msgstr "पहला नाम"
+
+#: frontend/SimplePopups.py:592
+msgid "Middle Name"
+msgstr "मध्य नाम"
+
+#: frontend/SimplePopups.py:593
+msgid "Last Name"
+msgstr "अंतिम नाम"
+
+#: frontend/SimplePopups.py:594
+msgid "Create Password"
+msgstr "पासवर्ड बनाएँ"
+
+#: frontend/SimplePopups.py:595
+msgid "Re-enter Password"
+msgstr "पासवर्ड फिर से दर्ज करें"
+
+#: frontend/SimplePopups.py:597
+msgid "E-mail"
+msgstr "ई-मेल"
+
+#: frontend/SimplePopups.py:598
+msgid "Mobile"
+msgstr "मोबाइल"
+
+#: frontend/SimplePopups.py:599 frontend/SimplePopups.py:602
+msgid "Role"
+msgstr "भूमिका"
+
+#: frontend/SimplePopups.py:607
+msgid "Create New Account"
+msgstr "नया खाता बनाएँ"
+
+#: frontend/SimplePopups.py:627
+msgid "Cancelling user addition."
+msgstr "उपयोगकर्ता जोड़ना रद्द किया जा रहा है।"
+
+#: frontend/SimplePopups.py:643
+#, python-brace-format
+msgid "Username {username} already exists. Please change and submit."
+msgstr "उपयोगकर्ता नाम {username} पहले से मौजूद है। कृपया बदलकर जमा करें।"
+
+#: frontend/SimplePopups.py:668
+msgid "Username has to be at least 5 characters. Please re-enter and submit."
+msgstr "उपयोगकर्ता नाम कम से कम 5 अक्षरों का होना चाहिए। कृपया फिर से दर्ज करके जमा करें।"
+
+#: frontend/SimplePopups.py:682
+msgid "The 2 password entries do not match. Please re-enter and submit."
+msgstr "दोनों पासवर्ड प्रविष्टियाँ मेल नहीं खातीं। कृपया फिर से दर्ज करके जमा करें।"
+
+#: frontend/SimplePopups.py:696
+msgid "The password must have at least 6 characters."
+msgstr "पासवर्ड में कम से कम 6 अक्षर होने चाहिए।"
+
+#: frontend/SimplePopups.py:710
+msgid "At least 1 of first, middle, or last name is needed."
+msgstr "पहला, मध्य या अंतिम नाम में से कम से कम 1 आवश्यक है।"
+
+#: frontend/SimplePopups.py:713
+#, python-brace-format
+msgid ""
+"Username : {username}\n"
+"First Name : {firstname}\n"
+"Middle Name : {middlename}\n"
+"Last Name: {lastname}\n"
+"email : {email}\n"
+"Mobile : {mobile}\n"
+"Role : {role}"
+msgstr ""
+"उपयोगकर्ता नाम : {username}\n"
+"पहला नाम : {firstname}\n"
+"मध्य नाम : {middlename}\n"
+"अंतिम नाम: {lastname}\n"
+"ई-मेल : {email}\n"
+"मोबाइल : {mobile}\n"
+"भूमिका : {role}"
+
+#: frontend/SimplePopups.py:731 frontend/SimplePopups.py:755
+msgid "Account could not be created. Likely reason is a database access problem."
+msgstr "खाता नहीं बन सका। संभावित कारण डेटाबेस एक्सेस की समस्या है।"
+
+#: frontend/SimplePopups.py:736
+msgid "Account could not be created. User id already exists"
+msgstr "खाता नहीं बन सका। उपयोगकर्ता आईडी पहले से मौजूद है"
+
+#: frontend/SimplePopups.py:770
+msgid "Please re-enter / re-check and submit."
+msgstr "कृपया फिर से दर्ज / जाँच करके जमा करें।"
+
+#: frontend/SimplePopups.py:896
+msgid "Current Password"
+msgstr "वर्तमान पासवर्ड"
+
+#: frontend/SimplePopups.py:898 frontend/SimplePopups.py:1003 frontend/SimplePopups.py:1019
+msgid "Enter New Password"
+msgstr "नया पासवर्ड दर्ज करें"
+
+#: frontend/SimplePopups.py:900 frontend/SimplePopups.py:1005 frontend/SimplePopups.py:1021
+msgid "Re-enter New Password"
+msgstr "नया पासवर्ड फिर से दर्ज करें"
+
+#: frontend/SimplePopups.py:905
+#, python-brace-format
+msgid "Change Password for user : {user}"
+msgstr "उपयोगकर्ता का पासवर्ड बदलें : {user}"
+
+#: frontend/SimplePopups.py:928 frontend/SimplePopups.py:1085
+#, python-brace-format
+msgid "Changing password for {user}"
+msgstr "{user} का पासवर्ड बदला जा रहा है"
+
+#: frontend/SimplePopups.py:938 frontend/SimplePopups.py:1080
+msgid "Minimum length of password should be 6 characters. Enter data again."
+msgstr "पासवर्ड की न्यूनतम लंबाई 6 अक्षर होनी चाहिए। फिर से दर्ज करें।"
+
+#: frontend/SimplePopups.py:944
+msgid "Current password does not match. Enter data again."
+msgstr "वर्तमान पासवर्ड मेल नहीं खाता। फिर से दर्ज करें।"
+
+#: frontend/SimplePopups.py:950 frontend/SimplePopups.py:1074
+msgid "The 2 new passwords do not match. Enter data again."
+msgstr "दोनों नए पासवर्ड मेल नहीं खाते। फिर से दर्ज करें।"
+
+#: frontend/SimplePopups.py:956
+msgid "The new password should not be same as previous password. Enter data again."
+msgstr "नया पासवर्ड पिछले पासवर्ड जैसा नहीं होना चाहिए। फिर से दर्ज करें।"
+
+#: frontend/SimplePopups.py:991
+msgid "No users available in database for changing password"
+msgstr "पासवर्ड बदलने के लिए डेटाबेस में कोई उपयोगकर्ता नहीं"
+
+#: frontend/SimplePopups.py:1000 frontend/SimplePopups.py:1015
+msgid "Username"
+msgstr "उपयोगकर्ता नाम"
+
+#: frontend/SimplePopups.py:1011
+msgid "No operators available in database for changing password"
+msgstr "पासवर्ड बदलने के लिए डेटाबेस में कोई ऑपरेटर नहीं"
+
+#: frontend/SimplePopups.py:1026 frontend/SimplePopups.py:1141 frontend/SimplePopups.py:1350
+#, python-brace-format
+msgid "Unknown Role : {role}"
+msgstr "अज्ञात भूमिका : {role}"
+
+#: frontend/SimplePopups.py:1038
+msgid "Change Password for users : "
+msgstr "उपयोगकर्ताओं का पासवर्ड बदलें : "
+
+#: frontend/SimplePopups.py:1115 frontend/SimplePopups.py:1130
+msgid "No users registered in database"
+msgstr "डेटाबेस में कोई पंजीकृत उपयोगकर्ता नहीं"
+
+#: frontend/SimplePopups.py:1123 frontend/SimplePopups.py:1134 frontend/SimplePopups.py:1203 frontend/SimplePopups.py:1328
+#: frontend/SimplePopups.py:1341
+msgid "Username : "
+msgstr "उपयोगकर्ता नाम : "
+
+#: frontend/SimplePopups.py:1161
+#, python-brace-format
+msgid "Inactivate user {username}. Are you sure ?"
+msgstr "उपयोगकर्ता {username} को निष्क्रिय करें। क्या आप निश्चित हैं ?"
+
+#: frontend/SimplePopups.py:1168
+#, python-brace-format
+msgid "Inactivating user {username}"
+msgstr "उपयोगकर्ता {username} को निष्क्रिय किया जा रहा है"
+
+#: frontend/SimplePopups.py:1173
+#, python-brace-format
+msgid "Leaving {username} activated"
+msgstr "{username} सक्रिय ही रहेगा"
+
+#: frontend/SimplePopups.py:1196
+msgid "Currently there are no inactive users"
+msgstr "अभी कोई निष्क्रिय उपयोगकर्ता नहीं है"
+
+#: frontend/SimplePopups.py:1208
+msgid "Activate User"
+msgstr "उपयोगकर्ता को सक्रिय करें"
+
+#: frontend/SimplePopups.py:1224
+#, python-brace-format
+msgid "Activate user {username}. Are you sure ?"
+msgstr "उपयोगकर्ता {username} को सक्रिय करें। क्या आप निश्चित हैं ?"
+
+#: frontend/SimplePopups.py:1231
+#, python-brace-format
+msgid "Activating user {username}"
+msgstr "उपयोगकर्ता {username} को सक्रिय किया जा रहा है"
+
+#: frontend/SimplePopups.py:1238
+#, python-brace-format
+msgid "Leaving {username} inactivated"
+msgstr "{username} निष्क्रिय ही रहेगा"
+
+#: frontend/SimplePopups.py:1319
+msgid "No users available in database for changing role"
+msgstr "भूमिका बदलने के लिए डेटाबेस में कोई उपयोगकर्ता नहीं"
+
+#: frontend/SimplePopups.py:1331 frontend/SimplePopups.py:1345
+msgid "Change Role to :"
+msgstr "भूमिका बदलें :"
+
+#: frontend/SimplePopups.py:1337
+msgid "No operators available in database for changing role"
+msgstr "भूमिका बदलने के लिए डेटाबेस में कोई ऑपरेटर नहीं"
+
+#: frontend/SimplePopups.py:1354
+msgid "Change Role"
+msgstr "भूमिका बदलें"
+
+#: frontend/SimplePopups.py:1373
+#, python-brace-format
+msgid "Change role of user {username} to {role}"
+msgstr "उपयोगकर्ता {username} की भूमिका {role} में बदलें"
+
+#: frontend/SimplePopups.py:1378
+#, python-brace-format
+msgid "Changing role for {username}"
+msgstr "{username} की भूमिका बदली जा रही है"
+
+#: frontend/SimplePopups.py:1387
+#, python-brace-format
+msgid "Role not changed for {username}"
+msgstr "{username} की भूमिका नहीं बदली गई"
+
+#: frontend/SimplePopups.py:1412
+msgid "Production Report Needed From Date : "
+msgstr "उत्पादन रिपोर्ट इस तारीख से चाहिए : "
+
+#: frontend/SimplePopups.py:1413 frontend/SimplePopups.py:1416 frontend/SimplePopups.py:1495 frontend/SimplePopups.py:1498
+msgid "Select Date"
+msgstr "तारीख चुनें"
+
+#: frontend/SimplePopups.py:1415
+msgid "Production Report Needed To Date : "
+msgstr "उत्पादन रिपोर्ट इस तारीख तक चाहिए : "
+
+#: frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500 frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650
+#: frontend/SimplePopups.py:1713
+msgid "Clear"
+msgstr "साफ़ करें"
+
+#: frontend/SimplePopups.py:1421
+msgid " Generate production report for a period"
+msgstr " एक अवधि की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1433 frontend/SimplePopups.py:1518 frontend/SimplePopups.py:1601 frontend/SimplePopups.py:1669
+#: frontend/SimplePopups.py:1727
+msgid ""
+"Cancelling.\n"
+"No report generated."
+msgstr ""
+"रद्द किया जा रहा है।\n"
+"कोई रिपोर्ट नहीं बनी।"
+
+#: frontend/SimplePopups.py:1447 frontend/SimplePopups.py:1533
+msgid "'To Date' cannot be less than 'From Date'"
+msgstr "'अंतिम तारीख' 'आरंभ तारीख' से पहले नहीं हो सकती"
+
+#: frontend/SimplePopups.py:1451
+#, python-brace-format
+msgid ""
+"Generate summary report for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"अवधि की सारांश रिपोर्ट बनाएँ (दोनों दिन शामिल):\n"
+"आरंभ तारीख : {fromDate}\n"
+"अंतिम तारीख : {toDate}"
+
+#: frontend/SimplePopups.py:1460 frontend/SimplePopups.py:1547 frontend/SimplePopups.py:1615 frontend/SimplePopups.py:1683
+#: frontend/SimplePopups.py:1740
+#, python-brace-format
+msgid "Report saved to {file}"
+msgstr "रिपोर्ट यहाँ सहेजी गई: {file}"
+
+#: frontend/SimplePopups.py:1465 frontend/SimplePopups.py:1467 frontend/SimplePopups.py:1552 frontend/SimplePopups.py:1554
+#: frontend/SimplePopups.py:1620 frontend/SimplePopups.py:1622 frontend/SimplePopups.py:1688 frontend/SimplePopups.py:1690
+#: frontend/SimplePopups.py:1745 frontend/SimplePopups.py:1747
+msgid "Report generation failed.\n"
+msgstr "रिपोर्ट बनाना विफल रहा।\n"
+
+#: frontend/SimplePopups.py:1470 frontend/SimplePopups.py:1557 frontend/SimplePopups.py:1626 frontend/SimplePopups.py:1693
+#: frontend/SimplePopups.py:1750
+msgid ""
+"Cancelling.\n"
+"Please choose dates again."
+msgstr ""
+"रद्द किया जा रहा है।\n"
+"कृपया तारीखें फिर से चुनें।"
+
+#: frontend/SimplePopups.py:1490 frontend/SimplePopups.py:1577
+msgid "Choose Model for which you want to generate report : "
+msgstr "वह मॉडल चुनें जिसकी रिपोर्ट बनानी है : "
+
+#: frontend/SimplePopups.py:1494
+msgid "From Date : "
+msgstr "आरंभ तारीख : "
+
+#: frontend/SimplePopups.py:1497
+msgid "To Date : "
+msgstr "अंतिम तारीख : "
+
+#: frontend/SimplePopups.py:1503
+msgid " Generate production report for a model for a period"
+msgstr " एक मॉडल की एक अवधि की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1537
+#, python-brace-format
+msgid ""
+"Generate report for model {model} for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"मॉडल {model} की अवधि की रिपोर्ट बनाएँ (दोनों दिन शामिल):\n"
+"आरंभ तारीख : {fromDate}\n"
+"अंतिम तारीख : {toDate}"
+
+#: frontend/SimplePopups.py:1584
+msgid " Generate production report for a model"
+msgstr " एक मॉडल की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1607
+#, python-brace-format
+msgid "Generate report for model {model}"
+msgstr "मॉडल {model} की रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1646
+msgid "Choose Model for which you want to generate today's report : "
+msgstr "वह मॉडल चुनें जिसकी आज की रिपोर्ट बनानी है : "
+
+#: frontend/SimplePopups.py:1653
+msgid " Generate today's production report for a model"
+msgstr " एक मॉडल की आज की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1675
+#, python-brace-format
+msgid "Generate today's report for model {model}"
+msgstr "मॉडल {model} की आज की रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1712
+msgid "Generate today's full production report "
+msgstr "आज की पूरी उत्पादन रिपोर्ट बनाएँ "
+
+#: frontend/SimplePopups.py:1716
+msgid " Generate today's production report for ALL models"
+msgstr " सभी मॉडलों की आज की उत्पादन रिपोर्ट बनाएँ"
+
+#: frontend/SimplePopups.py:1784
+msgid "Rotation RPM (20 - 40)"
+msgstr "रोटेशन RPM (20 - 40)"
+
+#: frontend/SimplePopups.py:1785
+msgid "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"
+msgstr "टाइटनिंग टॉर्क 1 सेटपॉइंट, Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1786
+msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
+msgstr "टाइटनिंग टॉर्क 2 सेटपॉइंट, Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1787
+msgid "No. of Rotations 1 CCW (1 - 4)"
+msgstr "रोटेशन की संख्या 1 CCW (1 - 4)"
+
+#: frontend/SimplePopups.py:1788
+msgid "No. of Rotations 1 CW (1 - 4)"
+msgstr "रोटेशन की संख्या 1 CW (1 - 4)"
+
+#: frontend/SimplePopups.py:1794
+msgid "Bypass Component Press and Second Tightening"
+msgstr "कंपोनेंट प्रेस और दूसरी टाइटनिंग बायपास करें"
+
+#: frontend/SimplePopups.py:1825
+msgid "Enter the password to open the machine settings"
+msgstr "मशीन सेटिंग्स खोलने के लिए पासवर्ड दर्ज करें"
+
+#: frontend/SimplePopups.py:1829
+msgid "Wrong password: machine settings not opened"
+msgstr "गलत पासवर्ड: मशीन सेटिंग्स नहीं खुलीं"
+
+#: frontend/SimplePopups.py:1838
+msgid "(no change)"
+msgstr "(कोई बदलाव नहीं)"
+
+#: frontend/SimplePopups.py:1839
+#, python-brace-format
+msgid ""
+"Change the machine settings for {model}:\n"
+"\n"
+"{changes}\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the machine settings password:"
+msgstr ""
+"{model} के लिए मशीन सेटिंग्स बदलें:\n"
+"\n"
+"{changes}\n"
+"\n"
+"पासवर्ड दर्ज करना इस बदलाव की पुष्टि करता है।\n"
+"मशीन सेटिंग्स का पासवर्ड दर्ज करें:"
+
+#: frontend/SimplePopups.py:1844
+msgid "Wrong password: machine settings not changed"
+msgstr "गलत पासवर्ड: मशीन सेटिंग्स नहीं बदलीं"
+
+#: frontend/SimplePopups.py:1850
+#, python-brace-format
+msgid ""
+"'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the bypass password:"
+msgstr ""
+"'कंपोनेंट प्रेस और दूसरी टाइटनिंग बायपास' -> {value}, {model} के लिए।\n"
+"\n"
+"पासवर्ड दर्ज करना इस बदलाव की पुष्टि करता है।\n"
+"बायपास पासवर्ड दर्ज करें:"
+
+#: frontend/SimplePopups.py:1855
+msgid "Wrong bypass password: machine settings not changed"
+msgstr "गलत बायपास पासवर्ड: मशीन सेटिंग्स नहीं बदलीं"
+
+#: frontend/SimplePopups.py:1881
+#, python-brace-format
+msgid "{name}: at most 2 decimals"
+msgstr "{name}: अधिकतम 2 दशमलव"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid whole number"
+msgstr "{name}: '{text}' मान्य पूर्ण संख्या नहीं है"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid number"
+msgstr "{name}: '{text}' मान्य संख्या नहीं है"
+
+#: frontend/SimplePopups.py:1902
+msgid "Only an Administrator or a Supervisor can change the machine settings"
+msgstr "केवल एडमिनिस्ट्रेटर या सुपरवाइज़र ही मशीन सेटिंग्स बदल सकते हैं"
+
+#: frontend/SimplePopups.py:1912
+msgid "No models found in qrcode.partmapping.N of the properties file"
+msgstr "प्रॉपर्टीज़ फ़ाइल के qrcode.partmapping.N में कोई मॉडल नहीं मिला"
+
+#: frontend/SimplePopups.py:1923
+#, python-brace-format
+msgid "In force for {model} since {since} (set by {user})"
+msgstr "{model} के लिए {since} से लागू ({user} द्वारा सेट)"
+
+#: frontend/SimplePopups.py:1925
+#, python-brace-format
+msgid "Default settings for {model}"
+msgstr "{model} के लिए डिफ़ॉल्ट सेटिंग्स"
+
+#: frontend/SimplePopups.py:1928
+msgid "Model"
+msgstr "मॉडल"
+
+#: frontend/SimplePopups.py:1945
+msgid "New settings apply from the next component of the chosen model."
+msgstr "नई सेटिंग्स चुने गए मॉडल के अगले कंपोनेंट से लागू होंगी।"
+
+#: frontend/SimplePopups.py:1946
+msgid "Save"
+msgstr "सहेजें"
+
+#: frontend/SimplePopups.py:1946
+msgid "Reset"
+msgstr "रीसेट करें"
+
+#: frontend/SimplePopups.py:1974
+#, python-brace-format
+msgid ""
+"Machine settings for {model} saved.\n"
+"They apply from the next {model} component."
+msgstr ""
+"{model} के लिए मशीन सेटिंग्स सहेजी गईं।\n"
+"ये अगले {model} कंपोनेंट से लागू होंगी।"
+
+#: frontend/SimplePopups.py:1976
+msgid "Could not save the machine settings"
+msgstr "मशीन सेटिंग्स सहेजी नहीं जा सकीं"
+
+#: frontend/SimplePopups.py:1979
+#, python-brace-format
+msgid "Machine settings: {error}"
+msgstr "मशीन सेटिंग्स: {error}"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid "Knuckle Check"
+msgstr "नकल जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid ""
+"Knuckle\n"
+"Check"
+msgstr ""
+"नकल\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:43
+msgid "Hub Check"
+msgstr "हब जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid "Top Bearing Check"
+msgstr "ऊपरी बेयरिंग जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid ""
+"Second\n"
+"Bearing\n"
+"Check"
+msgstr ""
+"दूसरी\n"
+"बेयरिंग\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid "Nut & Washer Check"
+msgstr "नट और वॉशर जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid ""
+"Nut &\n"
+"Plate Washer\n"
+"Check"
+msgstr ""
+"नट और\n"
+"प्लेट वॉशर\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid "Tightening Torque 1"
+msgstr "टाइटनिंग टॉर्क 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid ""
+"Tightening\n"
+"Torque 1"
+msgstr ""
+"टाइटनिंग\n"
+"टॉर्क 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid "Bung - Comp Press"
+msgstr "बंग - कंपो प्रेस"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid ""
+"Place\n"
+"Bung for\n"
+" Component Press"
+msgstr ""
+"कंपोनेंट प्रेस के\n"
+"लिए बंग\n"
+" रखें"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid "Component Press"
+msgstr "कंपोनेंट प्रेस"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid ""
+"Component\n"
+"Press"
+msgstr ""
+"कंपोनेंट\n"
+"प्रेस"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid "Remove bung"
+msgstr "बंग हटाएँ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid ""
+"Remove\n"
+"Bung"
+msgstr ""
+"बंग\n"
+"हटाएँ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid "Tightening Torque 2"
+msgstr "टाइटनिंग टॉर्क 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid ""
+"Tightening\n"
+"Torque 2"
+msgstr ""
+"टाइटनिंग\n"
+"टॉर्क 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid "Split Pin & Washer"
+msgstr "स्प्लिट पिन और वॉशर"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid ""
+"Split Pin\n"
+"And\n"
+"Washer\n"
+"Check"
+msgstr ""
+"स्प्लिट पिन\n"
+"और\n"
+"वॉशर\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid "Cap Check"
+msgstr "कैप जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid ""
+"Cap\n"
+"Check"
+msgstr ""
+"कैप\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid "Bung Check"
+msgstr "बंग जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid ""
+"Bung\n"
+"Check"
+msgstr ""
+"बंग\n"
+"जाँच"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid "Cap Press Result"
+msgstr "कैप प्रेस परिणाम"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid ""
+"Cap\n"
+"Press\n"
+"Result"
+msgstr ""
+"कैप\n"
+"प्रेस\n"
+"परिणाम"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid "Free Rotation Torque"
+msgstr "फ्री रोटेशन टॉर्क"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid ""
+"Free\n"
+"Rotation\n"
+"Torque"
+msgstr ""
+"फ्री\n"
+"रोटेशन\n"
+"टॉर्क"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Done"
+msgstr "रोटेशन पूर्ण"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Not Done"
+msgstr "रोटेशन नहीं हुआ"
+
+#. window.title
+#: ApplicationConfiguration.properties
+msgid "Ashok Leyland - Vision System for Acceptance / Rejection of Front Axle Knuckle-Hub-Disc Assembly"
+msgstr "अशोक लेलैंड - फ्रंट एक्सल नकल-हब-डिस्क असेंबली की स्वीकृति / अस्वीकृति हेतु विज़न सिस्टम"
+
+#. state.1.instruction
+#. state.2.instruction
+#: ApplicationConfiguration.properties
+msgid "Place KNUCKLE on Fixture. Scan QR CODE on the Knuckle"
+msgstr "नकल को फिक्स्चर पर रखें। नकल पर QR कोड स्कैन करें"
+
+#. state.3.instruction
+#. state.4.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS to take picture of KNUCKLE and evaluate"
+msgstr "नकल का चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.5.instruction
+#. state.6.instruction
+#: ApplicationConfiguration.properties
+msgid "Put assembled HUB, with bottom BEARING on KNUCKLE. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "नीचे की बेयरिंग सहित असेंबल हब को नकल पर रखें। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.7.instruction
+#. state.8.instruction
+#: ApplicationConfiguration.properties
+msgid "Place top BEARING on the HUB. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ऊपरी बेयरिंग को हब पर रखें। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.9.instruction
+#. state.10.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Place PLATE-WASHER and screw the NUT FOR 5-6 TURNS. Mark the top of bolts with BLUE. PRESS both buttons to take "
+"picture and evaluate"
+msgstr ""
+"प्लेट-वॉशर रखें और नट को 5-6 चक्कर कसें। बोल्ट के ऊपरी भाग पर नीला निशान लगाएँ। चित्र लेने और जाँचने के लिए दोनों बटन"
+" दबाएँ"
+
+#. state.11.instruction
+#. state.12.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 1st round of NUT TIGHTENING"
+msgstr "कंपोनेंट के कर्टन पार करने तक दोनों बटन दबाएँ। नट टाइटनिंग के पहले राउंड की टॉर्क रीडिंग की प्रतीक्षा"
+
+#. state.13.instruction
+#. state.14.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "कंपोनेंट पर बंग रखें। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.15.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting COMPONENT PRESS completion"
+msgstr "कंपोनेंट प्रेस पूरा होने की प्रतीक्षा"
+
+#. state.16.instruction
+#. state.17.instruction
+#: ApplicationConfiguration.properties
+msgid "Remove BUNG from COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "कंपोनेंट से बंग हटाएँ। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.18.instruction
+#. state.19.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 2nd round of NUT TIGHTENING"
+msgstr "कंपोनेंट के कर्टन पार करने तक दोनों बटन दबाएँ। नट टाइटनिंग के दूसरे राउंड की टॉर्क रीडिंग की प्रतीक्षा"
+
+#. state.20.instruction
+#. state.21.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Assemble WASHER and SPLIT PIN. Mark Washer in YELLOW and Split Pin in BLUE. PRESS BOTH BUTTONS to take picture and "
+"evaluate"
+msgstr ""
+"वॉशर और स्प्लिट पिन लगाएँ। वॉशर पर पीला और स्प्लिट पिन पर नीला निशान लगाएँ। चित्र लेने और जाँचने के लिए दोनों बटन "
+"दबाएँ"
+
+#. state.22.instruction
+#. state.23.instruction
+#: ApplicationConfiguration.properties
+msgid "Place CAP on SPLIT PIN. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "स्प्लिट पिन पर कैप रखें। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.24.instruction
+#. state.25.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on CAP. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "कैप पर बंग रखें। चित्र लेने और जाँचने के लिए दोनों बटन दबाएँ"
+
+#. state.26.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting CAP PRESS completion"
+msgstr "कैप प्रेस पूरा होने की प्रतीक्षा"
+
+#. state.27.instruction
+#. state.28.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting READING TORQUE after FREE ROTATION"
+msgstr "फ्री रोटेशन के बाद टॉर्क रीडिंग की प्रतीक्षा"
+

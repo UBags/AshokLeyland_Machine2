@@ -10,6 +10,10 @@ from utils.RedisUtils import *
 # from utils.ReportUtils import ReportBuilder
 # import threading
 import textwrap
+from frontend.FrontendI18n import tr, trf, N_
+# Texts of the dialogs opened from the main screen are shown in the frontend's language (CHANGES 156): tr() / trf();
+# in MainProgram's process (login, mode, start-up messages) the language is always English, so the shared helpers below
+# show English there. Button texts are translated, their events (keys) stay English.
 
 # from dateutil.relativedelta import relativedelta
 
@@ -67,7 +71,7 @@ def showMessage(textToShow: str = "A Message", theme: str = 'DarkBlue15', auto_c
     # Edge Case: Empty or None textToShow
     if not textToShow or textToShow.isspace():
         textToShow = "No message provided"
-    textToShow = f"\n{textToShow}\n"
+    textToShow = f"\n{tr(textToShow)}\n"
 
     # Font: Use Helvetica directly; PySimpleGUI falls back to system default (e.g., Arial) if unavailable
     font = ("Helvetica", 16, "bold")
@@ -86,7 +90,7 @@ def showMessage(textToShow: str = "A Message", theme: str = 'DarkBlue15', auto_c
 
     layout = [
         [sg.Text(textToShow, key='-TEXT-', font=font, justification="center", size=(text_width, None))],
-        [sg.Button("OK", key="-OK-", size=(10, 1), font=button_font)]
+        [sg.Button(tr("OK"), key="-OK-", size=(10, 1), font=button_font)]
     ]
 
     window = sg.Window(
@@ -150,9 +154,9 @@ def getSimpleInput(textToShow: str = "Type Input", modal: bool = False):
     sg.theme('LightBlue2')
 
     layout = [
-        [sg.Text(textToShow, font=16, pad=(10, 10))],
+        [sg.Text(tr(textToShow), font=16, pad=(10, 10))],
         [sg.InputText(key='-INPUT-', font=16, size=(30, 1))],
-        [sg.Button("OK", key="-OK-", size=(10, 1)), sg.Button("Cancel", key="-CANCEL-", size=(10, 1))]
+        [sg.Button(tr("OK"), key="-OK-", size=(10, 1)), sg.Button(tr("Cancel"), key="-CANCEL-", size=(10, 1))]
     ]
 
     window = sg.Window(
@@ -201,11 +205,11 @@ def getAssuredInputTillCancel(currentUser: str, currentRole: str = "Supervisor",
     aWindowIsInProgress = True
 
     layout = [
-        [sg.Text(textToShow, size=(30, 1), font=16), sg.InputText(key='-inputReceived-', font=16)],
-        [sg.Button("Submit"), sg.Button("Cancel")]
+        [sg.Text(tr(textToShow), size=(30, 1), font=16), sg.InputText(key='-inputReceived-', font=16)],
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
     ]
 
-    window = sg.Window(textToShow, layout, modal=modal, keep_on_top=True, finalize=True, disable_minimize=True,
+    window = sg.Window(tr(textToShow), layout, modal=modal, keep_on_top=True, finalize=True, disable_minimize=True,
                        force_toplevel=True, grab_anywhere=False, disable_close=True)
     window['-inputReceived-'].set_focus()
     window['-inputReceived-'].bind("<Return>", "_Enter")
@@ -228,7 +232,7 @@ def getAssuredInputTillCancel(currentUser: str, currentRole: str = "Supervisor",
                     showErrorMessage("No value provided. Please re-enter and submit.")
                     sg.theme('DarkBlue15')
                 else:
-                    confirmationMessage = f"{confirmationStart} provided is {inputValue}. Are you sure to proceed ahead ?"
+                    confirmationMessage = trf("{what} provided is {value}. Are you sure to proceed ahead ?", what=tr(confirmationStart), value=inputValue)
                     confirmed: str = getConfirmation(confirmationMessage)
                     if confirmed.upper() == 'OK':
                         break
@@ -256,9 +260,9 @@ def getConfirmation(message: str, question: str = "Please click OK to confirm, C
     sg.theme(theme)
 
     layout = [
-        [sg.Text(message, font=16)],
-        [sg.Text(question, font=16)],
-        [sg.Button("OK", size=(10, 1), key="-OK-"), sg.Button("Cancel", size=(10, 1), key="-CANCEL-")]
+        [sg.Text(tr(message), font=16)],
+        [sg.Text(tr(question), font=16)],
+        [sg.Button(tr("OK"), size=(10, 1), key="-OK-"), sg.Button(tr("Cancel"), size=(10, 1), key="-CANCEL-")]
     ]
 
     window = sg.Window(
@@ -307,6 +311,7 @@ def showErrorMessage(errorMessage: str, auto_close_duration: int = 3, theme: str
     # Edge Case: Empty or None errorMessage
     if not errorMessage or errorMessage.isspace():
         errorMessage = "No error message provided"
+    errorMessage = tr(errorMessage)
 
     # Font: Use Helvetica, size 16
     font = ("Helvetica", 16)
@@ -324,7 +329,7 @@ def showErrorMessage(errorMessage: str, auto_close_duration: int = 3, theme: str
 
     layout = [
         [sg.Text(errorMessage, key='-TEXT-', font=font, justification="center", size=(text_width, None))],
-        [sg.Button("OK", key="-OK-", size=(10, 1), font=button_font)]
+        [sg.Button(tr("OK"), key="-OK-", size=(10, 1), font=button_font)]
     ]
 
     window = sg.Window(
@@ -376,6 +381,7 @@ def flashSimpleMessage(simpleMessage: str = "A simple message", auto_close_durat
     # Edge Case: Empty or None simpleMessage
     if not simpleMessage or simpleMessage.isspace():
         simpleMessage = "No message provided"
+    simpleMessage = tr(simpleMessage)
 
     # Edge Case: Invalid line_width
     if not isinstance(line_width, int) or line_width < 10:
@@ -398,7 +404,7 @@ def flashSimpleMessage(simpleMessage: str = "A simple message", auto_close_durat
 
     layout = [
         [sg.Text(simpleMessage, key='-TEXT-', font=font, justification="center", size=(text_width, None))],
-        [sg.Button("OK", key="-OK-", size=(10, 1), font=button_font)]
+        [sg.Button(tr("OK"), key="-OK-", size=(10, 1), font=button_font)]
     ]
 
     window = sg.Window(
@@ -435,10 +441,10 @@ def displayScrollableColumnNoHeader(listOfSgText: list, title: str = "Scrollable
     sg.theme("DarkBlue16")
     layout = [
         [sg.Column(listOfSgText, scrollable=True, vertical_scroll_only=True)],
-        [sg.Button(buttonName)]
+        [sg.Button(tr(buttonName), key=buttonName)]
     ]
     # window = sg.Window(title=title, layout=layout, size=size, keep_on_top=True, finalize=True, modal=True, disable_minimize=True, force_toplevel=True)
-    window = sg.Window(title=title, layout=layout, size=size, keep_on_top=True, finalize=True, modal=True,
+    window = sg.Window(title=tr(title), layout=layout, size=size, keep_on_top=True, finalize=True, modal=True,
                        disable_minimize=True, grab_anywhere=False)
     toBeSent = False
     while True:
@@ -456,10 +462,10 @@ def displayScrollableColumnWithHeader(header: str, contentToBeDisplayed: str, ti
     layout = [[sg.Text(header, font=("Courier New", 12, "bold"))],
               [sg.Column([[sg.Text(contentToBeDisplayed, font=("Courier New", 12))]], scrollable=True,
                          vertical_scroll_only=True, size=size)],
-              [sg.Button(buttonName)],
+              [sg.Button(tr(buttonName), key=buttonName)],
               ]
     # window = sg.Window(title=title, layout=layout, modal = True, keep_on_top=True, finalize=True, disable_minimize=True, force_toplevel=True)
-    window = sg.Window(title=title, layout=layout, modal=True, keep_on_top=True, finalize=True, disable_minimize=True,
+    window = sg.Window(title=tr(title), layout=layout, modal=True, keep_on_top=True, finalize=True, disable_minimize=True,
                        grab_anywhere=False)
     toBeActed = False
     while True:
@@ -488,6 +494,7 @@ def getJustPassword(textToShow: str = "Enter password", modal: bool = False):
     # Edge Case: Empty or None textToShow
     if not textToShow or textToShow.isspace():
         textToShow = "Enter password"
+    textToShow = tr(textToShow)
 
     # Font: Use Helvetica, size 16 for consistency with getSimpleInput
     font = ("Helvetica", 16)
@@ -504,8 +511,8 @@ def getJustPassword(textToShow: str = "Enter password", modal: bool = False):
     layout = [
         [sg.Text(textToShow, key='-TEXT-', font=font, justification="center", size=(text_width, None))],
         [sg.InputText(key='-PASSWORD-', font=font, password_char='*', size=(30, 1))],
-        [sg.Button("OK", key="-OK-", size=(10, 1), font=button_font),
-         sg.Button("Cancel", key="-CANCEL-", size=(10, 1), font=button_font)]
+        [sg.Button(tr("OK"), key="-OK-", size=(10, 1), font=button_font),
+         sg.Button(tr("Cancel"), key="-CANCEL-", size=(10, 1), font=button_font)]
     ]
 
     window = sg.Window(
@@ -580,24 +587,24 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
 
     sg.theme('LightBlue3')
     layout = [
-        [sg.Text("Create Username", size=(20, 1), font=16), sg.InputText(key='-username-', font=16)],
-        [sg.Text("First Name", size=(20, 1), font=16), sg.InputText(key='-firstname-', font=16)],
-        [sg.Text("Middle Name", size=(20, 1), font=16), sg.InputText(key='-middlename-', font=16)],
-        [sg.Text("Last Name", size=(20, 1), font=16), sg.InputText(key='-lastname-', font=16)],
-        [sg.Text("Create Password", size=(20, 1), font=16), sg.InputText(key='-password-', font=16, password_char='*')],
-        [sg.Text("Re-enter Password", size=(20, 1), font=16),
+        [sg.Text(tr("Create Username"), size=(20, 1), font=16), sg.InputText(key='-username-', font=16)],
+        [sg.Text(tr("First Name"), size=(20, 1), font=16), sg.InputText(key='-firstname-', font=16)],
+        [sg.Text(tr("Middle Name"), size=(20, 1), font=16), sg.InputText(key='-middlename-', font=16)],
+        [sg.Text(tr("Last Name"), size=(20, 1), font=16), sg.InputText(key='-lastname-', font=16)],
+        [sg.Text(tr("Create Password"), size=(20, 1), font=16), sg.InputText(key='-password-', font=16, password_char='*')],
+        [sg.Text(tr("Re-enter Password"), size=(20, 1), font=16),
          sg.InputText(key='-password1-', font=16, password_char='*')],
-        [sg.Text("E-mail", size=(20, 1), font=16), sg.InputText(key='-email-', font=16)],
-        [sg.Text("Mobile", size=(20, 1), font=16), sg.InputText(key='-mobile-', font=16)],
-        [sg.Text("Role", size=(20, 1), font=16),
+        [sg.Text(tr("E-mail"), size=(20, 1), font=16), sg.InputText(key='-email-', font=16)],
+        [sg.Text(tr("Mobile"), size=(20, 1), font=16), sg.InputText(key='-mobile-', font=16)],
+        [sg.Text(tr("Role"), size=(20, 1), font=16),
          sg.Combo(values=allowed_roles[2:], default_value=allowed_roles[2], font=16,
                   k='-role-')] if currentRole == "Supervisor" else
-        [sg.Text("Role", size=(20, 1), font=16),
+        [sg.Text(tr("Role"), size=(20, 1), font=16),
          sg.Combo(values=allowed_roles, default_value=allowed_roles[2], font=16, k='-role-')],
-        [sg.Button("Submit"), sg.Button("Cancel")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
     ]
 
-    window = sg.Window("Create New Account", layout, modal=True, keep_on_top=True, finalize=True, disable_minimize=True,
+    window = sg.Window(tr("Create New Account"), layout, modal=True, keep_on_top=True, finalize=True, disable_minimize=True,
                        grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-role-'].bind("<Return>", "_Enter")
@@ -633,7 +640,7 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                 mobile = values['-mobile-'].strip()
                 role = values['-role-'].strip()
                 if username in currentUsernames:
-                    showErrorMessage(f"Username {username} already exists. Please change and submit.")
+                    showErrorMessage(trf("Username {username} already exists. Please change and submit.", username=username))
                     sg.theme('LightBlue3')
                     username = ''
                     password = ''
@@ -703,7 +710,7 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                     showErrorMessage("At least 1 of first, middle, or last name is needed.")
                     sg.theme('LightBlue3')
                 else:
-                    confirmationMessage = f"Username : {username}\nFirst Name : {firstname}\nMiddle Name : {middlename}\nLast Name: {lastname}\nemail : {email}\nMobile : {mobile}\nRole : {role}"
+                    confirmationMessage = trf("Username : {username}\nFirst Name : {firstname}\nMiddle Name : {middlename}\nLast Name: {lastname}\nemail : {email}\nMobile : {mobile}\nRole : {role}", username=username, firstname=firstname, middlename=middlename, lastname=lastname, email=email, mobile=mobile, role=tr(role))
                     confirmed: str = getConfirmation(confirmationMessage)
                     if confirmed.upper() == 'OK':
                         try:
@@ -718,7 +725,7 @@ def createAccount(currentUser: str, currentRole: str = "Supervisor", modal: bool
                                 try:
                                     # insertAuditRecord(db_name=db_name, action=ADDED_NEW_USER, user=currentUser, role=currentRole,
                                     #                   remarks=f"Created user {username} with role {role}")
-                                    progressBar(message="Creating newwidgets account...")
+                                    progressBar(message="Creating new account...")
                                 except Exception:
                                     showErrorMessage(
                                         "Account could not be created. Likely reason is a database access problem.")
@@ -886,16 +893,16 @@ def changePasswordForSelf(currentUser: str, currentRole: str, modal: bool = True
                 break
     sg.theme('LightBlue2')
     layout = [
-        [sg.Text("Current Password", size=(20, 1), font=16),
+        [sg.Text(tr("Current Password"), size=(20, 1), font=16),
          sg.InputText(key='-currentPassword-', font=16, password_char='*')],
-        [sg.Text("Enter New Password", size=(20, 1), font=16),
+        [sg.Text(tr("Enter New Password"), size=(20, 1), font=16),
          sg.InputText(key='-newpassword1-', font=16, password_char='*')],
-        [sg.Text("Re-enter New Password", size=(20, 1), font=16),
+        [sg.Text(tr("Re-enter New Password"), size=(20, 1), font=16),
          sg.InputText(key='-newpassword2-', font=16, password_char='*')],
-        [sg.Button("Submit"), sg.Button("Cancel")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
     ]
 
-    window = sg.Window(f"Change Password for user : {currentUser}", layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(trf("Change Password for user : {user}", user=currentUser), layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-currentPassword-'].set_focus()
     window['-newpassword2-'].bind("<Return>", "_Enter")
@@ -918,7 +925,7 @@ def changePasswordForSelf(currentUser: str, currentRole: str, modal: bool = True
                         len(password1) >= 6):
                     try:
                         updatePassword(db_name=db_name, username=currentUser, password=password1)
-                        progressBar(f"Changing password for {currentUser}", theme="DarkBlue16")
+                        progressBar(trf("Changing password for {user}", user=currentUser), theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OWN_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed own password")
                     except Exception:
@@ -940,7 +947,7 @@ def changePasswordForSelf(currentUser: str, currentRole: str, modal: bool = True
                     submitted = False
                     password1 = ''
                     password2 = ''
-                    showErrorMessage("The 2 newwidgets passwords do not match. Enter data again.")
+                    showErrorMessage("The 2 new passwords do not match. Enter data again.")
                     sg.theme('LightBlue2')
                 elif (currPassword == password1):
                     submitted = False
@@ -990,14 +997,14 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
     sg.theme('LightBlue2')
     if currentRole == "Administrator":
         layout = [
-            [sg.Text("Username", size=(20, 1), font=16),
+            [sg.Text(tr("Username"), size=(20, 1), font=16),
              sg.Combo(values=validUsernames, default_value=validUsernames[0] if len(validUsernames) > 0 else '',
                       font=16, k='-username-')],
-            [sg.Text("Enter New Password", size=(20, 1), font=16),
+            [sg.Text(tr("Enter New Password"), size=(20, 1), font=16),
              sg.InputText(key='-newpassword1-', font=16, password_char='*')],
-            [sg.Text("Re-enter New Password", size=(20, 1), font=16),
+            [sg.Text(tr("Re-enter New Password"), size=(20, 1), font=16),
              sg.InputText(key='-newpassword2-', font=16, password_char='*')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     elif currentRole == "Manager" or currentRole == "Supervisor":
         if len(validOperatorUsernames) == 0:
@@ -1005,18 +1012,18 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
             aWindowIsInProgress = False
             return False, None, None
         layout = [
-            [sg.Text("Username", size=(20, 1), font=16),
+            [sg.Text(tr("Username"), size=(20, 1), font=16),
              sg.Combo(values=validOperatorUsernames,
                       default_value=validOperatorUsernames[0] if len(validOperatorUsernames) > 0 else '', font=16,
                       k='-username-')],
-            [sg.Text("Enter New Password", size=(20, 1), font=16),
+            [sg.Text(tr("Enter New Password"), size=(20, 1), font=16),
              sg.InputText(key='-newpassword1-', font=16, password_char='*')],
-            [sg.Text("Re-enter New Password", size=(20, 1), font=16),
+            [sg.Text(tr("Re-enter New Password"), size=(20, 1), font=16),
              sg.InputText(key='-newpassword2-', font=16, password_char='*')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     else:
-        showErrorMessage(f"Unknown Role : {currentRole}", auto_close_duration=2)
+        showErrorMessage(trf("Unknown Role : {role}", role=currentRole), auto_close_duration=2)
         aWindowIsInProgress = False
         return False, None, None
 
@@ -1028,7 +1035,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
     #                 [sg.Button("Submit"), sg.Button("Cancel")]
     #             ]
 
-    window = sg.Window("Change Password for users : ", layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(tr("Change Password for users : "), layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-newpassword2-'].bind("<Return>", "_Enter")
@@ -1055,7 +1062,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
                 #     elif (currPassword != currentPassword):
                 #         showErrorMessage("Current password does not match. Enter data again.")
                 #     elif password1 != password2:
-                #         showErrorMessage("The 2 newwidgets passwords do not match. Enter data again.")
+                #         showErrorMessage("The 2 new passwords do not match. Enter data again.")
                 # else:
                 chosenUser = values['-username-']
                 password1 = values['-newpassword1-']
@@ -1064,7 +1071,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
                     password1 = ''
                     password2 = ''
                     submitted = False
-                    showErrorMessage("The 2 newwidgets passwords do not match. Enter data again.")
+                    showErrorMessage("The 2 new passwords do not match. Enter data again.")
                     sg.theme('LightBlue2')
                 elif len(password1) < 6:
                     password1 = ''
@@ -1075,7 +1082,7 @@ def changePassword(currentUser: str, currentRole: str = "Supervisor", modal: boo
                 else:
                     try:
                         updatePassword(db_name=db_name, username=chosenUser, password=password1)
-                        progressBar(f"Changing password for {chosenUser}", theme="DarkBlue16")
+                        progressBar(trf("Changing password for {user}", user=chosenUser), theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_OTHERS_PASSWORD, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully changed password for {chosenUser}")
                     except Exception:
@@ -1113,10 +1120,10 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
     sg.theme('DarkRed1')
     if currentRole.lower() == "administrator":
         layout = [
-            [sg.Text("Username : ", size=(20, 1), font=16),
+            [sg.Text(tr("Username : "), size=(20, 1), font=16),
              sg.Combo(values=validUsernames, default_value=validUsernames[0] if len(validUsernames) > 0 else '',
                       font=16, k='-username-')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     elif currentRole.lower() == "manager" or currentRole.lower() == "supervisor":
         if len(validOperatorUsernames) == 0:
@@ -1124,18 +1131,18 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
             aWindowIsInProgress = False
             return False, None
         layout = [
-            [sg.Text("Username : ", size=(20, 1), font=16),
+            [sg.Text(tr("Username : "), size=(20, 1), font=16),
              sg.Combo(values=validOperatorUsernames,
                       default_value=validOperatorUsernames[0] if len(validOperatorUsernames) > 0 else '', font=16,
                       k='-username-')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     else:
-        showErrorMessage(f"Unknown Role : {currentRole}")
+        showErrorMessage(trf("Unknown Role : {role}", role=currentRole))
         aWindowIsInProgress = False
         return False, None
 
-    window = sg.Window("Inactivate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
+    window = sg.Window(tr("Inactivate User"), layout, return_keyboard_events=True, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-username-'].bind("<Return>", "_Enter")
@@ -1151,19 +1158,19 @@ def inactivateUser(currentUser: str, currentRole: str = "Supervisor", modal: boo
                 submitted = True
                 # print('Clicked Submit')
                 username = values['-username-']
-                confirmationStatement = f"Inactivate user {username}. Are you sure ?"
+                confirmationStatement = trf("Inactivate user {username}. Are you sure ?", username=username)
                 confirmed: str = getConfirmation(confirmationStatement)
                 if (confirmed.upper() == 'OK'):
                     try:
                         inactivateUserInDatabase(db_name=db_name, username=username)
                         # insertAuditRecord(db_name=db_name, action=INACTIVATED_USER, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully inactivated user {username}")
-                        progressBar(f"Inactivating user {username}", theme="LightBrown6")
+                        progressBar(trf("Inactivating user {username}", username=username), theme="LightBrown6")
                     except Exception:
                         noteSuppressed()
                     break
                 else:
-                    showErrorMessage(f"Leaving {username} activated", auto_close_duration=2)
+                    showErrorMessage(trf("Leaving {username} activated", username=username), auto_close_duration=2)
                     sg.theme('DarkRed1')
                     username = None
                     submitted = False
@@ -1193,12 +1200,12 @@ def activateUser(currentUser: str, currentRole: str, modal: bool = True):
     username = None
     sg.theme('DarkGreen4')
     layout = [
-        [sg.Text("Username : ", size=(20, 1), font=16),
+        [sg.Text(tr("Username : "), size=(20, 1), font=16),
          sg.Combo(values=validUsernames, default_value=validUsernames[0] if len(validUsernames) > 0 else '', font=16,
                   k='-username-')],
-        [sg.Button("Submit"), sg.Button("Cancel")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
     ]
-    window = sg.Window("Activate User", layout, return_keyboard_events=True, modal=True, keep_on_top=True,
+    window = sg.Window(tr("Activate User"), layout, return_keyboard_events=True, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-username-'].bind("<Return>", "_Enter")
@@ -1214,21 +1221,21 @@ def activateUser(currentUser: str, currentRole: str, modal: bool = True):
                 submitted = True
                 # print('Clicked Submit')
                 username = values['-username-']
-                confirmationStatement = f"Activate user {username}. Are you sure ?"
+                confirmationStatement = trf("Activate user {username}. Are you sure ?", username=username)
                 confirmed: str = getConfirmation(confirmationStatement)
                 if (confirmed.upper() == 'OK'):
                     try:
                         activateInactiveUserInDatabase(db_name=db_name, username=username)
                         # insertAuditRecord(db_name=db_name, action=ACTIVATED_USER, user=currentUser, role=currentRole,
                         #                   remarks=f"Successfully re-activated user {username}")
-                        progressBar(f"Activating user {username}", theme="LightBlue6")
+                        progressBar(trf("Activating user {username}", username=username), theme="LightBlue6")
                     except Exception:
                         submitted = True
                         username = None
                         pass
                     break
                 else:
-                    showErrorMessage(f"Leaving {username} inactivated", auto_close_duration=2)
+                    showErrorMessage(trf("Leaving {username} inactivated", username=username), auto_close_duration=2)
                     sg.theme('DarkGreen4')
                     submitted = False
                     username = None
@@ -1318,12 +1325,12 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
     sg.theme('LightBlue2')
     if currentRole == "Administrator":
         layout = [
-            [sg.Text("Username : ", size=(20, 1), font=16),
+            [sg.Text(tr("Username : "), size=(20, 1), font=16),
              sg.Combo(values=validUsernames, default_value=validUsernames[0] if len(validUsernames) > 0 else '',
                       font=16, k='-username-')],
-            [sg.Text("Change Role to :", size=(20, 1), font=16),
+            [sg.Text(tr("Change Role to :"), size=(20, 1), font=16),
              sg.Combo(values=allowed_roles, default_value=allowed_roles[0], font=16, k='-role-')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     elif currentRole == "Manager" or currentRole == "Supervisor":
         if len(validOperatorUsernames) == 0:
@@ -1331,20 +1338,20 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
             aWindowIsInProgress = False
             return False, None, None
         layout = [
-            [sg.Text("Username : ", size=(20, 1), font=16),
+            [sg.Text(tr("Username : "), size=(20, 1), font=16),
              sg.Combo(values=validOperatorUsernames,
                       default_value=validOperatorUsernames[0] if len(validOperatorUsernames) > 0 else '',
                       font=16, k='-username-')],
-            [sg.Text("Change Role to :", size=(20, 1), font=16),
+            [sg.Text(tr("Change Role to :"), size=(20, 1), font=16),
              sg.Combo(values=allowed_roles[1:], default_value=allowed_roles[1], font=16, k='-role-')],
-            [sg.Button("Submit"), sg.Button("Cancel")]
+            [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Cancel"), key="Cancel")]
         ]
     else:
-        showErrorMessage(f"Unknown Role : {currentRole}")
+        showErrorMessage(trf("Unknown Role : {role}", role=currentRole))
         aWindowIsInProgress = False
         return False, None, None
 
-    window = sg.Window("Change Role", layout, return_keyboard_events=True, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(tr("Change Role"), layout, return_keyboard_events=True, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=True)
     window['-username-'].set_focus()
     window['-role-'].bind("<Return>", "_Enter")
@@ -1363,12 +1370,12 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
                 # print('Clicked Submit')
                 username = values['-username-']
                 role = values['-role-']
-                confirmationStatement = f"Change role of user {username} to {role}"
+                confirmationStatement = trf("Change role of user {username} to {role}", username=username, role=tr(role))
                 confirmed: str = getConfirmation(confirmationStatement)
                 if (confirmed.upper() == 'OK'):
                     try:
                         updateRole(db_name=db_name, username=username, role_name=role)
-                        progressBar(f"Changing role for {username}", theme="DarkBlue16")
+                        progressBar(trf("Changing role for {username}", username=username), theme="DarkBlue16")
                         # insertAuditRecord(db_name=db_name, action=CHANGED_USER_ROLE, user=currentUser, role=currentRole,
                         #                   remarks=f"Changed role of {username} to role {role}")
                     except Exception:
@@ -1377,7 +1384,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
                         pass
                     break
                 else:
-                    showErrorMessage(f"Role not changed for {username}", auto_close_duration=2)
+                    showErrorMessage(trf("Role not changed for {username}", username=username), auto_close_duration=2)
                     sg.theme('LightBlue2')
                     username = None
                     role = None
@@ -1402,16 +1409,16 @@ def createProductionReportByDateLimits():
     sg.theme('LightBlue3')
     db_name = getDatabaseName()
     layout = [
-        [sg.Text('Production Report Needed From Date : ', size=(40, 1)), sg.InputText(key='-fromdate-'),
-         sg.CalendarButton("Select Date", close_when_date_chosen=True, target="-fromdate-", format='%Y-%m-%d',
+        [sg.Text(tr('Production Report Needed From Date : '), size=(40, 1)), sg.InputText(key='-fromdate-'),
+         sg.CalendarButton(tr("Select Date"), close_when_date_chosen=True, target="-fromdate-", format='%Y-%m-%d',
                            size=(10, 1))],
-        [sg.Text('Production Report Needed To Date : ', size=(40, 1)), sg.InputText(key='-todate-'),
-         sg.CalendarButton("Select Date", close_when_date_chosen=True, target="-todate-", format='%Y-%m-%d',
+        [sg.Text(tr('Production Report Needed To Date : '), size=(40, 1)), sg.InputText(key='-todate-'),
+         sg.CalendarButton(tr("Select Date"), close_when_date_chosen=True, target="-todate-", format='%Y-%m-%d',
                            size=(10, 1))],
-        [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Clear"), key="Clear"), sg.Button(tr("Exit"), key="Exit")]
     ]
 
-    window = sg.Window(' Generate production report for a period', layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(tr(' Generate production report for a period'), layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=False)
     window['-fromdate-'].set_focus()
 
@@ -1441,7 +1448,7 @@ def createProductionReportByDateLimits():
                 sg.theme('LightBlue3')
             else:
                 toDate1 = datetime.strftime(toPythonDate, "%Y-%m-%d")
-                confirmationStatement = f"Generate summary report for period (both days inclusive):\nStartingDate : {fromDate}\nEnd date : {toDate}"
+                confirmationStatement = trf("Generate summary report for period (both days inclusive):\nStartingDate : {fromDate}\nEnd date : {toDate}", fromDate=fromDate, toDate=toDate)
                 confirmed: str = getConfirmation(confirmationStatement)
                 if (confirmed.upper() == 'OK'):
                     try:
@@ -1450,7 +1457,7 @@ def createProductionReportByDateLimits():
                             fName = writeReportToFile(csv_data=csv_data,
                                                       reportType="ProductionReportAllModelsByDateLimits")
                             done = True
-                            showMessage(f"Report saved to {fName}")
+                            showMessage(trf("Report saved to {file}", file=fName))
                             # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                             #                   role=currentRole,
                             #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
@@ -1480,20 +1487,20 @@ def createProductionReportByModelNameAndDateLimits():
     db_name = getDatabaseName()
     models = getUniqueModelNames(db_name=db_name)
     layout = [
-        [sg.Text("Choose Model for which you want to generate report : ", size=(55, 1), font=16),
+        [sg.Text(tr("Choose Model for which you want to generate report : "), size=(55, 1), font=16),
          sg.Combo(values=models,
                   default_value=models[0] if len(models) > 0 else '',
                   font=16, k='-modelname-')],
-        [sg.Text('From Date : ', size=(15, 1)), sg.InputText(key='-fromdate-'),
-         sg.CalendarButton("Select Date", close_when_date_chosen=True, target="-fromdate-", format='%Y-%m-%d',
+        [sg.Text(tr('From Date : '), size=(15, 1)), sg.InputText(key='-fromdate-'),
+         sg.CalendarButton(tr("Select Date"), close_when_date_chosen=True, target="-fromdate-", format='%Y-%m-%d',
                            size=(10, 1))],
-        [sg.Text('To Date : ', size=(15, 1)), sg.InputText(key='-todate-'),
-         sg.CalendarButton("Select Date", close_when_date_chosen=True, target="-todate-", format='%Y-%m-%d',
+        [sg.Text(tr('To Date : '), size=(15, 1)), sg.InputText(key='-todate-'),
+         sg.CalendarButton(tr("Select Date"), close_when_date_chosen=True, target="-todate-", format='%Y-%m-%d',
                            size=(10, 1))],
-        [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Clear"), key="Clear"), sg.Button(tr("Exit"), key="Exit")]
     ]
 
-    window = sg.Window(' Generate production report for a model for a period', layout, modal=True, keep_on_top=True,
+    window = sg.Window(tr(' Generate production report for a model for a period'), layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1527,7 +1534,7 @@ def createProductionReportByModelNameAndDateLimits():
                 sg.theme('LightBlue3')
             else:
                 toDate1 = datetime.strftime(toPythonDate, "%Y-%m-%d")
-                confirmationStatement = f"Generate report for model {modelName} for period (both days inclusive):\nStartingDate : {fromDate}\nEnd date : {toDate}"
+                confirmationStatement = trf("Generate report for model {model} for period (both days inclusive):\nStartingDate : {fromDate}\nEnd date : {toDate}", model=modelName, fromDate=fromDate, toDate=toDate)
                 confirmed: str = getConfirmation(confirmationStatement)
                 if (confirmed.upper() == 'OK'):
                     try:
@@ -1537,7 +1544,7 @@ def createProductionReportByModelNameAndDateLimits():
                             fName = writeReportToFile(csv_data=csv_data,
                                                       reportType="ProductionReportByModelNameAndDateLimits")
                             done = True
-                            showMessage(f"Report saved to {fName}")
+                            showMessage(trf("Report saved to {file}", file=fName))
                             # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                             #                   role=currentRole,
                             #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
@@ -1567,14 +1574,14 @@ def createProductionReportByModelName():
     db_name = getDatabaseName()
     models = getUniqueModelNames(db_name=db_name)
     layout = [
-        [sg.Text("Choose Model for which you want to generate report : ", size=(55, 1), font=16),
+        [sg.Text(tr("Choose Model for which you want to generate report : "), size=(55, 1), font=16),
          sg.Combo(values=models,
                   default_value=models[0] if len(models) > 0 else '',
                   font=16, k='-modelname-')],
-        [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Clear"), key="Clear"), sg.Button(tr("Exit"), key="Exit")]
     ]
 
-    window = sg.Window(' Generate production report for a model', layout, modal=True, keep_on_top=True, finalize=True,
+    window = sg.Window(tr(' Generate production report for a model'), layout, modal=True, keep_on_top=True, finalize=True,
                        disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1597,7 +1604,7 @@ def createProductionReportByModelName():
             clear_input(window)
         if event == 'Submit':
             modelName = values['-modelname-']
-            confirmationStatement = f"Generate report for model {modelName}"
+            confirmationStatement = trf("Generate report for model {model}", model=modelName)
             confirmed: str = getConfirmation(confirmationStatement)
             if (confirmed.upper() == 'OK'):
                 try:
@@ -1605,7 +1612,7 @@ def createProductionReportByModelName():
                     try:
                         fName = writeReportToFile(csv_data=csv_data, reportType="AllTimeProductionReportByModelName")
                         done = True
-                        showMessage(f"Report saved to {fName}")
+                        showMessage(trf("Report saved to {file}", file=fName))
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
@@ -1636,14 +1643,14 @@ def createProductionReportOfTodayByModelName():
     db_name = getDatabaseName()
     models = getUniqueModelNames(db_name=db_name)
     layout = [
-        [sg.Text("Choose Model for which you want to generate today's report : ", size=(55, 1), font=16),
+        [sg.Text(tr("Choose Model for which you want to generate today's report : "), size=(55, 1), font=16),
          sg.Combo(values=models,
                   default_value=models[0] if len(models) > 0 else '',
                   font=16, k='-modelname-')],
-        [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Clear"), key="Clear"), sg.Button(tr("Exit"), key="Exit")]
     ]
 
-    window = sg.Window(" Generate today's production report for a model", layout, modal=True, keep_on_top=True,
+    window = sg.Window(tr(" Generate today's production report for a model"), layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
     try:
         window['-modelname-'].set_focus()
@@ -1665,7 +1672,7 @@ def createProductionReportOfTodayByModelName():
             clear_input(window)
         if event == 'Submit':
             modelName = values['-modelname-']
-            confirmationStatement = f"Generate today's report for model {modelName}"
+            confirmationStatement = trf("Generate today's report for model {model}", model=modelName)
             confirmed: str = getConfirmation(confirmationStatement)
             if (confirmed.upper() == 'OK'):
                 try:
@@ -1673,7 +1680,7 @@ def createProductionReportOfTodayByModelName():
                     try:
                         fName = writeReportToFile(csv_data=csv_data, reportType="DayProductionReportByModelName")
                         done = True
-                        showMessage(f"Report saved to {fName}")
+                        showMessage(trf("Report saved to {file}", file=fName))
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
@@ -1702,11 +1709,11 @@ def createProductionReportOfToday():
     sg.theme('LightBlue3')
     db_name = getDatabaseName()
     layout = [
-        [sg.Text("Generate today's full production report ", size=(55, 1), font=16), ],
-        [sg.Button("Submit"), sg.Button("Clear"), sg.Button("Exit")]
+        [sg.Text(tr("Generate today's full production report "), size=(55, 1), font=16), ],
+        [sg.Button(tr("Submit"), key="Submit"), sg.Button(tr("Clear"), key="Clear"), sg.Button(tr("Exit"), key="Exit")]
     ]
 
-    window = sg.Window(" Generate today's production report for ALL models", layout, modal=True, keep_on_top=True,
+    window = sg.Window(tr(" Generate today's production report for ALL models"), layout, modal=True, keep_on_top=True,
                        finalize=True, disable_minimize=True, grab_anywhere=False, disable_close=False)
 
     def clear_input(window):
@@ -1730,7 +1737,7 @@ def createProductionReportOfToday():
                     try:
                         fName = writeReportToFile(csv_data=csv_data, reportType="DayProductionReport")
                         done = True
-                        showMessage(f"Report saved to {fName}")
+                        showMessage(trf("Report saved to {file}", file=fName))
                         # insertAuditRecord(db_name=db_name, action=SAVED_FROM_TO_REPORT, user=currentUser,
                         #                   role=currentRole,
                         #                   remarks=f"Production report from {fromDate} to {toDate} for medicine {med_name} for customer {cust_name}")
@@ -1774,17 +1781,17 @@ def writeReportToFile(csv_data: str, reportType: str):
 MACHINE_SETTINGS_ROLES = ("administrator", "supervisor")
 MACHINE_SETTINGS_FIELDS = (
     # key, label, input kind
-    ("rotation_rpm", "Rotation RPM (20 - 40)", "int"),
-    ("tightening_torque1_setpoint", "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)", "torque"),
-    ("tightening_torque2_setpoint", "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)", "torque"),
-    ("no_of_rotation1_ccw", "No. of Rotations 1 CCW (1 - 4)", "count"),
-    ("no_of_rotation1_cw", "No. of Rotations 1 CW (1 - 4)", "count"),
+    ("rotation_rpm", N_("Rotation RPM (20 - 40)"), "int"),
+    ("tightening_torque1_setpoint", N_("Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"), "torque"),
+    ("tightening_torque2_setpoint", N_("Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"), "torque"),
+    ("no_of_rotation1_ccw", N_("No. of Rotations 1 CCW (1 - 4)"), "count"),
+    ("no_of_rotation1_cw", N_("No. of Rotations 1 CW (1 - 4)"), "count"),
 )
 
 
 # per-model switches (checkboxes), stored with the numeric settings: key, label
 MACHINE_SETTINGS_FLAG_FIELDS = (
-    ("bypass_press_and_tightening2", "Bypass Component Press and Second Tightening"),
+    ("bypass_press_and_tightening2", N_("Bypass Component Press and Second Tightening")),
 )
 # Passwords (user, 2026-11-13 / 2026-11-15 / 2026-11-17): from the properties file, read at each use
 #   machine.settings.password         to open the dialog, and again at Save (entering it confirms the change; no Yes / No)
@@ -1806,10 +1813,10 @@ def machineSettingsChanges(settings: dict, current: dict) -> list:
         old, new = current.get(key), settings.get(key)
         if old is None or abs(float(old) - float(new)) > 1e-9:
             fmt = (lambda v: f"{float(v):.2f}") if kind == "torque" else (lambda v: str(int(round(float(v)))))
-            lines.append(f"{label.split(' (')[0]}: {fmt(old) if old is not None else '-'} -> {fmt(new)}")
+            lines.append(f"{tr(label).split(' (')[0]}: {fmt(old) if old is not None else '-'} -> {fmt(new)}")
     for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
         if bool(current.get(key, False)) != bool(settings.get(key, False)):
-            lines.append(f"{label}: {'Yes' if settings.get(key) else 'No'}")
+            lines.append(f"{tr(label)}: {tr('Yes') if settings.get(key) else tr('No')}")
     return lines
 
 
@@ -1828,9 +1835,9 @@ def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> b
     """Save: the machine settings password again, with the changes listed - entering it is the confirmation (no
     Yes / No since 2026-11-17); if the bypass switch changes, also the bypass password, worded the same way."""
     lines = machineSettingsChanges(settings, current)
-    changes = "\n".join(lines) if lines else "(no change)"
-    entered = getJustPassword(f"Change the machine settings for {model}:\n\n{changes}\n\n"
-                              f"Entering the password confirms this change.\nEnter the machine settings password:")
+    changes = "\n".join(lines) if lines else tr("(no change)")
+    entered = getJustPassword(trf("Change the machine settings for {model}:\n\n{changes}\n\nEntering the password confirms this change.\n"
+                                  "Enter the machine settings password:", model=model, changes=changes))
     if entered is None or entered == "":
         return False
     if entered != machineSettingsPassword():
@@ -1839,9 +1846,9 @@ def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> b
     bypassChanged = any(bool(current.get(key, False)) != bool(settings.get(key, False))
                         for key, _ in MACHINE_SETTINGS_FLAG_FIELDS)
     if bypassChanged:
-        newValue = "Yes" if any(bool(settings.get(key, False)) for key, _ in MACHINE_SETTINGS_FLAG_FIELDS) else "No"
-        entered = getJustPassword(f"'Bypass Component Press and Second Tightening' -> {newValue} for {model}.\n\n"
-                                  f"Entering the password confirms this change.\nEnter the bypass password:")
+        newValue = tr("Yes") if any(bool(settings.get(key, False)) for key, _ in MACHINE_SETTINGS_FLAG_FIELDS) else tr("No")
+        entered = getJustPassword(trf("'Bypass Component Press and Second Tightening' -> {value} for {model}.\n\nEntering the password confirms this "
+                                      "change.\nEnter the bypass password:", value=newValue, model=model))
         if entered is None or entered == "":
             return False
         if entered != machineSettingsBypassPassword():
@@ -1861,7 +1868,7 @@ def parseMachineSettingsInputs(values: dict):
     labels = {key: label for key, label, _ in MACHINE_SETTINGS_FIELDS}
     for key, label, kind in MACHINE_SETTINGS_FIELDS:
         text = str(values.get(key, "")).strip()
-        name = label.split(" (")[0].split(",")[0]
+        name = tr(label).split(" (")[0].split(",")[0]       # shown in the frontend's language
         try:
             if kind in ("int", "count"):
                 if not text.lstrip("+").isdigit():
@@ -1871,11 +1878,11 @@ def parseMachineSettingsInputs(values: dict):
                 if text.count(".") > 1 or not text.replace(".", "", 1).isdigit():
                     raise ValueError
                 if "." in text and len(text.split(".")[1]) > 2:
-                    errors.append(f"{name}: at most 2 decimals")
+                    errors.append(trf("{name}: at most 2 decimals", name=name))
                     continue
                 settings[key] = round(float(text), 2)
         except ValueError:
-            errors.append(f"{name}: '{text}' is not a valid {'whole number' if kind != 'torque' else 'number'}")
+            errors.append((trf("{name}: '{text}' is not a valid whole number", name=name, text=text) if kind != 'torque' else trf("{name}: '{text}' is not a valid number", name=name, text=text)))
     for problem in validateMachineSettings(settings):
         key = problem.split(":")[0]
         if key in settings:                       # unparsable entries are already reported
@@ -1913,11 +1920,12 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
 
         def infoText():
             changed = current.get("updated_on_date")
-            return (f"In force for {model} since {changed:%d-%m-%Y %H:%M} (set by {current.get('updated_by', '-')})"
-                    if changed else f"Default settings for {model}")
+            return (trf("In force for {model} since {since} (set by {user})", model=model, since=f"{changed:%d-%m-%Y %H:%M}",
+                        user=current.get('updated_by', '-'))
+                    if changed else trf("Default settings for {model}", model=model))
 
         sg.theme('DarkBlue15')
-        rows = [[sg.Text("Model", size=(44, 1), font=16),
+        rows = [[sg.Text(tr("Model"), size=(44, 1), font=16),
                  sg.Combo(models, default_value=model, readonly=True, size=(12, 1), font=16, enable_events=True,
                           k="model_name")]]
         for key, label, kind in MACHINE_SETTINGS_FIELDS:
@@ -1928,15 +1936,15 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                                  size=(8, 1), font=16, k=key)
             else:
                 field = sg.Input(shown(key, kind), size=(10, 1), font=16, k=key)
-            rows.append([sg.Text(label, size=(44, 1), font=16), field])
+            rows.append([sg.Text(tr(label), size=(44, 1), font=16), field])
         for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
-            rows.append([sg.Checkbox(label, default=bool(current.get(key, False)), font=16, k=key)])
-        layout = ([[sg.Text("Machine Settings", font=("Helvetica", 16, "bold"))],
+            rows.append([sg.Checkbox(tr(label), default=bool(current.get(key, False)), font=16, k=key)])
+        layout = ([[sg.Text(tr("Machine Settings"), font=("Helvetica", 16, "bold"))],
                    [sg.Text(infoText(), font=12, size=(70, 1), k="info")],
                    [sg.HorizontalSeparator()]] + rows +
-                  [[sg.Text("New settings apply from the next component of the chosen model.", font=12)],
-                   [sg.Button("Save"), sg.Button("Reset"), sg.Button("Cancel")]])
-        window = sg.Window("Machine Settings", layout, modal=modal, keep_on_top=True, finalize=True,
+                  [[sg.Text(tr("New settings apply from the next component of the chosen model."), font=12)],
+                   [sg.Button(tr("Save"), key="Save"), sg.Button(tr("Reset"), key="Reset"), sg.Button(tr("Cancel"), key="Cancel")]])
+        window = sg.Window(tr("Machine Settings"), layout, modal=modal, keep_on_top=True, finalize=True,
                            disable_minimize=True, grab_anywhere=False)
         while True:
             event, values = window.read()
@@ -1963,12 +1971,12 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                     continue                      # cancelled / wrong password: the dialog stays open, nothing saved
                 if insertNewMachineSettings(db_name, updated_by=currentUser, model_name=model, **settings):
                     saved = True
-                    showMessage(f"Machine settings for {model} saved.\nThey apply from the next {model} component.")
+                    showMessage(trf("Machine settings for {model} saved.\nThey apply from the next {model} component.", model=model))
                     break
                 showErrorMessage("Could not save the machine settings")
         window.close()
     except Exception as e:
-        showErrorMessage(f"Machine settings: {e}")
+        showErrorMessage(trf("Machine settings: {error}", error=e))
     finally:
         aWindowIsInProgress = False
     return saved

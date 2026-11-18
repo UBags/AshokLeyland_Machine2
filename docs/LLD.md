@@ -449,6 +449,15 @@ Every message also carries `timestamp` and `producer`.
 
 The sending and reading functions for each queue are in `utils/RedisUtils.py` and are named `send<What>From<A>To<B>` and `read<What>In<B>From<A>`.
 
+### 5.x Languages (CHANGES 156)
+
+- `frontend/FrontendI18n.py`: `tr(text)`, `trf(message, /, **values)`, `N_(text)` (marks a text for extraction), `bind(widget, text, setter="setText", fmt="{}")` (weak registry; set again on each change), `addListener` / `removeListener`, `setLanguage(code, save=True)`, `useSavedLanguage()` (at start), `readSavedLanguage` / `saveLanguage` (`Internal/frontend_language.txt`, written through a temporary file + `os.replace`), `reload`, `installIndicFonts(families)` (`QFont.insertSubstitutions` with `frontend.indic.fonts`). Catalogue: Babel `read_po` of the .po (non-fuzzy, translated entries), else `gettext.GNUTranslations` of the .mo; a missing text is shown in English; a translation whose placeholders do not match falls back to the English format.
+- `frontend/FrontendNotices.translateNotice(text)`: an exact match, else the patterns with a variable part (reasons translated recursively, tag names kept); unknown text stays English.
+- Main screen: `languageSelector` (QComboBox, item data = code) -> `languageChosen` -> `setLanguage`; listener `onLanguageChanged` rebuilds the run-time texts (mode, creator, QR code, date line, connection tiles, results, notices) and refits every font (`calculateAndSetIdealFontsForTitlesAndResults` fits every title and every result text and takes the smallest size; `fitInstructionFont` over all instructions).
+- Tiles (`CosThetaOutcomeContainer`): the title is bound; hint, result and the torque tiles' second line are shown through `tr`; `getResult()` returns the English status (`currentStatus`), so the record is unchanged; `retranslate()` redraws what is shown.
+- Dialogs (`SimplePopups`): `sg.Button(tr("X"), key="X")` - the event stays English; machine-settings labels `N_` and parsed back through `tr(label)`.
+- Catalogue upkeep: `python test/i18n/update_frontend_catalogues.py` (extract with Babel from `frontend/**.py` and the properties' `window.title` / `state.<N>.instruction`, update, compile); `--compile` after editing a .po.
+
 ## 10. Configuration keys (selection)
 
 Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.bung.folder`, `plc.pc.check.bung.tagname`, `<vendor>.vision.bung.*`, ...). A properties file with the old spelling still works: at every load `CosThetaConfigurator._addLegacyBungKeys` adds each old key under its new spelling (a warning is printed). The PLC tag names themselves (`PLC_PC_CheckBunkForCapPress`, `PC_PLC_NoBunkCheckOK`, ... - the values of the `*.tagname` keys and the keys of `IOServerProperties.yaml`) are the PLC program's names and keep their spelling (CHANGES §125).
@@ -522,6 +531,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
 | `DryRun_Tuning_Keys.py` | The tuning keys read through `getTuning` (CHANGES 154): in all three properties files, value = code default, typed like the default; a missing key gives the default |
+| `DryRun_Frontend_Languages.py` | The frontend's languages (CHANGES 156): catalogues complete with the same placeholders, .mo = .po; `tr` / `trf` / `bind` / the language file; notices; the real frontend in each language (tiles, results English inside, instruction, notice, menus, titles fit at 1920 x 1050); `--screenshots DIR` |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |
 
 `_plc_sim.py` simulates the PLC side of the handshake.

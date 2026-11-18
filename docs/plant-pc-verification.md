@@ -207,6 +207,20 @@ On the Machine 2 PC with the new exe:
    picture. Send the lines of a shift; a seated cap NOT OK by `holes not found` or by a distance above 5 is the thing to
    watch. To go back: `...hub.source=hubcheck`.
 
+## 11. Frontend languages (CHANGES 156)
+
+On the Machine 2 PC, with the new exe:
+1. The dist check of `runNuitka.bat` shows `OK: Internal\locale\ - frontend languages`.
+2. On the main screen choose ಕನ್ನಡ, தமிழ், हिन्दी in turn: tile titles, results, the instruction, the connection tiles,
+   the menus and a notice change language; Kannada, Tamil and Devanagari letters are joined correctly (Nirmala UI) and
+   no tile title is cut off. A dialog (e.g. Report) opens in the chosen language and its buttons work.
+3. Close and restart the application: it starts in the language chosen last (`D:\AshokLeyland\MainProgram.dist\
+   Internal\frontend_language.txt`). The login and mode screens stay English.
+4. Run one component in Kannada (or Tamil / Hindi): the database row has `OK` / `Not OK` as before and the log is English.
+5. A native speaker of each language reads the screen and the dialogs; wrong words go into the .po files
+   (`Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` in the repo, then `python test/i18n/update_frontend_catalogues.py
+   --compile`, then a new build).
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -222,3 +236,4 @@ On the Machine 2 PC with the new exe:
 | 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |
 | 9 Bung: rotation dry run and Bung_Check_UI on the laptop; failing bungs now OK; [Bung] lines; check time | | | | |
 | 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time; hub-centre distance lines (CHANGES 143) | | | | |
+| 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | | | | |

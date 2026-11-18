@@ -52,7 +52,7 @@ CosThetaConfigurator.getInstance()
 3) Check maikl for documeht 'Hikvision PZTZ settings'
 
 
-a) Go to Configurations -> Network -> Integration Protocol. Enable ONVIF. Then, create a newwidgets user with admin and abcd1234
+a) Go to Configurations -> Network -> Integration Protocol. Enable ONVIF. Then, create a new user with admin and abcd1234
 b) Go to that part which is creating a problem and overwrite the throws clause with 'returns xmlvalue'
 c) Clone the github in a directory and install on the machine using 'python setup.py install'. 
    This will ensure that the wsdls are installed in the correct directory and available to all the calls 

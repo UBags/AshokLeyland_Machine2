@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtGui import QFont, QFontMetrics, QColor
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSizePolicy, QWidget, QLabel
+from frontend.FrontendI18n import tr
 
 class ToggleMessageContainer(QWidget):
 
@@ -49,7 +50,7 @@ class ToggleMessageContainer(QWidget):
 
         self._font = labelFont
 
-        self._container_label = QLabel(self._notokText) # Container's title
+        self._container_label = QLabel(tr(self._notokText)) # Container's title
         self._container_label.setStyleSheet(self._notokStyleSheet.format(self._notokforegroundColor.name()))
         self._container_label.setContentsMargins(0, 0, 0, 0)
         self._container_label.setFont(self._font)
@@ -87,13 +88,17 @@ class ToggleMessageContainer(QWidget):
     def updateStatus(self, currentStatus : bool):
         self._status = currentStatus
         if self._status:
-            self._container_label.setText(self._okText)
+            self._container_label.setText(tr(self._okText))      # English kept; shown in the chosen language
             self._container_label.setStyleSheet(self._okStyleSheet.format(self._okforegroundColor.name()))
         else:
-            self._container_label.setText(self._notokText)
+            self._container_label.setText(tr(self._notokText))
             self._container_label.setStyleSheet(self._notokStyleSheet.format(self._notokforegroundColor.name()))
         # KEMSFrontEnd.logger.debug(f"About to update self widget in ToggleMessageContainer.updateStatus() in {super().objectName()}")
         self.update()
+
+    def retranslate(self) -> None:
+        """The status text again in the language now chosen (CHANGES 156)."""
+        self.updateStatus(getattr(self, "_status", False))
 
     def setFont(self, newFont : QFont):
         self._font = newFont

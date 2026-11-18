@@ -176,6 +176,8 @@ No values or words are written on the pictures sent to the frontend (outlines on
 - **Vision parameters** are the `<vendor>.vision.*` keys, read through `camera/VisionConfig.py` into each check module's constants (the module's defaults are the Machine 1 values). In the exe a changed vision value takes effect after a restart (live reload of vision values needs the .py sources). The knuckle frame's and locator's reference values are `<vendor>.vision.frame.*` / `.vision.knuckle.locator.*` keys (§5a).
 - **Tuning values** (retry counts and gaps, timeouts, poll intervals, ports, font sizes, debug switches) that were named constants in the code are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when their module is imported (block "TUNING VALUES", CHANGES 154); a missing key gives the code's default, which equals the value in the file. The vision checks' debug switches and pipeline switches (top bearing, nut, bung, cap polar size, knuckle grid, hub hole spacing ranges) are `<vendor>.vision.*` keys like the other vision values.
 
+- **Frontend languages** (CHANGES 156): the main screen and its dialogs in English, Kannada, Tamil or Hindi, chosen in a dropdown on the main screen and kept in `Internal/frontend_language.txt` (per PC, not in git). Texts: gettext catalogues `Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` (+ compiled `.mo`), read with Babel; English is the message id. Everything else stays English: the log, the database, result values, the other servers, the screens before the main screen. `frontend.indic.fonts` lists the Indic font fallbacks (Nirmala UI first).
+
 ## 8. Data
 
 - **PostgreSQL**, schema `al_hub_and_disc_assembly_schema`, with tables:

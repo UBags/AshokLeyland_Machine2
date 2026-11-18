@@ -247,6 +247,10 @@ class MachineStateMachine:
         """Return the instruction for the current state."""
         return self._instructions.get(self.currentState, "No available Instruction")
 
+    def getAllInstructions(self) -> list:
+        """Every state's instruction text (English, from the properties file)."""
+        return list(self._instructions.values())
+
     def getLongestInstruction(self) -> str:
         longestInstruction : str = ""
         for key in self._instructions:

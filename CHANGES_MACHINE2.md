@@ -4779,3 +4779,63 @@ User's decisions on the six findings:
   DB no record loss (a - e); work-thread health 17/17 (one earlier run 16/17, C2 - the timing flake noted in CHANGES 111;
   the code before this change gave 17/17 and so did the rerun); `ClearQueues`: 25 queues, `fe2db.q` emptied, counts
   reported; ShowScreen ports and page as above.
+
+## 156. Frontend in English, Kannada, Tamil and Hindi (2026-11-19)
+
+User's request: the database and the logs stay English; only the frontend changes, and only the main screen and its
+dialogs (the screens before it - splash, mode choice, login - stay English). A dropdown on the main screen offers
+English, Kannada, Tamil and Hindi; the choice is kept in a file in `Internal/`; an industrial-strength i18n package;
+messages in the database or in a file in `Internal/`. Choices (asked): gettext catalogues through Babel; main screen +
+its dialogs; part names translated / transliterated (नकल हब बेयरिंग वॉशर नट स्प्लिट पिन, ...).
+
+- **Catalogues:** `Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` (GNU gettext, read with Babel 2.18.0) and the
+  compiled `frontend.mo` beside each (read with the standard `gettext` module if Babel cannot read the .po);
+  `Internal/locale/frontend.pot` is the template. The English text is the message id, so English needs no catalogue and
+  a text without a translation is shown in English. `Internal/`, not `internal/`: the folder exists (`cd.bin`) and a
+  second one differing only in case would clash on Windows. **244 texts**, all translated in the three languages.
+  **The translations are drafts (written by Claude) and need a native speaker's review** - mainly the operator
+  instructions and the tile titles; correcting a .po needs no code change (`--compile` after editing).
+- **`test/i18n/update_frontend_catalogues.py`:** extracts every text the frontend shows (`tr`, `trf`, `N_`, `bind`, the
+  first argument of the popup helpers, plus `window.title` and every `state.<N>.instruction` of the properties file),
+  writes the template, updates the three .po files (new texts added empty, unused ones dropped, translations kept) and
+  compiles them; reports the texts without a translation. Run it after changing a text in the frontend.
+- **`frontend/FrontendI18n.py` (new):** `tr` / `trf` (named placeholders; positional-only message, so `{text}` works;
+  the English format if a translation's placeholders do not match) / `N_` (marks a text for extraction) / `bind(widget,
+  text, setter, fmt)` (sets the text now and again on every change of language; weak references) / listeners /
+  `setLanguage` / `useSavedLanguage`. The choice is written to **`Internal/frontend_language.txt`** (temporary file +
+  `os.replace`; git-ignored, so each PC keeps its own) and read when the frontend starts.
+  `installIndicFonts`: the tiles use Latin fonts (Courier, Segoe UI); without a substitution Qt fell back to a font that
+  cannot shape Indic scripts (Tamil vowel signs drawn in the wrong place - seen in the sandbox screenshots). Each of the
+  frontend's families now has the fallbacks of the new key **`frontend.indic.fonts`** (Nirmala UI - Windows 8 and later
+  cover all three scripts -, Noto Sans Kannada / Tamil / Devanagari, Tunga, Latha, Mangal).
+- **`frontend/FrontendNotices.py` (new):** notices written by the other servers (`frontend:notice:*`, English, also
+  logged) are translated in the frontend: whole notices, and patterns with a variable part (Picture NOT OK: <reason>,
+  Cycle aborted: <reason>, Bypass not possible (<tag> ...), no answer in <n> s, PLC restarted (<why>) ...), reasons
+  nested; a tag name stays as it is; an unknown notice or reason stays English.
+- **Main screen:** the language dropdown (names in their own script) beside the notice; on a change every bound text
+  (tile titles, hints, results, connection status, group titles, menus, window title, instruction) is shown again, the
+  texts built at run time (mode, creator, QR code, date / counts line, notices, torque tiles' second line) are rebuilt,
+  and every font is fitted again. `calculateAndSetIdealFontsForTitlesAndResults` now fits **every** title and every
+  result text (Result Awaited, OK, Not OK, Bypassed) and takes the smallest size: it used the text with the most
+  characters, which in Kannada is not the widest (two titles overflowed). The About text described an earlier product
+  (capsules and bottles) - corrected.
+- **What stays English inside:** result values (`getResult` returns `OK` / `Not OK` / ... as before - the record sent to
+  `fe2db.q` and the database are unchanged), FreeSimpleGUI button keys (the event names; only the label is translated),
+  the log, the MainProgram process (login, mode choice), and every server other than the frontend.
+- **Dialogs (`frontend/SimplePopups.py`):** user administration, passwords, roles, reports, machine settings (labels
+  marked `N_`, the entry checks' messages with named placeholders), confirmations. Typos fixed on the way ("Create
+  New Account", "The 2 new passwords do not match"); a comment typo "newwidgets user" -> "new user" in three camera files.
+- **Packaging:** `requirements.txt` + `babel==2.18.0`; `runNuitka.bat` includes `Internal/locale`, the `babel` package
+  and its data, and the dist check reports `Internal\locale\` (MISSING otherwise).
+- **New dry run `DryRun_Frontend_Languages.py`** (both folders, 63 checks): catalogues complete with the same
+  placeholders, .mo = .po; `tr` / `trf` / `bind` / listeners / the file / reload; notices; the real frontend (PySide6)
+  in each language - dropdown, tiles, results English inside, instruction, notice, mode title, menu, window title,
+  connection status, every title within its tile at 1920 x 1050 -, back to English, a Hindi start;
+  `--screenshots DIR` saves the main screen in each language. (The window is set to 1920 x 1050 in the test: the
+  offscreen platform clamps to 800 x 800 and Xvfb has no window manager to maximise - both clip English as well.)
+- **Run:** `DryRun_Frontend_Languages` 63/63 (machine2, Xvfb and offscreen) and 63/63 (machine1); FE cycles 167/167 (the
+  same 167 check names as HEAD before this change; it found the `{text}` placeholder clash in `trf`, fixed);
+  `DryRun_Tuning_Keys` 205/205; verifier ALL EQUIVALENT on both machines; IOServer fault scenarios (StateMachine gained
+  `getAllInstructions`) 211/211 Siemens, 218/218 Allen-Bradley. Screenshots in the four languages looked at (Kannada, Tamil, Hindi
+  shaped correctly after the font fallbacks; nothing clipped). Not run: the exe (Nuitka) on Windows, and the fonts on the
+  plant PC - Nirmala UI is expected there.

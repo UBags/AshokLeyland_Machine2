@@ -117,6 +117,9 @@ python -m nuitka --standalone ^
     --enable-plugin=pyside6 ^
     --include-data-dir=wavs=wavs ^
     --include-data-dir=internalimages=internalimages ^
+    --include-data-dir=Internal/locale=Internal/locale ^
+    --include-package=babel ^
+    --include-package-data=babel ^
     --include-data-files=costhetaio/siemens/IOServerProperties.yaml=costhetaio/siemens/IOServerProperties.yaml ^
     --include-package=costhetaio ^
     --include-package=pyS7 ^
@@ -193,6 +196,7 @@ for %%K in ("plc.vendor=%VENDOR%" "picture.retention.days.trial=" "picture.reten
 if exist "MainProgram.dist\costhetaio\siemens\IOServerProperties.yaml" (echo   OK: costhetaio\siemens\IOServerProperties.yaml) else (echo   MISSING: costhetaio\siemens\IOServerProperties.yaml& set "PROBLEMS=1")
 if exist "MainProgram.dist\wavs\" (echo   OK: wavs\) else (echo   MISSING: wavs\& set "PROBLEMS=1")
 if exist "MainProgram.dist\internalimages\" (echo   OK: internalimages\) else (echo   MISSING: internalimages\& set "PROBLEMS=1")
+if exist "MainProgram.dist\Internal\locale\hi\LC_MESSAGES\frontend.po" (echo   OK: Internal\locale\ - frontend languages) else (echo   MISSING: Internal\locale\ - frontend languages& set "PROBLEMS=1")
 
 :summary
 echo.

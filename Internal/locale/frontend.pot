@@ -1,0 +1,1164 @@
+# Frontend texts of the Ashok Leyland hub and disc assembly machine (CHANGES 156)
+msgid ""
+msgstr ""
+"Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-11-19 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: frontend/AshokLeylandFrontEnd.py:378 frontend/AshokLeylandFrontEnd.py:880
+#, python-brace-format
+msgid "IN {mode} MODE"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:386
+msgid "Mode"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:392 frontend/AshokLeylandFrontEnd.py:881
+#, python-brace-format
+msgid "{mode} - Knuckle, Hub, and Disc Assembly"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:453
+msgid "Camera connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:454
+msgid "Camera not connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:460
+msgid "I/O Module connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:461
+msgid "I/O Module not connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:468
+msgid "Database connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:469
+msgid "Database not connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:476
+msgid "QRCode Scanner connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:477
+msgid "QRCode Scanner not connected"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:485
+msgid "CONNECTION STATUS OF DEVICES"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:529 frontend/AshokLeylandFrontEnd.py:883
+msgid "Created by CosTheta Technologies and Ashok Leyland"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:575
+msgid "DATE / RUNNING DURATION PANEL"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:681
+msgid "Change Own Password"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:685 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Exit"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:689
+msgid "Add New User"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:693
+msgid "Manage Other Users Passwords"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:697
+msgid "Change User Role"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:701
+msgid "Activate an Inactive User"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:705 frontend/SimplePopups.py:1145
+msgid "Inactivate User"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:709
+msgid "Create Production Report By Model Name"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:713
+msgid "Create Production Report By Model Name For a Period"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:717
+msgid "Create Production Report By Model Name For Today"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:721
+msgid "Create Production Report for a Period for all Models"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:725
+msgid "Create Full Production Report for Today for all Models"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:729
+msgid "About"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:733
+msgid "Help"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:738
+msgid "(Z)Manual Abort"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:748
+msgid "Actions"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:755
+msgid "Administration"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:761
+msgid "Activate / Inactivate"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:766
+msgid "Report"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:776 frontend/AshokLeylandFrontEnd.py:850
+msgid "Information"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:782 frontend/AshokLeylandFrontEnd.py:785 frontend/SimplePopups.py:1942
+#: frontend/SimplePopups.py:1947
+msgid "Machine Settings"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Close Application"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Are you sure you want to exit the application ?"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:851
+msgid ""
+"Software Version: v 1.0\n"
+"\n"
+"This application is built by CosTheta Technologies Pvt Ltd. All copyright belongs to CosTheta Technologies Pvt Ltd.\n"
+"\n"
+"This application inspects and records the assembly of the front axle knuckle, hub and disc: every vision check, "
+"torque and press of each component, with its QR code.\n"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:861
+msgid "Help about using the menu"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:862
+msgid ""
+"When any of the menu choices are being used, \n"
+"the remaining menu items will be clickable.\n"
+"\n"
+"However, clicking on any other menu item will not be acted upon \n"
+"by the system till the currently-in-use menu action is completed \n"
+"or cancelled.\n"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:1159
+#, python-brace-format
+msgid ""
+"Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
+"month - {month}\n"
+"User: {user}; Current component processing time: {processing}    ; Components produced today - {todayCount}"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:1263
+msgid ""
+"Frontend abort (this screen only).\n"
+"Enter the password:"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:1268 frontend/FrontendNotices.py:56
+msgid "Wrong password - nothing aborted"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:1298 frontend/AshokLeylandFrontEnd.py:1302
+msgid "QR CODE : "
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:1582 frontend/AshokLeylandFrontEnd.py:1606 frontend/FrontendI18n.py:234
+msgid "Done"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:2331
+msgid "Large Image Display"
+msgstr ""
+
+#: frontend/FrontendI18n.py:234 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
+msgid "OK"
+msgstr ""
+
+#: frontend/FrontendI18n.py:234
+msgid "Not OK"
+msgstr ""
+
+#: frontend/FrontendI18n.py:234
+msgid "Bypassed"
+msgstr ""
+
+#: frontend/FrontendI18n.py:234 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+msgid "Result Awaited"
+msgstr ""
+
+#: frontend/FrontendI18n.py:234
+msgid "TEST"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235
+msgid "PRODUCTION"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235
+msgid "Operator"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235
+msgid "Supervisor"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235
+msgid "Administrator"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "Yes"
+msgstr ""
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "No"
+msgstr ""
+
+#: frontend/FrontendNotices.py:22
+#, python-brace-format
+msgid "Picture NOT OK: {reason}"
+msgstr ""
+
+#: frontend/FrontendNotices.py:23
+#, python-brace-format
+msgid "Cycle aborted: {reason}"
+msgstr ""
+
+#: frontend/FrontendNotices.py:25
+#, python-brace-format
+msgid "Bypass not possible ({tag} not on the PLC): full run"
+msgstr ""
+
+#: frontend/FrontendNotices.py:27
+#, python-brace-format
+msgid "no answer from the camera server in {secs} s"
+msgstr ""
+
+#: frontend/FrontendNotices.py:28
+#, python-brace-format
+msgid "check timed out after {secs} s"
+msgstr ""
+
+#: frontend/FrontendNotices.py:30
+#, python-brace-format
+msgid ""
+"check timed out after {secs} s ({count} in a row: vision checks too slow on this PC - check the GPU, then restart the"
+" application)"
+msgstr ""
+
+#: frontend/FrontendNotices.py:33
+#, python-brace-format
+msgid "camera stream stalled: no new frame in {secs} s ({pictures} picture)"
+msgstr ""
+
+#: frontend/FrontendNotices.py:34
+#, python-brace-format
+msgid "abort from the frontend ({reason})"
+msgstr ""
+
+#: frontend/FrontendNotices.py:36
+#, python-brace-format
+msgid "PLC restarted while the connection was lost ({why})"
+msgstr ""
+
+#: frontend/FrontendNotices.py:37
+#, python-brace-format
+msgid "check failed ({error})"
+msgstr ""
+
+#: frontend/FrontendNotices.py:39
+#, python-brace-format
+msgid "bearing-ring guard: no answer in {secs} s after the check"
+msgstr ""
+
+#: frontend/FrontendNotices.py:41
+#, python-brace-format
+msgid "bearing-ring guard: ring finder failed ({error})"
+msgstr ""
+
+#: frontend/FrontendNotices.py:46
+msgid "camera server down"
+msgstr ""
+
+#: frontend/FrontendNotices.py:46
+msgid "camera not connected"
+msgstr ""
+
+#: frontend/FrontendNotices.py:46
+msgid "no picture from the camera"
+msgstr ""
+
+#: frontend/FrontendNotices.py:47
+msgid "vision check worker starting"
+msgstr ""
+
+#: frontend/FrontendNotices.py:47
+msgid "vision dependencies missing"
+msgstr ""
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped; restarting"
+msgstr ""
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped during the check; restarting"
+msgstr ""
+
+#: frontend/FrontendNotices.py:49
+msgid "heartbeat server down"
+msgstr ""
+
+#: frontend/FrontendNotices.py:49
+msgid "frontend down"
+msgstr ""
+
+#: frontend/FrontendNotices.py:49
+msgid "manual abort (Ctrl+Alt+Z) in the frontend"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "no reason given"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "first"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "second"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "third"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "first, second"
+msgstr ""
+
+#: frontend/FrontendNotices.py:50
+msgid "second, third"
+msgstr ""
+
+#: frontend/FrontendNotices.py:51
+msgid "first, second, third"
+msgstr ""
+
+#: frontend/FrontendNotices.py:53
+msgid "Machine settings not updated: previous settings used"
+msgstr ""
+
+#: frontend/FrontendNotices.py:54
+msgid "Heartbeat server down: cycle aborted; next cycle on hold"
+msgstr ""
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: continue till end of cycle"
+msgstr ""
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: next cycle on hold"
+msgstr ""
+
+#: frontend/FrontendNotices.py:56
+msgid "QR Code not valid"
+msgstr ""
+
+#: frontend/FrontendNotices.py:56
+msgid "Redis is not storing data: restart the PC"
+msgstr ""
+
+#: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
+#: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
+#: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1946
+msgid "Cancel"
+msgstr ""
+
+#: frontend/SimplePopups.py:209 frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007
+#: frontend/SimplePopups.py:1023 frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206
+#: frontend/SimplePopups.py:1333 frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Submit"
+msgstr ""
+
+#: frontend/SimplePopups.py:222
+msgid "Cancelling this operation"
+msgstr ""
+
+#: frontend/SimplePopups.py:232
+msgid "No value provided. Please re-enter and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:235
+#, python-brace-format
+msgid "{what} provided is {value}. Are you sure to proceed ahead ?"
+msgstr ""
+
+#: frontend/SimplePopups.py:242
+msgid "Please re-enter and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:590
+msgid "Create Username"
+msgstr ""
+
+#: frontend/SimplePopups.py:591
+msgid "First Name"
+msgstr ""
+
+#: frontend/SimplePopups.py:592
+msgid "Middle Name"
+msgstr ""
+
+#: frontend/SimplePopups.py:593
+msgid "Last Name"
+msgstr ""
+
+#: frontend/SimplePopups.py:594
+msgid "Create Password"
+msgstr ""
+
+#: frontend/SimplePopups.py:595
+msgid "Re-enter Password"
+msgstr ""
+
+#: frontend/SimplePopups.py:597
+msgid "E-mail"
+msgstr ""
+
+#: frontend/SimplePopups.py:598
+msgid "Mobile"
+msgstr ""
+
+#: frontend/SimplePopups.py:599 frontend/SimplePopups.py:602
+msgid "Role"
+msgstr ""
+
+#: frontend/SimplePopups.py:607
+msgid "Create New Account"
+msgstr ""
+
+#: frontend/SimplePopups.py:627
+msgid "Cancelling user addition."
+msgstr ""
+
+#: frontend/SimplePopups.py:643
+#, python-brace-format
+msgid "Username {username} already exists. Please change and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:668
+msgid "Username has to be at least 5 characters. Please re-enter and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:682
+msgid "The 2 password entries do not match. Please re-enter and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:696
+msgid "The password must have at least 6 characters."
+msgstr ""
+
+#: frontend/SimplePopups.py:710
+msgid "At least 1 of first, middle, or last name is needed."
+msgstr ""
+
+#: frontend/SimplePopups.py:713
+#, python-brace-format
+msgid ""
+"Username : {username}\n"
+"First Name : {firstname}\n"
+"Middle Name : {middlename}\n"
+"Last Name: {lastname}\n"
+"email : {email}\n"
+"Mobile : {mobile}\n"
+"Role : {role}"
+msgstr ""
+
+#: frontend/SimplePopups.py:731 frontend/SimplePopups.py:755
+msgid "Account could not be created. Likely reason is a database access problem."
+msgstr ""
+
+#: frontend/SimplePopups.py:736
+msgid "Account could not be created. User id already exists"
+msgstr ""
+
+#: frontend/SimplePopups.py:770
+msgid "Please re-enter / re-check and submit."
+msgstr ""
+
+#: frontend/SimplePopups.py:896
+msgid "Current Password"
+msgstr ""
+
+#: frontend/SimplePopups.py:898 frontend/SimplePopups.py:1003 frontend/SimplePopups.py:1019
+msgid "Enter New Password"
+msgstr ""
+
+#: frontend/SimplePopups.py:900 frontend/SimplePopups.py:1005 frontend/SimplePopups.py:1021
+msgid "Re-enter New Password"
+msgstr ""
+
+#: frontend/SimplePopups.py:905
+#, python-brace-format
+msgid "Change Password for user : {user}"
+msgstr ""
+
+#: frontend/SimplePopups.py:928 frontend/SimplePopups.py:1085
+#, python-brace-format
+msgid "Changing password for {user}"
+msgstr ""
+
+#: frontend/SimplePopups.py:938 frontend/SimplePopups.py:1080
+msgid "Minimum length of password should be 6 characters. Enter data again."
+msgstr ""
+
+#: frontend/SimplePopups.py:944
+msgid "Current password does not match. Enter data again."
+msgstr ""
+
+#: frontend/SimplePopups.py:950 frontend/SimplePopups.py:1074
+msgid "The 2 new passwords do not match. Enter data again."
+msgstr ""
+
+#: frontend/SimplePopups.py:956
+msgid "The new password should not be same as previous password. Enter data again."
+msgstr ""
+
+#: frontend/SimplePopups.py:991
+msgid "No users available in database for changing password"
+msgstr ""
+
+#: frontend/SimplePopups.py:1000 frontend/SimplePopups.py:1015
+msgid "Username"
+msgstr ""
+
+#: frontend/SimplePopups.py:1011
+msgid "No operators available in database for changing password"
+msgstr ""
+
+#: frontend/SimplePopups.py:1026 frontend/SimplePopups.py:1141 frontend/SimplePopups.py:1350
+#, python-brace-format
+msgid "Unknown Role : {role}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1038
+msgid "Change Password for users : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1115 frontend/SimplePopups.py:1130
+msgid "No users registered in database"
+msgstr ""
+
+#: frontend/SimplePopups.py:1123 frontend/SimplePopups.py:1134 frontend/SimplePopups.py:1203 frontend/SimplePopups.py:1328
+#: frontend/SimplePopups.py:1341
+msgid "Username : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1161
+#, python-brace-format
+msgid "Inactivate user {username}. Are you sure ?"
+msgstr ""
+
+#: frontend/SimplePopups.py:1168
+#, python-brace-format
+msgid "Inactivating user {username}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1173
+#, python-brace-format
+msgid "Leaving {username} activated"
+msgstr ""
+
+#: frontend/SimplePopups.py:1196
+msgid "Currently there are no inactive users"
+msgstr ""
+
+#: frontend/SimplePopups.py:1208
+msgid "Activate User"
+msgstr ""
+
+#: frontend/SimplePopups.py:1224
+#, python-brace-format
+msgid "Activate user {username}. Are you sure ?"
+msgstr ""
+
+#: frontend/SimplePopups.py:1231
+#, python-brace-format
+msgid "Activating user {username}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1238
+#, python-brace-format
+msgid "Leaving {username} inactivated"
+msgstr ""
+
+#: frontend/SimplePopups.py:1319
+msgid "No users available in database for changing role"
+msgstr ""
+
+#: frontend/SimplePopups.py:1331 frontend/SimplePopups.py:1345
+msgid "Change Role to :"
+msgstr ""
+
+#: frontend/SimplePopups.py:1337
+msgid "No operators available in database for changing role"
+msgstr ""
+
+#: frontend/SimplePopups.py:1354
+msgid "Change Role"
+msgstr ""
+
+#: frontend/SimplePopups.py:1373
+#, python-brace-format
+msgid "Change role of user {username} to {role}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1378
+#, python-brace-format
+msgid "Changing role for {username}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1387
+#, python-brace-format
+msgid "Role not changed for {username}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1412
+msgid "Production Report Needed From Date : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1413 frontend/SimplePopups.py:1416 frontend/SimplePopups.py:1495 frontend/SimplePopups.py:1498
+msgid "Select Date"
+msgstr ""
+
+#: frontend/SimplePopups.py:1415
+msgid "Production Report Needed To Date : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500 frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650
+#: frontend/SimplePopups.py:1713
+msgid "Clear"
+msgstr ""
+
+#: frontend/SimplePopups.py:1421
+msgid " Generate production report for a period"
+msgstr ""
+
+#: frontend/SimplePopups.py:1433 frontend/SimplePopups.py:1518 frontend/SimplePopups.py:1601 frontend/SimplePopups.py:1669
+#: frontend/SimplePopups.py:1727
+msgid ""
+"Cancelling.\n"
+"No report generated."
+msgstr ""
+
+#: frontend/SimplePopups.py:1447 frontend/SimplePopups.py:1533
+msgid "'To Date' cannot be less than 'From Date'"
+msgstr ""
+
+#: frontend/SimplePopups.py:1451
+#, python-brace-format
+msgid ""
+"Generate summary report for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1460 frontend/SimplePopups.py:1547 frontend/SimplePopups.py:1615 frontend/SimplePopups.py:1683
+#: frontend/SimplePopups.py:1740
+#, python-brace-format
+msgid "Report saved to {file}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1465 frontend/SimplePopups.py:1467 frontend/SimplePopups.py:1552 frontend/SimplePopups.py:1554
+#: frontend/SimplePopups.py:1620 frontend/SimplePopups.py:1622 frontend/SimplePopups.py:1688 frontend/SimplePopups.py:1690
+#: frontend/SimplePopups.py:1745 frontend/SimplePopups.py:1747
+msgid "Report generation failed.\n"
+msgstr ""
+
+#: frontend/SimplePopups.py:1470 frontend/SimplePopups.py:1557 frontend/SimplePopups.py:1626 frontend/SimplePopups.py:1693
+#: frontend/SimplePopups.py:1750
+msgid ""
+"Cancelling.\n"
+"Please choose dates again."
+msgstr ""
+
+#: frontend/SimplePopups.py:1490 frontend/SimplePopups.py:1577
+msgid "Choose Model for which you want to generate report : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1494
+msgid "From Date : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1497
+msgid "To Date : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1503
+msgid " Generate production report for a model for a period"
+msgstr ""
+
+#: frontend/SimplePopups.py:1537
+#, python-brace-format
+msgid ""
+"Generate report for model {model} for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1584
+msgid " Generate production report for a model"
+msgstr ""
+
+#: frontend/SimplePopups.py:1607
+#, python-brace-format
+msgid "Generate report for model {model}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1646
+msgid "Choose Model for which you want to generate today's report : "
+msgstr ""
+
+#: frontend/SimplePopups.py:1653
+msgid " Generate today's production report for a model"
+msgstr ""
+
+#: frontend/SimplePopups.py:1675
+#, python-brace-format
+msgid "Generate today's report for model {model}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1712
+msgid "Generate today's full production report "
+msgstr ""
+
+#: frontend/SimplePopups.py:1716
+msgid " Generate today's production report for ALL models"
+msgstr ""
+
+#: frontend/SimplePopups.py:1784
+msgid "Rotation RPM (20 - 40)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1785
+msgid "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1786
+msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1787
+msgid "No. of Rotations 1 CCW (1 - 4)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1788
+msgid "No. of Rotations 1 CW (1 - 4)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1794
+msgid "Bypass Component Press and Second Tightening"
+msgstr ""
+
+#: frontend/SimplePopups.py:1825
+msgid "Enter the password to open the machine settings"
+msgstr ""
+
+#: frontend/SimplePopups.py:1829
+msgid "Wrong password: machine settings not opened"
+msgstr ""
+
+#: frontend/SimplePopups.py:1838
+msgid "(no change)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1839
+#, python-brace-format
+msgid ""
+"Change the machine settings for {model}:\n"
+"\n"
+"{changes}\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the machine settings password:"
+msgstr ""
+
+#: frontend/SimplePopups.py:1844
+msgid "Wrong password: machine settings not changed"
+msgstr ""
+
+#: frontend/SimplePopups.py:1850
+#, python-brace-format
+msgid ""
+"'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the bypass password:"
+msgstr ""
+
+#: frontend/SimplePopups.py:1855
+msgid "Wrong bypass password: machine settings not changed"
+msgstr ""
+
+#: frontend/SimplePopups.py:1881
+#, python-brace-format
+msgid "{name}: at most 2 decimals"
+msgstr ""
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid whole number"
+msgstr ""
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid number"
+msgstr ""
+
+#: frontend/SimplePopups.py:1902
+msgid "Only an Administrator or a Supervisor can change the machine settings"
+msgstr ""
+
+#: frontend/SimplePopups.py:1912
+msgid "No models found in qrcode.partmapping.N of the properties file"
+msgstr ""
+
+#: frontend/SimplePopups.py:1923
+#, python-brace-format
+msgid "In force for {model} since {since} (set by {user})"
+msgstr ""
+
+#: frontend/SimplePopups.py:1925
+#, python-brace-format
+msgid "Default settings for {model}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1928
+msgid "Model"
+msgstr ""
+
+#: frontend/SimplePopups.py:1945
+msgid "New settings apply from the next component of the chosen model."
+msgstr ""
+
+#: frontend/SimplePopups.py:1946
+msgid "Save"
+msgstr ""
+
+#: frontend/SimplePopups.py:1946
+msgid "Reset"
+msgstr ""
+
+#: frontend/SimplePopups.py:1974
+#, python-brace-format
+msgid ""
+"Machine settings for {model} saved.\n"
+"They apply from the next {model} component."
+msgstr ""
+
+#: frontend/SimplePopups.py:1976
+msgid "Could not save the machine settings"
+msgstr ""
+
+#: frontend/SimplePopups.py:1979
+#, python-brace-format
+msgid "Machine settings: {error}"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid "Knuckle Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid ""
+"Knuckle\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:43
+msgid "Hub Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid "Top Bearing Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid ""
+"Second\n"
+"Bearing\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid "Nut & Washer Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid ""
+"Nut &\n"
+"Plate Washer\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid "Tightening Torque 1"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid ""
+"Tightening\n"
+"Torque 1"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid "Bung - Comp Press"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid ""
+"Place\n"
+"Bung for\n"
+" Component Press"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid "Component Press"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid ""
+"Component\n"
+"Press"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid "Remove bung"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid ""
+"Remove\n"
+"Bung"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid "Tightening Torque 2"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid ""
+"Tightening\n"
+"Torque 2"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid "Split Pin & Washer"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid ""
+"Split Pin\n"
+"And\n"
+"Washer\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid "Cap Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid ""
+"Cap\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid "Bung Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid ""
+"Bung\n"
+"Check"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid "Cap Press Result"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid ""
+"Cap\n"
+"Press\n"
+"Result"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid "Free Rotation Torque"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid ""
+"Free\n"
+"Rotation\n"
+"Torque"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Done"
+msgstr ""
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Not Done"
+msgstr ""
+
+#. window.title
+#: ApplicationConfiguration.properties
+msgid "Ashok Leyland - Vision System for Acceptance / Rejection of Front Axle Knuckle-Hub-Disc Assembly"
+msgstr ""
+
+#. state.1.instruction
+#. state.2.instruction
+#: ApplicationConfiguration.properties
+msgid "Place KNUCKLE on Fixture. Scan QR CODE on the Knuckle"
+msgstr ""
+
+#. state.3.instruction
+#. state.4.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS to take picture of KNUCKLE and evaluate"
+msgstr ""
+
+#. state.5.instruction
+#. state.6.instruction
+#: ApplicationConfiguration.properties
+msgid "Put assembled HUB, with bottom BEARING on KNUCKLE. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.7.instruction
+#. state.8.instruction
+#: ApplicationConfiguration.properties
+msgid "Place top BEARING on the HUB. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.9.instruction
+#. state.10.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Place PLATE-WASHER and screw the NUT FOR 5-6 TURNS. Mark the top of bolts with BLUE. PRESS both buttons to take "
+"picture and evaluate"
+msgstr ""
+
+#. state.11.instruction
+#. state.12.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 1st round of NUT TIGHTENING"
+msgstr ""
+
+#. state.13.instruction
+#. state.14.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.15.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting COMPONENT PRESS completion"
+msgstr ""
+
+#. state.16.instruction
+#. state.17.instruction
+#: ApplicationConfiguration.properties
+msgid "Remove BUNG from COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.18.instruction
+#. state.19.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 2nd round of NUT TIGHTENING"
+msgstr ""
+
+#. state.20.instruction
+#. state.21.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Assemble WASHER and SPLIT PIN. Mark Washer in YELLOW and Split Pin in BLUE. PRESS BOTH BUTTONS to take picture and "
+"evaluate"
+msgstr ""
+
+#. state.22.instruction
+#. state.23.instruction
+#: ApplicationConfiguration.properties
+msgid "Place CAP on SPLIT PIN. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.24.instruction
+#. state.25.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on CAP. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr ""
+
+#. state.26.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting CAP PRESS completion"
+msgstr ""
+
+#. state.27.instruction
+#. state.28.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting READING TORQUE after FREE ROTATION"
+msgstr ""
+

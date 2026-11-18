@@ -1,0 +1,1251 @@
+# Frontend texts of the Ashok Leyland hub and disc assembly machine (CHANGES 156)
+msgid ""
+msgstr ""
+"Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-11-19 00:00+0000\n"
+"PO-Revision-Date: 2026-11-19 00:00+0000\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: kn\n"
+"Language-Team: kn <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: frontend/AshokLeylandFrontEnd.py:378 frontend/AshokLeylandFrontEnd.py:880
+#, python-brace-format
+msgid "IN {mode} MODE"
+msgstr "{mode} ಮೋಡ್‌ನಲ್ಲಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:386
+msgid "Mode"
+msgstr "ಮೋಡ್"
+
+#: frontend/AshokLeylandFrontEnd.py:392 frontend/AshokLeylandFrontEnd.py:881
+#, python-brace-format
+msgid "{mode} - Knuckle, Hub, and Disc Assembly"
+msgstr "{mode} - ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:453
+msgid "Camera connected"
+msgstr "ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:454
+msgid "Camera not connected"
+msgstr "ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:460
+msgid "I/O Module connected"
+msgstr "I/O ಮಾಡ್ಯೂಲ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:461
+msgid "I/O Module not connected"
+msgstr "I/O ಮಾಡ್ಯೂಲ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:468
+msgid "Database connected"
+msgstr "ಡೇಟಾಬೇಸ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:469
+msgid "Database not connected"
+msgstr "ಡೇಟಾಬೇಸ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:476
+msgid "QRCode Scanner connected"
+msgstr "QR ಕೋಡ್ ಸ್ಕ್ಯಾನರ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:477
+msgid "QRCode Scanner not connected"
+msgstr "QR ಕೋಡ್ ಸ್ಕ್ಯಾನರ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:485
+msgid "CONNECTION STATUS OF DEVICES"
+msgstr "ಸಾಧನಗಳ ಸಂಪರ್ಕ ಸ್ಥಿತಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:529 frontend/AshokLeylandFrontEnd.py:883
+msgid "Created by CosTheta Technologies and Ashok Leyland"
+msgstr "ಕಾಸ್‌ಥೀಟಾ ಟೆಕ್ನಾಲಜೀಸ್ ಮತ್ತು ಅಶೋಕ್ ಲೇಲ್ಯಾಂಡ್ ರಚಿಸಿದ್ದು"
+
+#: frontend/AshokLeylandFrontEnd.py:575
+msgid "DATE / RUNNING DURATION PANEL"
+msgstr "ದಿನಾಂಕ / ಚಾಲನಾ ಅವಧಿ ಫಲಕ"
+
+#: frontend/AshokLeylandFrontEnd.py:681
+msgid "Change Own Password"
+msgstr "ಸ್ವಂತ ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:685 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Exit"
+msgstr "ನಿರ್ಗಮಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:689
+msgid "Add New User"
+msgstr "ಹೊಸ ಬಳಕೆದಾರರನ್ನು ಸೇರಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:693
+msgid "Manage Other Users Passwords"
+msgstr "ಇತರ ಬಳಕೆದಾರರ ಪಾಸ್‌ವರ್ಡ್ ನಿರ್ವಹಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:697
+msgid "Change User Role"
+msgstr "ಬಳಕೆದಾರರ ಪಾತ್ರ ಬದಲಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:701
+msgid "Activate an Inactive User"
+msgstr "ನಿಷ್ಕ್ರಿಯ ಬಳಕೆದಾರರನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:705 frontend/SimplePopups.py:1145
+msgid "Inactivate User"
+msgstr "ಬಳಕೆದಾರರನ್ನು ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:709
+msgid "Create Production Report By Model Name"
+msgstr "ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:713
+msgid "Create Production Report By Model Name For a Period"
+msgstr "ಒಂದು ಅವಧಿಗೆ ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:717
+msgid "Create Production Report By Model Name For Today"
+msgstr "ಇಂದಿನ ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:721
+msgid "Create Production Report for a Period for all Models"
+msgstr "ಎಲ್ಲಾ ಮಾದರಿಗಳಿಗೆ ಒಂದು ಅವಧಿಯ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:725
+msgid "Create Full Production Report for Today for all Models"
+msgstr "ಎಲ್ಲಾ ಮಾದರಿಗಳಿಗೆ ಇಂದಿನ ಪೂರ್ಣ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:729
+msgid "About"
+msgstr "ಕುರಿತು"
+
+#: frontend/AshokLeylandFrontEnd.py:733
+msgid "Help"
+msgstr "ಸಹಾಯ"
+
+#: frontend/AshokLeylandFrontEnd.py:738
+msgid "(Z)Manual Abort"
+msgstr "(Z)ಕೈಯಾರೆ ರದ್ದುಗೊಳಿಸಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:748
+msgid "Actions"
+msgstr "ಕ್ರಿಯೆಗಳು"
+
+#: frontend/AshokLeylandFrontEnd.py:755
+msgid "Administration"
+msgstr "ಆಡಳಿತ"
+
+#: frontend/AshokLeylandFrontEnd.py:761
+msgid "Activate / Inactivate"
+msgstr "ಸಕ್ರಿಯ / ನಿಷ್ಕ್ರಿಯ"
+
+#: frontend/AshokLeylandFrontEnd.py:766
+msgid "Report"
+msgstr "ವರದಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:776 frontend/AshokLeylandFrontEnd.py:850
+msgid "Information"
+msgstr "ಮಾಹಿತಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:782 frontend/AshokLeylandFrontEnd.py:785 frontend/SimplePopups.py:1942
+#: frontend/SimplePopups.py:1947
+msgid "Machine Settings"
+msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Close Application"
+msgstr "ಅಪ್ಲಿಕೇಶನ್ ಮುಚ್ಚಿ"
+
+#: frontend/AshokLeylandFrontEnd.py:813
+msgid "Are you sure you want to exit the application ?"
+msgstr "ಅಪ್ಲಿಕೇಶನ್‌ನಿಂದ ನಿರ್ಗಮಿಸಲು ಖಚಿತವೇ ?"
+
+#: frontend/AshokLeylandFrontEnd.py:851
+msgid ""
+"Software Version: v 1.0\n"
+"\n"
+"This application is built by CosTheta Technologies Pvt Ltd. All copyright belongs to CosTheta Technologies Pvt Ltd.\n"
+"\n"
+"This application inspects and records the assembly of the front axle knuckle, hub and disc: every vision check, "
+"torque and press of each component, with its QR code.\n"
+msgstr ""
+"ಸಾಫ್ಟ್‌ವೇರ್ ಆವೃತ್ತಿ: v 1.0\n"
+"\n"
+"ಈ ಅಪ್ಲಿಕೇಶನ್ ಅನ್ನು ಕಾಸ್‌ಥೀಟಾ ಟೆಕ್ನಾಲಜೀಸ್ ಪ್ರೈ. ಲಿ. ನಿರ್ಮಿಸಿದೆ. ಎಲ್ಲಾ ಹಕ್ಕುಸ್ವಾಮ್ಯ ಕಾಸ್‌ಥೀಟಾ ಟೆಕ್ನಾಲಜೀಸ್ ಪ್ರೈ. ಲಿ.ಗೆ "
+"ಸೇರಿದೆ.\n"
+"\n"
+"ಈ ಅಪ್ಲಿಕೇಶನ್ ಮುಂಭಾಗದ ಆಕ್ಸಲ್‌ನ ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ದಾಖಲಿಸುತ್ತದೆ: ಪ್ರತಿ ಘಟಕದ ಪ್ರತಿಯೊಂದು ದೃಶ್ಯ "
+"ಪರಿಶೀಲನೆ, ಟಾರ್ಕ್ ಮತ್ತು ಪ್ರೆಸ್, ಅದರ QR ಕೋಡ್ ಸಹಿತ.\n"
+
+#: frontend/AshokLeylandFrontEnd.py:861
+msgid "Help about using the menu"
+msgstr "ಮೆನು ಬಳಕೆಯ ಕುರಿತು ಸಹಾಯ"
+
+#: frontend/AshokLeylandFrontEnd.py:862
+msgid ""
+"When any of the menu choices are being used, \n"
+"the remaining menu items will be clickable.\n"
+"\n"
+"However, clicking on any other menu item will not be acted upon \n"
+"by the system till the currently-in-use menu action is completed \n"
+"or cancelled.\n"
+msgstr ""
+"ಯಾವುದೇ ಮೆನು ಆಯ್ಕೆ ಬಳಕೆಯಲ್ಲಿರುವಾಗ, \n"
+"ಉಳಿದ ಮೆನು ಐಟಂಗಳನ್ನು ಕ್ಲಿಕ್ ಮಾಡಬಹುದು.\n"
+"\n"
+"ಆದರೆ ಪ್ರಸ್ತುತ ಬಳಕೆಯಲ್ಲಿರುವ ಮೆನು ಕ್ರಿಯೆ ಪೂರ್ಣಗೊಳ್ಳುವವರೆಗೆ \n"
+"ಅಥವಾ ರದ್ದಾಗುವವರೆಗೆ, ಬೇರೆ ಯಾವುದೇ ಮೆನು ಐಟಂ ಕ್ಲಿಕ್‌ಗೆ \n"
+"ವ್ಯವಸ್ಥೆ ಪ್ರತಿಕ್ರಿಯಿಸುವುದಿಲ್ಲ.\n"
+
+#: frontend/AshokLeylandFrontEnd.py:1159
+#, python-brace-format
+msgid ""
+"Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
+"month - {month}\n"
+"User: {user}; Current component processing time: {processing}    ; Components produced today - {todayCount}"
+msgstr ""
+"ಇಂದು {today}. ಆರಂಭ: {started}; ಚಾಲನಾ ಸಮಯ: {running}    ; ಉತ್ಪಾದಿತ ಘಟಕಗಳು : ಈ ವಾರ - {week}; ಈ ತಿಂಗಳು - {month}\n"
+"ಬಳಕೆದಾರ: {user}; ಪ್ರಸ್ತುತ ಘಟಕದ ಸಂಸ್ಕರಣಾ ಸಮಯ: {processing}    ; ಇಂದು ಉತ್ಪಾದಿತ ಘಟಕಗಳು - {todayCount}"
+
+#: frontend/AshokLeylandFrontEnd.py:1263
+msgid ""
+"Frontend abort (this screen only).\n"
+"Enter the password:"
+msgstr ""
+"ಫ್ರಂಟ್‌ಎಂಡ್ ರದ್ದತಿ (ಈ ಪರದೆ ಮಾತ್ರ).\n"
+"ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
+
+#: frontend/AshokLeylandFrontEnd.py:1268 frontend/FrontendNotices.py:56
+msgid "Wrong password - nothing aborted"
+msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್ - ಏನನ್ನೂ ರದ್ದುಗೊಳಿಸಲಾಗಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:1298 frontend/AshokLeylandFrontEnd.py:1302
+msgid "QR CODE : "
+msgstr "QR ಕೋಡ್ : "
+
+#: frontend/AshokLeylandFrontEnd.py:1582 frontend/AshokLeylandFrontEnd.py:1606 frontend/FrontendI18n.py:234
+msgid "Done"
+msgstr "ಮುಗಿದಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:2331
+msgid "Large Image Display"
+msgstr "ದೊಡ್ಡ ಚಿತ್ರ ಪ್ರದರ್ಶನ"
+
+#: frontend/FrontendI18n.py:234 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
+msgid "OK"
+msgstr "ಸರಿ"
+
+#: frontend/FrontendI18n.py:234
+msgid "Not OK"
+msgstr "ಸರಿ ಇಲ್ಲ"
+
+#: frontend/FrontendI18n.py:234
+msgid "Bypassed"
+msgstr "ಬೈಪಾಸ್ ಮಾಡಲಾಗಿದೆ"
+
+#: frontend/FrontendI18n.py:234 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+msgid "Result Awaited"
+msgstr "ಫಲಿತಾಂಶಕ್ಕೆ ಕಾಯಲಾಗುತ್ತಿದೆ"
+
+#: frontend/FrontendI18n.py:234
+msgid "TEST"
+msgstr "ಪರೀಕ್ಷಾ"
+
+#: frontend/FrontendI18n.py:235
+msgid "PRODUCTION"
+msgstr "ಉತ್ಪಾದನಾ"
+
+#: frontend/FrontendI18n.py:235
+msgid "Operator"
+msgstr "ಆಪರೇಟರ್"
+
+#: frontend/FrontendI18n.py:235
+msgid "Supervisor"
+msgstr "ಸೂಪರ್‌ವೈಸರ್"
+
+#: frontend/FrontendI18n.py:235
+msgid "Administrator"
+msgstr "ಆಡಳಿತಗಾರ"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "Yes"
+msgstr "ಹೌದು"
+
+#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+msgid "No"
+msgstr "ಇಲ್ಲ"
+
+#: frontend/FrontendNotices.py:22
+#, python-brace-format
+msgid "Picture NOT OK: {reason}"
+msgstr "ಚಿತ್ರ ಸರಿ ಇಲ್ಲ: {reason}"
+
+#: frontend/FrontendNotices.py:23
+#, python-brace-format
+msgid "Cycle aborted: {reason}"
+msgstr "ಸೈಕಲ್ ರದ್ದಾಗಿದೆ: {reason}"
+
+#: frontend/FrontendNotices.py:25
+#, python-brace-format
+msgid "Bypass not possible ({tag} not on the PLC): full run"
+msgstr "ಬೈಪಾಸ್ ಸಾಧ್ಯವಿಲ್ಲ ({tag} PLC ಯಲ್ಲಿ ಇಲ್ಲ): ಪೂರ್ಣ ಚಾಲನೆ"
+
+#: frontend/FrontendNotices.py:27
+#, python-brace-format
+msgid "no answer from the camera server in {secs} s"
+msgstr "{secs} ಸೆಕೆಂಡುಗಳಲ್ಲಿ ಕ್ಯಾಮೆರಾ ಸರ್ವರ್‌ನಿಂದ ಉತ್ತರವಿಲ್ಲ"
+
+#: frontend/FrontendNotices.py:28
+#, python-brace-format
+msgid "check timed out after {secs} s"
+msgstr "{secs} ಸೆಕೆಂಡುಗಳ ನಂತರ ಪರಿಶೀಲನೆಯ ಸಮಯ ಮೀರಿದೆ"
+
+#: frontend/FrontendNotices.py:30
+#, python-brace-format
+msgid ""
+"check timed out after {secs} s ({count} in a row: vision checks too slow on this PC - check the GPU, then restart the"
+" application)"
+msgstr ""
+"{secs} ಸೆಕೆಂಡುಗಳ ನಂತರ ಪರಿಶೀಲನೆಯ ಸಮಯ ಮೀರಿದೆ (ಸತತ {count}: ಈ PC ಯಲ್ಲಿ ದೃಶ್ಯ ಪರಿಶೀಲನೆಗಳು ತುಂಬಾ ನಿಧಾನ - GPU ಪರಿಶೀಲಿಸಿ, "
+"ನಂತರ ಅಪ್ಲಿಕೇಶನ್ ಮರುಪ್ರಾರಂಭಿಸಿ)"
+
+#: frontend/FrontendNotices.py:33
+#, python-brace-format
+msgid "camera stream stalled: no new frame in {secs} s ({pictures} picture)"
+msgstr "ಕ್ಯಾಮೆರಾ ಸ್ಟ್ರೀಮ್ ನಿಂತಿದೆ: {secs} ಸೆಕೆಂಡುಗಳಲ್ಲಿ ಹೊಸ ಫ್ರೇಮ್ ಇಲ್ಲ ({pictures} ಚಿತ್ರ)"
+
+#: frontend/FrontendNotices.py:34
+#, python-brace-format
+msgid "abort from the frontend ({reason})"
+msgstr "ಫ್ರಂಟ್‌ಎಂಡ್‌ನಿಂದ ರದ್ದತಿ ({reason})"
+
+#: frontend/FrontendNotices.py:36
+#, python-brace-format
+msgid "PLC restarted while the connection was lost ({why})"
+msgstr "ಸಂಪರ್ಕ ಕಳೆದುಹೋಗಿದ್ದಾಗ PLC ಮರುಪ್ರಾರಂಭವಾಯಿತು ({why})"
+
+#: frontend/FrontendNotices.py:37
+#, python-brace-format
+msgid "check failed ({error})"
+msgstr "ಪರಿಶೀಲನೆ ವಿಫಲವಾಗಿದೆ ({error})"
+
+#: frontend/FrontendNotices.py:39
+#, python-brace-format
+msgid "bearing-ring guard: no answer in {secs} s after the check"
+msgstr "ಬೇರಿಂಗ್-ರಿಂಗ್ ಗಾರ್ಡ್: ಪರಿಶೀಲನೆಯ ನಂತರ {secs} ಸೆಕೆಂಡುಗಳಲ್ಲಿ ಉತ್ತರವಿಲ್ಲ"
+
+#: frontend/FrontendNotices.py:41
+#, python-brace-format
+msgid "bearing-ring guard: ring finder failed ({error})"
+msgstr "ಬೇರಿಂಗ್-ರಿಂಗ್ ಗಾರ್ಡ್: ರಿಂಗ್ ಹುಡುಕುವಿಕೆ ವಿಫಲವಾಗಿದೆ ({error})"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera server down"
+msgstr "ಕ್ಯಾಮೆರಾ ಸರ್ವರ್ ಸ್ಥಗಿತಗೊಂಡಿದೆ"
+
+#: frontend/FrontendNotices.py:46
+msgid "camera not connected"
+msgstr "ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
+
+#: frontend/FrontendNotices.py:46
+msgid "no picture from the camera"
+msgstr "ಕ್ಯಾಮೆರಾದಿಂದ ಚಿತ್ರವಿಲ್ಲ"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision check worker starting"
+msgstr "ದೃಶ್ಯ ಪರಿಶೀಲನಾ ವರ್ಕರ್ ಆರಂಭವಾಗುತ್ತಿದೆ"
+
+#: frontend/FrontendNotices.py:47
+msgid "vision dependencies missing"
+msgstr "ದೃಶ್ಯ ಪರಿಶೀಲನೆಗೆ ಬೇಕಾದವು ಇಲ್ಲ"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped; restarting"
+msgstr "ದೃಶ್ಯ ಪರಿಶೀಲನಾ ವರ್ಕರ್ ನಿಂತಿದೆ; ಮರುಪ್ರಾರಂಭಿಸಲಾಗುತ್ತಿದೆ"
+
+#: frontend/FrontendNotices.py:48
+msgid "vision check worker stopped during the check; restarting"
+msgstr "ಪರಿಶೀಲನೆಯ ವೇಳೆ ದೃಶ್ಯ ಪರಿಶೀಲನಾ ವರ್ಕರ್ ನಿಂತಿತು; ಮರುಪ್ರಾರಂಭಿಸಲಾಗುತ್ತಿದೆ"
+
+#: frontend/FrontendNotices.py:49
+msgid "heartbeat server down"
+msgstr "ಹಾರ್ಟ್‌ಬೀಟ್ ಸರ್ವರ್ ಸ್ಥಗಿತಗೊಂಡಿದೆ"
+
+#: frontend/FrontendNotices.py:49
+msgid "frontend down"
+msgstr "ಫ್ರಂಟ್‌ಎಂಡ್ ಸ್ಥಗಿತಗೊಂಡಿದೆ"
+
+#: frontend/FrontendNotices.py:49
+msgid "manual abort (Ctrl+Alt+Z) in the frontend"
+msgstr "ಫ್ರಂಟ್‌ಎಂಡ್‌ನಲ್ಲಿ ಕೈಯಾರೆ ರದ್ದತಿ (Ctrl+Alt+Z)"
+
+#: frontend/FrontendNotices.py:50
+msgid "no reason given"
+msgstr "ಕಾರಣ ನೀಡಿಲ್ಲ"
+
+#: frontend/FrontendNotices.py:50
+msgid "first"
+msgstr "ಮೊದಲ"
+
+#: frontend/FrontendNotices.py:50
+msgid "second"
+msgstr "ಎರಡನೇ"
+
+#: frontend/FrontendNotices.py:50
+msgid "third"
+msgstr "ಮೂರನೇ"
+
+#: frontend/FrontendNotices.py:50
+msgid "first, second"
+msgstr "ಮೊದಲ, ಎರಡನೇ"
+
+#: frontend/FrontendNotices.py:50
+msgid "second, third"
+msgstr "ಎರಡನೇ, ಮೂರನೇ"
+
+#: frontend/FrontendNotices.py:51
+msgid "first, second, third"
+msgstr "ಮೊದಲ, ಎರಡನೇ, ಮೂರನೇ"
+
+#: frontend/FrontendNotices.py:53
+msgid "Machine settings not updated: previous settings used"
+msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ನವೀಕರಿಸಲಾಗಿಲ್ಲ: ಹಿಂದಿನ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬಳಸಲಾಗಿದೆ"
+
+#: frontend/FrontendNotices.py:54
+msgid "Heartbeat server down: cycle aborted; next cycle on hold"
+msgstr "ಹಾರ್ಟ್‌ಬೀಟ್ ಸರ್ವರ್ ಸ್ಥಗಿತ: ಸೈಕಲ್ ರದ್ದಾಗಿದೆ; ಮುಂದಿನ ಸೈಕಲ್ ತಡೆಹಿಡಿಯಲಾಗಿದೆ"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: continue till end of cycle"
+msgstr "ಡೇಟಾಬೇಸ್ ಸ್ಥಗಿತ: ಸೈಕಲ್ ಮುಗಿಯುವವರೆಗೆ ಮುಂದುವರಿಸಿ"
+
+#: frontend/FrontendNotices.py:55
+msgid "Database down: next cycle on hold"
+msgstr "ಡೇಟಾಬೇಸ್ ಸ್ಥಗಿತ: ಮುಂದಿನ ಸೈಕಲ್ ತಡೆಹಿಡಿಯಲಾಗಿದೆ"
+
+#: frontend/FrontendNotices.py:56
+msgid "QR Code not valid"
+msgstr "QR ಕೋಡ್ ಮಾನ್ಯವಲ್ಲ"
+
+#: frontend/FrontendNotices.py:56
+msgid "Redis is not storing data: restart the PC"
+msgstr "Redis ಡೇಟಾ ಸಂಗ್ರಹಿಸುತ್ತಿಲ್ಲ: PC ಮರುಪ್ರಾರಂಭಿಸಿ"
+
+#: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
+#: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
+#: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1946
+msgid "Cancel"
+msgstr "ರದ್ದುಮಾಡಿ"
+
+#: frontend/SimplePopups.py:209 frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007
+#: frontend/SimplePopups.py:1023 frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206
+#: frontend/SimplePopups.py:1333 frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
+msgid "Submit"
+msgstr "ಸಲ್ಲಿಸಿ"
+
+#: frontend/SimplePopups.py:222
+msgid "Cancelling this operation"
+msgstr "ಈ ಕಾರ್ಯಾಚರಣೆ ರದ್ದುಗೊಳ್ಳುತ್ತಿದೆ"
+
+#: frontend/SimplePopups.py:232
+msgid "No value provided. Please re-enter and submit."
+msgstr "ಮೌಲ್ಯ ನೀಡಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ನಮೂದಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:235
+#, python-brace-format
+msgid "{what} provided is {value}. Are you sure to proceed ahead ?"
+msgstr "ನೀಡಿದ {what} {value}. ಮುಂದುವರಿಯಲು ಖಚಿತವೇ ?"
+
+#: frontend/SimplePopups.py:242
+msgid "Please re-enter and submit."
+msgstr "ದಯವಿಟ್ಟು ಮತ್ತೆ ನಮೂದಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:590
+msgid "Create Username"
+msgstr "ಬಳಕೆದಾರ ಹೆಸರು ರಚಿಸಿ"
+
+#: frontend/SimplePopups.py:591
+msgid "First Name"
+msgstr "ಮೊದಲ ಹೆಸರು"
+
+#: frontend/SimplePopups.py:592
+msgid "Middle Name"
+msgstr "ಮಧ್ಯದ ಹೆಸರು"
+
+#: frontend/SimplePopups.py:593
+msgid "Last Name"
+msgstr "ಕೊನೆಯ ಹೆಸರು"
+
+#: frontend/SimplePopups.py:594
+msgid "Create Password"
+msgstr "ಪಾಸ್‌ವರ್ಡ್ ರಚಿಸಿ"
+
+#: frontend/SimplePopups.py:595
+msgid "Re-enter Password"
+msgstr "ಪಾಸ್‌ವರ್ಡ್ ಮತ್ತೆ ನಮೂದಿಸಿ"
+
+#: frontend/SimplePopups.py:597
+msgid "E-mail"
+msgstr "ಇ-ಮೇಲ್"
+
+#: frontend/SimplePopups.py:598
+msgid "Mobile"
+msgstr "ಮೊಬೈಲ್"
+
+#: frontend/SimplePopups.py:599 frontend/SimplePopups.py:602
+msgid "Role"
+msgstr "ಪಾತ್ರ"
+
+#: frontend/SimplePopups.py:607
+msgid "Create New Account"
+msgstr "ಹೊಸ ಖಾತೆ ರಚಿಸಿ"
+
+#: frontend/SimplePopups.py:627
+msgid "Cancelling user addition."
+msgstr "ಬಳಕೆದಾರರ ಸೇರ್ಪಡೆ ರದ್ದುಗೊಳ್ಳುತ್ತಿದೆ."
+
+#: frontend/SimplePopups.py:643
+#, python-brace-format
+msgid "Username {username} already exists. Please change and submit."
+msgstr "ಬಳಕೆದಾರ ಹೆಸರು {username} ಈಗಾಗಲೇ ಇದೆ. ದಯವಿಟ್ಟು ಬದಲಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:668
+msgid "Username has to be at least 5 characters. Please re-enter and submit."
+msgstr "ಬಳಕೆದಾರ ಹೆಸರು ಕನಿಷ್ಠ 5 ಅಕ್ಷರಗಳಿರಬೇಕು. ದಯವಿಟ್ಟು ಮತ್ತೆ ನಮೂದಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:682
+msgid "The 2 password entries do not match. Please re-enter and submit."
+msgstr "ಎರಡು ಪಾಸ್‌ವರ್ಡ್ ನಮೂದುಗಳು ಹೊಂದಿಕೆಯಾಗುತ್ತಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ನಮೂದಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:696
+msgid "The password must have at least 6 characters."
+msgstr "ಪಾಸ್‌ವರ್ಡ್ ಕನಿಷ್ಠ 6 ಅಕ್ಷರಗಳಿರಬೇಕು."
+
+#: frontend/SimplePopups.py:710
+msgid "At least 1 of first, middle, or last name is needed."
+msgstr "ಮೊದಲ, ಮಧ್ಯದ ಅಥವಾ ಕೊನೆಯ ಹೆಸರಿನಲ್ಲಿ ಕನಿಷ್ಠ 1 ಬೇಕು."
+
+#: frontend/SimplePopups.py:713
+#, python-brace-format
+msgid ""
+"Username : {username}\n"
+"First Name : {firstname}\n"
+"Middle Name : {middlename}\n"
+"Last Name: {lastname}\n"
+"email : {email}\n"
+"Mobile : {mobile}\n"
+"Role : {role}"
+msgstr ""
+"ಬಳಕೆದಾರ ಹೆಸರು : {username}\n"
+"ಮೊದಲ ಹೆಸರು : {firstname}\n"
+"ಮಧ್ಯದ ಹೆಸರು : {middlename}\n"
+"ಕೊನೆಯ ಹೆಸರು: {lastname}\n"
+"ಇ-ಮೇಲ್ : {email}\n"
+"ಮೊಬೈಲ್ : {mobile}\n"
+"ಪಾತ್ರ : {role}"
+
+#: frontend/SimplePopups.py:731 frontend/SimplePopups.py:755
+msgid "Account could not be created. Likely reason is a database access problem."
+msgstr "ಖಾತೆ ರಚಿಸಲಾಗಲಿಲ್ಲ. ಸಂಭಾವ್ಯ ಕಾರಣ ಡೇಟಾಬೇಸ್ ಪ್ರವೇಶ ಸಮಸ್ಯೆ."
+
+#: frontend/SimplePopups.py:736
+msgid "Account could not be created. User id already exists"
+msgstr "ಖಾತೆ ರಚಿಸಲಾಗಲಿಲ್ಲ. ಬಳಕೆದಾರ ಐಡಿ ಈಗಾಗಲೇ ಇದೆ"
+
+#: frontend/SimplePopups.py:770
+msgid "Please re-enter / re-check and submit."
+msgstr "ದಯವಿಟ್ಟು ಮತ್ತೆ ನಮೂದಿಸಿ / ಪರಿಶೀಲಿಸಿ ಸಲ್ಲಿಸಿ."
+
+#: frontend/SimplePopups.py:896
+msgid "Current Password"
+msgstr "ಪ್ರಸ್ತುತ ಪಾಸ್‌ವರ್ಡ್"
+
+#: frontend/SimplePopups.py:898 frontend/SimplePopups.py:1003 frontend/SimplePopups.py:1019
+msgid "Enter New Password"
+msgstr "ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ"
+
+#: frontend/SimplePopups.py:900 frontend/SimplePopups.py:1005 frontend/SimplePopups.py:1021
+msgid "Re-enter New Password"
+msgstr "ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಮತ್ತೆ ನಮೂದಿಸಿ"
+
+#: frontend/SimplePopups.py:905
+#, python-brace-format
+msgid "Change Password for user : {user}"
+msgstr "ಬಳಕೆದಾರರ ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಿ : {user}"
+
+#: frontend/SimplePopups.py:928 frontend/SimplePopups.py:1085
+#, python-brace-format
+msgid "Changing password for {user}"
+msgstr "{user} ಅವರ ಪಾಸ್‌ವರ್ಡ್ ಬದಲಾಗುತ್ತಿದೆ"
+
+#: frontend/SimplePopups.py:938 frontend/SimplePopups.py:1080
+msgid "Minimum length of password should be 6 characters. Enter data again."
+msgstr "ಪಾಸ್‌ವರ್ಡ್‌ನ ಕನಿಷ್ಠ ಉದ್ದ 6 ಅಕ್ಷರಗಳು. ಮತ್ತೆ ನಮೂದಿಸಿ."
+
+#: frontend/SimplePopups.py:944
+msgid "Current password does not match. Enter data again."
+msgstr "ಪ್ರಸ್ತುತ ಪಾಸ್‌ವರ್ಡ್ ಹೊಂದಿಕೆಯಾಗುತ್ತಿಲ್ಲ. ಮತ್ತೆ ನಮೂದಿಸಿ."
+
+#: frontend/SimplePopups.py:950 frontend/SimplePopups.py:1074
+msgid "The 2 new passwords do not match. Enter data again."
+msgstr "ಎರಡು ಹೊಸ ಪಾಸ್‌ವರ್ಡ್‌ಗಳು ಹೊಂದಿಕೆಯಾಗುತ್ತಿಲ್ಲ. ಮತ್ತೆ ನಮೂದಿಸಿ."
+
+#: frontend/SimplePopups.py:956
+msgid "The new password should not be same as previous password. Enter data again."
+msgstr "ಹೊಸ ಪಾಸ್‌ವರ್ಡ್ ಹಿಂದಿನ ಪಾಸ್‌ವರ್ಡ್‌ನಂತೆಯೇ ಇರಬಾರದು. ಮತ್ತೆ ನಮೂದಿಸಿ."
+
+#: frontend/SimplePopups.py:991
+msgid "No users available in database for changing password"
+msgstr "ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಲು ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಬಳಕೆದಾರರಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1000 frontend/SimplePopups.py:1015
+msgid "Username"
+msgstr "ಬಳಕೆದಾರ ಹೆಸರು"
+
+#: frontend/SimplePopups.py:1011
+msgid "No operators available in database for changing password"
+msgstr "ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಲು ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಆಪರೇಟರ್‌ಗಳಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1026 frontend/SimplePopups.py:1141 frontend/SimplePopups.py:1350
+#, python-brace-format
+msgid "Unknown Role : {role}"
+msgstr "ಅಜ್ಞಾತ ಪಾತ್ರ : {role}"
+
+#: frontend/SimplePopups.py:1038
+msgid "Change Password for users : "
+msgstr "ಬಳಕೆದಾರರ ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಿ : "
+
+#: frontend/SimplePopups.py:1115 frontend/SimplePopups.py:1130
+msgid "No users registered in database"
+msgstr "ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ನೋಂದಾಯಿತ ಬಳಕೆದಾರರಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1123 frontend/SimplePopups.py:1134 frontend/SimplePopups.py:1203 frontend/SimplePopups.py:1328
+#: frontend/SimplePopups.py:1341
+msgid "Username : "
+msgstr "ಬಳಕೆದಾರ ಹೆಸರು : "
+
+#: frontend/SimplePopups.py:1161
+#, python-brace-format
+msgid "Inactivate user {username}. Are you sure ?"
+msgstr "ಬಳಕೆದಾರ {username} ಅವರನ್ನು ನಿಷ್ಕ್ರಿಯಗೊಳಿಸುವುದೇ. ಖಚಿತವೇ ?"
+
+#: frontend/SimplePopups.py:1168
+#, python-brace-format
+msgid "Inactivating user {username}"
+msgstr "ಬಳಕೆದಾರ {username} ನಿಷ್ಕ್ರಿಯಗೊಳ್ಳುತ್ತಿದ್ದಾರೆ"
+
+#: frontend/SimplePopups.py:1173
+#, python-brace-format
+msgid "Leaving {username} activated"
+msgstr "{username} ಸಕ್ರಿಯವಾಗಿಯೇ ಇರುತ್ತಾರೆ"
+
+#: frontend/SimplePopups.py:1196
+msgid "Currently there are no inactive users"
+msgstr "ಪ್ರಸ್ತುತ ನಿಷ್ಕ್ರಿಯ ಬಳಕೆದಾರರಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1208
+msgid "Activate User"
+msgstr "ಬಳಕೆದಾರರನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಿ"
+
+#: frontend/SimplePopups.py:1224
+#, python-brace-format
+msgid "Activate user {username}. Are you sure ?"
+msgstr "ಬಳಕೆದಾರ {username} ಅವರನ್ನು ಸಕ್ರಿಯಗೊಳಿಸುವುದೇ. ಖಚಿತವೇ ?"
+
+#: frontend/SimplePopups.py:1231
+#, python-brace-format
+msgid "Activating user {username}"
+msgstr "ಬಳಕೆದಾರ {username} ಸಕ್ರಿಯಗೊಳ್ಳುತ್ತಿದ್ದಾರೆ"
+
+#: frontend/SimplePopups.py:1238
+#, python-brace-format
+msgid "Leaving {username} inactivated"
+msgstr "{username} ನಿಷ್ಕ್ರಿಯವಾಗಿಯೇ ಇರುತ್ತಾರೆ"
+
+#: frontend/SimplePopups.py:1319
+msgid "No users available in database for changing role"
+msgstr "ಪಾತ್ರ ಬದಲಿಸಲು ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಬಳಕೆದಾರರಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1331 frontend/SimplePopups.py:1345
+msgid "Change Role to :"
+msgstr "ಪಾತ್ರವನ್ನು ಇದಕ್ಕೆ ಬದಲಿಸಿ :"
+
+#: frontend/SimplePopups.py:1337
+msgid "No operators available in database for changing role"
+msgstr "ಪಾತ್ರ ಬದಲಿಸಲು ಡೇಟಾಬೇಸ್‌ನಲ್ಲಿ ಆಪರೇಟರ್‌ಗಳಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1354
+msgid "Change Role"
+msgstr "ಪಾತ್ರ ಬದಲಿಸಿ"
+
+#: frontend/SimplePopups.py:1373
+#, python-brace-format
+msgid "Change role of user {username} to {role}"
+msgstr "ಬಳಕೆದಾರ {username} ಅವರ ಪಾತ್ರವನ್ನು {role} ಗೆ ಬದಲಿಸಿ"
+
+#: frontend/SimplePopups.py:1378
+#, python-brace-format
+msgid "Changing role for {username}"
+msgstr "{username} ಅವರ ಪಾತ್ರ ಬದಲಾಗುತ್ತಿದೆ"
+
+#: frontend/SimplePopups.py:1387
+#, python-brace-format
+msgid "Role not changed for {username}"
+msgstr "{username} ಅವರ ಪಾತ್ರ ಬದಲಾಗಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1412
+msgid "Production Report Needed From Date : "
+msgstr "ಉತ್ಪಾದನಾ ವರದಿ ಬೇಕಾದ ಆರಂಭ ದಿನಾಂಕ : "
+
+#: frontend/SimplePopups.py:1413 frontend/SimplePopups.py:1416 frontend/SimplePopups.py:1495 frontend/SimplePopups.py:1498
+msgid "Select Date"
+msgstr "ದಿನಾಂಕ ಆಯ್ಕೆಮಾಡಿ"
+
+#: frontend/SimplePopups.py:1415
+msgid "Production Report Needed To Date : "
+msgstr "ಉತ್ಪಾದನಾ ವರದಿ ಬೇಕಾದ ಕೊನೆಯ ದಿನಾಂಕ : "
+
+#: frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500 frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650
+#: frontend/SimplePopups.py:1713
+msgid "Clear"
+msgstr "ತೆರವುಗೊಳಿಸಿ"
+
+#: frontend/SimplePopups.py:1421
+msgid " Generate production report for a period"
+msgstr " ಒಂದು ಅವಧಿಯ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1433 frontend/SimplePopups.py:1518 frontend/SimplePopups.py:1601 frontend/SimplePopups.py:1669
+#: frontend/SimplePopups.py:1727
+msgid ""
+"Cancelling.\n"
+"No report generated."
+msgstr ""
+"ರದ್ದುಗೊಳ್ಳುತ್ತಿದೆ.\n"
+"ಯಾವುದೇ ವರದಿ ತಯಾರಾಗಿಲ್ಲ."
+
+#: frontend/SimplePopups.py:1447 frontend/SimplePopups.py:1533
+msgid "'To Date' cannot be less than 'From Date'"
+msgstr "'ಕೊನೆಯ ದಿನಾಂಕ' 'ಆರಂಭ ದಿನಾಂಕ'ಕ್ಕಿಂತ ಹಿಂದಿನದಾಗಿರಬಾರದು"
+
+#: frontend/SimplePopups.py:1451
+#, python-brace-format
+msgid ""
+"Generate summary report for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"ಅವಧಿಯ ಸಾರಾಂಶ ವರದಿ ತಯಾರಿಸಿ (ಎರಡೂ ದಿನಗಳು ಸೇರಿ):\n"
+"ಆರಂಭ ದಿನಾಂಕ : {fromDate}\n"
+"ಕೊನೆಯ ದಿನಾಂಕ : {toDate}"
+
+#: frontend/SimplePopups.py:1460 frontend/SimplePopups.py:1547 frontend/SimplePopups.py:1615 frontend/SimplePopups.py:1683
+#: frontend/SimplePopups.py:1740
+#, python-brace-format
+msgid "Report saved to {file}"
+msgstr "ವರದಿ ಇಲ್ಲಿ ಉಳಿಸಲಾಗಿದೆ: {file}"
+
+#: frontend/SimplePopups.py:1465 frontend/SimplePopups.py:1467 frontend/SimplePopups.py:1552 frontend/SimplePopups.py:1554
+#: frontend/SimplePopups.py:1620 frontend/SimplePopups.py:1622 frontend/SimplePopups.py:1688 frontend/SimplePopups.py:1690
+#: frontend/SimplePopups.py:1745 frontend/SimplePopups.py:1747
+msgid "Report generation failed.\n"
+msgstr "ವರದಿ ತಯಾರಿಕೆ ವಿಫಲವಾಗಿದೆ.\n"
+
+#: frontend/SimplePopups.py:1470 frontend/SimplePopups.py:1557 frontend/SimplePopups.py:1626 frontend/SimplePopups.py:1693
+#: frontend/SimplePopups.py:1750
+msgid ""
+"Cancelling.\n"
+"Please choose dates again."
+msgstr ""
+"ರದ್ದುಗೊಳ್ಳುತ್ತಿದೆ.\n"
+"ದಯವಿಟ್ಟು ದಿನಾಂಕಗಳನ್ನು ಮತ್ತೆ ಆಯ್ಕೆಮಾಡಿ."
+
+#: frontend/SimplePopups.py:1490 frontend/SimplePopups.py:1577
+msgid "Choose Model for which you want to generate report : "
+msgstr "ವರದಿ ತಯಾರಿಸಬೇಕಾದ ಮಾದರಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ : "
+
+#: frontend/SimplePopups.py:1494
+msgid "From Date : "
+msgstr "ಆರಂಭ ದಿನಾಂಕ : "
+
+#: frontend/SimplePopups.py:1497
+msgid "To Date : "
+msgstr "ಕೊನೆಯ ದಿನಾಂಕ : "
+
+#: frontend/SimplePopups.py:1503
+msgid " Generate production report for a model for a period"
+msgstr " ಒಂದು ಮಾದರಿಯ ಒಂದು ಅವಧಿಯ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1537
+#, python-brace-format
+msgid ""
+"Generate report for model {model} for period (both days inclusive):\n"
+"StartingDate : {fromDate}\n"
+"End date : {toDate}"
+msgstr ""
+"ಮಾದರಿ {model} ಗೆ ಅವಧಿಯ ವರದಿ ತಯಾರಿಸಿ (ಎರಡೂ ದಿನಗಳು ಸೇರಿ):\n"
+"ಆರಂಭ ದಿನಾಂಕ : {fromDate}\n"
+"ಕೊನೆಯ ದಿನಾಂಕ : {toDate}"
+
+#: frontend/SimplePopups.py:1584
+msgid " Generate production report for a model"
+msgstr " ಒಂದು ಮಾದರಿಯ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1607
+#, python-brace-format
+msgid "Generate report for model {model}"
+msgstr "ಮಾದರಿ {model} ಗೆ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1646
+msgid "Choose Model for which you want to generate today's report : "
+msgstr "ಇಂದಿನ ವರದಿ ತಯಾರಿಸಬೇಕಾದ ಮಾದರಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ : "
+
+#: frontend/SimplePopups.py:1653
+msgid " Generate today's production report for a model"
+msgstr " ಒಂದು ಮಾದರಿಯ ಇಂದಿನ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1675
+#, python-brace-format
+msgid "Generate today's report for model {model}"
+msgstr "ಮಾದರಿ {model} ಗೆ ಇಂದಿನ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1712
+msgid "Generate today's full production report "
+msgstr "ಇಂದಿನ ಪೂರ್ಣ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ "
+
+#: frontend/SimplePopups.py:1716
+msgid " Generate today's production report for ALL models"
+msgstr " ಎಲ್ಲಾ ಮಾದರಿಗಳ ಇಂದಿನ ಉತ್ಪಾದನಾ ವರದಿ ತಯಾರಿಸಿ"
+
+#: frontend/SimplePopups.py:1784
+msgid "Rotation RPM (20 - 40)"
+msgstr "ತಿರುಗುವಿಕೆ RPM (20 - 40)"
+
+#: frontend/SimplePopups.py:1785
+msgid "Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"
+msgstr "ಬಿಗಿಗೊಳಿಸುವ ಟಾರ್ಕ್ 1 ಸೆಟ್‌ಪಾಯಿಂಟ್, Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1786
+msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
+msgstr "ಬಿಗಿಗೊಳಿಸುವ ಟಾರ್ಕ್ 2 ಸೆಟ್‌ಪಾಯಿಂಟ್, Nm (0.01 - 19.99)"
+
+#: frontend/SimplePopups.py:1787
+msgid "No. of Rotations 1 CCW (1 - 4)"
+msgstr "ತಿರುಗುವಿಕೆಗಳ ಸಂಖ್ಯೆ 1 CCW (1 - 4)"
+
+#: frontend/SimplePopups.py:1788
+msgid "No. of Rotations 1 CW (1 - 4)"
+msgstr "ತಿರುಗುವಿಕೆಗಳ ಸಂಖ್ಯೆ 1 CW (1 - 4)"
+
+#: frontend/SimplePopups.py:1794
+msgid "Bypass Component Press and Second Tightening"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಪ್ರೆಸ್ ಮತ್ತು ಎರಡನೇ ಬಿಗಿಗೊಳಿಸುವಿಕೆ ಬೈಪಾಸ್ ಮಾಡಿ"
+
+#: frontend/SimplePopups.py:1825
+msgid "Enter the password to open the machine settings"
+msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ತೆರೆಯಲು ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ"
+
+#: frontend/SimplePopups.py:1829
+msgid "Wrong password: machine settings not opened"
+msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್: ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ತೆರೆಯಲಾಗಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1838
+msgid "(no change)"
+msgstr "(ಬದಲಾವಣೆ ಇಲ್ಲ)"
+
+#: frontend/SimplePopups.py:1839
+#, python-brace-format
+msgid ""
+"Change the machine settings for {model}:\n"
+"\n"
+"{changes}\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the machine settings password:"
+msgstr ""
+"{model} ಗೆ ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬದಲಿಸಿ:\n"
+"\n"
+"{changes}\n"
+"\n"
+"ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸುವುದು ಈ ಬದಲಾವಣೆಯನ್ನು ದೃಢೀಕರಿಸುತ್ತದೆ.\n"
+"ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
+
+#: frontend/SimplePopups.py:1844
+msgid "Wrong password: machine settings not changed"
+msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್: ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಬದಲಾಗಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1850
+#, python-brace-format
+msgid ""
+"'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
+"\n"
+"Entering the password confirms this change.\n"
+"Enter the bypass password:"
+msgstr ""
+"'ಕಾಂಪೊನೆಂಟ್ ಪ್ರೆಸ್ ಮತ್ತು ಎರಡನೇ ಬಿಗಿಗೊಳಿಸುವಿಕೆ ಬೈಪಾಸ್' -> {value}, {model} ಗೆ.\n"
+"\n"
+"ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸುವುದು ಈ ಬದಲಾವಣೆಯನ್ನು ದೃಢೀಕರಿಸುತ್ತದೆ.\n"
+"ಬೈಪಾಸ್ ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
+
+#: frontend/SimplePopups.py:1855
+msgid "Wrong bypass password: machine settings not changed"
+msgstr "ತಪ್ಪು ಬೈಪಾಸ್ ಪಾಸ್‌ವರ್ಡ್: ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಬದಲಾಗಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1881
+#, python-brace-format
+msgid "{name}: at most 2 decimals"
+msgstr "{name}: ಗರಿಷ್ಠ 2 ದಶಮಾಂಶಗಳು"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid whole number"
+msgstr "{name}: '{text}' ಮಾನ್ಯ ಪೂರ್ಣ ಸಂಖ್ಯೆಯಲ್ಲ"
+
+#: frontend/SimplePopups.py:1885
+#, python-brace-format
+msgid "{name}: '{text}' is not a valid number"
+msgstr "{name}: '{text}' ಮಾನ್ಯ ಸಂಖ್ಯೆಯಲ್ಲ"
+
+#: frontend/SimplePopups.py:1902
+msgid "Only an Administrator or a Supervisor can change the machine settings"
+msgstr "ಆಡಳಿತಗಾರ ಅಥವಾ ಸೂಪರ್‌ವೈಸರ್ ಮಾತ್ರ ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬದಲಿಸಬಹುದು"
+
+#: frontend/SimplePopups.py:1912
+msgid "No models found in qrcode.partmapping.N of the properties file"
+msgstr "ಪ್ರಾಪರ್ಟೀಸ್ ಫೈಲ್‌ನ qrcode.partmapping.N ನಲ್ಲಿ ಯಾವುದೇ ಮಾದರಿ ಇಲ್ಲ"
+
+#: frontend/SimplePopups.py:1923
+#, python-brace-format
+msgid "In force for {model} since {since} (set by {user})"
+msgstr "{model} ಗೆ {since} ರಿಂದ ಜಾರಿಯಲ್ಲಿದೆ ({user} ಹೊಂದಿಸಿದ್ದು)"
+
+#: frontend/SimplePopups.py:1925
+#, python-brace-format
+msgid "Default settings for {model}"
+msgstr "{model} ಗೆ ಡೀಫಾಲ್ಟ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
+
+#: frontend/SimplePopups.py:1928
+msgid "Model"
+msgstr "ಮಾದರಿ"
+
+#: frontend/SimplePopups.py:1945
+msgid "New settings apply from the next component of the chosen model."
+msgstr "ಹೊಸ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಆಯ್ದ ಮಾದರಿಯ ಮುಂದಿನ ಘಟಕದಿಂದ ಅನ್ವಯವಾಗುತ್ತವೆ."
+
+#: frontend/SimplePopups.py:1946
+msgid "Save"
+msgstr "ಉಳಿಸಿ"
+
+#: frontend/SimplePopups.py:1946
+msgid "Reset"
+msgstr "ಮರುಹೊಂದಿಸಿ"
+
+#: frontend/SimplePopups.py:1974
+#, python-brace-format
+msgid ""
+"Machine settings for {model} saved.\n"
+"They apply from the next {model} component."
+msgstr ""
+"{model} ಗೆ ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಉಳಿಸಲಾಗಿದೆ.\n"
+"ಅವು ಮುಂದಿನ {model} ಘಟಕದಿಂದ ಅನ್ವಯವಾಗುತ್ತವೆ."
+
+#: frontend/SimplePopups.py:1976
+msgid "Could not save the machine settings"
+msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1979
+#, python-brace-format
+msgid "Machine settings: {error}"
+msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು: {error}"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid "Knuckle Check"
+msgstr "ನಕಲ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:41
+msgid ""
+"Knuckle\n"
+"Check"
+msgstr ""
+"ನಕಲ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:43
+msgid "Hub Check"
+msgstr "ಹಬ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid "Top Bearing Check"
+msgstr "ಮೇಲಿನ ಬೇರಿಂಗ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:46
+msgid ""
+"Second\n"
+"Bearing\n"
+"Check"
+msgstr ""
+"ಎರಡನೇ\n"
+"ಬೇರಿಂಗ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid "Nut & Washer Check"
+msgstr "ನಟ್ & ವಾಷರ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:49
+msgid ""
+"Nut &\n"
+"Plate Washer\n"
+"Check"
+msgstr ""
+"ನಟ್ &\n"
+"ಪ್ಲೇಟ್ ವಾಷರ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid "Tightening Torque 1"
+msgstr "ಬಿಗಿಗೊಳಿಸುವ ಟಾರ್ಕ್ 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:52
+msgid ""
+"Tightening\n"
+"Torque 1"
+msgstr ""
+"ಬಿಗಿಗೊಳಿಸುವ\n"
+"ಟಾರ್ಕ್ 1"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid "Bung - Comp Press"
+msgstr "ಬಂಗ್ - ಕಾಂಪ್ ಪ್ರೆಸ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:55
+msgid ""
+"Place\n"
+"Bung for\n"
+" Component Press"
+msgstr ""
+"ಕಾಂಪೊನೆಂಟ್ ಪ್ರೆಸ್‌ಗೆ\n"
+"ಬಂಗ್\n"
+" ಇಡಿ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid "Component Press"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಪ್ರೆಸ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:58
+msgid ""
+"Component\n"
+"Press"
+msgstr ""
+"ಕಾಂಪೊನೆಂಟ್\n"
+"ಪ್ರೆಸ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid "Remove bung"
+msgstr "ಬಂಗ್ ತೆಗೆಯಿರಿ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:61
+msgid ""
+"Remove\n"
+"Bung"
+msgstr ""
+"ಬಂಗ್\n"
+"ತೆಗೆಯಿರಿ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid "Tightening Torque 2"
+msgstr "ಬಿಗಿಗೊಳಿಸುವ ಟಾರ್ಕ್ 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:64
+msgid ""
+"Tightening\n"
+"Torque 2"
+msgstr ""
+"ಬಿಗಿಗೊಳಿಸುವ\n"
+"ಟಾರ್ಕ್ 2"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid "Split Pin & Washer"
+msgstr "ಸ್ಪ್ಲಿಟ್ ಪಿನ್ & ವಾಷರ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:67
+msgid ""
+"Split Pin\n"
+"And\n"
+"Washer\n"
+"Check"
+msgstr ""
+"ಸ್ಪ್ಲಿಟ್ ಪಿನ್\n"
+"ಮತ್ತು\n"
+"ವಾಷರ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid "Cap Check"
+msgstr "ಕ್ಯಾಪ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:70
+msgid ""
+"Cap\n"
+"Check"
+msgstr ""
+"ಕ್ಯಾಪ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid "Bung Check"
+msgstr "ಬಂಗ್ ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:72
+msgid ""
+"Bung\n"
+"Check"
+msgstr ""
+"ಬಂಗ್\n"
+"ಪರಿಶೀಲನೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid "Cap Press Result"
+msgstr "ಕ್ಯಾಪ್ ಪ್ರೆಸ್ ಫಲಿತಾಂಶ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:74
+msgid ""
+"Cap\n"
+"Press\n"
+"Result"
+msgstr ""
+"ಕ್ಯಾಪ್\n"
+"ಪ್ರೆಸ್\n"
+"ಫಲಿತಾಂಶ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid "Free Rotation Torque"
+msgstr "ಮುಕ್ತ ತಿರುಗುವಿಕೆ ಟಾರ್ಕ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:77
+msgid ""
+"Free\n"
+"Rotation\n"
+"Torque"
+msgstr ""
+"ಮುಕ್ತ\n"
+"ತಿರುಗುವಿಕೆ\n"
+"ಟಾರ್ಕ್"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Done"
+msgstr "ತಿರುಗುವಿಕೆ ಮುಗಿದಿದೆ"
+
+#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+msgid "Rotation Not Done"
+msgstr "ತಿರುಗುವಿಕೆ ಆಗಿಲ್ಲ"
+
+#. window.title
+#: ApplicationConfiguration.properties
+msgid "Ashok Leyland - Vision System for Acceptance / Rejection of Front Axle Knuckle-Hub-Disc Assembly"
+msgstr "ಅಶೋಕ್ ಲೇಲ್ಯಾಂಡ್ - ಮುಂಭಾಗದ ಆಕ್ಸಲ್ ನಕಲ್-ಹಬ್-ಡಿಸ್ಕ್ ಜೋಡಣೆಯ ಸ್ವೀಕಾರ / ತಿರಸ್ಕಾರಕ್ಕಾಗಿ ದೃಶ್ಯ ವ್ಯವಸ್ಥೆ"
+
+#. state.1.instruction
+#. state.2.instruction
+#: ApplicationConfiguration.properties
+msgid "Place KNUCKLE on Fixture. Scan QR CODE on the Knuckle"
+msgstr "ನಕಲ್ ಅನ್ನು ಫಿಕ್ಸ್ಚರ್ ಮೇಲೆ ಇಡಿ. ನಕಲ್ ಮೇಲಿನ QR ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ"
+
+#. state.3.instruction
+#. state.4.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS to take picture of KNUCKLE and evaluate"
+msgstr "ನಕಲ್‌ನ ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.5.instruction
+#. state.6.instruction
+#: ApplicationConfiguration.properties
+msgid "Put assembled HUB, with bottom BEARING on KNUCKLE. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಕೆಳಗಿನ ಬೇರಿಂಗ್ ಸಹಿತ ಜೋಡಿಸಿದ ಹಬ್ ಅನ್ನು ನಕಲ್ ಮೇಲೆ ಇಡಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.7.instruction
+#. state.8.instruction
+#: ApplicationConfiguration.properties
+msgid "Place top BEARING on the HUB. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಮೇಲಿನ ಬೇರಿಂಗ್ ಅನ್ನು ಹಬ್ ಮೇಲೆ ಇಡಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.9.instruction
+#. state.10.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Place PLATE-WASHER and screw the NUT FOR 5-6 TURNS. Mark the top of bolts with BLUE. PRESS both buttons to take "
+"picture and evaluate"
+msgstr ""
+"ಪ್ಲೇಟ್-ವಾಷರ್ ಇಟ್ಟು ನಟ್ ಅನ್ನು 5-6 ಸುತ್ತು ತಿರುಗಿಸಿ. ಬೋಲ್ಟ್‌ಗಳ ಮೇಲ್ಭಾಗವನ್ನು ನೀಲಿ ಬಣ್ಣದಿಂದ ಗುರುತಿಸಿ. ಚಿತ್ರ ತೆಗೆದು "
+"ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.11.instruction
+#. state.12.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 1st round of NUT TIGHTENING"
+msgstr "ಘಟಕ ಕರ್ಟನ್ ದಾಟುವವರೆಗೆ ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ. ನಟ್ ಬಿಗಿಗೊಳಿಸುವಿಕೆಯ 1ನೇ ಸುತ್ತಿನ ಟಾರ್ಕ್ ರೀಡಿಂಗ್‌ಗೆ ಕಾಯಲಾಗುತ್ತಿದೆ"
+
+#. state.13.instruction
+#. state.14.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಘಟಕದ ಮೇಲೆ ಬಂಗ್ ಇಡಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.15.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting COMPONENT PRESS completion"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಪ್ರೆಸ್ ಪೂರ್ಣಗೊಳ್ಳಲು ಕಾಯಲಾಗುತ್ತಿದೆ"
+
+#. state.16.instruction
+#. state.17.instruction
+#: ApplicationConfiguration.properties
+msgid "Remove BUNG from COMPONENT. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಘಟಕದಿಂದ ಬಂಗ್ ತೆಗೆಯಿರಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.18.instruction
+#. state.19.instruction
+#: ApplicationConfiguration.properties
+msgid "PRESS BOTH BUTTONS till the component crosses the curtain. Awaiting READING TORQUE for 2nd round of NUT TIGHTENING"
+msgstr "ಘಟಕ ಕರ್ಟನ್ ದಾಟುವವರೆಗೆ ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ. ನಟ್ ಬಿಗಿಗೊಳಿಸುವಿಕೆಯ 2ನೇ ಸುತ್ತಿನ ಟಾರ್ಕ್ ರೀಡಿಂಗ್‌ಗೆ ಕಾಯಲಾಗುತ್ತಿದೆ"
+
+#. state.20.instruction
+#. state.21.instruction
+#: ApplicationConfiguration.properties
+msgid ""
+"Assemble WASHER and SPLIT PIN. Mark Washer in YELLOW and Split Pin in BLUE. PRESS BOTH BUTTONS to take picture and "
+"evaluate"
+msgstr ""
+"ವಾಷರ್ ಮತ್ತು ಸ್ಪ್ಲಿಟ್ ಪಿನ್ ಜೋಡಿಸಿ. ವಾಷರ್ ಅನ್ನು ಹಳದಿ ಮತ್ತು ಸ್ಪ್ಲಿಟ್ ಪಿನ್ ಅನ್ನು ನೀಲಿ ಬಣ್ಣದಿಂದ ಗುರುತಿಸಿ. ಚಿತ್ರ ತೆಗೆದು "
+"ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.22.instruction
+#. state.23.instruction
+#: ApplicationConfiguration.properties
+msgid "Place CAP on SPLIT PIN. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಸ್ಪ್ಲಿಟ್ ಪಿನ್ ಮೇಲೆ ಕ್ಯಾಪ್ ಇಡಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.24.instruction
+#. state.25.instruction
+#: ApplicationConfiguration.properties
+msgid "Place BUNG on CAP. PRESS BOTH BUTTONS to take picture and evaluate"
+msgstr "ಕ್ಯಾಪ್ ಮೇಲೆ ಬಂಗ್ ಇಡಿ. ಚಿತ್ರ ತೆಗೆದು ಪರಿಶೀಲಿಸಲು ಎರಡೂ ಬಟನ್ ಒತ್ತಿರಿ"
+
+#. state.26.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting CAP PRESS completion"
+msgstr "ಕ್ಯಾಪ್ ಪ್ರೆಸ್ ಪೂರ್ಣಗೊಳ್ಳಲು ಕಾಯಲಾಗುತ್ತಿದೆ"
+
+#. state.27.instruction
+#. state.28.instruction
+#: ApplicationConfiguration.properties
+msgid "Awaiting READING TORQUE after FREE ROTATION"
+msgstr "ಮುಕ್ತ ತಿರುಗುವಿಕೆಯ ನಂತರದ ಟಾರ್ಕ್ ರೀಡಿಂಗ್‌ಗೆ ಕಾಯಲಾಗುತ್ತಿದೆ"
+
