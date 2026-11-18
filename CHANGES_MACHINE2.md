@@ -4306,3 +4306,8 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   Unchanged: `DryRun_Cap_Production_Path` 12/12, `DryRun_Cap_Silver_Seating` 6/6, `DryRun_Cap_Check` all as expected
   (none of them sets a hub centre: rule not applied), `DryRun_Camera_State_File` 19/19 both, `DryRun_Vision_Check_Timeout`
   23/23. Not run: the real hub check (needs YOLO), `DryRun_Knuckle_Frame.py --quick` (stopped at 500 s on this CPU).
+- **Known before the first run:** CHANGES 96 measured the stud (bolt) circle's centre about 7 px above the hole
+  circle's (the bolt tips are nearer the camera), and the seated cap outlines of CHANGES 99 sit a few px above the
+  hole circles too. With both offsets 0, a cycle whose hub check won on the other group than the cap face lines up
+  with can be off by about 7 px, above the 5 px limit: the offsets have to be measured (hub check line + seating line
+  of the same cycles) before the rule is relied on.
