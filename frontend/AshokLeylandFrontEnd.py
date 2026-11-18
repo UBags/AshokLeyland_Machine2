@@ -127,7 +127,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     emergencyUpdationRedisConnection: Union[Redis, None] = None
     emergencyUpdationRedisConnected: bool = False
     heartbeatRedisConnection: Union[Redis, None] = None
-    STATUS_STALE_AFTER_INTERVALS: int = 3          # no status for 3 heartbeat intervals -> all shown as down
+    # no status for 3 heartbeat intervals -> all shown as down
+    STATUS_STALE_AFTER_INTERVALS: int = CosThetaConfigurator.getTuning("frontend.status.stale.after.intervals", 3, minimum=1)
     lastConnectionStatusReceivedAt: float = 0.0     # time.monotonic() of the last status message
     heartbeatRedisConnected: bool = False
     databaseUpdationRedisConnection: Union[Redis, None] = None
@@ -225,7 +226,7 @@ class AshokLeylandFrontEnd(QMainWindow):
     emergencyButtonPressed : bool = False
     # an aborted cycle's tiles are cleared this soon after the "Aborted" box (as before CHANGES 123; user, 2026-11-17);
     # a completed cycle's stay frontend.free.rotation.torque.display.sec (5 s)
-    ABORT_TILES_CLEAR_MSEC : int = 750
+    ABORT_TILES_CLEAR_MSEC : int = CosThetaConfigurator.getTuning("frontend.abort.tiles.clear.msec", 750, minimum=0)
     abortReason : str = ""                  # why the cycle was aborted (emergency button / manual abort), for the record
     # the frontend's abort (Ctrl+Alt+Z): password frontend.abort.password in the properties file, read at each use
 
@@ -2176,7 +2177,7 @@ class StateSyncWorker(QObject):
     (utils/StateSync.StateSyncMonitor). It changes nothing: a difference lasting longer than
     frontend.state.sync.grace.sec (5 s) is logged as "STATE-SYNC MISMATCH", its end as "STATE-SYNC RESOLVED"; missing
     messages, an IOServer restart and a per-cycle summary are logged too (all lines start with "STATE-SYNC")."""
-    INTERVAL_MS = 250
+    INTERVAL_MS = CosThetaConfigurator.getTuning("frontend.state.sync.poll.interval.msec", 250, minimum=50)
 
     def __init__(self):
         super().__init__()

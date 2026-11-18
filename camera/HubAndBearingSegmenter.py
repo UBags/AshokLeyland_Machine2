@@ -36,37 +36,38 @@ from utils.ImageNormalisationWithMask import (
     pixBackgroundNorm_masked,
     pixContrastNorm_masked
 )
+from camera.VisionConfig import vInt, vFloat
 
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_10 = 1.3
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_20 = 1.2
-MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_40 = 1.15
-MAJOR_MINOR_AXIS_CUTOFF_FOR_OTHERS = 1.10
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_10 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.10", 1.3)
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_20 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.20", 1.2)
+MAJOR_MINOR_AXIS_CUTOFF_IF_LESS_THAN_40 = vFloat("vision.hub.major.minor.axis.cutoff.if.less.than.40", 1.15)
+MAJOR_MINOR_AXIS_CUTOFF_FOR_OTHERS = vFloat("vision.hub.major.minor.axis.cutoff.for.others", 1.10)
 
 # These are applied based on the median radius/major_axis of each group
 # Percentages (12-15% range):
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_10 = 0.25  # 20%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_20 = 0.20  # 20%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_40 = 0.15  # 15%
-GROUPING_RADIUS_VARIANCE_PERCENTAGE_MORE_THAN_40 = 0.10  # 10%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_10 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.10", 0.25)  # 20%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_20 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.20", 0.20)  # 20%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_LESS_THAN_40 = vFloat("vision.hub.grouping.radius.variance.percentage.less.than.40", 0.15)  # 15%
+GROUPING_RADIUS_VARIANCE_PERCENTAGE_MORE_THAN_40 = vFloat("vision.hub.grouping.radius.variance.percentage.more.than.40", 0.10)  # 10%
 
 # Area ratio thresholds for filtering ill-shaped masks
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_10 = 0.5
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_20 = 0.55
-AREA_RATIO_THRESHOLD_IF_LESS_THAN_40 = 0.6
-AREA_RATIO_THRESHOLD_FOR_OTHERS = 0.65
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_10 = vFloat("vision.hub.area.ratio.threshold.if.less.than.10", 0.5)
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_20 = vFloat("vision.hub.area.ratio.threshold.if.less.than.20", 0.55)
+AREA_RATIO_THRESHOLD_IF_LESS_THAN_40 = vFloat("vision.hub.area.ratio.threshold.if.less.than.40", 0.6)
+AREA_RATIO_THRESHOLD_FOR_OTHERS = vFloat("vision.hub.area.ratio.threshold.for.others", 0.65)
 
 # Model-specific distance configurations for hole counting
 # Format: (distance1, distance2, tolerance_percentage)
 # Edge distances (px) between neighbouring holes / bolts of the winning group, per model: one range for each of the
 # two hole / bolt circles ("distances" and "tolerance" are not read by the live code)
-HUB_SPACING_DOST_1_MIN = 215
-HUB_SPACING_DOST_1_MAX = 245
-HUB_SPACING_DOST_2_MIN = 175
-HUB_SPACING_DOST_2_MAX = 200
-HUB_SPACING_DOSTPLUS_1_MIN = 190
-HUB_SPACING_DOSTPLUS_1_MAX = 210
-HUB_SPACING_DOSTPLUS_2_MIN = 145
-HUB_SPACING_DOSTPLUS_2_MAX = 170
+HUB_SPACING_DOST_1_MIN = vInt("vision.hub.spacing.dost.1.min", 215)
+HUB_SPACING_DOST_1_MAX = vInt("vision.hub.spacing.dost.1.max", 245)
+HUB_SPACING_DOST_2_MIN = vInt("vision.hub.spacing.dost.2.min", 175)
+HUB_SPACING_DOST_2_MAX = vInt("vision.hub.spacing.dost.2.max", 200)
+HUB_SPACING_DOSTPLUS_1_MIN = vInt("vision.hub.spacing.dostplus.1.min", 190)
+HUB_SPACING_DOSTPLUS_1_MAX = vInt("vision.hub.spacing.dostplus.1.max", 210)
+HUB_SPACING_DOSTPLUS_2_MIN = vInt("vision.hub.spacing.dostplus.2.min", 145)
+HUB_SPACING_DOSTPLUS_2_MAX = vInt("vision.hub.spacing.dostplus.2.max", 170)
 MODEL_DISTANCE_CONFIG = {
     "DOST": {
         "distances": [170, 135],
@@ -94,28 +95,28 @@ ALL_SPACING_CONFIGURATIONS = [
     {"count": 4, "spacing_min": 175, "spacing_max": 200, "model": "DOST"},
 ]
 
-PERCENTAGE_SPREAD_FOR_GROUPING_FROM_CENTER = 0.15  # 12.5%
+PERCENTAGE_SPREAD_FOR_GROUPING_FROM_CENTER = vFloat("vision.hub.percentage.spread.for.grouping.from.center", 0.15)  # 12.5%
 
 # Equispacing tolerance for circular arrangement validation
-EQUISPACING_STRICT_TOLERANCE = 0.10  # 10% - strict pass criteria
-EQUISPACING_RELAXED_TOLERANCE = 0.20  # 20% - fallback if no strict pass
+EQUISPACING_STRICT_TOLERANCE = vFloat("vision.hub.equispacing.strict.tolerance", 0.10)  # 10% - strict pass criteria
+EQUISPACING_RELAXED_TOLERANCE = vFloat("vision.hub.equispacing.relaxed.tolerance", 0.20)  # 20% - fallback if no strict pass
 
 # =============================================================================
 # NEW v2.0: REGULAR POLYGON FINDER CONSTANTS
 # =============================================================================
 
 # Tolerance for angular deviation (as fraction of expected angle)
-POLYGON_ANGULAR_TOLERANCE = 0.15  # 15%
+POLYGON_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.polygon.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Tolerance for radial deviation (as fraction of mean radius)
-POLYGON_RADIAL_TOLERANCE = 0.20  # 20%
+POLYGON_RADIAL_TOLERANCE = vFloat("vision.unused.hub.polygon.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
 
 # Quality thresholds for polygon fit
-GOOD_FIT_THRESHOLD_K4 = 0.25  # Good square fit
-GOOD_FIT_THRESHOLD_K5 = 0.30  # Good pentagon fit
+GOOD_FIT_THRESHOLD_K4 = vFloat("vision.unused.hub.good.fit.threshold.k4", 0.25)  # Good square fit  # UNUSED by live code
+GOOD_FIT_THRESHOLD_K5 = vFloat("vision.unused.hub.good.fit.threshold.k5", 0.30)  # Good pentagon fit  # UNUSED by live code
 
 # Dominance ratio: winner must be this much better than loser
-DOMINANCE_RATIO = 0.70  # Winner score must be < 70% of loser score
+DOMINANCE_RATIO = vFloat("vision.unused.hub.dominance.ratio", 0.70)  # Winner score must be < 70% of loser score  # UNUSED by live code
 
 # =============================================================================
 # STRICT REGULARITY VALIDATION THRESHOLDS (v2.1)
@@ -125,13 +126,28 @@ DOMINANCE_RATIO = 0.70  # Winner score must be < 70% of loser score
 # Angular tolerance: how much each angle can deviate from expected (360/K)
 # For K=4: expected 90°, tolerance ±15% means 76.5° to 103.5°
 # For K=5: expected 72°, tolerance ±15% means 61.2° to 82.8°
-REGULARITY_ANGULAR_TOLERANCE = 0.15  # 15%
+REGULARITY_ANGULAR_TOLERANCE = vFloat("vision.unused.hub.regularity.angular.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Side length tolerance: how much each side can deviate from mean side length
-REGULARITY_SIDE_TOLERANCE = 0.15  # 15%
+REGULARITY_SIDE_TOLERANCE = vFloat("vision.unused.hub.regularity.side.tolerance", 0.15)  # 15%  # UNUSED by live code
 
 # Radial tolerance: how much each vertex distance from center can deviate from mean
-REGULARITY_RADIAL_TOLERANCE = 0.20  # 20%
+REGULARITY_RADIAL_TOLERANCE = vFloat("vision.unused.hub.regularity.radial.tolerance", 0.20)  # 20%  # UNUSED by live code
+
+# =============================================================================
+# HUB CHECK ROI / ACCEPTANCE PARAMETERS (configurable via ApplicationConfiguration.properties)
+# =============================================================================
+# Annular region (full-image pixel coordinates) in which the hub holes are segmented; also used to place the overlay
+HUB_SEGMENT_CENTER_X = vInt("vision.hub.segment.center.x", 635)
+HUB_SEGMENT_CENTER_Y = vInt("vision.hub.segment.center.y", 345)
+HUB_SEGMENT_OUTER_RADIUS = vInt("vision.hub.segment.outer.radius", 250)
+HUB_SEGMENT_INNER_RADIUS = vInt("vision.hub.segment.inner.radius", 120)
+# Hole-candidate mask area limits (pixels) and YOLO proposal confidence cut-off
+HUB_MIN_MASK_AREA = vInt("vision.hub.min.mask.area", 100)
+HUB_MAX_MASK_AREA = vInt("vision.hub.max.mask.area", 3000)
+HUB_YOLO_CONF_THRESHOLD = vFloat("vision.hub.yolo.conf.threshold", 0.3)
+# Equal-angle filter: each angular gap may deviate this fraction from 360/K
+HUB_EQUAL_ANGLE_TOLERANCE = vFloat("vision.hub.equal.angle.tolerance", 0.15)
 
 
 # =============================================================================
@@ -2298,7 +2314,7 @@ def filter_subgroups_by_equispacing(
     Returns:
         Tuple of (filtered_groups, winning_group_id, detected_model, is_match)
     """
-    angular_tolerance = 0.15  # ±15% for angular validation
+    angular_tolerance = HUB_EQUAL_ANGLE_TOLERANCE  # ±15% for angular validation
 
     _src = __name__
     logBoth('logDebug', _src,
@@ -2763,10 +2779,10 @@ class HubAndBearingSegmenter:
         self.sam_predictor = self.model_manager.get_sam_predictor()
         self.yolo_model = self.model_manager.get_yolo_model()
 
-        self.conf_thresh = 0.3
+        self.conf_thresh = HUB_YOLO_CONF_THRESHOLD
         self.iou_thresh = 0.7
-        self.min_area = 100
-        self.max_area = 3000
+        self.min_area = HUB_MIN_MASK_AREA
+        self.max_area = HUB_MAX_MASK_AREA
         self.use_grid = True
 
         # Create mask generator
@@ -2782,9 +2798,9 @@ class HubAndBearingSegmenter:
         )
 
         # Annular region parameters (fixed for this application)
-        self.annular_center = (635, 345)
-        self.annular_outer_radius = 250
-        self.annular_inner_radius = 120
+        self.annular_center = (HUB_SEGMENT_CENTER_X, HUB_SEGMENT_CENTER_Y)
+        self.annular_outer_radius = HUB_SEGMENT_OUTER_RADIUS
+        self.annular_inner_radius = HUB_SEGMENT_INNER_RADIUS
 
         # Storage for last run results
         self._last_masks = None
@@ -3150,7 +3166,7 @@ class HubAndBearingSegmenter:
                     'center': center,
                     'aspect_ratio': aspect_ratio
                 }
-        except:
+        except Exception:
             return {'type': 'other', 'center': None}
 
     def _group_by_distance_from_center(self, masks: List[Dict]) -> Dict[int, List[int]]:
@@ -3449,8 +3465,8 @@ def paint_masks_on_image(original_image: np.ndarray,
     # TRANSLATION OFFSET: Annular region offset from full image
     # Annular region center is at (635, 345) with outer_radius=250
     # So annular region top-left corner is at:
-    offset_x = 635 - 250  # = 385
-    offset_y = 345 - 250  # = 95
+    offset_x = HUB_SEGMENT_CENTER_X - HUB_SEGMENT_OUTER_RADIUS  # = 385
+    offset_y = HUB_SEGMENT_CENTER_Y - HUB_SEGMENT_OUTER_RADIUS  # = 95
 
     # Create overlay
     overlay = np.zeros_like(result)

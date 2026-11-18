@@ -36,7 +36,8 @@ DISC_EDGE_FRACTION = vFloat("vision.cap.mask.disc.edge.fraction", 0.9)  # radius
 ELLIPSE_TOLERANCE = vFloat("vision.cap.mask.ellipse.tolerance", 2.5)    # px; an outline point this close is on it
 ELLIPSE_TRIES = vInt("vision.cap.mask.ellipse.tries", 300)              # RANSAC ellipses in stage 2
 
-BOX_BATCH = 64                                                          # boxes per MobileSAM decoder pass
+# boxes per MobileSAM decoder pass
+BOX_BATCH = vInt("vision.cap.mask.box.batch", 64)
 
 
 def applyGamma(picture: np.ndarray, gamma: float) -> np.ndarray:

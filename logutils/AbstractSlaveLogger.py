@@ -51,8 +51,8 @@ class SlaveLogger(Thread, ABC):
     # Messages are never dropped silently: a full in-process queue or a Redis outage is counted, messages that
     # could not be sent are kept (up to PENDING_LIMIT) and re-sent when Redis is back, and the counts of any that
     # had to be dropped are reported in the log as soon as it is possible again.
-    DEFAULT_QUEUE_SIZE: int = 5000
-    PENDING_LIMIT: int = 20000
+    DEFAULT_QUEUE_SIZE: int = CosThetaConfigurator.getTuning("log.slave.queue.size", 5000, minimum=100)
+    PENDING_LIMIT: int = CosThetaConfigurator.getTuning("log.slave.pending.limit", 20000, minimum=0)
 
     def __init__(self, max_size: int = 5000, **kwargs) -> None:
         """

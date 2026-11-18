@@ -49,11 +49,11 @@ except ImportError as e:
 # =============================================================================
 # PRINT CONTROL FLAGS
 # =============================================================================
-PRINT_QR_PARSING = False
-PRINT_IMAGE_PREPROCESSING = False
-PRINT_BATCH_SEGMENTATION = False
-PRINT_RESULT_PAINTING = False
-PRINT_SUCCESS_EVALUATION = True
+PRINT_QR_PARSING = CosThetaConfigurator.getTuning("debug.print.checknocapbung.qr.parsing", False)
+PRINT_IMAGE_PREPROCESSING = CosThetaConfigurator.getTuning("debug.print.checknocapbung.image.preprocessing", False)
+PRINT_BATCH_SEGMENTATION = CosThetaConfigurator.getTuning("debug.print.checknocapbung.batch.segmentation", False)
+PRINT_RESULT_PAINTING = CosThetaConfigurator.getTuning("debug.print.checknocapbung.result.painting", False)
+PRINT_SUCCESS_EVALUATION = CosThetaConfigurator.getTuning("debug.print.checknocapbung.success.evaluation", True)
 
 
 from camera.CheckBung import drawSeatingMarks  # noqa: E402

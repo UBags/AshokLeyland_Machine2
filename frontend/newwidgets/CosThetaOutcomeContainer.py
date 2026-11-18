@@ -30,9 +30,11 @@ class CosThetaOutcomeContainer(QFrame):
     RESULT_AWAITED_STYLESHEET = noResultLabelStylesheet.format(QColor(Qt.GlobalColor.white).name())
     EMPTY_IMAGE_FONT = QFont('Courier', pointSize=18, weight=QFont.Weight.Bold)
     NUMBER_DISPLAY_FONT = QFont('Courier', pointSize=36, weight=QFont.Weight.Bold)
-    SECOND_LINE_POINT_SIZE = 13             # second line of a two-line display (e.g. "Rotation Done"); was 16, the
-                                            # last 'e' of "Rotation Not Done" went past the tile edge
-    SECOND_LINE_MIN_POINT_SIZE = 8          # never smaller than this when shrinking to fit
+    # second line of a two-line display (e.g. "Rotation Done"); was 16, the last 'e' of "Rotation Not Done" went past
+    # the tile edge
+    SECOND_LINE_POINT_SIZE = CosThetaConfigurator.getTuning("frontend.outcome.second.line.point.size", 13, minimum=4)
+    # never smaller than this when shrinking to fit
+    SECOND_LINE_MIN_POINT_SIZE = CosThetaConfigurator.getTuning("frontend.outcome.second.line.min.point.size", 8, minimum=4)
 
     def __init__(self, title : str, imageHint : str, bg_color = Qt.GlobalColor.black, fg_color = Qt.GlobalColor.white,
                  default_status = "Result Awaited", forceTopLabelFontSizeTo : int = 0,

@@ -459,7 +459,8 @@ class PLCIOServer:
     OPTIONAL_TAG_ATTRS = ("PC_PLC_CycleAborted", "PC_PLC_Skip_Second_Tightening")
     # states skipped by the bypass: after the Torque 1 value (state 12) straight to the split pin picture (state 20)
     SKIP_TO_STATE_AFTER_TORQUE_1 = MachineState.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER
-    FRONTEND_ABORT_WRITE_ATTEMPTS: int = 3      # the frontend's abort: PC_PLC_CycleAborted = True, then abort
+    # the frontend's abort: PC_PLC_CycleAborted = True, then abort
+    FRONTEND_ABORT_WRITE_ATTEMPTS: int = CosThetaConfigurator.getTuning("plc.frontend.abort.write.attempts", 3, minimum=1)
 
     # ==================== Configuration Values ====================
     PLC_IP: str = CosThetaConfigurator.getInstance().getPlcIP()
@@ -470,12 +471,18 @@ class PLCIOServer:
     FALSE_FLOAT_VALUE: float = -1234.
     FALSE_INT_VALUE: int = -1234
     WATCH_TAG_VALUE: int = 1234
-    SETTINGS_WRITE_ATTEMPTS: int = 3        # per cycle-setting tag, in state 2
-    WRITE_RETRY_INTERVAL: float = 0.2       # s between write attempts
-    VISION_RESULT_RESET_ATTEMPTS: int = 5          # attempts to set a vision check's OK / Done back to False
-    RESET_WRITE_ATTEMPTS: int = 5           # per tag in resetForNextCycle(): write + read back until they agree
-    RESET_FLOAT_TOLERANCE: float = 1e-3     # a REAL read back within this of the value written counts as written
-    REFERENCE_READ_ATTEMPTS: int = 3        # reads of the reference tag after a reconnect before giving up for now
+    # per cycle-setting tag, in state 2
+    SETTINGS_WRITE_ATTEMPTS: int = CosThetaConfigurator.getTuning("plc.settings.write.attempts", 3, minimum=1)
+    # s between write attempts
+    WRITE_RETRY_INTERVAL: float = CosThetaConfigurator.getTuning("plc.write.retry.interval.sec", 0.2, minimum=0.0)
+    # attempts to set a vision check's OK / Done back to False
+    VISION_RESULT_RESET_ATTEMPTS: int = CosThetaConfigurator.getTuning("plc.vision.result.reset.attempts", 5, minimum=1)
+    # per tag in resetForNextCycle(): write + read back until they agree
+    RESET_WRITE_ATTEMPTS: int = CosThetaConfigurator.getTuning("plc.reset.write.attempts", 5, minimum=1)
+    # a REAL read back within this of the value written counts as written
+    RESET_FLOAT_TOLERANCE: float = CosThetaConfigurator.getTuning("plc.reset.float.tolerance", 0.001, minimum=0.0)
+    # reads of the reference tag after a reconnect before giving up for now
+    REFERENCE_READ_ATTEMPTS: int = CosThetaConfigurator.getTuning("plc.reference.read.attempts", 3, minimum=1)
     NO_CONNECTION: int = -1986754392
     CONSECUTIVE_CONNECTION_DOWN_COUNT: int = 0
 
@@ -1746,7 +1753,8 @@ class PLCIOServer:
                 self._awaitingTriggerReset.discard(readState)
                 self._awaitingTriggerSince.pop(readState, None)
 
-    TRIGGER_HELD_WARNING_SECS: float = 3.0      # trigger still True this long after a NOT OK -> logged once (PLC side)
+    # trigger still True this long after a NOT OK -> logged once (PLC side)
+    TRIGGER_HELD_WARNING_SECS: float = CosThetaConfigurator.getTuning("plc.trigger.held.warning.sec", 3.0, minimum=0.0)
 
     def _noteTriggerStillHeld(self, readState: MachineState, triggerTag: str) -> None:
         """The trigger is still True after a NOT OK: after TRIGGER_HELD_WARNING_SECS, say so once."""

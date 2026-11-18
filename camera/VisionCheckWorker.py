@@ -26,14 +26,18 @@ import threading
 import time
 from typing import Any, Optional, Tuple
 
-READY_TIMEOUT_SECS = 600.0        # loading the models on a cold start can take a while
-STOP_TIMEOUT_SECS = 3.0
-TIMEOUTS_IN_A_ROW_FOR_ALARM = 3   # this many timed-out checks in a row: the checks are too slow on this PC (alarm)
+from Configuration import CosThetaConfigurator
+
+# loading the models on a cold start can take a while
+READY_TIMEOUT_SECS = CosThetaConfigurator.getTuning("camera.worker.ready.timeout.sec", 600.0, minimum=10.0)
+STOP_TIMEOUT_SECS = CosThetaConfigurator.getTuning("camera.worker.stop.timeout.sec", 3.0, minimum=0.5)
+# this many timed-out checks in a row: the checks are too slow on this PC (alarm)
+TIMEOUTS_IN_A_ROW_FOR_ALARM = CosThetaConfigurator.getTuning("camera.worker.timeouts.in.a.row.for.alarm", 3, minimum=1)
 # A worker that does not reach "ready" (dies while starting, e.g. a missing DLL) is started again after a growing pause
 # - 1, 2, 4 ... RESTART_BACKOFF_MAX_SECS s - instead of at once, which spawned processes in a tight loop (CHANGES 110).
 # A restart after a worker that had been ready (a timed-out check, a crash during a check) stays immediate.
-RESTART_BACKOFF_BASE_SECS = 1.0
-RESTART_BACKOFF_MAX_SECS = 60.0
+RESTART_BACKOFF_BASE_SECS = CosThetaConfigurator.getTuning("camera.worker.restart.backoff.base.sec", 1.0, minimum=0.1)
+RESTART_BACKOFF_MAX_SECS = CosThetaConfigurator.getTuning("camera.worker.restart.backoff.max.sec", 60.0, minimum=0.1)
 
 _worker = None
 _workerLock = threading.Lock()
@@ -127,7 +131,7 @@ def _warmUp(cps) -> None:
 
 
 # Longest wait for the bearing-ring guard after the worker's verdict (it normally finishes during the check)
-GUARD_MAX_WAIT_SECS = 5.0
+GUARD_MAX_WAIT_SECS = CosThetaConfigurator.getTuning("camera.bearing.ring.guard.max.wait.sec", 5.0, minimum=0.0)
 
 
 class VisionCheckWorker:
@@ -245,7 +249,8 @@ class VisionCheckWorker:
     def pid(self) -> Optional[int]:
         return self._process.pid if self._process is not None else None
 
-    TRANSFER_WARNING_SECS = 1.0          # pictures to the worker and the result back taking longer than this: warned
+    # pictures to the worker and the result back taking longer than this: warned
+    TRANSFER_WARNING_SECS = CosThetaConfigurator.getTuning("camera.worker.transfer.warning.sec", 1.0, minimum=0.0)
 
     def _logTimes(self, state, totalSecs: float, checkSecs) -> None:
         """Each check's time in the worker and the time to send the pictures there and the result back (the rest of

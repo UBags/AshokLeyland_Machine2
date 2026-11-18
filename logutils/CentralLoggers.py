@@ -171,8 +171,9 @@ class MasterFileLogger(Thread):
             pass
         return 0
 
-    BATCH: int = 200
-    STOP_CHECK_INTERVAL: float = 0.5        # s between checks of the stop queue (each check can take ~100 ms)
+    BATCH: int = CosThetaConfigurator.getTuning("log.master.file.batch", 200, minimum=1)
+    # s between checks of the stop queue (each check can take ~100 ms)
+    STOP_CHECK_INTERVAL: float = CosThetaConfigurator.getTuning("log.master.stop.check.interval.sec", 0.5, minimum=0.05)
 
     def _getData(self) -> Optional[list]:
         """

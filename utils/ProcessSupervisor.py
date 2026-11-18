@@ -23,10 +23,13 @@ import time
 from collections import deque
 from typing import Callable, Dict, List, Optional
 
+from Configuration import CosThetaConfigurator
+
 
 class ProcessSupervisor:
 
-    GRACE_SECS = 2.0          # a process found dead: wait this long (a stop command may be on its way), then decide
+    # a process found dead: wait this long (a stop command may be on its way), then decide
+    GRACE_SECS = CosThetaConfigurator.getTuning("supervisor.grace.sec", 2.0, minimum=0.0)
 
     def __init__(self, processFactory: Callable, isStopping: Callable[[], bool], pidList: Optional[List[int]] = None,
                  checkInterval: float = 2.0, maxRestartsPerHour: int = 10, log: Callable[[str], None] = print):

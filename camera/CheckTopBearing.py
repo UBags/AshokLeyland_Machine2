@@ -67,7 +67,7 @@ from utils.ImageNormalisationWithMask import (
     pixBackgroundNorm_masked,
     pixContrastNorm_masked,
     relative_gamma_masked)
-from camera.VisionConfig import vInt, vFloat, vBool, vList, vPoints
+from camera.VisionConfig import vInt, vFloat, vBool, vList, vPoints, vStr
 
 
 # =============================================================================
@@ -94,17 +94,23 @@ TARGET_RING_THICKNESS_FOR_AREA_SCORE = vInt("vision.topbearing.target.ring.thick
 
 # RANSAC circle fitting samples from its own random generator started from this fixed seed (not the global np.random):
 # the same picture always gives the same ring and the same verdict, also when the branches run in parallel threads.
-RANSAC_SEED = 0
+RANSAC_SEED = vInt("vision.topbearing.ransac.seed", 0)
 
 # ---------------------------------------------------------------------------
 # Diagnostic print verbosity flags (set True to enable)
 # ---------------------------------------------------------------------------
-PRINT_IMAGE_TRANSFORMATION_DETAILS = False  # Steps 1-8: annular extraction, bg norm, gamma, bilateral, contrast, channel, invert, binarisation
-PRINT_RADIAL_TRACING_DETAILS = False  # Radial ray-casting that produces list_a / list_b
-PRINT_CIRCLE_FITTING_DETAILS = False  # RANSAC + Kasa circle fitting
-PRINT_ANCHOR_SELECTION_DETAILS = False  # Which edge (inner/outer) is chosen as anchor
-PRINT_THICKNESS_DETERMINATION_DETAILS = False  # Thickness scanning and percentile selection
-PRINT_WINNING_BRANCH_SELECTION_DETAILS = False  # Branch scoring, ranking, winner selection
+# Steps 1-8: annular extraction, bg norm, gamma, bilateral, contrast, channel, invert, binarisation
+PRINT_IMAGE_TRANSFORMATION_DETAILS = vBool("vision.topbearing.debug.print.image.transformation", False)
+# Radial ray-casting that produces list_a / list_b
+PRINT_RADIAL_TRACING_DETAILS = vBool("vision.topbearing.debug.print.radial.tracing", False)
+# RANSAC + Kasa circle fitting
+PRINT_CIRCLE_FITTING_DETAILS = vBool("vision.topbearing.debug.print.circle.fitting", False)
+# Which edge (inner/outer) is chosen as anchor
+PRINT_ANCHOR_SELECTION_DETAILS = vBool("vision.topbearing.debug.print.anchor.selection", False)
+# Thickness scanning and percentile selection
+PRINT_THICKNESS_DETERMINATION_DETAILS = vBool("vision.topbearing.debug.print.thickness.determination", False)
+# Branch scoring, ranking, winner selection
+PRINT_WINNING_BRANCH_SELECTION_DETAILS = vBool("vision.topbearing.debug.print.winning.branch.selection", False)
 
 
 class CheckTopBearing:
@@ -124,21 +130,21 @@ class CheckTopBearing:
     BG_NORM_SY = vInt("vision.topbearing.bg.norm.sy", 40)
 
     # Contrast normalization parameters
-    APPLY_CONTRAST_NORM = True
+    APPLY_CONTRAST_NORM = vBool("vision.topbearing.apply.contrast.norm", True)
     CONTRAST_NORM_SX = vInt("vision.topbearing.contrast.norm.sx", 10)
     CONTRAST_NORM_SY = vInt("vision.topbearing.contrast.norm.sy", 10)
 
     # Gamma and filtering
-    ALTER_GAMMA = True
-    APPLY_BILATERAL = True
-    GAMMA_FIRST = True  # Apply gamma before bilateral
+    ALTER_GAMMA = vBool("vision.topbearing.alter.gamma", True)
+    APPLY_BILATERAL = vBool("vision.topbearing.apply.bilateral", True)
+    GAMMA_FIRST = vBool("vision.topbearing.gamma.first", True)  # Apply gamma before bilateral
 
     # Channel selection and inversion
-    USE_CHANNEL = "Blue"  # "Red", "Green", "Blue", or "All channels"
-    INVERT_CHANNELS = True
+    USE_CHANNEL = vStr("vision.topbearing.use.channel", "Blue")  # "Red", "Green", "Blue", or "All channels"
+    INVERT_CHANNELS = vBool("vision.topbearing.invert.channels", True)
 
     # Remove inner region toggle
-    REMOVE_INNER_REGION = False
+    REMOVE_INNER_REGION = vBool("vision.topbearing.remove.inner.region", False)
 
     # Point prompt radius for bearing ring detection
     PROMPT_RADIUS = vInt("vision.topbearing.prompt.radius", 40)

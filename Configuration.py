@@ -3147,6 +3147,30 @@ class CosThetaConfigurator():
             return default
 
     @classmethod
+    def getTuning(cls, key: str, default: Any, minimum: Optional[float] = None) -> Any:
+        """A tuning value from the properties file, typed like `default` (bool, int, float or str); `default` when the
+        key is missing or cannot be read, `minimum` as a floor for numbers. The named tuning constants of the code
+        (timeouts, retry counts and gaps, poll intervals, ports, sizes; CHANGES 154) are read through this, once, when
+        their module is imported - a change applies after a restart."""
+        try:
+            raw = CosThetaConfigurator.getValue(key, default=None)
+            if raw is None or str(raw).strip() == "":
+                value = default
+            elif isinstance(default, bool):
+                value = str(raw).strip().lower() in ("true", "1", "yes", "on")
+            elif isinstance(default, int):
+                value = int(float(str(raw).strip()))
+            elif isinstance(default, float):
+                value = float(str(raw).strip())
+            else:
+                value = str(raw).strip()
+        except Exception:
+            value = default
+        if minimum is not None and isinstance(value, (int, float)) and not isinstance(value, bool) and value < minimum:
+            value = type(default)(minimum)
+        return value
+
+    @classmethod
     def _boolValue(cls, key: str, default: bool) -> bool:
         try:
             value = CosThetaConfigurator.getValue(key, default=str(default))

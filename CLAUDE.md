@@ -60,6 +60,10 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
   knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the
   allenbradley copies hold the Machine 2 values until Machine 1 is measured.
+- Named tuning values outside the vision checks (retry counts and gaps, timeouts, poll intervals, ports, font sizes,
+  debug switches of the bung checks) are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when
+  their module is imported (CHANGES 154; block "TUNING VALUES" of the properties files); the code default equals the
+  properties value - `DryRun_Tuning_Keys.py` checks it. Names, keys, states, queue names and labels stay in the code.
 - `costhetaio/siemens/IOServerProperties.yaml`: Siemens rack / slot / PDU and tag addresses.
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.

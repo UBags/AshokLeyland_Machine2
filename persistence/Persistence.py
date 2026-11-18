@@ -2128,7 +2128,7 @@ class PersistentDBConnection:
     too is the error raised. Each statement is limited to STATEMENT_TIMEOUT_MS, so a hung server cannot block the
     caller for ever. Not shared between threads: each thread keeps its own instance."""
 
-    STATEMENT_TIMEOUT_MS: int = 5000
+    STATEMENT_TIMEOUT_MS: int = CosThetaConfigurator.getTuning("db.statement.timeout.ms", 5000, minimum=0)
 
     def __init__(self):
         self._connection = None

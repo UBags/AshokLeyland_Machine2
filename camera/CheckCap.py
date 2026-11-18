@@ -303,8 +303,8 @@ class CheckCap:
     # 31 of 36 seated brass caps were "bore not found". Now both circles come from the picture unwrapped round CENTER
     # (angle x radius): per angle the strongest fall of R-B (brass -> not brass) in SEATING_BRASS_EDGE_BAND and the
     # strongest fall of grey in SEATING_BORE_EDGE_BAND; a circle is fitted to each by RANSAC (deterministic).
-    _POLAR_RADIUS = 170
-    _POLAR_ANGLES = 360
+    _POLAR_RADIUS = vInt("vision.cap.polar.radius", 170)
+    _POLAR_ANGLES = vInt("vision.cap.polar.angles", 360)
 
     @staticmethod
     def _polar(anImage: np.ndarray) -> np.ndarray:

@@ -42,11 +42,11 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # =============================================================================
 # PRINT CONTROL FLAGS
 # =============================================================================
-PRINT_PREPROCESSING = False
-PRINT_SAM_SEGMENTATION = False
-PRINT_MASK_FILTERING = False
-PRINT_GEOMETRIC_VALIDATION = False
-PRINT_BATCH_PROCESSING = False
+PRINT_PREPROCESSING = vBool("vision.bung.debug.print.preprocessing", False)
+PRINT_SAM_SEGMENTATION = vBool("vision.bung.debug.print.sam.segmentation", False)
+PRINT_MASK_FILTERING = vBool("vision.bung.debug.print.mask.filtering", False)
+PRINT_GEOMETRIC_VALIDATION = vBool("vision.bung.debug.print.geometric.validation", False)
+PRINT_BATCH_PROCESSING = vBool("vision.bung.debug.print.batch.processing", False)
 
 # =============================================================================
 # CONFIGURATION CONSTANTS (V0.7 PIPELINE)
@@ -59,6 +59,7 @@ OUTER_DISC_RADIUS = vInt("vision.bung.outer.disc.radius", 250)
 INNER_DISC_RADIUS = vInt("vision.bung.inner.disc.radius", 110)  # Radius from center of outer disc
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
+# not configurable: _preprocess_image needs a LUT for every gamma of get_gamma_sequence_for_model (CHANGES 154)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
@@ -73,9 +74,9 @@ HOLE_GRID_STEP = vInt("vision.bung.hole.grid.step", 15)
 HOLE_GRID_RADIUS_MIN = vInt("vision.bung.hole.grid.radius.min", 20)
 HOLE_GRID_RADIUS_MAX = vInt("vision.bung.hole.grid.radius.max", 90)
 # Masks found more than once (the same hole from several points): IoU above this counts as the same mask
-HOLE_DUPLICATE_IOU = 0.5
+HOLE_DUPLICATE_IOU = vFloat("vision.bung.hole.duplicate.iou", 0.5)
 # Masks overlapping by more than this fraction of the smaller one belong to the same blob; one mask is kept per blob
-HOLE_BLOB_OVERLAP = 0.15
+HOLE_BLOB_OVERLAP = vFloat("vision.bung.hole.blob.overlap", 0.15)
 
 # Geometric validation thresholds (retained from v1)
 EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bung.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code

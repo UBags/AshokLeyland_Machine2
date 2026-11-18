@@ -57,7 +57,7 @@ SPINDLE_FILL_MIN = vFloat("vision.knuckle.locator.spindle.fill.min", 0.75)
 BOSS_L_FROM_SPINDLE = vTuple("vision.knuckle.locator.boss.left.from.spindle", (-198.0, -161.0))
 BOSS_R_FROM_SPINDLE = vTuple("vision.knuckle.locator.boss.right.from.spindle", (200.0, -161.0))
 SPACING = vFloat("vision.knuckle.locator.grid.spacing", 36.76955262170047)    # 2 x 26 / sqrt(2) px
-GRID_N = 4
+GRID_N = vInt("vision.knuckle.locator.grid.n", 4)
 DEDUPE_IOU = vFloat("vision.knuckle.locator.dedupe.iou", 0.85)
 # A boss: radius, circularity, fill, bright ring round a dark core (bore + pin), concentricity
 BOSS_RADIUS = vTuple("vision.knuckle.locator.boss.radius", (30.0, 60.0))

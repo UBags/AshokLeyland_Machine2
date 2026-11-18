@@ -174,6 +174,7 @@ No values or words are written on the pictures sent to the frontend (outlines on
 - **`ApplicationConfiguration.Machine1.properties` and `.Machine2.properties`** are build-time copies used by `runNuitka.bat allenbradley|siemens`, which copies the machine's file into the build as `ApplicationConfiguration.properties`. They differ only in `plc.vendor`; per-machine values are kept under `allenbradley.` / `siemens.` prefixes.
 - **`costhetaio/siemens/IOServerProperties.yaml`** holds the Siemens rack, slot and PDU size, and the tag addresses.
 - **Vision parameters** are the `<vendor>.vision.*` keys, read through `camera/VisionConfig.py` into each check module's constants (the module's defaults are the Machine 1 values). In the exe a changed vision value takes effect after a restart (live reload of vision values needs the .py sources). The knuckle frame's and locator's reference values are `<vendor>.vision.frame.*` / `.vision.knuckle.locator.*` keys (§5a).
+- **Tuning values** (retry counts and gaps, timeouts, poll intervals, ports, font sizes, debug switches) that were named constants in the code are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when their module is imported (block "TUNING VALUES", CHANGES 154); a missing key gives the code's default, which equals the value in the file. The vision checks' debug switches and pipeline switches (top bearing, nut, bung, cap polar size, knuckle grid, hub hole spacing ranges) are `<vendor>.vision.*` keys like the other vision values.
 
 ## 8. Data
 

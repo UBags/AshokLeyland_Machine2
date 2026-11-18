@@ -4655,3 +4655,86 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   (judges the hole pattern only, which did not change).
 - **Margin to watch:** the oval test (6 %) has the least room: seated up to 4.0 % here, and a moved picture added up to
   2.8 points on B12. Not changed; the seating lines of a shift will show it.
+
+## 154. Named tuning constants moved into the properties files; code review (report only) (2026-11-19)
+
+- **User:** review the whole codebase for errors; no constants in the Python programs - as far as possible in the
+  properties files. Scope chosen by the user: **named tuning constants only** (not bare literals in function bodies,
+  and not names: properties-key strings, state numbers, queue names, labels, SQL column lists); the review **reported
+  first**, nothing fixed without a decision.
+- **Inventory:** 583 named constants in 159 production files; 353 of them are the key-name strings of
+  `Configuration.py`, the rest mostly state numbers, log levels, audit labels, queue names and sentinels. About 50 are
+  tuning values; all of them are moved.
+- **Non-vision code:** new `CosThetaConfigurator.getTuning(key, default, minimum=None)` - typed like the default (bool,
+  int, float, str), the default when the key is missing or unreadable, `minimum` as a floor. Each constant keeps its
+  name and is now initialised from it when its module is imported (a change applies after a restart; the dry runs that
+  patch these attributes keep working). Keys (plain, both machines; block "TUNING VALUES (CHANGES 154)" of the three
+  properties files, values = the old code values):
+  - PLCIOServer: `plc.settings.write.attempts` 3, `plc.frontend.abort.write.attempts` 3,
+    `plc.vision.result.reset.attempts` 5, `plc.reset.write.attempts` 5, `plc.reference.read.attempts` 3,
+    `plc.write.retry.interval.sec` 0.2, `plc.reset.float.tolerance` 0.001, `plc.trigger.held.warning.sec` 3.0;
+  - QR code server: `qrcode.invalid.notice.sec` 10.0, `qrcode.line.quiet.sec` 0.3;
+  - vision check worker: `camera.worker.ready.timeout.sec` 600, `.stop.timeout.sec` 3, `.timeouts.in.a.row.for.alarm`
+    3, `.restart.backoff.base.sec` 1, `.restart.backoff.max.sec` 60, `.transfer.warning.sec` 1.0,
+    `camera.bearing.ring.guard.max.wait.sec` 5.0;
+  - DB: `db.idle.poll.sec` 1.0, `db.insert.max.attempts` 3, `db.insert.retry.gap.sec` 5.0, `db.day.check.interval.sec`
+    60, `db.statement.timeout.ms` 5000;
+  - frontend: `frontend.status.stale.after.intervals` 3, `frontend.abort.tiles.clear.msec` 750,
+    `frontend.state.sync.poll.interval.msec` 250, `frontend.outcome.second.line.point.size` 13 / `.min.point.size` 8;
+  - logging, Redis, supervisor: `log.slave.queue.size` 5000, `log.slave.pending.limit` 20000, `log.master.file.batch`
+    200, `log.master.stop.check.interval.sec` 0.5, `log.suppressed.repeat.every` 100 (read at first use:
+    `SuppressedExceptions` is imported before `Configuration` by many modules), `redis.io.state.stream.maxlen` 500,
+    `supervisor.grace.sec` 2.0;
+  - web service / MI / show-screen: `endpoints.webservice.port` 8000, `endpoints.mi.port` 8050,
+    `endpoints.showscreen.http.port` 8100 / `.ws.port` 8099 / `.interval.sec` 1.0 / `.resize.scale` 0.6;
+  - debug print switches of `CheckBung` / `CheckNoCapBung`: `debug.print.checkbung.*` / `debug.print.checknocapbung.*`
+    (plain keys: as `vision.*` keys the verifier would require the two files in its manifest).
+- **Vision files** (`<vendor>.vision.*`, both vendors = the code value, wrapped with `vBool` / `vInt` / `vFloat` / `vStr`
+  - the verifier substitutes the default, so these need no reference commit): BungSegmenter debug prints (5),
+  `bung.hole.duplicate.iou` 0.5, `bung.hole.blob.overlap` 0.15; CheckTopBearing `topbearing.ransac.seed` 0, debug
+  prints (6), pipeline switches `apply.contrast.norm`, `alter.gamma`, `apply.bilateral`, `gamma.first`,
+  `invert.channels` (True) / `remove.inner.region` (False), `use.channel` Blue; HexagonNutDetector `nut.debug.print.detail`
+  False (it switches all six debug flags on), `nut.enable.vram.monitoring` True; CheckCap `cap.polar.radius` 170 /
+  `cap.polar.angles` 360; CapMaskFinder `cap.mask.box.batch` 64; KnuckleLocator `knuckle.locator.grid.n` 4;
+  CheckKnuckle `knuckle.debug.image` False. HubAndBearingSegmenter's hole-spacing ranges (the only values of
+  `MODEL_DISTANCE_CONFIG` the live code reads) became named constants first - reference commit `7f04479` (3d91a76's
+  file + the named constants, values hard-coded; 8 extracted-literal entries moved by 10 lines) - then
+  `vision.hub.spacing.<dost|dostplus>.<1|2>.<min|max>` (215-245 / 175-200 / 190-210 / 145-170).
+- **Left in the code on purpose:** `BungSegmenter.GAMMA_SEQUENCE` (only the LUTs built at start; `_preprocess_image`
+  needs a LUT for every gamma that `get_gamma_sequence_for_model` returns, so a configurable list could make every bung
+  check fail with a KeyError - and the order actually used is that function's inline list, a bare literal), the six
+  `DEBUG_*` flags of HexagonNutDetector (set by `PRINT_DETAIL`; the verifier cannot wrap a name assigned twice),
+  `SYMMETRY_THRESHOLDS` and `ALL_SPACING_CONFIGURATIONS` (not read by the live code), sentinels (`FALSE_FLOAT_VALUE`,
+  `NO_CONNECTION`, `WATCH_TAG_VALUE`), the PLC side codes 1 / 2, file-format and Windows API numbers.
+- **Review (report, not fixed):** ruff bug rules and pyflakes over the production code (no undefined names, no new
+  defects; the remaining F841 / F811 are the kept ones of CHANGES 82 / 110 and legacy modules); every production module
+  compiles; every `CosThetaConfigurator.get...()` called exists (except in legacy modules nothing imports and commented
+  lines); every `*_KEY` read by a getter in use is in the properties file or has a deliberate default. Read in detail:
+  ProcessSupervisor, StateMachine, VisionCheckWorker, the camera server's `assessPictures` / `_assessCap`, the bung
+  seating step, the QR line assembler, the DB server's insert loop, MainProgram's start / stop, the IOServer's read and
+  write loops and its reconnect check. Findings, for decision:
+  1. *Confirmed:* a record on `fe2db.q` without the `timestamp` field (or any field whose decoding raises outside the
+     per-field `try`s) blocks the queue for good: `readDataInDatabaseServerFromFEServer` raises (KeyError, checked here),
+     the DB server catches it without a message id, never deletes or counts the record, and reads it again every second
+     - no later record is stored. Only the frontend writes there (always with the field), so it needs a bug elsewhere.
+  2. *By reading:* a record still on `fe2db.q` at Exit can be lost: MainProgram sends the stop, waits 2 s and ends every
+     server, while the DB server only then starts draining (a failed insert waits 5 s before retrying); MainProgram's
+     next start flushes Redis.
+  3. The IOServer's read loop only prints an exception (`printBoldRed`); the write loop also logs and audits it.
+  4. `endpoints/ShowScreen.py` prints `HTTP_PORT`, not the free port actually used (`find_free_port`).
+  5. `getFastestPossibleTimeBetweenTakePicRequests` (used by the camera server) reads a key that is in no properties
+     file (default 1.0 s); the queue getters of `utils/ClearQueues.py` likewise use defaults (legacy queues).
+  6. `test/machine1_dryrun/DryRun_Bung_Frame.py` decides the vendor by `"machine2" in str(HERE)`: in a checkout whose path
+     contains `machine2` in lower case (the sandbox's) the Machine 1 copy runs as Siemens. The other dry runs use the
+     folder name.
+- **New dry run** `DryRun_Tuning_Keys.py` (both folders): every `getTuning` key in all three properties files, value =
+  code default, the type kept, one default per key, a missing key gives the default.
+- **Run (sandbox; Redis and PostgreSQL started, Python 3.13):** `Verify_Vision_Config_Equivalence.py` ALL EQUIVALENT on
+  both machines (362 parameters, was 326); `DryRun_Tuning_Keys` 201/201 on both vendors; every vision module imported on
+  both vendors with the old values (checked one by one); QR validation 17/17, process supervisor 7/7, state change
+  delivery 4/4, stale stop command 5/5, vision worker back-off 6/6, picture retention 10/10, camera state file 19/19,
+  work-thread health 17/17, DB no record loss (a-e), DB indexes / day folder 8/8, DB server and persistence 66/66,
+  heartbeat / start-up 28/28, state sync monitor 15/15, camera end-of-cycle order 6/6, camera stale frames 23/23,
+  bearing-ring guard 13/13, vision check timeout 22/22 (regions knuckle: no `models/` here); fault scenarios Siemens
+  211/211, Allen-Bradley 218/218; frontend (Python 3.12, Xvfb) 172/172; endpoints 98/98. Not run: the integrated
+  all-servers cycle, the windows, model-based vision runs (no vision logic changed; values identical).

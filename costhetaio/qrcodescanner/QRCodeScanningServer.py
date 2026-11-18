@@ -33,12 +33,12 @@ from Configuration import CosThetaConfigurator
 # Placeholder constants (define these in a constants module if not already)
 qrCodeKey = "qrCode"
 INVALID_QR_CODE_NOTICE = "QR Code not valid"     # shown on the frontend (notice "qrcode") for an invalid scan
-INVALID_QR_CODE_NOTICE_SECS = 10.0
+INVALID_QR_CODE_NOTICE_SECS = CosThetaConfigurator.getTuning("qrcode.invalid.notice.sec", 10.0, minimum=1.0)
 # The serial port is read with a 0.1 s timeout, and readline() returns what has arrived when it expires: a code still
 # arriving then came back in two pieces, each refused (the scan lost; since CHANGES 110 also the siren and the notice).
 # The bytes are now collected across reads and a line is checked only when complete (CHANGES 112): at a CR or LF, or,
 # for a scanner that sends no line end, once no byte has come for QR_LINE_QUIET_SECS.
-QR_LINE_QUIET_SECS = 0.3
+QR_LINE_QUIET_SECS = CosThetaConfigurator.getTuning("qrcode.line.quiet.sec", 0.3, minimum=0.05)
 
 
 class QRCodeLineAssembler:

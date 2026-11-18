@@ -39,8 +39,9 @@ import plotly.io as pio
 from plotly.offline import get_plotlyjs
 
 from endpoints import EndpointsDB as DB
+from Configuration import CosThetaConfigurator
 
-DEFAULT_PORT = 8050
+DEFAULT_PORT = CosThetaConfigurator.getTuning("endpoints.mi.port", 8050, minimum=1)
 ALL_MODELS = "ALL MODELS"
 ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 GREEN, RED, BLUE, ORANGE, GREY, PURPLE = "#2e7d32", "#c62828", "#1565c0", "#ef6c00", "#616161", "#6a1b9a"

@@ -128,7 +128,7 @@ FRONTEND_NOTICE_PREFIX : str = "feNotice:"             # IOServer -> frontend: m
 # (or restarts) in the middle of a cycle.
 IO_STATE_STREAM : str = "io2festate.q"
 IO_STATE_KEY : str = "io:state"
-IO_STATE_STREAM_MAXLEN : int = 500
+IO_STATE_STREAM_MAXLEN : int = CosThetaConfigurator.getTuning("redis.io.state.stream.maxlen", 500, minimum=10)
 
 
 def encodeOptionalBool(value) -> str:

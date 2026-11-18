@@ -10,7 +10,8 @@ tests are unaffected. Never raises.
 import sys
 import threading
 
-REPEAT_EVERY = 100
+REPEAT_EVERY = 100          # code default; log.suppressed.repeat.every in the properties file (read at first use)
+_repeatEvery = None
 _counts = {}
 _lock = threading.Lock()
 _busy = threading.local()
@@ -32,7 +33,14 @@ def noteSuppressed() -> None:
         with _lock:
             n = _counts.get(site, 0) + 1
             _counts[site] = n
-        if n != 1 and n % REPEAT_EVERY != 0:
+        global _repeatEvery
+        if _repeatEvery is None:
+            try:
+                from Configuration import CosThetaConfigurator
+                _repeatEvery = CosThetaConfigurator.getTuning("log.suppressed.repeat.every", REPEAT_EVERY, minimum=1)
+            except Exception:
+                _repeatEvery = REPEAT_EVERY
+        if n != 1 and n % _repeatEvery != 0:
             return
         from logutils.Logger import Logger
         from logutils.SlaveLoggers import SlaveFileLogger

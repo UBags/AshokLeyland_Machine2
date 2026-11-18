@@ -53,7 +53,7 @@ from BaseUtils import get_project_root, getFullyQualifiedName
 
 # Import ModelManager for shared model access
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat
+from camera.VisionConfig import vInt, vFloat, vBool
 
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
@@ -69,7 +69,7 @@ DEBUG_WORKFLOW: bool = False         # Sequential submission, early termination
 DEBUG_SAVE_IMAGES: bool = False      # Save annular/preprocessed images to C:/temp
 
 # Legacy flag for backward compatibility (enables all debug)
-PRINT_DETAIL: bool = False
+PRINT_DETAIL: bool = vBool("vision.nut.debug.print.detail", False)
 
 # Auto-enable all if PRINT_DETAIL is True
 if PRINT_DETAIL:
@@ -80,7 +80,7 @@ if PRINT_DETAIL:
     DEBUG_WORKFLOW = True
     DEBUG_SAVE_IMAGES = True
 
-ENABLE_VRAM_MONITORING: bool = True
+ENABLE_VRAM_MONITORING: bool = vBool("vision.nut.enable.vram.monitoring", True)
 
 NUT_YOLO_CONF_THRESHOLD = vFloat("vision.nut.yolo.conf.threshold", 0.3)    # YOLO box confidence for nut candidates (NutDetector)
 NUT_MIN_MASK_AREA = vInt("vision.nut.min.mask.area", 3000)                 # SAM mask area window, min (px, NutDetector)

@@ -54,7 +54,9 @@ from endpoints import EndpointsDB as DB
 warnings.filterwarnings("ignore")
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-DEFAULT_PORT = 8000
+from Configuration import CosThetaConfigurator  # noqa: E402
+
+DEFAULT_PORT = CosThetaConfigurator.getTuning("endpoints.webservice.port", 8000, minimum=1)
 
 app = Flask(__name__)          # serves endpoints/static/app.js (the page's script)
 CORS(app)

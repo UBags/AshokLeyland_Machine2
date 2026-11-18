@@ -26,7 +26,7 @@ from camera.VisionConfig import vInt, vBool, vTuple, vPoints, vStr, vFloat
 CosThetaConfigurator.getInstance()
 
 # Global debug flag - will be linked to Configuration parameter later
-CHECK_KNUCKLE_IMAGE_DEBUG: bool = False
+CHECK_KNUCKLE_IMAGE_DEBUG: bool = vBool("vision.knuckle.debug.image", False)
 
 
 class CheckKnuckle():

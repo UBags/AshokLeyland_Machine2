@@ -61,9 +61,12 @@ class _RecordSkipped(Exception):
 
 class DataPersistence():
     logSource = getFullyQualifiedName(__file__)
-    IDLE_POLL_SECS : float = 1.0          # was a fixed 5 s sleep between single reads
-    MAX_INSERT_ATTEMPTS : int = 3         # after this, the record is written to disk (FailedRecords/) and removed from the queue
-    INSERT_RETRY_GAP_SECS : float = 5.0   # gap between two attempts at the same record (CHANGES 110; was back to back)
+    # was a fixed 5 s sleep between single reads
+    IDLE_POLL_SECS : float = CosThetaConfigurator.getTuning("db.idle.poll.sec", 1.0, minimum=0.05)
+    # after this, the record is written to disk (FailedRecords/) and removed from the queue
+    MAX_INSERT_ATTEMPTS : int = CosThetaConfigurator.getTuning("db.insert.max.attempts", 3, minimum=1)
+    # gap between two attempts at the same record (CHANGES 110; was back to back)
+    INSERT_RETRY_GAP_SECS : float = CosThetaConfigurator.getTuning("db.insert.retry.gap.sec", 5.0, minimum=0.0)
 
     def __init__(self, mode: str, username: str | None, **kwargs) -> None:
         super().__init__()
@@ -607,7 +610,7 @@ class DataPersistence():
                     break
                 time.sleep(0.1)
 
-    DAY_CHECK_INTERVAL_SECS: float = 60.0
+    DAY_CHECK_INTERVAL_SECS: float = CosThetaConfigurator.getTuning("db.day.check.interval.sec", 60.0, minimum=1.0)
 
     def watchForNewDay(self) -> None:
         """Images are saved in a folder per day (<base>/<mode>/<step>/<YYYY-MM-DD>/). The folders were worked out once,

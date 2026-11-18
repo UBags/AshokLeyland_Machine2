@@ -8,11 +8,14 @@ import logging
 import platform
 import socket
 
-# Configuration
-HTTP_PORT = 8100
-WS_PORT = 8099
-INTERVAL_SECONDS = 1
-RESIZE_SCALE = 0.6  # Scale down screenshot to 60% of original size
+from Configuration import CosThetaConfigurator
+
+# Configuration (endpoints.showscreen.* in the properties file)
+HTTP_PORT = CosThetaConfigurator.getTuning("endpoints.showscreen.http.port", 8100, minimum=1)
+WS_PORT = CosThetaConfigurator.getTuning("endpoints.showscreen.ws.port", 8099, minimum=1)
+INTERVAL_SECONDS = CosThetaConfigurator.getTuning("endpoints.showscreen.interval.sec", 1.0, minimum=0.05)
+# screenshot scaled to this share of its size
+RESIZE_SCALE = CosThetaConfigurator.getTuning("endpoints.showscreen.resize.scale", 0.6, minimum=0.05)
 
 # Set up logging
 logging.basicConfig(level=logging.FATAL, format='%(asctime)s %(levelname)s:%(message)s')
