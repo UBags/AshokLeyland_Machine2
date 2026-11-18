@@ -15,10 +15,13 @@ the next picture).
      sees it, as the checks do (each pixel 255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened.
      Applies from the next picture.
   3. "Find masks only around the centre" (ticked at start): the ring prompts above. Unticked: masks all over the
-     picture - MobileSAM's automatic mask generator (a 32 x 32 grid of point prompts; its own filters at their
-     defaults: predicted IoU >= 0.88, stability score >= 0.95, overlapping boxes merged at IoU 0.7, no minimum area),
-     each mask outlined in its own colour, listed largest first. Slower: about 10 s per picture on the laptop GPU,
-     about 1-2 min on a CPU. Applies from the next picture.
+     picture: first a disc of "Disc radius" (default 300 px) round the centre is cut out (black outside it, thin
+     white circle on the marked picture); MobileSAM's automatic mask generator then runs on that alone (a 32 x 32 grid
+     of point prompts over the disc's square; its own filters at their defaults: predicted IoU >= 0.88, stability
+     score >= 0.95, overlapping boxes merged at IoU 0.7, no minimum area); each mask is kept to the disc and one with
+     less than half of it inside the disc (the black corners) is dropped. Each mask outlined in its own colour,
+     listed largest first. Slower: several seconds per picture on the laptop GPU, minutes on a CPU. Applies from the
+     next picture.
   4. "Masks shown" (around the centre only): All, or mask 1 / 2 / 3 (MobileSAM's order: small to large). Outline colours: mask 1 cyan,
      mask 2 magenta, mask 3 yellow; prompt points blue dots; centre a small blue cross. No text on the picture.
   5. Per picture and mask, in the list at the bottom and in the terminal: SAM score, area, centroid, the fitted
@@ -31,8 +34,8 @@ opens (GPU if there is one). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--whole] [--save]
-                             (--whole: masks all over the picture)
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--whole [--disc 300]] [--save]
+                             (--whole: masks on the disc round the centre)
 """
 import os
 import pathlib
@@ -54,6 +57,7 @@ VIEW_W, VIEW_H = 1120, 630
 MASK_COLOURS = ((255, 255, 0), (255, 0, 255), (0, 255, 255))     # BGR: cyan, magenta, yellow
 POINT_COLOUR = (255, 0, 0)                                        # BGR blue
 AUTO_POINTS_PER_SIDE = 32                                         # the automatic generator's grid (its default)
+DISC_RADIUS = 300                                                 # px; the disc cut round the centre (whole mode)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 
 
@@ -231,21 +235,51 @@ def drawWhole(picture, measures):
     return marked
 
 
-def processWhole(segmenter, path, centre, gamma=1.0):
-    """Masks all over the picture -> (marked picture or None, list of lines)."""
+def cutDisc(picture, centre, radius):
+    """The square round the disc (clipped to the picture), black outside the disc: (crop, disc mask of the crop,
+    (x0, y0) of the crop in the picture)."""
+    h, w = picture.shape[:2]
+    cx, cy, r = int(round(centre[0])), int(round(centre[1])), int(round(radius))
+    x0, y0, x1, y1 = max(cx - r, 0), max(cy - r, 0), min(cx + r + 1, w), min(cy + r + 1, h)
+    crop = picture[y0:y1, x0:x1].copy()
+    disc = np.zeros(crop.shape[:2], np.uint8)
+    cv2.circle(disc, (cx - x0, cy - y0), r, 1, -1)
+    crop[disc == 0] = 0
+    return crop, disc.astype(bool), (x0, y0)
+
+
+def processWhole(segmenter, path, centre, gamma=1.0, discRadius=DISC_RADIUS):
+    """Masks on the disc of discRadius round the centre -> (marked picture or None, list of lines). The disc is cut
+    first (black outside it); the automatic generator runs on that alone; each mask is kept to the disc, and a mask
+    with less than half of its area inside the disc (the black corners) is dropped."""
     picture = loadPicture(path)
     if picture is None:
         return None, [f"{path.name}: could not read the picture"]
     picture = applyGamma(picture, gamma)
-    found, secs = segmenter.segmentWhole(picture)
-    measures = [measure(d["segmentation"], centre) for d in found]
-    lines = [f"{path.name}: whole picture, {len(found)} masks (automatic generator, {AUTO_POINTS_PER_SIDE} x "
-             f"{AUTO_POINTS_PER_SIDE} points; predicted IoU >= 0.88, stability >= 0.95, box NMS 0.7); gamma {gamma:.1f}; "
-             f"time {secs:.2f} s"]
-    for i, (d, meas) in enumerate(zip(found, measures)):
+    crop, disc, (x0, y0) = cutDisc(picture, centre, discRadius)
+    found, secs = segmenter.segmentWhole(crop)
+    kept, dropped = [], 0
+    for d in found:
+        seg = d["segmentation"].astype(bool)
+        inside = seg & disc
+        if inside.sum() * 2 < seg.sum() or not inside.any():
+            dropped += 1
+            continue
+        full = np.zeros(picture.shape[:2], bool)
+        full[y0:y0 + inside.shape[0], x0:x0 + inside.shape[1]] = inside
+        kept.append((d, full))
+    kept.sort(key=lambda t: -int(t[1].sum()))
+    measures = [measure(full, centre) for _, full in kept]
+    lines = [f"{path.name}: disc r {discRadius:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks "
+             f"(automatic generator, {AUTO_POINTS_PER_SIDE} x {AUTO_POINTS_PER_SIDE} points on the disc's square; "
+             f"predicted IoU >= 0.88, stability >= 0.95, box NMS 0.7; {dropped} dropped: less than half inside the "
+             f"disc); gamma {gamma:.1f}; time {secs:.2f} s"]
+    for i, ((d, _), meas) in enumerate(zip(kept, measures)):
         text = describe(i, float(d.get("predicted_iou", 0.0)), meas).replace(": score", ": predicted IoU", 1)
         lines.append(f"    {text}, stability {float(d.get('stability_score', 0.0)):.3f}")
-    return drawWhole(picture, measures), lines
+    marked = drawWhole(picture, measures)
+    cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(discRadius)), (255, 255, 255), 1)
+    return marked, lines
 
 
 def loadPicture(path):
@@ -290,7 +324,7 @@ def runBatch():
     outDir = (pathlib.Path(target) if pathlib.Path(target).is_dir() else pathlib.Path(target).parent) / "hub_centre_mask_results"
     for path in files:
         if "--whole" in sys.argv:
-            marked, lines = processWhole(segmenter, path, centre, gamma)
+            marked, lines = processWhole(segmenter, path, centre, gamma, float(argValue("--disc", str(DISC_RADIUS))))
         else:
             marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
         print("\n".join(lines), flush=True)
@@ -330,6 +364,7 @@ def runWindow():
             self.secondsVar = tk.IntVar(master=root, value=3)
             self.gammaVar = tk.StringVar(master=root, value="1.0")
             self.centreOnlyVar = tk.BooleanVar(master=root, value=True)
+            self.discVar = tk.StringVar(master=root, value=str(DISC_RADIUS))
             self.showVar = tk.StringVar(master=root, value="All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
             for label, var, width in (("Centre x,y", self.centreVar, 10), ("Ring radii (px)", self.radiiVar, 10),
@@ -347,8 +382,10 @@ def runWindow():
             ttk.Checkbutton(bar2, text="Save marked pictures", variable=self.saveVar).pack(side="left")
             bar3 = ttk.Frame(root); bar3.pack(fill="x", padx=6)
             ttk.Checkbutton(bar3, text="Find masks only around the centre", variable=self.centreOnlyVar).pack(side="left")
+            ttk.Label(bar3, text="   Disc radius (unticked)").pack(side="left")
+            ttk.Entry(bar3, textvariable=self.discVar, width=6).pack(side="left", padx=2)
             ttk.Label(bar3, text="   Around the centre: mask 1 cyan, mask 2 magenta, mask 3 yellow; prompt points blue "
-                                 "dots; centre blue cross.  Whole picture: each mask its own colour (slower)."
+                                 "dots; centre blue cross.  Unticked: masks on the disc, each its own colour (slower)."
                       ).pack(side="left")
 
             self.blank = ImageTk.PhotoImage(Image.new("RGB", (VIEW_W, VIEW_H)))
@@ -443,9 +480,14 @@ def runWindow():
                     marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get(),
                                                self.gamma())
                 else:
-                    self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - masks all over the picture ...")
+                    self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - masks on the disc ...")
                     self.root.update_idletasks()
-                    marked, lines = processWhole(self.segmenter, path, centre, self.gamma())
+                    try:
+                        disc = float(self.discVar.get()); assert disc > 0
+                    except Exception:
+                        self.log(f"Disc radius '{self.discVar.get()}' not a positive number: {DISC_RADIUS} used")
+                        disc = float(DISC_RADIUS)
+                    marked, lines = processWhole(self.segmenter, path, centre, self.gamma(), disc)
             except Exception as e:
                 marked, lines = None, [f"{path.name}: error {e}"]
             for line in lines:

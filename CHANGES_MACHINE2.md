@@ -4051,3 +4051,16 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   take about 10 s). Found: the disc, the hub flange (radius 249, 1.8 px from the centre), studs, holes, the spindle tip,
   fixture parts; no mask of the hub's centre opening survived the generator's filters. Window under Xvfb with
   stand-ins: ticked at start; unticked gives the whole-picture line and its masks; ticked again back to ring prompts.
+
+## 133. Hub centre mask window: whole mode works on a disc round the centre (2026-11-18)
+
+- **User:** cut a disc of radius 300 round the centre first, then do everything else on that disc alone.
+- Unticked mode (both copies): `cutDisc` takes the square round the disc (clipped to the picture) and blacks out
+  everything outside the disc; the automatic generator runs on that crop only (32 x 32 points over the square, same
+  default filters); each mask is kept to the disc and placed back in the picture; a mask less than half inside the
+  disc (the black corners) is dropped and counted in the line. "Disc radius" box (default 300; a bad entry logged,
+  300 used), `--disc` in batch. The disc is drawn as a thin white circle (no text).
+- **Run:** `--batch --whole` on 151821100: 17 masks kept, 5 dropped (corners), 157 s on the sandbox CPU. Kept: the disc
+  itself (r 298), the hub flange (r 248, 2.6 px from the centre), studs, holes, small marks; still no mask of the hub's
+  centre opening from the generator. Window under Xvfb with stand-ins: the disc line, a corner mask dropped, ticked
+  mode unchanged.
