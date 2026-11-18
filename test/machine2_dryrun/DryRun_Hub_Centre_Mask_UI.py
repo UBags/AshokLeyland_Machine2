@@ -14,19 +14,25 @@ the next picture).
      "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 1.0 = picture as taken): the picture is brightened before MobileSAM
      sees it, as the checks do (each pixel 255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened.
      Applies from the next picture.
-  3. "Masks shown": All, or mask 1 / 2 / 3 (MobileSAM's order: small to large). Outline colours: mask 1 cyan,
+  3. "Find masks only around the centre" (ticked at start): the ring prompts above. Unticked: masks all over the
+     picture - MobileSAM's automatic mask generator (a 32 x 32 grid of point prompts; its own filters at their
+     defaults: predicted IoU >= 0.88, stability score >= 0.95, overlapping boxes merged at IoU 0.7, no minimum area),
+     each mask outlined in its own colour, listed largest first. Slower: about 10 s per picture on the laptop GPU,
+     about 1-2 min on a CPU. Applies from the next picture.
+  4. "Masks shown" (around the centre only): All, or mask 1 / 2 / 3 (MobileSAM's order: small to large). Outline colours: mask 1 cyan,
      mask 2 magenta, mask 3 yellow; prompt points blue dots; centre a small blue cross. No text on the picture.
-  4. Per picture and mask, in the list at the bottom and in the terminal: SAM score, area, centroid, the fitted
+  5. Per picture and mask, in the list at the bottom and in the terminal: SAM score, area, centroid, the fitted
      ellipse's centre, mean radius and roundness (minor / major axis), the centroid's distance from the centre given,
      and the picture's time (embedding + decoder).
-  5. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/.
+  6. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/.
 
 MobileSAM: models/MobileSAM/weights/mobile_sam.pt, or --sam <mobile_sam.pt>; loaded in the background when the window
 opens (GPU if there is one). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine2_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine2_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--save]
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--whole] [--save]
+                             (--whole: masks all over the picture)
 """
 import os
 import pathlib
@@ -47,6 +53,7 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 VIEW_W, VIEW_H = 1120, 630
 MASK_COLOURS = ((255, 255, 0), (255, 0, 255), (0, 255, 255))     # BGR: cyan, magenta, yellow
 POINT_COLOUR = (255, 0, 0)                                        # BGR blue
+AUTO_POINTS_PER_SIDE = 32                                         # the automatic generator's grid (its default)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 
 
@@ -92,9 +99,10 @@ def parseStep(text):
 class HubCentreSegmenter:
     """One MobileSAM predictor; segment(picture, centre, radii, step) -> (masks, scores, points, seconds)."""
 
-    def __init__(self, samPath=None, predictor=None):
+    def __init__(self, samPath=None, predictor=None, generator=None):
         self.samPath = str(samPath or DEFAULT_SAM)
         self.predictor = predictor
+        self.generator = generator
         self.device = "given"
 
     def load(self):
@@ -124,6 +132,23 @@ class HubCentreSegmenter:
             masks, scores, _ = self.predictor.predict(point_coords=points, point_labels=np.ones(len(points)),
                                                       multimask_output=True)
         return masks, np.asarray(scores, dtype=float), points, (tEmbed, time.perf_counter() - t0 - tEmbed)
+
+    def segmentWhole(self, picture):
+        """Masks all over the picture (MobileSAM's automatic mask generator, its default filters), largest first:
+        (list of the generator's dicts, seconds)."""
+        if self.generator is None:
+            from mobile_sam import SamAutomaticMaskGenerator
+            self.generator = SamAutomaticMaskGenerator(self.predictor.model, points_per_side=AUTO_POINTS_PER_SIDE)
+        t0 = time.perf_counter()
+        try:
+            import torch
+            ctx = torch.inference_mode()
+        except ImportError:
+            import contextlib
+            ctx = contextlib.nullcontext()
+        with ctx:
+            found = self.generator.generate(cv2.cvtColor(picture, cv2.COLOR_BGR2RGB))
+        return sorted(found, key=lambda d: -int(d["area"])), time.perf_counter() - t0
 
 
 def measure(mask, centre):
@@ -188,6 +213,41 @@ def applyGamma(picture, gamma):
     return cv2.LUT(picture, table)
 
 
+def distinctColours(n):
+    """n well-separated BGR colours (hues spread by the golden ratio, full saturation)."""
+    out = []
+    for i in range(n):
+        hsv = np.uint8([[[int((i * 0.618034 % 1.0) * 179), 255, 255 if i % 2 == 0 else 200]]])
+        out.append(tuple(int(v) for v in cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0]))
+    return out
+
+
+def drawWhole(picture, measures):
+    """Outlines only (no text): every mask in its own colour."""
+    marked = picture.copy()
+    for meas, colour in zip(measures, distinctColours(len(measures))):
+        if meas["contour"] is not None:
+            cv2.drawContours(marked, [meas["contour"]], -1, colour, 2)
+    return marked
+
+
+def processWhole(segmenter, path, centre, gamma=1.0):
+    """Masks all over the picture -> (marked picture or None, list of lines)."""
+    picture = loadPicture(path)
+    if picture is None:
+        return None, [f"{path.name}: could not read the picture"]
+    picture = applyGamma(picture, gamma)
+    found, secs = segmenter.segmentWhole(picture)
+    measures = [measure(d["segmentation"], centre) for d in found]
+    lines = [f"{path.name}: whole picture, {len(found)} masks (automatic generator, {AUTO_POINTS_PER_SIDE} x "
+             f"{AUTO_POINTS_PER_SIDE} points; predicted IoU >= 0.88, stability >= 0.95, box NMS 0.7); gamma {gamma:.1f}; "
+             f"time {secs:.2f} s"]
+    for i, (d, meas) in enumerate(zip(found, measures)):
+        text = describe(i, float(d.get("predicted_iou", 0.0)), meas).replace(": score", ": predicted IoU", 1)
+        lines.append(f"    {text}, stability {float(d.get('stability_score', 0.0)):.3f}")
+    return drawWhole(picture, measures), lines
+
+
 def loadPicture(path):
     image = cv2.imread(str(path))
     if image is None:
@@ -229,7 +289,10 @@ def runBatch():
     files = picturesIn(target)
     outDir = (pathlib.Path(target) if pathlib.Path(target).is_dir() else pathlib.Path(target).parent) / "hub_centre_mask_results"
     for path in files:
-        marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
+        if "--whole" in sys.argv:
+            marked, lines = processWhole(segmenter, path, centre, gamma)
+        else:
+            marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
         print("\n".join(lines), flush=True)
         if marked is not None and "--save" in sys.argv:
             outDir.mkdir(exist_ok=True)
@@ -266,6 +329,7 @@ def runWindow():
             self.stepVar = tk.StringVar(master=root, value="30")
             self.secondsVar = tk.IntVar(master=root, value=3)
             self.gammaVar = tk.StringVar(master=root, value="1.0")
+            self.centreOnlyVar = tk.BooleanVar(master=root, value=True)
             self.showVar = tk.StringVar(master=root, value="All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
             for label, var, width in (("Centre x,y", self.centreVar, 10), ("Ring radii (px)", self.radiiVar, 10),
@@ -281,8 +345,11 @@ def runWindow():
             ttk.Combobox(bar2, textvariable=self.showVar, values=["All", "Mask 1", "Mask 2", "Mask 3"], width=8,
                          state="readonly").pack(side="left", padx=(2, 10))
             ttk.Checkbutton(bar2, text="Save marked pictures", variable=self.saveVar).pack(side="left")
-            ttk.Label(root, text="Outlines: mask 1 cyan, mask 2 magenta, mask 3 yellow; prompt points blue dots; "
-                                 "centre blue cross").pack(fill="x", padx=6)
+            bar3 = ttk.Frame(root); bar3.pack(fill="x", padx=6)
+            ttk.Checkbutton(bar3, text="Find masks only around the centre", variable=self.centreOnlyVar).pack(side="left")
+            ttk.Label(bar3, text="   Around the centre: mask 1 cyan, mask 2 magenta, mask 3 yellow; prompt points blue "
+                                 "dots; centre blue cross.  Whole picture: each mask its own colour (slower)."
+                      ).pack(side="left")
 
             self.blank = ImageTk.PhotoImage(Image.new("RGB", (VIEW_W, VIEW_H)))
             self.canvas = tk.Label(root, image=self.blank, background="black"); self.canvas.pack(padx=6)
@@ -372,8 +439,13 @@ def runWindow():
             self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} ...")
             self.root.update_idletasks()
             try:
-                marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get(),
-                                           self.gamma())
+                if self.centreOnlyVar.get():
+                    marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get(),
+                                               self.gamma())
+                else:
+                    self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} - masks all over the picture ...")
+                    self.root.update_idletasks()
+                    marked, lines = processWhole(self.segmenter, path, centre, self.gamma())
             except Exception as e:
                 marked, lines = None, [f"{path.name}: error {e}"]
             for line in lines:

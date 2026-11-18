@@ -4037,3 +4037,17 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run:** `--batch` with `--gamma 2.4` on one hub picture (masks found, gamma in the line); `--gamma 6.2` refused.
   Window under Xvfb (Python 3.12, MobileSAM stood in): default 1.0, range 1.0 - 6.0, 3 steps up = 1.6, stops at 6.0,
   a run at 2.4 logs "gamma 2.4".
+
+## 132. Hub centre mask window: masks all over the picture (2026-11-18)
+
+- **User:** a tick box "Find masks only around the centre" - ticked: as now; unticked: masks all over the picture, in
+  different colours. (Asked too: the masks are found on the picture after the gamma - yes, in both modes.)
+- `DryRun_Hub_Centre_Mask_UI.py` (both copies): the tick box (ticked at start); unticked = MobileSAM's automatic mask
+  generator (`SamAutomaticMaskGenerator`, 32 x 32 point grid) on the gamma-adjusted picture, with its own filters at
+  their defaults - predicted IoU >= 0.88, stability score >= 0.95, overlapping boxes merged at IoU 0.7, no minimum
+  area - stated in each picture's line. Each mask outlined in its own colour (no text); listed largest first with
+  predicted IoU, stability, area, centroid, ellipse, distance from the centre. `--whole` in `--batch`.
+- **Run:** `--batch --whole` on hub picture 151821100: 79 masks in 170.7 s on the sandbox CPU (the laptop GPU should
+  take about 10 s). Found: the disc, the hub flange (radius 249, 1.8 px from the centre), studs, holes, the spindle tip,
+  fixture parts; no mask of the hub's centre opening survived the generator's filters. Window under Xvfb with
+  stand-ins: ticked at start; unticked gives the whole-picture line and its masks; ticked again back to ring prompts.
