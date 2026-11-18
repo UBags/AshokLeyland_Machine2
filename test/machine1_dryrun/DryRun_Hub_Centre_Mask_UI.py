@@ -3,26 +3,26 @@ DryRun_Hub_Centre_Mask_UI - MobileSAM masks round the hub centre on hub (and cap
 production changes.
 
   1. "Folder..." (every jpg / jpeg / png / bmp in it, by name) or "Picture...", then Start. Default folder:
-     test/machine2_dryrun/hub_images. "Seconds between pictures" (1 - 10, starts at 3); Stop ends the run. The work runs
+     test/machine2_dryrun/hub_images. "Seconds between pictures" (1 - 10, starts at 1); Stop ends the run. The work runs
      off the window's thread: the status line shows the picture and its time so far; each picture's time goes to the list.
-  2. "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 1.0 = as taken): the picture is brightened before MobileSAM sees it,
+  2. "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 3.0; 1.0 = as taken): the picture is brightened before MobileSAM sees it,
      as the checks do (255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened. Both modes.
-  3. "Find masks only around the centre" (ticked at start): ring prompts - one point every "Angle step" degrees
+  3. "Find masks only around the centre" (unticked at start): ring prompts - one point every "Angle step" degrees
      (default 30, from 0 = right, clockwise) on each ring of "Ring radii" px (default 50, 60) round "Centre" (default
      `cap.center`, Machine 2 644,340); one decoder call, MobileSAM's 3 masks (small to large). "Masks shown": All or
      mask 1 / 2 / 3. Outlines: mask 1 cyan, 2 magenta, 3 yellow; prompt points blue dots; centre blue cross.
   4. Unticked: all masks on a disc of "Disc radius" (default 300) round the centre. The disc is cut out first (black
      outside it; thin white circle on the marked picture) and everything runs on it alone. "Prompts":
        - Grid points: MobileSAM's automatic mask generator, "Points per side" x "Points per side" (16 - 64, default 32)
-         over the disc's square, only the points inside the disc used (about 21 % fewer); 256 points per decoder pass
+         (default 64) over the disc's square, only the points inside the disc used (about 21 % fewer); 256 points per decoder pass
          on a GPU, 64 on a CPU. Time grows with the number of points.
        - YOLO boxes (MobileSAMv2, as the hub check's MobileSAMv2AutomaticMaskGenerator): the object-aware YOLO model
          (models/MobileSAM/MobileSAMv2/weight/ObjectAwareModel.pt, through ModelManager) proposes boxes on the disc
          ("YOLO confidence", default 0.25; its own box NMS 0.7); boxes whose centre lies outside the disc are left out;
          one MobileSAM decoder pass per 64 boxes, one mask per box. Tens of prompts instead of hundreds: much faster.
-     Filters, both: "Min stability" (0.70 - 1.00, step 0.02, default 0.90; SAM's own stability score of the mask),
-     "Min predicted IoU" (0.50 - 1.00, step 0.02, default 0.88), "Box merge IoU" (0.30 - 1.00, step 0.05, default
-     0.70: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
+     Default prompts: YOLO boxes. Filters, both: "Min stability" (0.70 - 1.00, step 0.02, default 0.70; SAM's own
+     stability score of the mask), "Min predicted IoU" (0.50 - 1.00, step 0.02, default 0.50), "Box merge IoU"
+     (0.30 - 1.00, step 0.05, default 0.50: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
      mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
      colour, listed largest first. Every value used is in the picture's line.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
@@ -30,13 +30,14 @@ production changes.
   6. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/. No text on any picture.
 
 MobileSAM: models/MobileSAM/weights/mobile_sam.pt, or --sam <mobile_sam.pt>; loaded in the background when the window
-opens (GPU if there is one). YOLO boxes need the YOLO weights (the laptop has them). No Redis, PLC or camera needed.
+opens (GPU if there is one), together with YOLO, and both run once on a blank disc (warm-up, as the vision check
+worker does), so the first picture's time is the real one. YOLO boxes need the YOLO weights (the laptop has them). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--save]
-                             [--whole [--disc 300] [--prompts grid|yolo] [--pps 32] [--stability 0.90] [--iou 0.88]
-                              [--nms 0.70] [--conf 0.25]]
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 3.0] [--save]
+                             [--whole [--disc 300] [--prompts yolo|grid] [--pps 64] [--stability 0.70] [--iou 0.50]
+                              [--nms 0.50] [--conf 0.25]]
 """
 import os
 import pathlib
@@ -59,7 +60,7 @@ MASK_COLOURS = ((255, 255, 0), (255, 0, 255), (0, 255, 255))     # BGR: cyan, ma
 POINT_COLOUR = (255, 0, 0)                                        # BGR blue
 DISC_RADIUS = 300                                                 # px; the disc cut round the centre (whole mode)
 BOX_BATCH = 64                                                    # YOLO boxes per MobileSAM decoder pass
-WHOLE_DEFAULTS = dict(prompts="grid", pointsPerSide=32, stabilityMin=0.90, iouMin=0.88, nmsIou=0.70, yoloConf=0.25,
+WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMin=0.50, nmsIou=0.50, yoloConf=0.25,
                       discRadius=float(DISC_RADIUS))
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 
@@ -146,6 +147,7 @@ class HubCentreSegmenter:
         self.yolo = yolo
         self._generator, self._generatorKey = None, None
         self.device = "given"
+        self.yoloNote = ""
 
     def load(self):
         if self.predictor is not None:
@@ -158,6 +160,20 @@ class HubCentreSegmenter:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         model = sam_model_registry["vit_t"](checkpoint=self.samPath).to(self.device).eval()
         self.predictor = SamPredictor(model)
+        self.warmUp()
+
+    def warmUp(self):
+        """Load YOLO and run both models once on a blank disc, as the vision check worker warms up at start, so that the
+        first picture's time is the real one. YOLO missing: noted (yoloNote), the grid and ring modes still work."""
+        t0 = time.perf_counter()
+        blank = np.zeros((2 * DISC_RADIUS + 1, 2 * DISC_RADIUS + 1, 3), np.uint8)
+        try:
+            with _noGrad():
+                self.predictor.set_image(blank)
+            self._yoloModel().predict(blank, conf=0.25, iou=0.7, verbose=False)
+            self.yoloNote = f"YOLO ready; warm-up {time.perf_counter() - t0:.1f} s"
+        except Exception as e:
+            self.yoloNote = f"YOLO not available ({type(e).__name__}: {e}) - Grid points and ring prompts still work"
 
     # ---- ring prompts round the centre ----
     def segment(self, picture, centre, radii, stepDeg):
@@ -238,7 +254,10 @@ class HubCentreSegmenter:
                 f"{len(onDisc)} centred on the disc")
         if len(onDisc) == 0:
             return [], note
+        t1 = time.perf_counter()
         self.predictor.set_image(rgb)
+        tEmbed = time.perf_counter() - t1
+        t1 = time.perf_counter()
         model = self.predictor.model
         allMasks, allIou, allStab = [], [], []
         with torch.inference_mode():
@@ -261,7 +280,8 @@ class HubCentreSegmenter:
                 masks, iou, stab = masks[k], iou[k], stab[k]
         found = [dict(segmentation=m.cpu().numpy(), area=int(m.sum()), predicted_iou=float(q), stability_score=float(st))
                  for m, q, st in zip(masks, iou, stab)]
-        return found, note + f", {passed} passed the filters, {len(found)} after box merging"
+        return found, (note + f", {passed} passed the filters, {len(found)} after box merging; SAM embedding "
+                       f"{tEmbed:.2f} s, decoder + filters {time.perf_counter() - t1:.2f} s")
 
 
 def measure(mask, centre):
@@ -389,6 +409,7 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None):
         return None, [f"{path.name}: could not read the picture"]
     picture = applyGamma(picture, gamma)
     crop, disc, (x0, y0) = cutDisc(picture, centre, s["discRadius"])
+    tStart = time.perf_counter()
     found, secs, note = segmenter.segmentWhole(crop, disc, s)
     kept, dropped = [], 0
     for d in found:
@@ -405,7 +426,7 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None):
     lines = [f"{path.name}: disc r {s['discRadius']:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks; "
              f"{note}; filters: stability >= {s['stabilityMin']:.2f}, predicted IoU >= {s['iouMin']:.2f}, box merge "
              f"IoU {s['nmsIou']:.2f}; {dropped} dropped (less than half inside the disc); gamma {gamma:.1f}; "
-             f"time {secs:.2f} s"]
+             f"time {secs:.2f} s for the masks, {time.perf_counter() - tStart:.2f} s with measuring and drawing"]
     for i, ((d, _), meas) in enumerate(zip(kept, measures)):
         lines.append(f"    {describe(i, float(d.get('predicted_iou', 0.0)), meas)}, "
                      f"stability {float(d.get('stability_score', 0.0)):.3f}")
@@ -419,7 +440,7 @@ def runBatch():
     centre = parseCentre(argValue("--centre")) if "--centre" in sys.argv else defaultCentre()
     radii = parseRadii(argValue("--radii", "50,60"))
     step = parseStep(argValue("--step", "30"))
-    gamma = parseGamma(argValue("--gamma", "1.0"))
+    gamma = parseGamma(argValue("--gamma", "3.0"))
     d = WHOLE_DEFAULTS
     whole = wholeSettings(argValue("--prompts", d["prompts"]), argValue("--pps", d["pointsPerSide"]),
                           argValue("--stability", d["stabilityMin"]), argValue("--iou", d["iouMin"]),
@@ -469,11 +490,11 @@ def runWindow():
             c = defaultCentre()
             V = lambda v: tk.StringVar(master=root, value=v)
             self.centreVar, self.radiiVar, self.stepVar = V(f"{c[0]:g},{c[1]:g}"), V("50,60"), V("30")
-            self.secondsVar = tk.IntVar(master=root, value=3)
-            self.gammaVar, self.showVar = V("1.0"), V("All")
+            self.secondsVar = tk.IntVar(master=root, value=1)
+            self.gammaVar, self.showVar = V("3.0"), V("All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
-            self.centreOnlyVar = tk.BooleanVar(master=root, value=True)
-            self.discVar, self.promptsVar = V(f"{d['discRadius']:g}"), V("Grid points")
+            self.centreOnlyVar = tk.BooleanVar(master=root, value=False)
+            self.discVar, self.promptsVar = V(f"{d['discRadius']:g}"), V("YOLO boxes" if d["prompts"] == "yolo" else "Grid points")
             self.ppsVar, self.stabilityVar = V(str(d["pointsPerSide"])), V(f"{d['stabilityMin']:.2f}")
             self.iouVar, self.nmsVar = V(f"{d['iouMin']:.2f}"), V(f"{d['nmsIou']:.2f}")
             self.confVar = V(f"{d['yoloConf']:.2f}")
@@ -538,7 +559,8 @@ def runWindow():
             if not self.modelReady:
                 self.root.after(200, self._pollLoad); return
             self.status.set(f"MobileSAM error: {self.modelError}" if self.modelError
-                            else f"MobileSAM ready ({self.segmenter.device}). Choose a folder or a picture, then Start.")
+                            else f"MobileSAM ready ({self.segmenter.device}); {self.segmenter.yoloNote}. Choose a folder or "
+                                 f"a picture, then Start.")
 
         def log(self, line):
             print(line, flush=True)

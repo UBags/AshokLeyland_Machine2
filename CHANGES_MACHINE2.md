@@ -4102,3 +4102,25 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   step 0.02; the window stays live with the time ticking; the generator built with the spinner values and the points
   inside the disc; an error in YOLO mode goes to the list and the window carries on.
 - **Not run here:** the real YOLO model (weights on the laptop only) - its boxes, their number and the GPU time.
+
+## 135. Hub centre mask window: the user's settings as defaults; YOLO warmed up at start; time split (2026-11-18)
+
+- **User (laptop run, 4.3 s for one picture, "the fastest I could get"):** make those settings the defaults; is this
+  the same as the hub check, which often takes 1.25 s or less?
+- **Defaults now** (window and `--batch`): "Find masks only around the centre" unticked; Prompts YOLO boxes; gamma 3.0;
+  disc radius 300; YOLO confidence 0.25; points per side 64 (grid only); min stability 0.70; min predicted IoU 0.50;
+  box merge IoU 0.50; 1 s between pictures.
+- **Same method as the hub check?** The same idea - `MobileSAMv2AutomaticMaskGenerator`: one MobileSAM embedding, the
+  object-aware YOLO's boxes as box prompts, one mask per box. Differences: (1) the hub check's models are loaded and
+  warmed up once in the vision check worker at start, so its 1.25 s is the steady state, while the window's first
+  picture also paid for loading YOLO through `ModelManager` and its first predict - the user's 4.3 s was a run of one
+  picture; (2) the hub check decodes one box at a time and keeps masks by area (121-3630 px); the window batches 64
+  boxes and keeps them by SAM's stability / predicted IoU, then merges overlapping boxes; (3) the hub check works on
+  its ring crop (r 253, grey picture per gamma), the window on the r 300 disc.
+- **Changed:** `HubCentreSegmenter.warmUp()` runs at load: YOLO loaded (through `ModelManager`) and both models run
+  once on a blank disc, as the vision check worker does; the status line says "YOLO ready; warm-up n s" or why YOLO is
+  not available (grid and ring modes still work). The YOLO line now splits the time: YOLO, SAM embedding, decoder +
+  filters, and the total with measuring and drawing.
+- **Run:** with a stand-in YOLO (no weights here) and the real MobileSAM on the sandbox CPU: warm-up 1.0 s; two
+  pictures in a row 1.25 - 1.26 s each (embedding 0.94 - 0.96 s, decoder + filters 0.29 - 0.31 s, measuring and drawing
+  0.01 - 0.02 s). Without YOLO the note says so and the window starts. Window defaults read back under Xvfb as above.
