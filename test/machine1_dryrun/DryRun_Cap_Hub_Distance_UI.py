@@ -38,6 +38,10 @@ printed and written to files.
      picture of its cycle gets no distance. This is how the camera server runs it, so offsets and limits measured this
      way are the ones production needs; one hub picture for caps of other parts only measures how far those parts sat
      from that one part. The summary also lists the caps the colour rules said NOT SEATED against the suggested limit.
+  9. Hub from the cap picture (CHANGES 151): tick "Hub from the cap picture" (batch: --hub-from-cap). The hub check runs
+     on the cap picture itself: its ring (r 116-253) is outside the cap, so the hub's holes / bolts round the cap give
+     the hub centre in the same picture - where the part sat and any camera move cancel, no pairing needed. The step-3
+     hub picture stays the chosen / stored one. Needs YOLO (laptop).
 
 Settings: <vendor>.vision.cap.* / vision.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). Models through ModelManager (MobileSAM, YOLO): needs models/ (the laptop).
@@ -46,7 +50,7 @@ Run from the project root:   python test/machine1_dryrun/DryRun_Cap_Hub_Distance
 Without a window:            python test/machine1_dryrun/DryRun_Cap_Hub_Distance_UI.py --batch --caps <folder>
                                [--model DOST|DOSTPLUS] [--hub <hub picture> | --hub-centre x,y,holes|bolts]
                                [--top <picture>] [--nut <picture>] [--max 5.0] [--offset-holes dx,dy]
-                               [--offset-bolts dx,dy] [--save] [--hub-folder <folder> [--pair-max-secs 300]]
+                               [--offset-bolts dx,dy] [--save] [--hub-folder <folder> [--pair-max-secs 300] | --hub-from-cap]
 """
 import csv
 import datetime
@@ -100,9 +104,36 @@ def pictureTime(path):
         return None
 
 
+class CapPictureHub:
+    """The hub centre from the cap picture itself (CHANGES 151): the hub check runs on the cap picture. Its ring crop
+    (r 116-253 round the hub segmentation centre) leaves out the cap (r about 103 silver, 85 brass), so the hub's holes /
+    bolts round the cap are found in the same picture as the cap: where the part sat, and any camera move, cancel. The
+    step-3 hub picture (brightening) stays the chosen / stored one."""
+
+    label = "hub from the cap picture itself"
+
+    def __init__(self):
+        self.hubs = []
+        self.maxSecs = 0.0
+
+    def describe(self):
+        return "each cap against the hub centre found in the cap picture itself"
+
+    def hubFor(self, checks, capPath, model):
+        picture = readPicture(capPath)
+        if picture is None:
+            return capPath, None, 0.0
+        return capPath, dict(runHubCheck(checks, picture, model), picture=None), 0.0
+
+
 class HubPairer:
     """The hub picture of each cap picture's cycle: the latest one in the hub folder taken before the cap picture and at
     most maxSecs before it. The hub check runs once per hub picture (kept)."""
+
+    label = "paired hub"
+
+    def describe(self):
+        return f"each cap against the hub picture of its own cycle ({len(self.hubs)} hub pictures)"
 
     def __init__(self, folder, maxSecs=PAIR_MAX_SECS):
         self.maxSecs = float(maxSecs)
@@ -366,12 +397,16 @@ def summarise(rows, maxDistance):
             d = float(np.hypot(r["dx"] + r["offset_dx"] - mdx, r["dy"] + r["offset_dy"] - mdy))
             out.append(f"    colour NOT SEATED {r['picture']}: {d:.2f} px with the suggested offset "
                        f"({'also caught' if d > max(dev) + LIMIT_MARGIN else 'NOT caught'} by the suggested max)")
-    paired = [r for r in rows if r.get("hub_picture")]
+    selfHub = [r for r in rows if r.get("hub_picture") and r["hub_picture"] == r["picture"]]
+    paired = [r for r in rows if r.get("hub_picture") and r["hub_picture"] != r["picture"]]
+    if selfHub:
+        out.append(f"hub from the cap picture itself: {len(selfHub)} caps; "
+                   f"{sum(1 for r in selfHub if r.get('hub_cx') is not None)} with a hub centre")
     if paired:
         out.append(f"paired by cycle: {len(paired)} caps measured against the hub picture of their own cycle "
                    f"({len({r['hub_picture'] for r in paired})} hub pictures); "
                    f"{sum(1 for r in rows if not r.get('hub_picture'))} without one")
-    else:
+    elif not selfHub:
         out.append("The hub picture is not of the same part as the caps unless they were taken in one cycle: the "
                    "figures are only as good as that pairing (use Hub folder (pair by time) for real figures).")
     return out
@@ -409,15 +444,17 @@ def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets
     if pairer is not None:                       # the hub picture of this cap's cycle (CHANGES 150)
         hp, hubRes, info = pairer.hubFor(checks, path, model)
         hubCentre = None
+        tag = pairer.label
         if hp is None:
-            pairLines.append(f"    paired hub: {info} - distance not measured")
+            pairLines.append(f"    {tag}: {info} - distance not measured")
         elif hubRes is None:
-            pairLines.append(f"    paired hub: {hp.name} could not be read")
+            pairLines.append(f"    {tag}: {hp.name} could not be read")
             pairCols = dict(hub_picture=hp.name, hub_seconds_before=float(info))
         else:
             hubCentre = hubRes["hub"]
-            bases = dict(bases, hub=hubRes["picture"])
-            pairLines.append(f"    paired hub: {hp.name}, {info:.1f} s before; " + hubRes["lines"][0]
+            if hubRes.get("picture") is not None:
+                bases = dict(bases, hub=hubRes["picture"])
+            pairLines.append(f"    {tag}: {hp.name}, {info:.1f} s before; " + hubRes["lines"][0]
                              + (f"; centre ({hubCentre['cx']:.1f}, {hubCentre['cy']:.1f}) from {hubCentre['count']} "
                                 f"{hubCentre['kind']}" if hubCentre else " - no hub centre"))
             pairCols = dict(hub_picture=hp.name, hub_seconds_before=float(info))
@@ -466,7 +503,10 @@ def runBatch():
     bases, note = basesFor(model, hubPicture, argValue("--top"), argValue("--nut"))
     header += [note, f"max distance {maxDistance:g} px, offset holes {offsets[0]}, bolts {offsets[1]}"]
     pairer = None
-    if "--hub-folder" in sys.argv:
+    if "--hub-from-cap" in sys.argv:
+        pairer = CapPictureHub()
+        header.append("hub centre from each cap picture itself (hub check on the cap picture)")
+    elif "--hub-folder" in sys.argv:
         pairer = HubPairer(argValue("--hub-folder"), float(argValue("--pair-max-secs", PAIR_MAX_SECS)))
         header.append(f"pairing by cycle: hub folder {argValue('--hub-folder')} ({len(pairer.hubs)} pictures with a "
                       f"time in the name), hub picture at most {pairer.maxSecs:.0f} s before the cap picture")
@@ -526,7 +566,9 @@ def runWindow():
             ttk.Entry(bar, textvariable=self.hy, width=7).pack(side="left")
             ttk.Combobox(bar, textvariable=self.hkind, values=["holes", "bolts"], width=6,
                          state="readonly").pack(side="left", padx=(4, 10))
-            ttk.Button(bar, text="Hub folder (pair by time)...", command=self.chooseHubFolder).pack(side="left", padx=(0, 10))
+            ttk.Button(bar, text="Hub folder (pair by time)...", command=self.chooseHubFolder).pack(side="left", padx=(0, 4))
+            self.hubFromCap = tk.BooleanVar(master=root, value=False)
+            ttk.Checkbutton(bar, text="Hub from the cap picture", variable=self.hubFromCap).pack(side="left", padx=(0, 10))
             ttk.Button(bar, text="Top bearing...", command=lambda: self.chooseBase("top")).pack(side="left")
             ttk.Button(bar, text="Nut / washer...", command=lambda: self.chooseBase("nut")).pack(side="left", padx=4)
             bar2 = ttk.Frame(root); bar2.pack(fill="x", padx=6, pady=3)
@@ -666,8 +708,13 @@ def runWindow():
                 self.status.set("No pictures in the caps folder"); return
             self.run = Run(self.capsFolder)
             self.listbox.delete(0, "end")
-            self.pairer = HubPairer(self.hubFolder) if self.hubFolder else None
-            if self.pairer is not None:
+            if self.hubFromCap.get():
+                self.pairer = CapPictureHub()
+                self.listbox.insert("end", "hub centre from each cap picture itself")
+                self.log(["=== hub centre from each cap picture itself (hub check on the cap picture)"])
+            else:
+                self.pairer = HubPairer(self.hubFolder) if self.hubFolder else None
+            if isinstance(self.pairer, HubPairer):
                 self.listbox.insert("end", f"pairing by cycle: {len(self.pairer.hubs)} hub pictures in {self.hubFolder}")
                 self.log([f"=== pairing by cycle: hub folder {self.hubFolder} ({len(self.pairer.hubs)} pictures), hub "
                           f"picture at most {self.pairer.maxSecs:.0f} s before the cap picture"])
@@ -678,7 +725,7 @@ def runWindow():
             self.bases, note = basesFor(self.model.get(), self.hubPicture, self.topPath, self.nutPath)
             self.log([f"=== Machine {os.environ['COSTHETA_PLC_VENDOR']}, model {self.model.get()}, caps {self.capsFolder} "
                       f"({len(self.files)} pictures)",
-                      ("each cap against the hub picture of its own cycle" if self.pairer is not None else
+                      (self.pairer.describe() if self.pairer is not None else
                        f"hub picture {self.hubPath or '(none)'}; hub centre "
                        + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub else
                           "none - the distance is not measured")),

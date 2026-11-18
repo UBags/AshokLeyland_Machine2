@@ -190,6 +190,10 @@ On the Machine 2 PC with the new exe:
    measures each cap against the hub picture of its own cycle (latest hub picture <= 300 s before, by file-name time),
    as production does. Offsets and max should be re-checked this way: one hub picture for caps of other parts mixes in
    where each part sat (DOST: two positions about 10 px apart, CHANGES 149).
+   Hub from the cap picture (CHANGES 151): the hub's holes and bolts are visible round the cap, so the window can take
+   the hub centre from the cap picture itself ("Hub from the cap picture", `--hub-from-cap`). Measured that way (study,
+   holes by dark blobs) the 9 seated DOST caps of 13 and 17 Nov lie 0.9 - 3.5 px from the hub centre; candidate for
+   production once confirmed with the real hub check on the laptop.
 
 ## Results
 

@@ -150,7 +150,7 @@ No per-check times were recorded with the report; when they are, put them in the
   bolts) is kept as `ImageProcessor.hubCentre`; the cap's centre (stage-2 ellipse of the cap mask, `camera/CapMaskFinder.py`
   = the method frozen in CHANGES 139 - 142, window `DryRun_Cap_Centre_Mask_UI.py`) must be within 5 px of it (+ offset for
   holes / bolts). Offsets per hub kind and model (CHANGES 147): DOSTPLUS holes 0.1,-1.4, DOSTPLUS bolts -0.6,2.2, DOST bolts -0.4,4.9 (CHANGES 149), DOST holes 0.3,0.5 (CHANGES 148; 18 seated silver caps each); max 5.0. Part-to-part
-  spread and holes-vs-bolts on the same model still to measure (window: Hub folder (pair by time), CHANGES 150): Uddi sends the seating lines of a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
+  spread and holes-vs-bolts on the same model still to measure (window: Hub folder (pair by time), CHANGES 150; or the hub centre from the cap picture itself, CHANGES 151 - seated DOST caps of both positions within 3.5 px in the study, to confirm with the real hub check and then decide whether production takes the hub centre from the cap picture): Uddi sends the seating lines of a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

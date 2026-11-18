@@ -4499,3 +4499,40 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   picture, fallback to the single hub centre without pairing, summary); window test under Xvfb 11/11 per folder
   (single-hub run unchanged; pairing run passes the pairer to every cap, no single hub line). Real checks need YOLO
   (laptop): not run here.
+
+## 151. The hub centre from the cap picture itself: seated DOST caps of both positions agree (2026-11-18)
+
+- **User (laptop, run 183611):** DOST, holes, one hub picture (`..._20261113151830811`, (643.8, 338.8)), the 29 caps of
+  13 Nov: the first 6 silver caps (seated) should be OK, the other silver caps NOT OK; all 29 NOT OK. "You have not been
+  able to fix that."
+- **Found:** the run used one hub picture for every cap (no pairing; `hub_picture` empty). The 6 seated caps are SEATED
+  by the colour rules and fail only the distance: raw cap - hub dx +0.5 .. +2.5, dy -8.5 .. -6.7 (7.2 - 9.0 px against
+  offset 0.3,0.5). Against the same hub picture the 18 seated caps of 17 Nov (CHANGES 148) are at dy -0.8 .. +1.3: the
+  same hub reference, two groups 8 px apart (the two positions of the DOST part, CHANGES 149). The 7 other silver caps
+  are already NOT OK by the colour rules (face fit 0.45 - 0.59; 152449349 also hub uncovered and outline 55 px off; two
+  more pictures have no cap). So only the distance rule is wrong here, and any one offset that passes the 13 Nov
+  group fails the 17 Nov group. Widening max to about 9.5 px would give the expected verdicts on these runs, but then
+  the distance rule would add almost nothing; not done.
+- **Root cause and the better reference:** the hub picture is a different picture from the cap picture, often of
+  another part, and the part does not sit in one place. The hub's 4 holes (r about 151) and 4 studs are clearly
+  visible round the cap in the cap picture (cap r about 103; the hub check's ring is r 116 - 253). So the hub centre
+  can be taken from the cap picture itself: hub and cap in the same picture, the part's position and any camera move
+  cancel, no pairing needed.
+- **Measured (new `Study_Hub_Holes_In_Cap_Picture.py`; holes by dark blobs at r 128 - 168 and a circle through their
+  centroids, cap centre by the production `CapMaskFinder` with stand-in YOLO boxes - no YOLO weights here), the 16 DOST
+  pictures of `cap_images/`:** hole circle found on all 16 (r 149.9 - 152.6); its centre moves y 328.5 - 340.4 between
+  pictures (where the part sat). Cap - hub in the same picture: the 9 seated caps (01 - 05 of 13 Nov, 06 - 09 of 17 Nov)
+  dx -1.8 .. +3.0, dy -2.0 .. +2.8, 0.9 - 3.5 px from the hub centre with no offset; skewed 04 / 05 / 06 at 16.4 / 9.5 /
+  15.5 px; skewed 01 - 03 (tilted in place) 1.1 - 2.0 px - caught by the colour rules (face fit), as before; skewed 07
+  has no cap mask (pushed off the bore).
+- **Changed (dry-run window only; production unchanged):** `DryRun_Cap_Hub_Distance_UI.py` (both folders): tick box
+  "Hub from the cap picture" (batch `--hub-from-cap`): the real hub check runs on each cap picture and its centre is
+  that cap's hub centre (`CapPictureHub`); the step-3 hub picture (brightening) stays the chosen / stored one. The
+  per-cap line `hub from the cap picture itself: ...`, `hub_picture` = the cap picture, a summary line.
+- **Next (decision for Uddi):** if the laptop run with the real hub check confirms the study, production should take
+  the hub centre for the distance rule from the cap picture (the hub segmentation run in the cap check; a vision logic
+  change with a reference commit; about one hub check more per cap check on the GPU), and the offsets be measured
+  again that way (the study suggests about (+1, 0) for DOST holes with max 5).
+- **Run:** pairing / cap-picture unit test 19/19 per folder; window under Xvfb 13/13 per folder (single hub, pairing,
+  hub from the cap picture); the study on the 16 DOST pictures (above). Not run: the real hub check on cap pictures
+  (needs YOLO).
