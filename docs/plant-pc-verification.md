@@ -180,9 +180,9 @@ On the Machine 2 PC with the new exe:
    the same part): send these lines for a shift of seated caps. If seated caps sit at a steady dx / dy (camera angle:
    holes, bolt tips and the cap face are at three heights), that goes into `siemens.vision.cap.seating.hub.distance.offset.holes`
    / `.bolts`; to stop the rule, `siemens.vision.cap.seating.hub.distance.check=False`.
-   Expect the bolts case to differ from the holes case by about 7 px in y (CHANGES 96: the stud circle's centre sits
-   about 7 px above the hole circle's): with both offsets 0, seated caps may be rejected on one of the two until the
-   offsets are set.
+   Offsets set to 0.3,-2.7 for both (CHANGES 145: laptop run, DOST from bolts and DOSTPLUS from holes, one hub
+   picture each). CHANGES 96 measured the stud circle's centre about 7 px above the hole circle's on the same hub: watch
+   for seated caps NOT OK with `from N holes` on DOST or `from N bolts` on DOSTPLUS - those need their own offset.
 
 ## Results
 

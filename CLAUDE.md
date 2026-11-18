@@ -149,8 +149,8 @@ No per-check times were recorded with the report; when they are, put them in the
 - **Cap seating by the hub-centre distance** (CHANGES 143): the hub check's centre (circle through its 4 / 5 holes or
   bolts) is kept as `ImageProcessor.hubCentre`; the cap's centre (stage-2 ellipse of the cap mask, `camera/CapMaskFinder.py`
   = the method frozen in CHANGES 139 - 142, window `DryRun_Cap_Centre_Mask_UI.py`) must be within 5 px of it (+ offset for
-  holes / bolts). Limit and offsets not measured (no hub + cap pictures of the same part): Uddi sends the seating lines of
-  a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
+  holes / bolts). Offsets 0.3,-2.7 (CHANGES 145, one hub picture per model, caps of other parts); max 5.0. Part-to-part
+  spread and holes-vs-bolts on the same model still to measure: Uddi sends the seating lines of a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

@@ -4352,3 +4352,24 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   offsets, elapsed time shown, run file with hub line, caps and suggested offset / max, CSV rows, list.
   `DryRun_Cap_Hub_Distance.py` (sandbox, stand-in YOLO): Machine 2 11/11 (C0 on all 30 cap pictures, C0b), Machine 1 9/9
   (C1 / C2 skipped, seating off).
+
+## 145. Hub-centre offsets set from the laptop run of DryRun_Cap_Hub_Distance_UI (2026-11-18)
+
+- **User (laptop, real hub check and YOLO):** the window on the 29 cap pictures of 13 Nov, once as DOST with hub picture
+  `..._20261113151843774` (hub centre (644.5, 334.4) from 4 bolts) and once as DOSTPLUS with `..._20261113153023353`
+  ((643.7, 342.0) from 5 holes). Cap check 0.78 - 1.03 s (silver), 0.49 - 0.56 s (brass) per picture on CUDA.
+- **Seated caps (colour rules SEATED), cap centre - hub centre:** DOST, bolts, 6 caps: dx -0.18 .. +1.81, dy -4.11 ..
+  -2.25 (median +0.26, -2.73); DOSTPLUS, holes, 6 caps: dx -0.42 .. +0.69, dy -3.58 .. -0.75 (median +0.35, -2.67).
+  Both models give the same offset, about (0.3, -2.7): the cap centre is seen about 2.7 px above the hub centre.
+- **With offset (0.3, -2.7) and max 5.0:** seated 0.2 - 2.0 px (all OK); skewed silver 8.0 - 65.4 px (NOT OK) except
+  `..._152441953` at 1.7 px (tilted in place: caught by the face rule, 0.50 < 0.64); skewed brass 14.3 - 18.4 px (all
+  NOT OK, as by the bore rule). The window's own suggestion (largest seated deviation + 1.5 = 3.2 / 3.4 px) is not
+  taken: the 6 seated caps of each model are consecutive pictures (15:24:12 - 15:24:25, 15:34:46 - 15:35:20), probably
+  one to three parts, and each model had one hub picture, not of the same part - the part-to-part spread is not yet
+  measured. 5.0 keeps 3 px of room over the seated caps and still lies far below the nearest pushed-aside cap (8.0).
+- **Now:** `siemens.vision.cap.seating.hub.distance.offset.holes` and `.offset.bolts` = 0.3,-2.7 in the three
+  properties files (max stays 5.0; allenbradley unchanged). Holes and bolts get the same offset because this run had
+  bolts only on DOST and holes only on DOSTPLUS; CHANGES 96 measured the stud circle about 7 px above the hole circle
+  on the same hub, so a model whose hub check wins on the other group may need its own value - to be seen in the hub
+  check's `from N holes|bolts` lines with the seating lines of the same cycles.
+- **Run:** verifier ALL EQUIVALENT on both machines; the rule recomputed from the two CSVs with the new offset (above).
