@@ -22,19 +22,18 @@ from typing import Any, Dict, Optional, Tuple
 import cv2
 import numpy as np
 
-from camera.VisionConfig import vInt, vFloat
 
-GAMMA = vFloat("vision.cap.mask.gamma", 2.0)
-DISC_RADIUS = vInt("vision.cap.mask.disc.radius", 160)                  # px, round the cap centre
-YOLO_CONFIDENCE = vFloat("vision.cap.mask.yolo.confidence", 0.15)
-STABILITY_MIN = vFloat("vision.cap.mask.stability.min", 0.70)           # MobileSAM's stability score of a mask
-IOU_MIN = vFloat("vision.cap.mask.iou.min", 0.50)                       # MobileSAM's predicted IoU of a mask
-MERGE_IOU = vFloat("vision.cap.mask.merge.iou", 0.50)                   # box overlap above which two masks are one
-AREA_MIN = vInt("vision.cap.mask.area.min", 15000)                      # px, inside the disc
-AREA_MAX = vInt("vision.cap.mask.area.max", 50000)
-DISC_EDGE_FRACTION = vFloat("vision.cap.mask.disc.edge.fraction", 0.9)  # radius above this x the disc's = the disc
-ELLIPSE_TOLERANCE = vFloat("vision.cap.mask.ellipse.tolerance", 2.5)    # px; an outline point this close is on it
-ELLIPSE_TRIES = vInt("vision.cap.mask.ellipse.tries", 300)              # RANSAC ellipses in stage 2
+GAMMA = 2.0
+DISC_RADIUS = 160                  # px, round the cap centre
+YOLO_CONFIDENCE = 0.15
+STABILITY_MIN = 0.70           # MobileSAM's stability score of a mask
+IOU_MIN = 0.50                       # MobileSAM's predicted IoU of a mask
+MERGE_IOU = 0.50                   # box overlap above which two masks are one
+AREA_MIN = 15000                      # px, inside the disc
+AREA_MAX = 50000
+DISC_EDGE_FRACTION = 0.9  # radius above this x the disc's = the disc
+ELLIPSE_TOLERANCE = 2.5    # px; an outline point this close is on it
+ELLIPSE_TRIES = 300              # RANSAC ellipses in stage 2
 
 BOX_BATCH = 64                                                          # boxes per MobileSAM decoder pass
 
@@ -202,12 +201,18 @@ def fitCapEllipse(mask: np.ndarray, tolerance: float, tries: int) -> Optional[Di
     points = contour.reshape(-1, 2).astype(np.float64)
     if len(points) < 10:
         return None
+    # fitted round a whole-pixel origin near the outline's middle (CHANGES 144): the same outline anywhere in a picture
+    # gives the same ellipse - in absolute coordinates float32 rounding (cv2.fitEllipse) picked a different RANSAC winner
+    # between candidates with equal counts in the cut-out disc and in the full picture (DOST_cap_08: 0.7 px)
+    origin = np.floor(points.mean(0))
+    points = points - origin
     e1 = leastSquaresEllipse(points)
     d1 = ellipseDistances(points, e1)
     e2, inl2, rounds = mostInliersEllipse(points, e1, tolerance, tries)
     d2 = ellipseDistances(points, e2)
-    return dict(points=len(points), e1=e1, rms1=float(np.sqrt((d1 ** 2).mean())), in1=int((d1 <= tolerance).sum()),
-                e2=e2, rms2=float(np.sqrt((d2 ** 2).mean())), in2=int(inl2.sum()), rounds=rounds, contour=contour)
+    back = lambda e: (e[0] + float(origin[0]), e[1] + float(origin[1]), e[2], e[3], e[4])
+    return dict(points=len(points), e1=back(e1), rms1=float(np.sqrt((d1 ** 2).mean())), in1=int((d1 <= tolerance).sum()),
+                e2=back(e2), rms2=float(np.sqrt((d2 ** 2).mean())), in2=int(inl2.sum()), rounds=rounds, contour=contour)
 
 
 def ellipseContour(e, step: int = 4) -> np.ndarray:
