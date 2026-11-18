@@ -4738,3 +4738,5 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   bearing-ring guard 13/13, vision check timeout 22/22 (regions knuckle: no `models/` here); fault scenarios Siemens
   211/211, Allen-Bradley 218/218; frontend (Python 3.12, Xvfb) 172/172; endpoints 98/98. Not run: the integrated
   all-servers cycle, the windows, model-based vision runs (no vision logic changed; values identical).
+- **Repository slip, corrected:** commit `c142412` also added `src/mobile-sam` (the sandbox's MobileSAM clone, as a
+  gitlink - no files); removed in `f5709d3`. A `git pull` past both leaves nothing behind.
