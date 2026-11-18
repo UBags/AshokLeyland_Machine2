@@ -4224,3 +4224,19 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   (`camera/CheckCap.py`) is unchanged; moving the method there is a vision logic change (reference commit, both
   manifests, verifier).
 - **Run:** both copies compile and are identical apart from paths.
+
+## 140. Hub centre mask window: min area 15000, new max area filter (2026-11-18)
+
+- **User:** min area to 15000; add a max area filter (20000 - 150000 in steps of 10000), applied after the disc's own
+  edge is dropped.
+- **Now (both copies):** `WHOLE_DEFAULTS` `minArea` 15000, new `maxArea` 50000. In `processWhole` the order is: less
+  than half inside the disc, smaller than the min area, the disc's own edge (radius > 0.9 x the disc's), then larger
+  than the max area (counted as "larger than the max area" in the picture's line; CSV `max_area`, `dropped_large`).
+  Window: "Max area (px)" spinner 20000 - 150000, step 10000, beside Min area. `--batch`: `--max-area`.
+  `wholeSettings` refuses a max area not above the min area. Default 50000, not 20000: the caps in the CHANGES 139 run
+  are 22112 - 23660 px (brass) and 27807 - 33873 px (silver), so 20000 would drop every cap.
+- **Run:** stand-in segmenter, five discs on a 160 disc (areas about 5000, 20000, 33000, 49000 and the disc's edge):
+  max 50000 keeps 3 (1 small, 1 edge, 0 large), max 40000 keeps 2 (1 large), max 150000 keeps 3; min 30000 / max
+  20000 refused. Window under Xvfb (Python 3.12, stand-ins), both copies, 4/4: min area 15000, max area 50000, range
+  20000 - 150000 step 10000 (up -> 60000, top 150000, bottom 20000), both reach the settings. Both copies identical
+  apart from paths. MobileSAM / YOLO not re-run (filter only).

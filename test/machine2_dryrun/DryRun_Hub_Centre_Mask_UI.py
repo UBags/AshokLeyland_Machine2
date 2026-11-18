@@ -24,8 +24,9 @@ production changes.
      (0.30 - 1.00, step 0.05, default 0.50: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
      mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
      colour, listed largest first. Every value used is in the picture's line.
-     "Min area" (default 1000 px): smaller masks dropped (counted in the line).
-     Masks of radius above 0.9 x the disc's are dropped (the cut-out disc's own edge). The first (largest) mask is the
+     "Min area" (default 15000 px): smaller masks dropped (counted in the line).
+     Masks of radius above 0.9 x the disc's are dropped (the cut-out disc's own edge). Then "Max area" (20000 - 150000
+     in steps of 10000, default 50000; CHANGES 140): larger masks dropped (counted in the line). The first (largest) mask is the
      cap mask; its colour (mean R-B inside it, picture as taken, against the cap check's brass limit) is reported.
      "Fit an ellipse to the cap mask" (ticked at start; CHANGES 138): the cap mask's outline points get an ellipse in
      two stages - (1) least squares: the ellipse minimising the sum of squared distances of the outline points from it
@@ -36,7 +37,7 @@ production changes.
      points within the tolerance); stage 1 drawn thin black, stage 2 white. Defaults (CHANGES 136, the user's
      settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between pictures, the rest as above.
      FROZEN (CHANGES 139) as the method for the cap mask: YOLO boxes on the gamma-2.0 disc of radius 160, the
-     filters above, the first (largest) mask, then the two-stage ellipse fit (tolerance 2.5 px, 300 tries). A
+     filters above (areas 15000 - 50000 px since CHANGES 140), the first (largest) mask, then the two-stage ellipse fit (tolerance 2.5 px, 300 tries). A
      wrong mask (a badly tilted cap) is not corrected; it shows as few outline points within the tolerance.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
      centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
@@ -52,7 +53,7 @@ Run from the project root:   python test/machine2_dryrun/DryRun_Hub_Centre_Mask_
 Without a window:            python test/machine2_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
                              [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 2.0] [--save]
                              [--whole [--disc 160] [--prompts yolo|grid] [--pps 64] [--stability 0.70] [--iou 0.50]
-                              [--nms 0.50] [--conf 0.15] [--min-area 1000]
+                              [--nms 0.50] [--conf 0.15] [--min-area 15000] [--max-area 50000]
                               [--no-ellipse] [--tolerance 2.5] [--tries 300]]
 """
 import os
@@ -77,7 +78,7 @@ POINT_COLOUR = (255, 0, 0)                                        # BGR blue
 DISC_RADIUS = 160                                                 # px; the disc cut round the centre (whole mode)
 BOX_BATCH = 64                                                    # YOLO boxes per MobileSAM decoder pass
 WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMin=0.50, nmsIou=0.50, yoloConf=0.15,
-                      discRadius=160.0, minArea=1000, refine=False, refineRings=(0.5, 0.8), refineNegative=1.15,
+                      discRadius=160.0, minArea=15000, maxArea=50000, refine=False, refineRings=(0.5, 0.8), refineNegative=1.15,
                       refineStep=30.0, refineBox=True, ellipse=True, ellipseTolerance=2.5, ellipseTries=300)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 DISC_EDGE_FRACTION = 0.9                                          # a mask of radius above this x the disc's = the disc
@@ -149,10 +150,12 @@ def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_D
                   refine=WHOLE_DEFAULTS["refine"], refineRings="0.5,0.8", refineNegative=WHOLE_DEFAULTS["refineNegative"],
                   refineStep=WHOLE_DEFAULTS["refineStep"], refineBox=WHOLE_DEFAULTS["refineBox"],
                   ellipse=WHOLE_DEFAULTS["ellipse"], ellipseTolerance=WHOLE_DEFAULTS["ellipseTolerance"],
-                  ellipseTries=WHOLE_DEFAULTS["ellipseTries"]):
+                  ellipseTries=WHOLE_DEFAULTS["ellipseTries"], maxArea=WHOLE_DEFAULTS["maxArea"]):
     """The whole-mode settings, checked."""
     if prompts not in ("grid", "yolo"):
         raise ValueError("prompts must be grid or yolo")
+    if int(float(maxArea)) <= int(float(minArea)):
+        raise ValueError(f"max area {maxArea} must be above the min area {minArea}")
     rings = tuple(float(v) for v in str(refineRings).replace(" ", "").split(",") if v) if not isinstance(
         refineRings, tuple) else refineRings
     if not rings or any(not 0.05 <= r <= 0.98 for r in rings):
@@ -161,7 +164,8 @@ def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_D
                 stabilityMin=inRange("min stability", stability, 0.70, 1.00),
                 iouMin=inRange("min predicted IoU", iou, 0.50, 1.00), nmsIou=inRange("box merge IoU", nms, 0.30, 1.00),
                 yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000),
-                minArea=inRange("min area", minArea, 0, 1000000, int), refine=bool(refine), refineRings=rings,
+                minArea=inRange("min area", minArea, 0, 1000000, int),
+                maxArea=inRange("max area", maxArea, 1000, 10000000, int), refine=bool(refine), refineRings=rings,
                 refineNegative=inRange("negative ring", refineNegative, 1.02, 2.0),
                 refineStep=inRange("refine angle step", refineStep, 5, 180), refineBox=bool(refineBox),
                 ellipse=bool(ellipse), ellipseTolerance=inRange("inlier tolerance", ellipseTolerance, 0.5, 10.0),
@@ -585,9 +589,9 @@ def _iou(a, b):
 
 _MEAS = ("score", "stability", "area", "cx", "cy", "circle_r", "ellipse_r", "roundness", "edge_rms", "edge_max",
          "from_centre")
-CSV_COLUMNS = (["picture", "gamma", "disc", "prompts", "yolo_conf", "min_stability", "min_iou", "merge_iou", "min_area",
+CSV_COLUMNS = (["picture", "gamma", "disc", "prompts", "yolo_conf", "min_stability", "min_iou", "merge_iou", "min_area", "max_area",
                 "boxes_found", "boxes_on_disc", "passed_filters", "masks_after_merge", "masks_kept", "t_yolo", "t_embed",
-                "t_decode", "t_grid", "t_masks", "dropped_disc_edge"] + [f"first_{k}" for k in _MEAS]
+                "t_decode", "t_grid", "t_masks", "dropped_disc_edge", "dropped_large"] + [f"first_{k}" for k in _MEAS]
                + ["cap_rb", "cap_colour", "cap_mask"]
                + ["ellipse_tolerance", "ellipse_tries", "outline_points", "t_ellipse"]
                + [f"ell{i}_{k}" for i in (1, 2) for k in ("cx", "cy", "a", "b", "angle", "rms", "inliers", "inlier_frac")]
@@ -617,7 +621,7 @@ def _measureRow(prefix, meas, score=None, stability=None):
 def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None):
     """All masks on the disc round the centre -> (marked picture or None, list of lines). The disc is cut first
     (black outside it); the masks are found on that alone; each is kept to the disc; one with less than half of its
-    area inside the disc, smaller than minArea, or the disc's own edge, is dropped. With ellipse: a two-stage ellipse
+    area inside the disc, smaller than minArea, or the disc's own edge, is dropped; then one larger than maxArea. With ellipse: a two-stage ellipse
     fit to the first (cap) mask's outline (fitCapEllipse). csvPath: one row per picture with every value."""
     s = dict(WHOLE_DEFAULTS, **(settings or {}))
     picture = loadPicture(path)
@@ -628,7 +632,7 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
     crop, disc, (x0, y0) = cutDisc(picture, centre, s["discRadius"])
     tStart = time.perf_counter()
     found, secs, note = segmenter.segmentWhole(crop, disc, s)
-    kept, outside, small, edge = [], 0, 0, 0
+    kept, outside, small, edge, large = [], 0, 0, 0, 0
     for d in found:
         seg = np.asarray(d["segmentation"]).astype(bool)
         inside = seg & disc
@@ -642,6 +646,9 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
         if circle is not None and circle[2] > DISC_EDGE_FRACTION * s["discRadius"]:
             edge += 1                                         # the cut-out disc's own edge, not an object on it
             continue
+        if inside.sum() > s["maxArea"]:
+            large += 1                                        # after the disc's edge is out (CHANGES 140)
+            continue
         kept.append((d, inside))
     kept.sort(key=lambda t: -int(t[1].sum()))
 
@@ -653,19 +660,19 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
     measures = [measure(full(m), centre) for _, m in kept]
     lines = [f"{path.name}: disc r {s['discRadius']:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks; "
              f"{note}; filters: stability >= {s['stabilityMin']:.2f}, predicted IoU >= {s['iouMin']:.2f}, box merge "
-             f"IoU {s['nmsIou']:.2f}, area >= {s['minArea']} px; dropped {outside} (less than half inside the disc), "
+             f"IoU {s['nmsIou']:.2f}, area {s['minArea']} - {s['maxArea']} px; dropped {outside} (less than half inside the disc), "
              f"{small} (smaller than the min area), {edge} (the disc's own edge: radius > {DISC_EDGE_FRACTION:g} x the "
-             f"disc's); gamma {gamma:.1f}; time {secs:.2f} s for the masks"]
+             f"disc's), {large} (larger than the max area); gamma {gamma:.1f}; time {secs:.2f} s for the masks"]
     for i, ((d, _), meas) in enumerate(zip(kept, measures)):
         lines.append(f"    {describe(i, float(d.get('predicted_iou', 0.0)), meas)}, "
                      f"stability {float(d.get('stability_score', 0.0)):.3f}")
     row = dict(picture=path.name, gamma=gamma, disc=s["discRadius"], prompts=s["prompts"], yolo_conf=s["yoloConf"],
-               min_stability=s["stabilityMin"], min_iou=s["iouMin"], merge_iou=s["nmsIou"], min_area=s["minArea"],
+               min_stability=s["stabilityMin"], min_iou=s["iouMin"], merge_iou=s["nmsIou"], min_area=s["minArea"], max_area=s["maxArea"],
                boxes_found=segmenter.lastTimes.get("boxesFound"), boxes_on_disc=segmenter.lastTimes.get("boxesOnDisc"),
                passed_filters=segmenter.lastTimes.get("passed"), masks_after_merge=segmenter.lastTimes.get("merged"),
                masks_kept=len(kept), t_yolo=segmenter.lastTimes.get("yolo"), t_embed=segmenter.lastTimes.get("embed"),
                t_decode=segmenter.lastTimes.get("decode"), t_grid=segmenter.lastTimes.get("grid"), t_masks=secs,
-               dropped_disc_edge=edge)
+               dropped_disc_edge=edge, dropped_large=large)
     row.update(_measureRow("first", measures[0], float(kept[0][0].get("predicted_iou", 0)),
                            float(kept[0][0].get("stability_score", 0))) if kept else {"first_area": None})
     marked = drawWhole(picture, measures)
@@ -731,7 +738,7 @@ def runBatch():
                           argValue("--disc", d["discRadius"]), argValue("--min-area", d["minArea"]),
                           False, "0.5,0.8", d["refineNegative"], d["refineStep"], d["refineBox"],
                           "--no-ellipse" not in sys.argv, argValue("--tolerance", d["ellipseTolerance"]),
-                          argValue("--tries", d["ellipseTries"]))
+                          argValue("--tries", d["ellipseTries"]), argValue("--max-area", d["maxArea"]))
     segmenter = HubCentreSegmenter(argValue("--sam"))
     segmenter.load()
     print(f"MobileSAM on {segmenter.device}")
@@ -790,7 +797,7 @@ def runWindow():
             self.ppsVar, self.stabilityVar = V(str(d["pointsPerSide"])), V(f"{d['stabilityMin']:.2f}")
             self.iouVar, self.nmsVar = V(f"{d['iouMin']:.2f}"), V(f"{d['nmsIou']:.2f}")
             self.confVar = V(f"{d['yoloConf']:.2f}")
-            self.minAreaVar = V(str(d["minArea"]))
+            self.minAreaVar, self.maxAreaVar = V(str(d["minArea"])), V(str(d["maxArea"]))
             self.ellipseVar = tk.BooleanVar(master=root, value=d["ellipse"])
             self.tolVar, self.triesVar = V(f"{d['ellipseTolerance']:.1f}"), V(str(d["ellipseTries"]))
             self.csvPath = self.logPath = None
@@ -827,6 +834,7 @@ def runWindow():
             spin(bar4, "Min predicted IoU", self.iouVar, 0.50, 1.00, 0.02, "%.2f")
             spin(bar4, "Box merge IoU", self.nmsVar, 0.30, 1.00, 0.05, "%.2f")
             spin(bar4, "Min area (px)", self.minAreaVar, 0, 50000, 250, "%.0f", 7)
+            spin(bar4, "Max area (px)", self.maxAreaVar, 20000, 150000, 10000, "%.0f", 7)
             bar5 = ttk.Frame(root); bar5.pack(fill="x", padx=6)
             ttk.Checkbutton(bar5, text="Fit an ellipse to the cap mask", variable=self.ellipseVar).pack(side="left")
             spin(bar5, "  inlier tolerance (px)", self.tolVar, 0.5, 5.0, 0.5, "%.1f")
@@ -899,7 +907,7 @@ def runWindow():
                                  self.stabilityVar.get(), self.iouVar.get(), self.nmsVar.get(), self.confVar.get(),
                                  self.discVar.get(), self.minAreaVar.get(), False, "0.5,0.8",
                                  WHOLE_DEFAULTS["refineNegative"], WHOLE_DEFAULTS["refineStep"], WHOLE_DEFAULTS["refineBox"],
-                                 self.ellipseVar.get(), self.tolVar.get(), self.triesVar.get())
+                                 self.ellipseVar.get(), self.tolVar.get(), self.triesVar.get(), self.maxAreaVar.get())
 
         def start(self):
             if not self.modelReady or self.modelError:
