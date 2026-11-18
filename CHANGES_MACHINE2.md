@@ -4204,15 +4204,15 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 
 ## 139. Cap mask method frozen: YOLO boxes on the disc, first mask, two-stage ellipse fit (2026-11-18)
 
-- **User (laptop run of CHANGES 138, 30 cap pictures of 13 Nov):** the fit finds the cap's outline almost exactly in
+- **User (laptop run of CHANGES 138, 29 cap pictures of 13 Nov):** the fit finds the cap's outline almost exactly in
   most cases; one stray case (the 14th picture, `..._20261113152502157`) where the cap was so tilted that the first
   mask, and so the fit, were wrong. Freeze this as the method for the cap mask unless there is a further improvement.
-- **Run, read from the log:** 16 silver (R-B -17.0 to -1.0), 14 brass (66.3 to 82.6); 0.40 - 0.54 s for the masks,
+- **Run, read from the log:** 16 silver (R-B -17.0 to -1.0), 13 brass (66.3 to 82.6); 0.40 - 0.54 s for the masks,
   0.11 - 0.14 s per ellipse fit (0.52 s on the first: scipy warming up), 0.52 - 0.89 s per picture in all. Points
-  within 2.5 px, stage 1: 91 - 100 % on 23 pictures; 84 - 88 % on 4 (the 9th, 11th, 25th, 28th...: 85.3, 84.4, 78.9,
-  87.9 %); low on 3: the 12th (`452377`, 40.3 -> 59.4 % in stage 2, mask area 27807 against about 33000, ratio 0.92),
+  within 2.5 px, stage 1: 91 - 100 % on 21 pictures; 84 - 88 % on 3 (the 9th, 11th, 27th); 76 - 79 % on 2 (the
+  15th, 21st); low on 3: the 12th (`452377`, 40.3 -> 59.4 % in stage 2, mask area 27807 against about 33000, ratio 0.92),
   the 14th (`502157`, 45.3 -> 61.4 %, 739 outline points against about 600, mask stability 0.896, roundness 0.878) and
-  the 16th (`516872`, 52.1 -> 71.0 %, stage-2 centre 6.1 px from stage 1). Stage 2 equals stage 1 on 20 of 30; it
+  the 16th (`516872`, 52.1 -> 71.0 %, stage-2 centre 6.1 px from stage 1). Stage 2 equals stage 1 on 16 of 29; it
   gains up to 19 points of share only where the outline is not one ellipse.
 - **Why no further step:** on the 14th the mask itself is wrong; an ellipse fit cannot correct a wrong mask, and
   prompting SAM again from it is the step dropped in CHANGES 138. A mask that is not one ellipse shows as a low share
