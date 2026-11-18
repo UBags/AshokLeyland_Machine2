@@ -4442,3 +4442,29 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   seated silver caps are at 0.07 - 2.0 px from the target, all OK; max stays 5.0.
 - **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from `details_20261118-171917.csv`;
   `DryRun_Cap_Hub_Distance.py` Machine 2 11/11 (C2 uses the configured offset).
+
+## 149. DOST bolts offset measured: -0.4,4.9; two seating positions of the DOST part in the cap pictures (2026-11-18)
+
+- **User (laptop):** `DryRun_Cap_Hub_Distance_UI` as DOST with two bolts hub pictures (`..._20261113151835968`,
+  centre (644.3, 334.5); `..._20261113151833451`, (644.5, 334.4)) on the 117 production pictures of 17 Nov. Only the 3
+  silver caps of cycle 19:19:43 OK; the other 18 seated silver caps NOT OK (6.0 - 8.6 px against offset 0.3,-2.7).
+- **Found:** raw cap - hub for the 18: dx -2.2 .. +1.6, dy +3.3 .. +5.7, the same in both runs. Best offset (smallest
+  largest distance over both runs): (-0.35, 4.9); with -0.4,4.9 they lie 0.2 - 2.0 px from the target.
+- **Cross-check with the holes run (CHANGES 148):** holes offset dy +0.5, bolts +4.9: 4.4 px apart; on the DOST hub
+  pictures the bolt circle's centre sits 4.3 px above the hole circle's ((643.8, 338.8) vs (644.3, 334.5)). Both
+  offsets put the same caps on the same point.
+- **Two positions of the DOST part.** Cycle 19:19:43 (dy -6.5 .. -5.2 here, 3 pictures) and the 6 seated silver caps of
+  13 Nov used for CHANGES 145 (dy -4.1 .. -2.3 against hub `..._151843774`) show the cap about 10 px higher than the 18
+  caps of 17:04 - 18:44: the cap's own seating line puts its outline 10.8 - 11.0 px from `cap.center` (1.1 - 2.5 px for
+  the 18). So the DOST part sat in two places (LHS / RHS, or two parts on the fixture; CHANGES 102 measured DOST parts
+  3 - 7 px apart), and every hub picture available is of one of them. That is why CHANGES 145 got 0.3,-2.7 (13 Nov caps
+  of the high position against a hub of the low one) and why one offset per hub picture cannot pass both groups.
+  In production the cap is compared with the hub picture of its own cycle, so the part's position cancels out; the
+  offset only has to hold the camera-angle part, which is what the 18 measure (their hub pictures and caps are both
+  of the low position: the cap outline 1.1 - 2.5 px from `cap.center`, as the hub centre is near it).
+  Not proven yet: needs a hub picture and cap pictures of the same cycle for the high position (19:19:43).
+- **Now:** `siemens.vision.cap.seating.hub.distance.offset.bolts.dost` = -0.4,4.9 (three properties files). Max 5.0.
+  The 3 caps of 19:19:43 and the 13 Nov caps now read 7 - 11 px against these hub pictures (pairing, see above).
+- **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from `details_20261118-175424.csv` and
+  `details_20261118-175837.csv`. `DryRun_Cap_Hub_Distance` not re-run: C1 / C2 set their own offsets or use the DOST
+  holes offset, which did not change.
