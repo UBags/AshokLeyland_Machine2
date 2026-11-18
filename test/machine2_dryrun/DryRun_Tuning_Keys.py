@@ -17,7 +17,9 @@ import ast
 import os
 import pathlib
 import re
+import subprocess
 import sys
+import warnings
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -32,15 +34,35 @@ PROPERTIES = ("ApplicationConfiguration.properties", "ApplicationConfiguration.M
               "ApplicationConfiguration.Machine2.properties")
 
 
+PRUNE = {".venv", "venv", ".git", ".idea", "__pycache__", "site-packages", "models", "src", "archive", "bokeh",
+         "Temp", "test", "MainProgram.dist", "MainProgram.build", "MainProgram.onefile-build"}
+
+
+def productionFiles():
+    """The repo's own .py files: the ones git tracks (so a virtual environment, the models and the Nuitka build
+    folders in the working folder are never read); without git, a walk that skips those folders."""
+    try:
+        out = subprocess.run(["git", "ls-files", "*.py"], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        if out.returncode == 0 and out.stdout.strip():
+            return [ROOT / rel for rel in out.stdout.splitlines() if not rel.startswith(SKIP)]
+    except Exception:
+        pass
+    files = []
+    for folder, dirs, names in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in PRUNE and not d.startswith(".")]
+        files += [pathlib.Path(folder) / n for n in names if n.endswith(".py")]
+    return [p for p in files if not p.relative_to(ROOT).as_posix().startswith(SKIP)]
+
+
 def codeKeys():
     found = {}
-    for path in ROOT.rglob("*.py"):
+    for path in productionFiles():
         rel = path.relative_to(ROOT).as_posix()
-        if rel.startswith(SKIP):
-            continue
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
-        except SyntaxError:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")          # invalid escapes etc. in old files: not this test's business
+                tree = ast.parse(path.read_text(encoding="utf-8", errors="ignore"))
+        except (SyntaxError, OSError):
             continue
         for node in ast.walk(tree):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "getTuning"

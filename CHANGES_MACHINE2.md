@@ -4740,3 +4740,9 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   all-servers cycle, the windows, model-based vision runs (no vision logic changed; values identical).
 - **Repository slip, corrected:** commit `c142412` also added `src/mobile-sam` (the sandbox's MobileSAM clone, as a
   gitlink - no files); removed in `f5709d3`. A `git pull` past both leaves nothing behind.
+- **Follow-up (laptop run of `DryRun_Tuning_Keys.py`):** it seemed to hang after a page of SyntaxWarnings: it parsed
+  every `.py` under the project folder, which on the laptop includes `.venv` (all of site-packages) and the Nuitka
+  build folders; the warnings came from those third-party files. It now reads only the files git tracks (`git ls-files`;
+  without git, a walk that skips `.venv`, `models`, `src`, the build folders and the other non-production folders), with
+  warnings silenced while parsing. Here: 201/201 in 0.7 - 2.8 s on both vendors, also without git on the PATH; a planted
+  `.venv/lib/site-packages/bad.py` with an invalid escape is not read.
