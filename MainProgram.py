@@ -182,7 +182,10 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
     if endingSplashScreenBeingShown:
         time.sleep(CosThetaConfigurator.getInstance().getEndScreenTime() + 2)
     sendStopCommand(redisConnection, aProducer="MainProgram")
-    time.sleep(2.0)
+    # wait before ending the servers: the DB server drains fe2db.q only after the stop, and a failed insert waits
+    # db.insert.retry.gap.sec (5 s) before its next attempt; a record still on the queue is lost at the next start,
+    # which flushes Redis (CHANGES 155; was 2 s)
+    time.sleep(CosThetaConfigurator.getTuning("mainprogram.stop.wait.sec", 6.0, minimum=0.0))
     for pid in currentProcessPIDs:
         try:
             if psutil.pid_exists(pid):

@@ -4746,3 +4746,36 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   without git, a walk that skips `.venv`, `models`, `src`, the build folders and the other non-production folders), with
   warnings silenced while parsing. Here: 201/201 in 0.7 - 2.8 s on both vendors, also without git on the PATH; a planted
   `.venv/lib/site-packages/bad.py` with an invalid escape is not read.
+
+## 155. Review findings of CHANGES 154 acted on (2026-11-19)
+
+User's decisions on the six findings:
+1. **Malformed `fe2db.q` record:** the only writer is `RedisUtils.sendDataFromFEServerToDatabaseServer` (called once, by
+   the frontend), which sends through `sendData`; `sendData` sets `timestamp` and `producer` on every message it sends,
+   overwriting whatever the caller passed - checked: no other `xadd` to `fe2db.q` in the production code. Nothing changed.
+2. **Records lost at Exit:** MainProgram waits `mainprogram.stop.wait.sec` (new, **6.0 s**, was a fixed 2 s) after the
+   stop command before ending the servers: the DB server drains `fe2db.q` after the stop, and a failed insert waits
+   5 s before its next attempt (the next start flushes Redis).
+3. **IOServer read-loop exceptions only printed:** left as is (user).
+4. **ShowScreen:** prints the HTTP and WebSocket ports actually used. Found on the way and fixed with it: the page
+   connected to a hard-coded `:8099` whatever WebSocket port was in use (now the port found free, `_wsPort`), and the two
+   free-port searches could return the same port (probing does not bind: 8099 busy -> the WebSocket search took 8100,
+   which the HTTP search had just chosen); the second search now skips the first one's port. Checked with 8099 held:
+   HTTP 8100, WebSocket 8101, the page uses 8101.
+5. **`getFastestPossibleTimeBetweenTakePicRequests`:** correction to CHANGES 154 - it is NOT used by the running camera
+   server: its only call is in commented-out code (`CameraProcessorServer.py` lines around 1537 / 1591; the
+   finding's grep matched the comment). Not critical: the key `fastest.possible.time.between.takepic.requests=1.0` is now
+   in the three properties files (the getter was already in `Configuration.py`). **`utils/ClearQueues`** asked the
+   configuration for an earlier project's queues (recording, actuators, tower lamps, bottle release ...) whose keys are
+   in no properties file; it now clears the queues the application uses: new `RedisUtils.applicationQueues()` (the list
+   MainProgram's `clearQueues` already used, now shared by it and `reportMessageCount`, which had left out
+   `io2qrcodeabort.q` and `io2festate.q`) plus `getLoggingQueues()` (file and console logging) - 25 streams. The old
+   getters stay in `Configuration.py` (unused).
+6. **Vendor of a dry-run copy:** `DryRun_Bung_Frame.py` (both copies) now takes the vendor from its own folder's name
+   (`HERE.name.startswith("machine2")`), as the other dry runs do - the root cause was matching "machine2" anywhere in the
+   full path. The folders are not renamed: with the folder name used, `machine1_dryrun` / `machine2_dryrun` are
+   unambiguous, and a rename would touch every README, document and laptop habit.
+- **Run:** `DryRun_Tuning_Keys` 205/205 both vendors (51 keys); heartbeat / start-up 28/28 (H10: the stop and backup);
+  DB no record loss (a - e); work-thread health 17/17 (one earlier run 16/17, C2 - the timing flake noted in CHANGES 111;
+  the code before this change gave 17/17 and so did the rerun); `ClearQueues`: 25 queues, `fe2db.q` emptied, counts
+  reported; ShowScreen ports and page as above.

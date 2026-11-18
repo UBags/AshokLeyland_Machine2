@@ -22,8 +22,10 @@ logging.basicConfig(level=logging.FATAL, format='%(asctime)s %(levelname)s:%(mes
 
 # Store WebSocket clients
 clients = set()
+# the WebSocket port actually in use (the page connects to it; set in main())
+_wsPort = WS_PORT
 
-# Serve the webpage on port 8100
+# Serve the webpage (on the HTTP port found free in main())
 async def index(request):
     html_content = """
     <!DOCTYPE html>
@@ -36,7 +38,7 @@ async def index(request):
         <img id="screenshot" style="max-width:100%; border:1px solid black" />
         <script>
             const img = document.getElementById('screenshot');
-            const ws = new WebSocket('ws://' + window.location.hostname + ':8099');
+            const ws = new WebSocket('ws://' + window.location.hostname + ':__WS_PORT__');
 
             ws.binaryType = 'arraybuffer';
 
@@ -65,7 +67,7 @@ async def index(request):
     </body>
     </html>
     """
-    return web.Response(text=html_content, content_type='text/html')
+    return web.Response(text=html_content.replace("__WS_PORT__", str(_wsPort)), content_type='text/html')
 
 async def serve_webpage(port):
     app = web.Application()
@@ -107,9 +109,12 @@ async def screenshot_websocket(websocket: ServerConnection):
     finally:
         clients.discard(websocket)  # Use discard to avoid KeyError if already removed
 
-def find_free_port(start_port):
+def find_free_port(start_port, avoid=()):
     port = start_port
     while True:
+        if port in avoid:            # a port already chosen for the other server (found free, not yet bound)
+            port += 1
+            continue
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(('127.0.0.1', port))
@@ -122,8 +127,10 @@ def find_free_port(start_port):
 
 async def main():
     # Find free ports
+    global _wsPort
     http_port = find_free_port(HTTP_PORT)
-    ws_port = find_free_port(WS_PORT)
+    ws_port = find_free_port(WS_PORT, avoid=(http_port,))
+    _wsPort = ws_port
 
     # Start HTTP server
     http_task = asyncio.create_task(serve_webpage(http_port))
@@ -132,7 +139,7 @@ async def main():
     logging.debug(f'Registering WebSocket handler: {screenshot_websocket.__name__}')
     ws_server = await websockets.serve(screenshot_websocket, '127.0.0.1', ws_port)
     logging.info(f'WebSocket server started at ws://127.0.0.1:{ws_port}')
-    print(f'Show Screen server started at http://127.0.0.1:{HTTP_PORT}')
+    print(f'Show Screen server started at http://127.0.0.1:{http_port} (screenshots on ws://127.0.0.1:{ws_port})')
 
     # Run forever
     await asyncio.gather(http_task, ws_server.wait_closed())

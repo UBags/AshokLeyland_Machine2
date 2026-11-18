@@ -33,7 +33,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("COSTHETA_PLC_VENDOR", "siemens" if "machine2" in str(HERE) else "allenbradley")
+os.environ.setdefault("COSTHETA_PLC_VENDOR", "siemens" if HERE.name.startswith("machine2") else "allenbradley")
 
 import cv2
 import numpy as np

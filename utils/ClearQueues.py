@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from redis import Redis
 
-from utils.RedisUtils import getMessageCount
+from utils.RedisUtils import getMessageCount, applicationQueues, getLoggingQueues
 from Configuration import CosThetaConfigurator
 
 CosThetaConfigurator.getInstance()
@@ -32,37 +32,12 @@ class ClearQueues:
         self.connectToRedis()
 
     def _collectQueues(self) -> None:
-        """Collect all queue names from configuration."""
-        config = CosThetaConfigurator.getInstance()
-
-        # Per-station queues (stations 1 and 2)
-        for i in range(1, 3):
-            self.queues.extend([
-                config.getRecordingQueue(i),
-                config.getCameraTakePicQueue(i),
-                config.getCameraHeartbeatQueue(i),
-                config.getCameraRequestResultQueue(i),
-                config.getCameraResultQueue(i),
-                config.getActuatorHeartbeatQueue(i),
-                config.getActuatorActionQueue(i),
-                config.getTowerLampActionQueue(i),
-                config.getBottleReleaseHeartbeatQueue(i),
-                config.getSavePictureQueue(i),
-            ])
-
-        # Global queues
-        self.queues.extend([
-            config.getDatabaseQueue(),
-            config.getMonitorAllConnectionsQueue(),
-            config.getConnectionAlarmQueue(),
-            config.getAllConnectionsQueue(),
-            config.getStopCommandQueue(),
-            config.getConsoleLoggingQueue(),
-            config.getFileLoggingQueue(),
-            config.getStoppedResponseQueue(),
-            config.getIOHeartbeatQueue(),
-            config.getDatabaseHeartbeatQueue(),
-        ])
+        """The queues the application really uses: the inter-process streams (RedisUtils.applicationQueues(), the same
+        list MainProgram clears at start) and the two logging streams. Before CHANGES 155 this asked the configuration
+        for the queues of an earlier project (recording, actuators, tower lamps, bottle release ...), whose keys are in
+        no properties file, so it cleared default names nobody uses."""
+        names = applicationQueues() + getLoggingQueues()
+        self.queues = list(dict.fromkeys(name for name in names if name))      # no duplicates, order kept
 
     def connectToRedis(self, forceRenew: bool = False) -> bool:
         """

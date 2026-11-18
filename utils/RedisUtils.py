@@ -2701,10 +2701,22 @@ def sendHeartbeatFromDBServerToHeartbeatServer(redisConnection : redis.client.Re
 
 # *********************************************** CLEAR QUEUES and GET MESSAGE COUNT ****************
 
+def applicationQueues() -> list:
+    """Every stream the running application uses between its processes (the names read from the properties file,
+    as the senders and readers use them); the logging streams are not included (getLoggingQueues())."""
+    return [io2feq, io2cameraq, io2qrcodeq, io2qrcodeabortq, io2hbq, qrcode2ioq, qrcode2feq, qrcode2hbq, qrcode2cameraq,
+            fe2ioq, fe2dbq, fe2hbq, camera2ioq, camera2feq, camera2hbq, db2hbq, hb2feq, hb2ioq,
+            alarmq, emergencyq, stopQ, stoppedResponseQ, IO_STATE_STREAM]
+
+
+def getLoggingQueues() -> list:
+    """The two streams of the central logging server (file and console)."""
+    return [CosThetaConfigurator.getInstance().getFileLoggingQueue(),
+            CosThetaConfigurator.getInstance().getConsoleLoggingQueue()]
+
+
 def clearQueues(redisConnection: redis.client.Redis, reportCounts : bool = False):
-    queues = [io2feq, io2cameraq, io2qrcodeq, io2qrcodeabortq, io2hbq, qrcode2ioq, qrcode2feq, qrcode2hbq, qrcode2cameraq,
-              fe2ioq, fe2dbq, fe2hbq, camera2ioq, camera2feq, camera2hbq, db2hbq, hb2feq, hb2ioq,
-              alarmq, emergencyq, stopQ, stoppedResponseQ, IO_STATE_STREAM]
+    queues = applicationQueues()
     try:
         redisConnection.flushdb()
     except Exception as e:
@@ -2721,9 +2733,7 @@ def clearQueues(redisConnection: redis.client.Redis, reportCounts : bool = False
         reportMessageCount(redisConnection=redisConnection)
 
 def reportMessageCount(redisConnection: redis.client.Redis):
-    queues = [io2feq, io2cameraq, io2qrcodeq, io2hbq, qrcode2ioq, qrcode2feq, qrcode2hbq, qrcode2cameraq,
-              fe2ioq, fe2dbq, fe2hbq, camera2ioq, camera2feq, camera2hbq, db2hbq, hb2feq, hb2ioq,
-              alarmq, emergencyq, stopQ, stoppedResponseQ]
+    queues = applicationQueues()
     try:
         for queue in queues:
             print(f"{getMessageCount(redisConnection, queue)} entries in queue {queue}")
