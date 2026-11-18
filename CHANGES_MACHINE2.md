@@ -4124,3 +4124,30 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run:** with a stand-in YOLO (no weights here) and the real MobileSAM on the sandbox CPU: warm-up 1.0 s; two
   pictures in a row 1.25 - 1.26 s each (embedding 0.94 - 0.96 s, decoder + filters 0.29 - 0.31 s, measuring and drawing
   0.01 - 0.02 s). Without YOLO the note says so and the window starts. Window defaults read back under Xvfb as above.
+
+## 136. Hub centre mask window: cap-finding defaults, min area, refinement from the first mask's outline, CSV of every value (2026-11-18)
+
+- **User (laptop, fast now):** the settings of the screenshot find the cap's outline almost perfectly - make them the
+  defaults; add a minimum area to drop small masks; from the first mask's outline make fresh point prompts (not YOLO)
+  that pin the cap mask down better; print every detail for a laptop run.
+- **Defaults:** gamma 2.0, unticked, disc radius 160, YOLO boxes, YOLO confidence 0.15, min stability 0.70, min predicted
+  IoU 0.50, box merge IoU 0.50, 3 s between pictures; new "Min area" 1000 px (masks kept to the disc and smaller than
+  this are dropped and counted).
+- **Refinement (`HubCentreSegmenter.refine`, ticked at start):** from the largest kept mask's fitted-ellipse centre and
+  radius: positive points on rings at 0.5 and 0.8 x the radius and negative points on a ring at 1.15 x (inside the
+  crop), every 30 deg, plus the mask's bounding box grown by 4 px; one decoder call on the same embedding (no new
+  embedding in YOLO mode); MobileSAM's 3 masks. Each listed with score, area, fitted circle, the outline's distance
+  from that circle (RMS / max), IoU with the first mask and how far the circle centre moved; the highest-scoring one
+  drawn white, positive points blue, negative black. Rings, negative ring, angle step and the box are editable.
+  `measure()` now also fits a least-squares circle to every outline (centre, radius, RMS / max off it).
+- **Details files:** every run writes `<folder>/hub_centre_mask_results/details_<time>.csv` (fixed 75 columns: settings,
+  YOLO boxes found / on the disc / passing / after merging, the times, the first mask, the 3 refined masks) and
+  `run_<time>.txt` (every line of the list); batch the same. `--batch`: `--min-area`, `--no-refine`, `--refine-rings`,
+  `--refine-neg`, `--refine-step`, `--refine-no-box`.
+- **Run (sandbox, real MobileSAM, a stand-in YOLO box round the cap - no YOLO weights here), gamma 2.0:** 4 seated silver
+  caps (DOST_cap_01-04): first mask r 102.5-103.6, outline off its circle RMS 0.79-2.10 px; refined masks within
+  0.1-1.7 px of its centre, IoU 0.95-0.99; refined mask 2 (the middle one) had the smallest RMS on 3 of 4 (0.65-2.01 px);
+  the highest score always picked mask 3 (r about 1 px larger, RMS like the first). Skewed caps 01-03: refined masks
+  moved 0.6-5.9 px and shrank (DOST_skewed_02: masks 1-2 r 100.0-100.6, 5.6-5.9 px off the first mask, RMS 1.44-1.54 px
+  against 3.77) - worth watching on the laptop data. Refine 0.09-0.16 s on CPU. Window under Xvfb with stand-ins:
+  defaults as above, a small mask dropped by the min area, refine lines, 2 CSV rows of 75 columns, the log file.

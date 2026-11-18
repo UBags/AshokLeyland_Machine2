@@ -25,9 +25,20 @@ production changes.
      (0.30 - 1.00, step 0.05, default 0.50: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
      mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
      colour, listed largest first. Every value used is in the picture's line.
+     "Min area" (default 1000 px): smaller masks dropped (counted in the line).
+     "Refine the largest mask with point prompts" (ticked at start, no YOLO): from the largest mask's fitted-ellipse
+     centre and radius, positive points on rings at "positive rings" x the radius (default 0.5, 0.8), negative points
+     on a ring at "negative ring" x the radius (default 1.15), every "angle step" degrees (default 30), plus ("with its
+     box") its bounding box grown by 4 px; one decoder call on the same embedding; MobileSAM's 3 masks listed with
+     score, size, fitted circle, how far the outline lies off that circle (RMS / max px), IoU with the first mask and
+     how far the circle centre moved; the one with the highest score is drawn white (positive points blue, negative
+     black). Defaults (CHANGES 136, the user's settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between
+     pictures, the rest as above.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
      centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
-  6. "Save marked pictures" writes each marked picture to <folder>/hub_centre_mask_results/. No text on any picture.
+  6. Every run writes <folder>/hub_centre_mask_results/details_<time>.csv (one row per picture, every value of the
+     unticked mode: settings, YOLO boxes, times, first mask, the 3 refined masks) and run_<time>.txt (every line of the
+     list). "Save marked pictures" also writes each marked picture there. No text on any picture.
 
 MobileSAM: models/MobileSAM/weights/mobile_sam.pt, or --sam <mobile_sam.pt>; loaded in the background when the window
 opens (GPU if there is one), together with YOLO, and both run once on a blank disc (warm-up, as the vision check
@@ -35,9 +46,10 @@ worker does), so the first picture's time is the real one. YOLO boxes need the Y
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 3.0] [--save]
-                             [--whole [--disc 300] [--prompts yolo|grid] [--pps 64] [--stability 0.70] [--iou 0.50]
-                              [--nms 0.50] [--conf 0.25]]
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 2.0] [--save]
+                             [--whole [--disc 160] [--prompts yolo|grid] [--pps 64] [--stability 0.70] [--iou 0.50]
+                              [--nms 0.50] [--conf 0.15] [--min-area 1000]
+                              [--no-refine] [--refine-rings 0.5,0.8] [--refine-neg 1.15] [--refine-step 30] [--refine-no-box]]
 """
 import os
 import pathlib
@@ -58,10 +70,11 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 VIEW_W, VIEW_H = 1120, 630
 MASK_COLOURS = ((255, 255, 0), (255, 0, 255), (0, 255, 255))     # BGR: cyan, magenta, yellow
 POINT_COLOUR = (255, 0, 0)                                        # BGR blue
-DISC_RADIUS = 300                                                 # px; the disc cut round the centre (whole mode)
+DISC_RADIUS = 160                                                 # px; the disc cut round the centre (whole mode)
 BOX_BATCH = 64                                                    # YOLO boxes per MobileSAM decoder pass
-WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMin=0.50, nmsIou=0.50, yoloConf=0.25,
-                      discRadius=float(DISC_RADIUS))
+WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMin=0.50, nmsIou=0.50, yoloConf=0.15,
+                      discRadius=160.0, minArea=1000, refine=True, refineRings=(0.5, 0.8), refineNegative=1.15,
+                      refineStep=30.0, refineBox=True)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
 
 
@@ -118,14 +131,23 @@ def inRange(name, text, low, high, cast=float):
     return value
 
 
-def wholeSettings(prompts, pps, stability, iou, nms, conf, disc):
+def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_DEFAULTS["minArea"],
+                  refine=WHOLE_DEFAULTS["refine"], refineRings="0.5,0.8", refineNegative=WHOLE_DEFAULTS["refineNegative"],
+                  refineStep=WHOLE_DEFAULTS["refineStep"], refineBox=WHOLE_DEFAULTS["refineBox"]):
     """The whole-mode settings, checked."""
     if prompts not in ("grid", "yolo"):
         raise ValueError("prompts must be grid or yolo")
+    rings = tuple(float(v) for v in str(refineRings).replace(" ", "").split(",") if v) if not isinstance(
+        refineRings, tuple) else refineRings
+    if not rings or any(not 0.05 <= r <= 0.98 for r in rings):
+        raise ValueError("refine rings must be fractions of the radius, 0.05 - 0.98, e.g. 0.5,0.8")
     return dict(prompts=prompts, pointsPerSide=inRange("points per side", pps, 16, 64, int),
                 stabilityMin=inRange("min stability", stability, 0.70, 1.00),
                 iouMin=inRange("min predicted IoU", iou, 0.50, 1.00), nmsIou=inRange("box merge IoU", nms, 0.30, 1.00),
-                yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000))
+                yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000),
+                minArea=inRange("min area", minArea, 0, 1000000, int), refine=bool(refine), refineRings=rings,
+                refineNegative=inRange("negative ring", refineNegative, 1.02, 2.0),
+                refineStep=inRange("refine angle step", refineStep, 5, 180), refineBox=bool(refineBox))
 
 
 def _noGrad():
@@ -148,6 +170,8 @@ class HubCentreSegmenter:
         self._generator, self._generatorKey = None, None
         self.device = "given"
         self.yoloNote = ""
+        self.lastTimes = {}                                   # the last whole-mode picture's times (for the CSV)
+        self.embedded = None                                  # the crop MobileSAM's embedding is of (id)
 
     def load(self):
         if self.predictor is not None:
@@ -197,6 +221,34 @@ class HubCentreSegmenter:
             found, note = self._gridMasks(crop, disc, s)
         return found, time.perf_counter() - t0, note
 
+    def refine(self, crop, mask, s):
+        """Fresh point prompts from the first mask's outline (no YOLO): positive points on rings at refineRings x its
+        radius and negative points on a ring at refineNegative x its radius, every refineStep degrees round its
+        fitted-ellipse centre, plus (refineBox) its bounding box grown by 4 px; MobileSAM's 3 masks back.
+        -> (masks, scores, points, labels, box or None, seconds) in crop coordinates, or None if it cannot be fitted."""
+        meas = measure(mask, (0.0, 0.0))
+        if meas["ellipse"] is None:
+            return None
+        (cx, cy), r = meas["ellipse"], meas["radius"]
+        t0 = time.perf_counter()
+        if self.embedded != id(crop):
+            self.predictor.set_image(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+            self.embedded = id(crop)
+        h, w = crop.shape[:2]
+        pos = promptPoints((cx, cy), [f * r for f in s["refineRings"]], s["refineStep"])
+        neg = promptPoints((cx, cy), [s["refineNegative"] * r], s["refineStep"])
+        neg = neg[(neg[:, 0] >= 0) & (neg[:, 0] < w) & (neg[:, 1] >= 0) & (neg[:, 1] < h)]
+        points = np.concatenate([pos, neg]).astype(np.float32)
+        labels = np.concatenate([np.ones(len(pos)), np.zeros(len(neg))])
+        box = None
+        if s["refineBox"]:
+            x, y, bw, bh = cv2.boundingRect(mask.astype(np.uint8))
+            box = np.array([max(x - 4, 0), max(y - 4, 0), min(x + bw + 4, w - 1), min(y + bh + 4, h - 1)], np.float32)
+        with _noGrad():
+            masks, scores, _ = self.predictor.predict(point_coords=points, point_labels=labels, box=box,
+                                                      multimask_output=True)
+        return masks, np.asarray(scores, dtype=float), points, labels, box, time.perf_counter() - t0
+
     @staticmethod
     def pointGrid(shape, disc, n):
         """The n x n grid of the automatic generator (normalised x, y), only the points inside the disc."""
@@ -220,8 +272,10 @@ class HubCentreSegmenter:
                     self.predictor.model, points_per_side=None, point_grids=[grid], points_per_batch=perPass,
                     pred_iou_thresh=s["iouMin"], stability_score_thresh=s["stabilityMin"], box_nms_thresh=s["nmsIou"])
             self._generatorKey = key
+        t0 = time.perf_counter()
         with _noGrad():
             found = self._generator.generate(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+        self.lastTimes = dict(grid=time.perf_counter() - t0, gridPoints=len(grid), merged=len(found))
         return found, (f"grid {s['pointsPerSide']} x {s['pointsPerSide']}, {len(grid)} points inside the disc, "
                        f"{perPass} per pass")
 
@@ -243,6 +297,7 @@ class HubCentreSegmenter:
         boxes = (results[0].boxes.xyxy.cpu().numpy() if len(results) and results[0].boxes is not None
                  else np.zeros((0, 4)))
         tYolo = time.perf_counter() - t0
+        self.lastTimes = dict(yolo=tYolo, boxesFound=len(boxes))
         h, w = disc.shape
         if len(boxes):
             cxs = np.clip(((boxes[:, 0] + boxes[:, 2]) / 2).astype(int), 0, w - 1)
@@ -252,10 +307,12 @@ class HubCentreSegmenter:
             onDisc = boxes
         note = (f"YOLO boxes: {len(boxes)} found (confidence >= {s['yoloConf']:.2f}, {tYolo:.2f} s), "
                 f"{len(onDisc)} centred on the disc")
+        self.lastTimes["boxesOnDisc"] = len(onDisc)
         if len(onDisc) == 0:
             return [], note
         t1 = time.perf_counter()
         self.predictor.set_image(rgb)
+        self.embedded = id(crop)
         tEmbed = time.perf_counter() - t1
         t1 = time.perf_counter()
         model = self.predictor.model
@@ -280,6 +337,7 @@ class HubCentreSegmenter:
                 masks, iou, stab = masks[k], iou[k], stab[k]
         found = [dict(segmentation=m.cpu().numpy(), area=int(m.sum()), predicted_iou=float(q), stability_score=float(st))
                  for m, q, st in zip(masks, iou, stab)]
+        self.lastTimes.update(embed=tEmbed, decode=time.perf_counter() - t1, passed=passed, merged=len(found))
         return found, (note + f", {passed} passed the filters, {len(found)} after box merging; SAM embedding "
                        f"{tEmbed:.2f} s, decoder + filters {time.perf_counter() - t1:.2f} s")
 
@@ -303,6 +361,15 @@ def measure(mask, centre):
             major, minor = max(a, b) / 2.0, min(a, b) / 2.0
             if major > 0:
                 out.update(ellipse=(float(ex), float(ey)), radius=(major + minor) / 2.0, roundness=minor / major)
+            pts = c.reshape(-1, 2).astype(np.float64)
+            try:                                              # least-squares circle through the outline
+                sol = np.linalg.lstsq(np.c_[2 * pts, np.ones(len(pts))], (pts ** 2).sum(1), rcond=None)[0]
+                rc = float(np.sqrt(max(sol[2] + sol[0] ** 2 + sol[1] ** 2, 0.0)))
+                d = np.hypot(pts[:, 0] - sol[0], pts[:, 1] - sol[1]) - rc
+                out.update(circle=(float(sol[0]), float(sol[1]), rc), edgeRms=float(np.sqrt((d ** 2).mean())),
+                           edgeMax=float(np.abs(d).max()))
+            except np.linalg.LinAlgError:
+                pass
     return out
 
 
@@ -314,6 +381,9 @@ def describe(i, score, meas):
     if meas["ellipse"] is not None:
         text += (f", ellipse centre ({meas['ellipse'][0]:.1f}, {meas['ellipse'][1]:.1f}), radius {meas['radius']:.1f}, "
                  f"roundness {meas['roundness']:.3f}")
+    if meas.get("circle") is not None:
+        text += (f", fitted circle ({meas['circle'][0]:.1f}, {meas['circle'][1]:.1f}) r {meas['circle'][2]:.1f}, "
+                 f"outline off the circle RMS {meas['edgeRms']:.2f} px / max {meas['edgeMax']:.1f} px")
     return text
 
 
@@ -399,10 +469,45 @@ def processOne(segmenter, path, centre, radii, stepDeg, show="All", gamma=1.0):
     return draw(picture, masks, measures, points, centre, show), lines
 
 
-def processWhole(segmenter, path, centre, gamma=1.0, settings=None):
+def _iou(a, b):
+    u = np.logical_or(a, b).sum()
+    return float(np.logical_and(a, b).sum() / u) if u else 0.0
+
+
+_MEAS = ("score", "stability", "area", "cx", "cy", "circle_r", "ellipse_r", "roundness", "edge_rms", "edge_max",
+         "from_centre")
+CSV_COLUMNS = (["picture", "gamma", "disc", "prompts", "yolo_conf", "min_stability", "min_iou", "merge_iou", "min_area",
+                "boxes_found", "boxes_on_disc", "passed_filters", "masks_after_merge", "masks_kept", "t_yolo", "t_embed",
+                "t_decode", "t_grid", "t_masks"] + [f"first_{k}" for k in _MEAS]
+               + ["t_refine", "refine_positive", "refine_negative", "refine_box", "refine_pick"]
+               + [f"ref{i}_{k}" for i in (1, 2, 3) for k in _MEAS + ("iou_first", "shift")] + ["t_total"])
+
+
+def appendCsv(path, row):
+    """One row per picture, the fixed columns CSV_COLUMNS (empty where a value does not apply); header when new."""
+    import csv
+    new = not path.exists()
+    with open(path, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=CSV_COLUMNS, extrasaction="ignore", restval="")
+        if new:
+            w.writeheader()
+        w.writerow(row)
+
+
+def _measureRow(prefix, meas, score=None, stability=None):
+    c = meas.get("circle") or (None, None, None)
+    return {f"{prefix}_score": score, f"{prefix}_stability": stability, f"{prefix}_area": meas["area"],
+            f"{prefix}_cx": c[0], f"{prefix}_cy": c[1], f"{prefix}_circle_r": c[2],
+            f"{prefix}_ellipse_r": meas["radius"], f"{prefix}_roundness": meas["roundness"],
+            f"{prefix}_edge_rms": meas.get("edgeRms"), f"{prefix}_edge_max": meas.get("edgeMax"),
+            f"{prefix}_from_centre": meas["fromCentre"]}
+
+
+def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None):
     """All masks on the disc round the centre -> (marked picture or None, list of lines). The disc is cut first
-    (black outside it); the masks are found on that alone; each is kept to the disc, and one with less than half of
-    its area inside the disc is dropped."""
+    (black outside it); the masks are found on that alone; each is kept to the disc; one with less than half of its
+    area inside the disc, or smaller than minArea, is dropped. With refine: the largest mask's outline gives fresh
+    point prompts (see HubCentreSegmenter.refine). csvPath: one row per picture with every value."""
     s = dict(WHOLE_DEFAULTS, **(settings or {}))
     picture = loadPicture(path)
     if picture is None:
@@ -411,27 +516,79 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None):
     crop, disc, (x0, y0) = cutDisc(picture, centre, s["discRadius"])
     tStart = time.perf_counter()
     found, secs, note = segmenter.segmentWhole(crop, disc, s)
-    kept, dropped = [], 0
+    kept, outside, small = [], 0, 0
     for d in found:
         seg = np.asarray(d["segmentation"]).astype(bool)
         inside = seg & disc
         if inside.sum() * 2 < seg.sum() or not inside.any():
-            dropped += 1
+            outside += 1
             continue
-        full = np.zeros(picture.shape[:2], bool)
-        full[y0:y0 + inside.shape[0], x0:x0 + inside.shape[1]] = inside
-        kept.append((d, full))
+        if inside.sum() < s["minArea"]:
+            small += 1
+            continue
+        kept.append((d, inside))
     kept.sort(key=lambda t: -int(t[1].sum()))
-    measures = [measure(full, centre) for _, full in kept]
+
+    def full(m):
+        out = np.zeros(picture.shape[:2], bool)
+        out[y0:y0 + m.shape[0], x0:x0 + m.shape[1]] = m
+        return out
+
+    measures = [measure(full(m), centre) for _, m in kept]
     lines = [f"{path.name}: disc r {s['discRadius']:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks; "
              f"{note}; filters: stability >= {s['stabilityMin']:.2f}, predicted IoU >= {s['iouMin']:.2f}, box merge "
-             f"IoU {s['nmsIou']:.2f}; {dropped} dropped (less than half inside the disc); gamma {gamma:.1f}; "
-             f"time {secs:.2f} s for the masks, {time.perf_counter() - tStart:.2f} s with measuring and drawing"]
+             f"IoU {s['nmsIou']:.2f}, area >= {s['minArea']} px; dropped {outside} (less than half inside the disc), "
+             f"{small} (smaller than the min area); gamma {gamma:.1f}; time {secs:.2f} s for the masks"]
     for i, ((d, _), meas) in enumerate(zip(kept, measures)):
         lines.append(f"    {describe(i, float(d.get('predicted_iou', 0.0)), meas)}, "
                      f"stability {float(d.get('stability_score', 0.0)):.3f}")
+    row = dict(picture=path.name, gamma=gamma, disc=s["discRadius"], prompts=s["prompts"], yolo_conf=s["yoloConf"],
+               min_stability=s["stabilityMin"], min_iou=s["iouMin"], merge_iou=s["nmsIou"], min_area=s["minArea"],
+               boxes_found=segmenter.lastTimes.get("boxesFound"), boxes_on_disc=segmenter.lastTimes.get("boxesOnDisc"),
+               passed_filters=segmenter.lastTimes.get("passed"), masks_after_merge=segmenter.lastTimes.get("merged"),
+               masks_kept=len(kept), t_yolo=segmenter.lastTimes.get("yolo"), t_embed=segmenter.lastTimes.get("embed"),
+               t_decode=segmenter.lastTimes.get("decode"), t_grid=segmenter.lastTimes.get("grid"), t_masks=secs)
+    row.update(_measureRow("first", measures[0], float(kept[0][0].get("predicted_iou", 0)),
+                           float(kept[0][0].get("stability_score", 0))) if kept else {"first_area": None})
     marked = drawWhole(picture, measures)
-    cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(s["discRadius"])), (255, 255, 255), 1)
+    refined = None
+    if s["refine"] and kept:
+        res = segmenter.refine(crop, kept[0][1], s)
+        if res is None:
+            lines.append("    refine: the first mask's outline could not be fitted")
+        else:
+            rmasks, rscores, points, labels, box, tRef = res
+            rmeas = [measure(full(m & disc), centre) for m in rmasks]
+            first = full(kept[0][1])
+            pick = int(np.argmax(rscores))
+            lines.append(f"    refine (first mask's outline -> {int(labels.sum())} positive points on rings "
+                         f"{', '.join(f'{f:g}' for f in s['refineRings'])} x its radius, {int((labels == 0).sum())} "
+                         f"negative at {s['refineNegative']:g} x, every {s['refineStep']:g} deg"
+                         f"{', box' if box is not None else ''}): {tRef:.2f} s; picked the highest score, mask {pick + 1}")
+            row.update(t_refine=tRef, refine_positive=int(labels.sum()), refine_negative=int((labels == 0).sum()),
+                       refine_box=box is not None, refine_pick=pick + 1)
+            for k, (m, sc, me) in enumerate(zip(rmasks, rscores, rmeas)):
+                iou = _iou(full(m & disc), first)
+                shift = (float(np.hypot(me["circle"][0] - measures[0]["circle"][0], me["circle"][1] - measures[0]["circle"][1]))
+                         if me.get("circle") and measures[0].get("circle") else None)
+                lines.append(f"      refined {describe(k, float(sc), me)}; IoU with the first mask {iou:.3f}"
+                             + (f", circle centre moved {shift:.1f} px" if shift is not None else ""))
+                row.update(_measureRow(f"ref{k + 1}", me, float(sc)))
+                row.update({f"ref{k + 1}_iou_first": iou, f"ref{k + 1}_shift": shift})
+            refined = rmeas[pick]
+            if refined["contour"] is not None:
+                cv2.drawContours(marked, [refined["contour"]], -1, (255, 255, 255), 2)
+            for (px, py), lab in zip(points, labels):
+                cv2.circle(marked, (int(round(px + x0)), int(round(py + y0))), 3, POINT_COLOUR if lab else (0, 0, 0), -1)
+    total = time.perf_counter() - tStart
+    lines[0] += f"; {total:.2f} s in all (with refine, measuring and drawing)"
+    row["t_total"] = total
+    cv2.circle(marked, (int(round(centre[0])), int(round(centre[1]))), int(round(s["discRadius"])), (200, 200, 200), 1)
+    if csvPath is not None:
+        try:
+            appendCsv(csvPath, row)
+        except Exception as e:
+            lines.append(f"    CSV not written: {e}")
     return marked, lines
 
 
@@ -440,23 +597,32 @@ def runBatch():
     centre = parseCentre(argValue("--centre")) if "--centre" in sys.argv else defaultCentre()
     radii = parseRadii(argValue("--radii", "50,60"))
     step = parseStep(argValue("--step", "30"))
-    gamma = parseGamma(argValue("--gamma", "3.0"))
+    gamma = parseGamma(argValue("--gamma", "2.0"))
     d = WHOLE_DEFAULTS
     whole = wholeSettings(argValue("--prompts", d["prompts"]), argValue("--pps", d["pointsPerSide"]),
                           argValue("--stability", d["stabilityMin"]), argValue("--iou", d["iouMin"]),
                           argValue("--nms", d["nmsIou"]), argValue("--conf", d["yoloConf"]),
-                          argValue("--disc", d["discRadius"]))
+                          argValue("--disc", d["discRadius"]), argValue("--min-area", d["minArea"]),
+                          "--no-refine" not in sys.argv, argValue("--refine-rings", "0.5,0.8"),
+                          argValue("--refine-neg", d["refineNegative"]), argValue("--refine-step", d["refineStep"]),
+                          "--refine-no-box" not in sys.argv)
     segmenter = HubCentreSegmenter(argValue("--sam"))
     segmenter.load()
     print(f"MobileSAM on {segmenter.device}")
     files = picturesIn(target)
     outDir = (pathlib.Path(target) if pathlib.Path(target).is_dir() else pathlib.Path(target).parent) / "hub_centre_mask_results"
+    outDir.mkdir(exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    csvPath, logPath = outDir / f"details_{stamp}.csv", outDir / f"run_{stamp}.txt"
+    print(f"Details: {csvPath}; all lines: {logPath}")
     for path in files:
         if "--whole" in sys.argv:
-            marked, lines = processWhole(segmenter, path, centre, gamma, whole)
+            marked, lines = processWhole(segmenter, path, centre, gamma, whole, csvPath)
         else:
             marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
         print("\n".join(lines), flush=True)
+        with open(logPath, "a") as f:
+            f.write("\n".join(lines) + "\n")
         if marked is not None and "--save" in sys.argv:
             outDir.mkdir(exist_ok=True)
             cv2.imwrite(str(outDir / (path.stem + "_masks.png")), marked)
@@ -490,14 +656,20 @@ def runWindow():
             c = defaultCentre()
             V = lambda v: tk.StringVar(master=root, value=v)
             self.centreVar, self.radiiVar, self.stepVar = V(f"{c[0]:g},{c[1]:g}"), V("50,60"), V("30")
-            self.secondsVar = tk.IntVar(master=root, value=1)
-            self.gammaVar, self.showVar = V("3.0"), V("All")
+            self.secondsVar = tk.IntVar(master=root, value=3)
+            self.gammaVar, self.showVar = V("2.0"), V("All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
             self.centreOnlyVar = tk.BooleanVar(master=root, value=False)
             self.discVar, self.promptsVar = V(f"{d['discRadius']:g}"), V("YOLO boxes" if d["prompts"] == "yolo" else "Grid points")
             self.ppsVar, self.stabilityVar = V(str(d["pointsPerSide"])), V(f"{d['stabilityMin']:.2f}")
             self.iouVar, self.nmsVar = V(f"{d['iouMin']:.2f}"), V(f"{d['nmsIou']:.2f}")
             self.confVar = V(f"{d['yoloConf']:.2f}")
+            self.minAreaVar = V(str(d["minArea"]))
+            self.refineVar = tk.BooleanVar(master=root, value=d["refine"])
+            self.refineBoxVar = tk.BooleanVar(master=root, value=d["refineBox"])
+            self.refineRingsVar = V(",".join(f"{f:g}" for f in d["refineRings"]))
+            self.refineNegVar, self.refineStepVar = V(f"{d['refineNegative']:.2f}"), V(f"{d['refineStep']:g}")
+            self.csvPath = self.logPath = None
 
             def spin(parent, label, var, lo, hi, inc, fmt, width=5):
                 ttk.Label(parent, text=label).pack(side="left")
@@ -530,8 +702,17 @@ def runWindow():
             spin(bar4, "Min stability", self.stabilityVar, 0.70, 1.00, 0.02, "%.2f")
             spin(bar4, "Min predicted IoU", self.iouVar, 0.50, 1.00, 0.02, "%.2f")
             spin(bar4, "Box merge IoU", self.nmsVar, 0.30, 1.00, 0.05, "%.2f")
-            ttk.Label(bar4, text="Around the centre: mask 1 cyan, 2 magenta, 3 yellow, points blue.  Unticked: each "
-                                 "mask its own colour, disc white.").pack(side="left", padx=6)
+            spin(bar4, "Min area (px)", self.minAreaVar, 0, 50000, 250, "%.0f", 7)
+            bar5 = ttk.Frame(root); bar5.pack(fill="x", padx=6)
+            ttk.Checkbutton(bar5, text="Refine the largest mask with point prompts", variable=self.refineVar).pack(side="left")
+            ttk.Label(bar5, text="  positive rings (x radius)").pack(side="left")
+            ttk.Entry(bar5, textvariable=self.refineRingsVar, width=9).pack(side="left", padx=(2, 10))
+            spin(bar5, "negative ring (x radius)", self.refineNegVar, 1.02, 2.0, 0.01, "%.2f")
+            spin(bar5, "angle step", self.refineStepVar, 5, 90, 5, "%.0f", 4)
+            ttk.Checkbutton(bar5, text="with its box", variable=self.refineBoxVar).pack(side="left")
+            ttk.Label(root, text="Around the centre: mask 1 cyan, 2 magenta, 3 yellow, points blue.  Unticked: each mask "
+                                 "its own colour, disc grey; refined mask white, its positive points blue, negative black."
+                      ).pack(fill="x", padx=6)
 
             self.blank = ImageTk.PhotoImage(Image.new("RGB", (VIEW_W, VIEW_H)))
             self.canvas = tk.Label(root, image=self.blank, background="black"); self.canvas.pack(padx=6)
@@ -564,6 +745,12 @@ def runWindow():
 
         def log(self, line):
             print(line, flush=True)
+            if getattr(self, "logPath", None) is not None:
+                try:
+                    with open(self.logPath, "a") as f:
+                        f.write(line + "\n")
+                except Exception:
+                    pass
             self.listbox.insert("end", line); self.listbox.see("end")
 
         def chooseFolder(self):
@@ -589,7 +776,9 @@ def runWindow():
         def whole(self):
             return wholeSettings("yolo" if self.promptsVar.get() == "YOLO boxes" else "grid", self.ppsVar.get(),
                                  self.stabilityVar.get(), self.iouVar.get(), self.nmsVar.get(), self.confVar.get(),
-                                 self.discVar.get())
+                                 self.discVar.get(), self.minAreaVar.get(), self.refineVar.get(),
+                                 self.refineRingsVar.get(), self.refineNegVar.get(), self.refineStepVar.get(),
+                                 self.refineBoxVar.get())
 
         def start(self):
             if not self.modelReady or self.modelError:
@@ -604,6 +793,15 @@ def runWindow():
             if not self.files:
                 messagebox.showinfo("Hub centre masks", "No pictures there."); return
             self.index, self.running = 0, True
+            out = (self.folder if self.folder.is_dir() else self.folder.parent) / "hub_centre_mask_results"
+            try:
+                out.mkdir(exist_ok=True)
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                self.csvPath, self.logPath = out / f"details_{stamp}.csv", out / f"run_{stamp}.txt"
+                self.log(f"Details of this run: {self.csvPath}  (all lines: {self.logPath})")
+            except Exception as e:
+                self.csvPath = self.logPath = None
+                self.log(f"Cannot write the details files in {out}: {e}")
             self.startButton.configure(state="disabled"); self.stopButton.configure(state="normal")
             self.step()
 
@@ -642,7 +840,7 @@ def runWindow():
                     if centreOnly:
                         result["out"] = processOne(self.segmenter, path, centre, radii, stepDeg, show, gamma)
                     else:
-                        result["out"] = processWhole(self.segmenter, path, centre, gamma, whole)
+                        result["out"] = processWhole(self.segmenter, path, centre, gamma, whole, self.csvPath)
                 except Exception as e:
                     result["out"] = (None, [f"{path.name}: error {type(e).__name__}: {e}"])
 
