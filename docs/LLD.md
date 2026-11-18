@@ -251,7 +251,17 @@ conf 0.15 as box prompts, stability ≥ 0.70, predicted IoU ≥ 0.50, box merge 
 own edge, largest mask, ellipse fit 2.5 px / 300 RANSAC tries, round a whole-pixel origin near the outline's middle
 (CHANGES §144); keys `vision.cap.mask.*`). No cap mask -> NOT seated; no
 hub centre -> rule not applied (said in the reason). Marked picture: the cap ellipse green / red, the hub centre a blue
-cross. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+cross. **Hub source (CHANGES §152, `seating.hub.source`, Machine 2 `cap`):** the hub centre is taken from the cap picture
+itself - `CheckCap.hubHoles`: dark blobs (the darkest `seating.hub.holes.dark.percentiles` 6 / 9 / 12 % of the band
+`seating.hub.holes.band` 128-168 px round `cap.center`, opened 5 px, area 150-2500 px, the 8 largest), the model's count
+(`holes.count.dost` 4 / `.dostplus` 5) most evenly spaced on a circle, accepted only with the circle radius in
+`holes.radius` 140-160 (holes 147-154; the bolts' circle is 182-196, bright, and outside the band - never taken),
+spread ≤ 3 px and every angle gap within 15° of 360 / count; then once more with the band round that circle (a part off
+`cap.center` would cut holes at the band's edge). Holes not found -> NOT seated. Target = hole circle centre +
+`seating.hub.distance.offset.cap.<dost|dostplus>` (Machine 2 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
+caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
+hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
+move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
@@ -470,7 +480,8 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
+| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.2,-0.1 and -0.6,-5.3 (Machine 1: 0,0) | 3 |
+| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)
@@ -499,8 +510,8 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
 | `DryRun_Cap_Silver_Seating.py` | Silver cap seating, two rules (CHANGES §129): seated SEATED, skewed NOT SEATED, face fit alone separates them, hub centre uncovered on the cap pushed off the bore, no / blank hub picture -> rule 1 not checked |
-| `DryRun_Cap_Hub_Distance.py` | Cap seating by the hub-centre distance (CHANGES §143): hub centre from 4 / 5 holes or bolts, kept with the cycle (worker, state file, end of cycle), production cap mask = the frozen window's, the rule within / not within, checkCap OK / NOT OK by the hub centre |
-| `DryRun_Cap_Hub_Distance_UI.py` | Window / `--batch` (CHANGES §144): hub check on a chosen hub picture -> hub centre; cap check with it on every picture of a caps folder; every value and the suggested offset / max from the seated caps; `--hub-folder` / Hub folder (pair by time) (§150): each cap against the hub picture of its own cycle; `--hub-from-cap` / Hub from the cap picture (§151): the hub check on the cap picture itself |
+| `DryRun_Cap_Hub_Distance.py` | Cap seating by the hub-centre distance (CHANGES §143; §152: H6 / H7 the holes in the cap picture, C3 / C4 hub source cap; Machine 1: H6 / H7 skipped): hub centre from 4 / 5 holes or bolts, kept with the cycle (worker, state file, end of cycle), production cap mask = the frozen window's, the rule within / not within, checkCap OK / NOT OK by the hub centre |
+| `DryRun_Cap_Hub_Distance_UI.py` | Window / `--batch` (CHANGES §144; §152: Hub source "cap holes" - no hub picture needed): hub check on a chosen hub picture -> hub centre; cap check with it on every picture of a caps folder; every value and the suggested offset / max from the seated caps; `--hub-folder` / Hub folder (pair by time) (§150): each cap against the hub picture of its own cycle; `--hub-from-cap` / Hub from the cap picture (§151): the hub check on the cap picture itself |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` | The real check on a folder of pictures, shown one at a time |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |

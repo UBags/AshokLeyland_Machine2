@@ -34,6 +34,24 @@ QR = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL A
       "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
 
 
+def capMaskYolo():
+    """YOLO for the cap mask of the hub-centre distance (CHANGES 143; applied on every seating since the hub centre comes
+    from the cap picture itself, CHANGES 152): ModelManager's object-aware model, else stand-in boxes round the disc
+    (DryRun_Cap_Hub_Distance.StandInYolo; no YOLO weights in the sandbox) -> (model, note)."""
+    import importlib.util
+    try:
+        import camera.ModelManager
+        yolo = camera.ModelManager.ModelManager.get_instance().get_yolo_model()
+        if yolo is None:
+            raise RuntimeError("no YOLO model")
+        return yolo, "YOLO from ModelManager"
+    except Exception as e:
+        spec = importlib.util.spec_from_file_location("hcd", str(HERE / "DryRun_Cap_Hub_Distance.py"))
+        hcd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hcd)
+        return hcd.CircleBoxYolo(), f"stand-in YOLO boxes round the cap's circle ({e})"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
@@ -62,7 +80,9 @@ def main() -> int:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = sam_model_registry["vit_t"](checkpoint=args.sam).to(device).eval()
     CheckCap.samModelProvider = lambda: model
-    print(f"MobileSAM on {device}")
+    yolo, yoloNote = capMaskYolo()
+    CheckCap.yoloModelProvider = lambda: yolo
+    print(f"MobileSAM on {device}; {yoloNote}")
 
     runs = []
     realSeating = CheckCap.checkSeating

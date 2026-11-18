@@ -194,6 +194,13 @@ On the Machine 2 PC with the new exe:
    the hub centre from the cap picture itself ("Hub from the cap picture", `--hub-from-cap`). Measured that way (study,
    holes by dark blobs) the 9 seated DOST caps of 13 and 17 Nov lie 0.9 - 3.5 px from the hub centre; candidate for
    production once confirmed with the real hub check on the laptop.
+   **Since CHANGES 152 production takes the hub centre from the holes round the cap in the cap picture**
+   (`siemens.vision.cap.seating.hub.source=cap`, offsets `...offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3, max 5.0).
+   The seating line reads `cap centre (x, y) to hub centre (x, y) d px <= 5.0 (hub from 4 cap holes (circle r .., spread
+   .., gap .. deg), DOST offset ...)`; holes not found -> `the hub's 4 holes round the cap not found (...)` and NOT OK.
+   Laptop: `DryRun_Cap_Hub_Distance_UI.py`, Hub source "cap holes" (the default), model and caps folder only - no hub
+   picture. Send the lines of a shift; a seated cap NOT OK by `holes not found` or by a distance above 5 is the thing to
+   watch. To go back: `...hub.source=hubcheck`.
 
 ## Results
 

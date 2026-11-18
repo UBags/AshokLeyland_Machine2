@@ -32,6 +32,24 @@ import cv2
 import numpy as np
 
 
+def capMaskYolo():
+    """YOLO for the cap mask of the hub-centre distance (CHANGES 143; applied on every seating since the hub centre comes
+    from the cap picture itself, CHANGES 152): ModelManager's object-aware model, else stand-in boxes round the disc
+    (DryRun_Cap_Hub_Distance.StandInYolo; no YOLO weights in the sandbox) -> (model, note)."""
+    import importlib.util
+    try:
+        import camera.ModelManager
+        yolo = camera.ModelManager.ModelManager.get_instance().get_yolo_model()
+        if yolo is None:
+            raise RuntimeError("no YOLO model")
+        return yolo, "YOLO from ModelManager"
+    except Exception as e:
+        spec = importlib.util.spec_from_file_location("hcd", str(HERE / "DryRun_Cap_Hub_Distance.py"))
+        hcd = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hcd)
+        return hcd.CircleBoxYolo(), f"stand-in YOLO boxes round the cap's circle ({e})"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
@@ -43,6 +61,9 @@ def main():
     from mobile_sam import sam_model_registry
     from camera.CheckCap import CheckCap
     CheckCap.samModelProvider = staticmethod(lambda: sam_model_registry["vit_t"](checkpoint=args.sam).eval())
+    yolo, yoloNote = capMaskYolo()
+    CheckCap.yoloModelProvider = lambda: yolo
+    print(yoloNote)
     if not CheckCap.SEATING_CHECK:
         print("Seating is off for this machine (vision.cap.seating.check=False): nothing to check here.")
         return 0

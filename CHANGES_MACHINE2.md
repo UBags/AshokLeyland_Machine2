@@ -4536,3 +4536,70 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run:** pairing / cap-picture unit test 19/19 per folder; window under Xvfb 13/13 per folder (single hub, pairing,
   hub from the cap picture); the study on the 16 DOST pictures (above). Not run: the real hub check on cap pictures
   (needs YOLO).
+
+## 152. Cap / hub distance: the hub centre from the holes round the cap in the cap picture itself (2026-11-18)
+
+- **User:** fix the DOST holes / bolts offsets with the hub picture `..._20261113151833451` (laptop hub check: 4
+  bolts, (644.5, 334.4), CHANGES 149) - the first 6 silver caps of MixedCaps (the 29 pictures of 13 Nov) OK, the other
+  10 NOT OK; every silver cap of Cap_Pictures (the 117 of 17 Nov) OK. Then, on the diagnosis below: take the holes from
+  the cap picture itself; what does a 4 px limit do; how is it ensured that the holes, never the bolts, are found; the
+  window must no longer need a hub picture.
+- **Diagnosis (sandbox: production colour rules and cap mask, real MobileSAM, stand-in YOLO boxes; the hub check
+  itself needs YOLO and was not run here):**
+  - Against that one hub picture the 27 seated silver caps lie in three groups: 13 Nov dy -3.9 .. +1.0, 17 Nov
+    17:04 - 18:44 +3.6 .. +6.2, 19:19:43 -6.0 .. -5.8; the smallest circle holding them has radius 6.3 px. With max 5
+    no offset passes all of them - the back and forth of CHANGES 145 / 148 / 149.
+  - Cause: where each part sat. The hub's hole circle measured in each cap picture is at y about 333 (13 Nov), 339 -
+    340 (17:04 - 18:44), 328 (19:19:43); in the hub picture 331.8. The cap sits on its own hub; the hub moves.
+  - So the DOST offsets of CHANGES 148 / 149 carry about 7.7 px of part-to-part position (measured against hub
+    pictures of other parts). For source `hubcheck` (each cap against its own cycle's hub check) they would have been
+    about bolts.dost (0.0, -2.8) and holes.dost (0.6, -7.2) (from the hub-check-vs-blob bias on the same part; the
+    holes value assumes `..._151830811` is the same part as `..._151833451`). Not changed - that source is now off.
+- **Now (`CheckCap`, `vision.cap.seating.hub.source=cap`):** `hubHoles(picture, model)` finds the hub's holes round
+  the cap in the cap picture: dark blobs - the darkest `hub.holes.dark.percentiles` 6 % of the band
+  `hub.holes.band` 128 - 168 px round `cap.center` (9 %, 12 % tried when the holes are not all found), opened 5 px,
+  area 150 - 2500 px, the 8 largest - and of them the model's count (`hub.holes.count.dost` 4 / `.dostplus` 5) most
+  evenly spaced; accepted only if the circle through them has a radius in `hub.holes.radius` 140 - 160, a spread
+  (sd of the distances) <= 3 px and every angle gap within 15 deg of 360 / count; then once more with the band round
+  the circle found (a part 12 px off `cap.center` cut holes at the band's edge: synthetic 12 / -9 px move, centre
+  3 px off before, 0.04 px after). Not found -> NOT seated ("the hub's 4 holes round the cap not found (...)").
+  `hubCentreDistance` with source `cap`: target = hole circle centre + `hub.distance.offset.cap.<dost|dostplus>`; the
+  hub check's centre is not used (kept for source `hubcheck`, with the holes / bolts offsets, unchanged).
+  The seating line reads `... (hub from 4 cap holes (circle r 150.9, spread 0.6, gap 3 deg), DOST offset (0.2, -0.1),
+  ...)`; the hole circle is drawn thin blue on the marked picture.
+- **Holes, never the bolts:** the holes are dark at r 147 - 154 from the hub centre; the studs are bright tops at r 182 -
+  196. The finder takes dark blobs only, searches a band that ends at 168 px, and refuses any circle whose radius is
+  outside 140 - 160 - a bolt circle cannot pass even if a stud's shadow were dark. Measured: holes found on 37 of 37
+  silver pictures except 2 NOT OK caps that hide holes (pushed off the bore, tilted far: NOT OK either way), 106 / 106
+  brass, every cap and hub picture of the dry-run folders (H6, 40 pictures), the uploaded hub picture; circle r 147.3
+  - 154.0; never found with the other model's count. Synthetic (H7): dark holes at r 150 found, bright bolts at r 183
+  not; dark discs at the bolts' radius alone never taken.
+- **Offsets and limit (cap centre - hole circle centre, the smallest circle round the seated caps):** DOST 27 seated
+  silver caps (13 and 17 Nov, all three positions): within 3.25 px of (+0.17, -0.14) -> `offset.cap.dost` = 0.2,-0.1;
+  DOSTPLUS 99 seated brass caps (13 Nov seated by the bore rule, 17 Nov all): within 2.97 px of (-0.56, -5.31) ->
+  `offset.cap.dostplus` = -0.6,-5.3 (brass cap centres with stand-in boxes round the brass cap circle - the fixed
+  stand-in squares make MobileSAM take the bore on some brass caps). Max stays 5.0:
+  | | largest seated | room at 5.0 | room at 4.0 | nearest NOT OK by distance |
+  |---|---|---|---|---|
+  | DOST | 3.25 | 1.75 | 0.75 | 9.5 (pushed aside) |
+  | DOSTPLUS | 2.99 | 2.01 | 1.01 | 12.0 |
+  4.0 gives the same verdicts on all this data; it leaves 0.75 px on DOST, measured on caps from about 9 parts.
+  Tilted-in-place silver caps (152433983, 152438344, 152441953) are 1.3 - 2.1 px from the target: the distance does not
+  catch them, the face rule does (fit 0.46 - 0.57 < 0.64), as before.
+- **Verdicts, production `checkSeating` with source cap (hub picture `..._151833451` for silver rule 1):** DOST 37 / 37
+  as expected (MixedCaps: first 6 SEATED, other 10 NOT; Cap_Pictures: all 21 SEATED; the no-cap cycle 18:39:30 left
+  out: no cap at step 1), DOSTPLUS 106 / 106 (93 + 6 seated, 7 skewed NOT). Time (CPU) DOST 5.7 s, DOSTPLUS 1.3 s
+  median; the hole finder itself a few ms.
+- Reference commit `e81a162` (CheckCap with the new logic, values written in), both manifests; new keys in the three
+  properties files (allenbradley = the code defaults, offsets 0,0; seating stays off on Machine 1). Verifier ALL
+  EQUIVALENT on both machines.
+- **`DryRun_Cap_Hub_Distance_UI.py` (both folders):** "Hub source" box - `cap holes` (default: the machine's
+  `hub.source`) needs only the model and a caps folder, no hub picture; "cap offset dx,dy" follows the model; per cap the
+  hole circle (centre, r, spread, gap) and the distance; holes not found said; summary suggests `offset.cap.<model>`.
+  `hub check` = everything before. Batch: `--hub-source cap|hubcheck`, `--offset-cap dx,dy`. The step-3 hub picture
+  is the model's stored one unless one is chosen.
+- **Dry runs:** `DryRun_Cap_Hub_Distance.py` new H6 / H7 (holes, Machine 2 only), C3 (DOST, source cap: 9 seated within,
+  pushed-aside 04 - 06 not), C4 (camera server path, no hub-check centre: seated OK, holes hidden NOT OK); C1 / C2 run
+  with source `hubcheck`; new `CircleBoxYolo` stand-in (sandbox only). `DryRun_Cap_Production_Path.py` and
+  `DryRun_Cap_Silver_Seating.py` now give the cap mask a YOLO (ModelManager's, else the stand-in): the distance rule
+  now runs on every seating (before, without a hub centre it was skipped there).

@@ -1,8 +1,16 @@
 """
 DryRun_Cap_Hub_Distance_UI - the cap seating step's hub-centre distance (CHANGES 143) on real pictures, the way the
-camera server runs it: the hub check on a hub picture gives the hub's centre, then the cap check runs on every cap
-picture of a folder with that hub centre. Everything needed to set the distance limit and the holes / bolts offsets is
-printed and written to files.
+camera server runs it. Everything needed to set the distance limit and the offsets is printed and written to files.
+
+  0. "Hub source" (CHANGES 152; starts at this machine's vision.cap.seating.hub.source, batch --hub-source):
+     "cap holes" (production on Machine 2) - the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes
+     round the cap in each cap picture itself (CheckCap.hubHoles). No hub picture is needed: choose the model and a caps
+     folder and Start. The offset is "cap offset dx,dy" (vision.cap.seating.hub.distance.offset.cap.<model>); the hole
+     circle is drawn thin blue on the marked picture, its centre + offset as a blue cross. Points 2, 8 and 9 below and the
+     holes / bolts offsets are for "hub check" only. Step 3 still needs a hub picture of the part (brightening): the
+     model's stored one unless one is chosen with "Hub picture...".
+     "hub check" - as before CHANGES 152: the hub centre from the hub check on a hub picture (2), a hub folder (8) or
+     the cap picture (9), with the holes / bolts offsets.
 
   1. "Model": DOST or DOSTPLUS - the QR code both checks are given (the hub check needs 4 / 5 holes or bolts of that
      model; the cap check needs that model's cap).
@@ -51,6 +59,9 @@ Without a window:            python test/machine1_dryrun/DryRun_Cap_Hub_Distance
                                [--model DOST|DOSTPLUS] [--hub <hub picture> | --hub-centre x,y,holes|bolts]
                                [--top <picture>] [--nut <picture>] [--max 5.0] [--offset-holes dx,dy]
                                [--offset-bolts dx,dy] [--save] [--hub-folder <folder> [--pair-max-secs 300] | --hub-from-cap]
+                               [--hub-source cap|hubcheck] [--offset-cap dx,dy]
+  e.g. production (hub from the holes in each cap picture, no hub picture):
+                             python test/machine1_dryrun/DryRun_Cap_Hub_Distance_UI.py --batch --caps <folder> --model DOST
 """
 import csv
 import datetime
@@ -245,15 +256,26 @@ def runHubCheck(checks, picture, model):
     return dict(ok=bool(ok), marked=marked, hub=hub, gamma=gamma, seconds=secs, lines=lines)
 
 
-def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, offsetBolts):
-    """The cap check as the camera server calls it, with the hub centre -> dict(ok, marked, row values, lines)."""
+def isCapSource(source):
+    return str(source).strip().lower() == "cap"
+
+
+def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, offsetBolts, source="hubcheck",
+           offsetCap=(0.0, 0.0)):
+    """The cap check as the camera server calls it -> dict(ok, marked, row values, lines). source "cap": the hub centre
+    from the holes in the cap picture (hubCentre not used); "hubcheck": hubCentre."""
     capClass = checks.loadCap()
     module = checks.capModule
     plus = model == "DOSTPLUS"                  # the offsets are per model (CHANGES 147): set this model's pair
     holesName = "SEATING_HUB_DISTANCE_OFFSET_HOLES_" + ("DOSTPLUS" if plus else "DOST")
     boltsName = "SEATING_HUB_DISTANCE_OFFSET_BOLTS_" + ("DOSTPLUS" if plus else "DOST")
+    capName = "SEATING_HUB_DISTANCE_OFFSET_CAP_" + ("DOSTPLUS" if plus else "DOST")
+    capSource = isCapSource(source)
+    if capSource:
+        hubCentre = None
     saved = (capClass.SEATING_HUB_DISTANCE_CHECK, capClass.SEATING_HUB_DISTANCE_MAX,
-             getattr(capClass, holesName), getattr(capClass, boltsName))
+             getattr(capClass, holesName), getattr(capClass, boltsName), getattr(capClass, capName),
+             capClass.SEATING_HUB_SOURCE)
     realSeating, realColour = capClass.checkSeating, capClass._seatingByColour
     seen = {}
 
@@ -271,6 +293,8 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
         capClass.SEATING_HUB_DISTANCE_MAX = float(maxDistance)
         setattr(capClass, holesName, tuple(float(v) for v in offsetHoles))
         setattr(capClass, boltsName, tuple(float(v) for v in offsetBolts))
+        setattr(capClass, capName, tuple(float(v) for v in offsetCap))
+        capClass.SEATING_HUB_SOURCE = "cap" if capSource else "hubcheck"
         capClass._seatingByColour = staticmethod(colour)
         capClass.checkSeating = staticmethod(seating)
         current = {module.hubAndBottomBearingPictureKeyString: bases["hub"],
@@ -281,18 +305,28 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
                                        runSeating=True, hubCentre=hubCentre)
         secs = time.perf_counter() - t0
         rule, measuredOnly = None, False
-        if "seating" not in seen and hubCentre:                  # stopped before the seating step: measure anyway
+        if "seating" not in seen and (hubCentre or capSource):  # stopped before the seating step: measure anyway
             rule, measuredOnly = capClass.hubCentreDistance(picture, hubCentre, model), True
-        elif hubCentre:
-            rule = dict(cap=None, target=seen["seating"].get("hub_target"), distance=seen["seating"].get("hub_distance"))
+        elif hubCentre or capSource:
+            rule = dict(cap=None, target=seen["seating"].get("hub_target"), distance=seen["seating"].get("hub_distance"),
+                        hub=seen["seating"].get("hub_centre"), reason=seen["seating"].get("reason", ""))
             rule["ok"] = rule["distance"] is not None and rule["distance"] <= float(maxDistance)
     finally:
         capClass.SEATING_HUB_DISTANCE_CHECK, capClass.SEATING_HUB_DISTANCE_MAX = saved[0], saved[1]
         setattr(capClass, holesName, saved[2])
         setattr(capClass, boltsName, saved[3])
+        setattr(capClass, capName, saved[4])
+        capClass.SEATING_HUB_SOURCE = saved[5]
         capClass.checkSeating, capClass._seatingByColour = realSeating, realColour
+    holesReason = ""
+    if capSource and rule is not None:          # the hub centre the check found (the holes in the cap picture)
+        hubCentre = rule.get("hub")
+    if capSource and not hubCentre:             # why the holes were not found (the seating reason has every rule)
+        holes = capClass.hubHoles(picture, model)
+        holesReason = "" if holes["found"] else f"the hub's {holes['count']} holes round the cap not found ({holes['reason']})"
     return dict(ok=bool(ok), marked=marked if marked is not None else picture, seconds=secs, colour=seen.get("colour"),
-                seating=seen.get("seating"), rule=rule, measuredOnly=measuredOnly, messages=list(checks.messages))
+                seating=seen.get("seating"), rule=rule, measuredOnly=measuredOnly, messages=list(checks.messages),
+                hub=hubCentre, holesReason=holesReason)
 
 
 class CapCatcher:
@@ -330,8 +364,14 @@ def describeCap(name, model, res, hubCentre, maxDistance, offsets, cap):
         lines.append("    the cap check stopped before the seating step")
     if hubCentre:
         kind = hubCentre.get("kind", "holes")
-        dx0, dy0 = offsets[1] if kind == "bolts" else offsets[0]
+        dx0, dy0 = offsets[2] if kind == "cap holes" else offsets[1] if kind == "bolts" else offsets[0]
         row.update(hub_kind=kind, hub_cx=hubCentre["cx"], hub_cy=hubCentre["cy"], offset_dx=dx0, offset_dy=dy0)
+        if kind == "cap holes":
+            lines.append(f"    hub from the {hubCentre['count']} holes round the cap in this picture: centre "
+                         f"({hubCentre['cx']:.1f}, {hubCentre['cy']:.1f}), circle r {hubCentre['radius']:.1f}, spread "
+                         f"{hubCentre['spread']:.2f} px, angle gap off {hubCentre['gap']:.1f} deg")
+    elif res.get("holesReason"):
+        lines.append(f"    hub holes: {res['holesReason']}")
     if cap is not None:
         fit = cap.get("fit")
         row.update(cap_found=bool(cap.get("found")), mask_area=cap.get("area"), mask_stability=cap.get("stability"),
@@ -351,6 +391,8 @@ def describeCap(name, model, res, hubCentre, maxDistance, offsets, cap):
                      f"(hub {row.get('hub_kind')}, offset {row.get('offset_dx'):+g}, {row.get('offset_dy'):+g})")
     elif hubCentre:
         lines.append(f"    distance: not measured ({(cap or {}).get('reason') or 'no cap mask'})")
+    elif res.get("holesReason"):
+        lines.append("    distance: not measured (the hub's holes round the cap not found -> NOT seated)")
     else:
         lines.append("    distance: no hub centre")
     if cap is not None:
@@ -383,7 +425,7 @@ def summarise(rows, maxDistance):
         out.append(f"    dx {stat(dx)}")
         out.append(f"    dy {stat(dy)}")
         models = sorted({r["model"] for r in seated})
-        out.append(f"    suggested offset.{kind}.{'/'.join(m.lower() for m in models)} = {mdx:.1f},{mdy:.1f}; with it the seated caps lie "
+        out.append(f"    suggested offset.{'cap' if kind == 'cap holes' else kind}.{'/'.join(m.lower() for m in models)} = {mdx:.1f},{mdy:.1f}; with it the seated caps lie "
                    f"{min(dev):.2f} - {max(dev):.2f} px from the hub centre -> suggested max = {max(dev) + LIMIT_MARGIN:.1f} "
                    f"(largest + {LIMIT_MARGIN:g})")
         skewed = [r for r in measured if r.get("hub_kind") == kind and "skewed" in r["picture"].lower()]
@@ -406,6 +448,9 @@ def summarise(rows, maxDistance):
         out.append(f"paired by cycle: {len(paired)} caps measured against the hub picture of their own cycle "
                    f"({len({r['hub_picture'] for r in paired})} hub pictures); "
                    f"{sum(1 for r in rows if not r.get('hub_picture'))} without one")
+    elif any(r.get("hub_kind") == "cap holes" for r in rows):
+        out.append(f"hub from the holes round the cap in each cap picture: {sum(1 for r in rows if r.get('hub_kind') == 'cap holes')} "
+                   f"caps with the holes found, {sum(1 for r in rows if r.get('verdict') in ('OK', 'NOT OK') and r.get('hub_kind') != 'cap holes')} without")
     elif not selfHub:
         out.append("The hub picture is not of the same part as the caps unless they were taken in one cycle: the "
                    "figures are only as good as that pairing (use Hub folder (pair by time) for real figures).")
@@ -435,12 +480,14 @@ class Run:
                 {k: (f"{v:.3f}" if isinstance(v, float) else v) for k, v in row.items()})
 
 
-def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets, pairer=None):
+def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets, pairer=None, source="hubcheck"):
     picture = readPicture(path)
     if picture is None:
         row = dict(picture=path.name, model=model, verdict="UNREADABLE")
         return row, [f"{path.name}: could not be read"], None
     pairLines, pairCols = [], {}
+    if isCapSource(source):                      # the hub from the holes in the cap picture (CHANGES 152)
+        pairer, hubCentre = None, None
     if pairer is not None:                       # the hub picture of this cap's cycle (CHANGES 150)
         hp, hubRes, info = pairer.hubFor(checks, path, model)
         hubCentre = None
@@ -459,9 +506,10 @@ def capPass(checks, catcher, path, model, hubCentre, bases, maxDistance, offsets
                                 f"{hubCentre['kind']}" if hubCentre else " - no hub centre"))
             pairCols = dict(hub_picture=hp.name, hub_seconds_before=float(info))
     catcher.last = None
-    res = runCap(checks, picture, model, hubCentre, bases, maxDistance, offsets[0], offsets[1])
+    res = runCap(checks, picture, model, hubCentre, bases, maxDistance, offsets[0], offsets[1], source, offsets[2])
     cap = (res["rule"] or {}).get("cap") or catcher.last
-    row, lines = describeCap(path.name, model, res, hubCentre, maxDistance, offsets, cap)
+    row, lines = describeCap(path.name, model, res, res["hub"] if isCapSource(source) else hubCentre, maxDistance,
+                             offsets, cap)
     row.update(pairCols)
     return row, lines[:1] + pairLines + lines[1:], res["marked"]
 
@@ -499,11 +547,17 @@ def runBatch():
         header.append(f"hub centre typed: ({float(x):.1f}, {float(y):.1f}) {kind}")
     maxDistance = float(argValue("--max", capClass.SEATING_HUB_DISTANCE_MAX))
     offsets = (parsePair(argValue("--offset-holes", ",".join(map(str, capClass.hubOffset("holes", model))))),
-               parsePair(argValue("--offset-bolts", ",".join(map(str, capClass.hubOffset("bolts", model))))))
+               parsePair(argValue("--offset-bolts", ",".join(map(str, capClass.hubOffset("bolts", model))))),
+               parsePair(argValue("--offset-cap", ",".join(map(str, capClass.hubOffset("cap holes", model))))))
+    source = argValue("--hub-source", capClass.SEATING_HUB_SOURCE)
     bases, note = basesFor(model, hubPicture, argValue("--top"), argValue("--nut"))
-    header += [note, f"max distance {maxDistance:g} px, offset holes {offsets[0]}, bolts {offsets[1]}"]
+    header += [note, (f"hub source: the holes round the cap in each cap picture (no hub picture needed); max distance "
+                      f"{maxDistance:g} px, cap offset {offsets[2]}" if isCapSource(source) else
+                      f"hub source: hub check; max distance {maxDistance:g} px, offset holes {offsets[0]}, bolts {offsets[1]}")]
     pairer = None
-    if "--hub-from-cap" in sys.argv:
+    if isCapSource(source):
+        pass
+    elif "--hub-from-cap" in sys.argv:
         pairer = CapPictureHub()
         header.append("hub centre from each cap picture itself (hub check on the cap picture)")
     elif "--hub-folder" in sys.argv:
@@ -514,7 +568,7 @@ def runBatch():
     print("\n".join(header), flush=True)
     run.write(header)
     for path in picturesIn(argValue("--caps")):
-        row, lines, marked = capPass(checks, catcher, path, model, hub, bases, maxDistance, offsets, pairer)
+        row, lines, marked = capPass(checks, catcher, path, model, hub, bases, maxDistance, offsets, pairer, source)
         run.add(row)
         run.write(lines)
         print("\n".join(lines), flush=True)
@@ -535,7 +589,7 @@ def runWindow():
     class App:
         def __init__(self, root):
             self.root, self.checks, self.catcher = root, Checks(), CapCatcher()
-            root.title("Cap seating: hub-centre distance (CHANGES 143)")
+            root.title("Cap seating: hub-centre distance (CHANGES 143 / 152)")
             self.model = tk.StringVar(master=root, value="DOST")
             self.model.trace_add("write", self.fillOffsets)
             self.hubPath = self.capsFolder = self.topPath = self.nutPath = self.hubFolder = None
@@ -547,6 +601,8 @@ def runWindow():
             self.maxVar = tk.StringVar(master=root, value="5.0")
             self.ohx, self.ohy = tk.StringVar(master=root, value="0.0"), tk.StringVar(master=root, value="0.0")
             self.obx, self.oby = tk.StringVar(master=root, value="0.0"), tk.StringVar(master=root, value="0.0")
+            self.ocx, self.ocy = tk.StringVar(master=root, value="0.0"), tk.StringVar(master=root, value="0.0")
+            self.source = tk.StringVar(master=root, value="cap holes")
             self.save = tk.BooleanVar(master=root, value=False)
             self.status = tk.StringVar(master=root, value="Loading the models...")
             self.ready, self.loadError = False, ""
@@ -558,6 +614,9 @@ def runWindow():
             bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=3)
             ttk.Label(bar, text="Model").pack(side="left")
             ttk.Combobox(bar, textvariable=self.model, values=["DOST", "DOSTPLUS"], width=10,
+                         state="readonly").pack(side="left", padx=(2, 10))
+            ttk.Label(bar, text="Hub source").pack(side="left")
+            ttk.Combobox(bar, textvariable=self.source, values=["cap holes", "hub check"], width=10,
                          state="readonly").pack(side="left", padx=(2, 10))
             self.hubButton = ttk.Button(bar, text="Hub picture...", command=self.chooseHub); self.hubButton.pack(side="left")
             ttk.Label(bar, text="  Hub centre x").pack(side="left")
@@ -582,6 +641,9 @@ def runWindow():
                             state="readonly").pack(side="left", padx=2)
             spin("Seconds between pictures", self.seconds, 1, 10, 1, "%.0f", 3)
             spin("Max distance (px)", self.maxVar, 0.5, 20, 0.5, "%.1f")
+            ttk.Label(bar2, text="  cap offset dx,dy").pack(side="left")
+            ttk.Entry(bar2, textvariable=self.ocx, width=5).pack(side="left")
+            ttk.Entry(bar2, textvariable=self.ocy, width=5).pack(side="left")
             ttk.Label(bar2, text="  offset holes dx,dy").pack(side="left")
             ttk.Entry(bar2, textvariable=self.ohx, width=5).pack(side="left")
             ttk.Entry(bar2, textvariable=self.ohy, width=5).pack(side="left")
@@ -604,7 +666,9 @@ def runWindow():
                 self.catcher.install()
                 capClass = self.checks.loadCap()
                 vals = (capClass.SEATING_HUB_DISTANCE_MAX,
-                        {m: (capClass.hubOffset("holes", m), capClass.hubOffset("bolts", m)) for m in ("DOST", "DOSTPLUS")})
+                        {m: (capClass.hubOffset("holes", m), capClass.hubOffset("bolts", m),
+                             capClass.hubOffset("cap holes", m)) for m in ("DOST", "DOSTPLUS")},
+                        "cap holes" if isCapSource(capClass.SEATING_HUB_SOURCE) else "hub check")
             except Exception as e:
                 err, vals = err or f"{type(e).__name__}: {e}", None
             with self.lock:
@@ -619,10 +683,10 @@ def runWindow():
             with self.lock:
                 self.pending.append(("hub", result))
 
-        def _capWork(self, path, model, hub, bases, maxDistance, offsets):
+        def _capWork(self, path, model, hub, bases, maxDistance, offsets, source):
             try:
                 row, lines, marked = capPass(self.checks, self.catcher, path, model, hub, bases, maxDistance, offsets,
-                                             self.pairer)
+                                             self.pairer, source)
             except Exception as e:
                 row, lines, marked = (dict(picture=path.name, model=model, verdict="ERROR", reason=str(e)),
                                       [f"{path.name}: error {type(e).__name__}: {e}"], None)
@@ -691,6 +755,7 @@ def runWindow():
             if pair:
                 self.ohx.set(f"{float(pair[0][0]):g}"); self.ohy.set(f"{float(pair[0][1]):g}")
                 self.obx.set(f"{float(pair[1][0]):g}"); self.oby.set(f"{float(pair[1][1]):g}")
+                self.ocx.set(f"{float(pair[2][0]):g}"); self.ocy.set(f"{float(pair[2][1]):g}")
 
         def hubCentre(self):
             try:
@@ -708,7 +773,10 @@ def runWindow():
                 self.status.set("No pictures in the caps folder"); return
             self.run = Run(self.capsFolder)
             self.listbox.delete(0, "end")
-            if self.hubFromCap.get():
+            if self.capSource():
+                self.pairer = None
+                self.listbox.insert("end", "hub centre from the holes round the cap in each cap picture")
+            elif self.hubFromCap.get():
                 self.pairer = CapPictureHub()
                 self.listbox.insert("end", "hub centre from each cap picture itself")
                 self.log(["=== hub centre from each cap picture itself (hub check on the cap picture)"])
@@ -718,14 +786,15 @@ def runWindow():
                 self.listbox.insert("end", f"pairing by cycle: {len(self.pairer.hubs)} hub pictures in {self.hubFolder}")
                 self.log([f"=== pairing by cycle: hub folder {self.hubFolder} ({len(self.pairer.hubs)} pictures), hub "
                           f"picture at most {self.pairer.maxSecs:.0f} s before the cap picture"])
-            hub = self.hubCentre()
-            if self.pairer is None:
+            hub = None if self.capSource() else self.hubCentre()
+            if self.pairer is None and not self.capSource():
                 self.listbox.insert("end", "hub centre " + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub
                                                             else "none - the distance is not measured"))
             self.bases, note = basesFor(self.model.get(), self.hubPicture, self.topPath, self.nutPath)
             self.log([f"=== Machine {os.environ['COSTHETA_PLC_VENDOR']}, model {self.model.get()}, caps {self.capsFolder} "
                       f"({len(self.files)} pictures)",
-                      (self.pairer.describe() if self.pairer is not None else
+                      ("hub source: the holes round the cap in each cap picture (no hub picture needed)"
+                       if self.capSource() else self.pairer.describe() if self.pairer is not None else
                        f"hub picture {self.hubPath or '(none)'}; hub centre "
                        + (f"({hub['cx']:.1f}, {hub['cy']:.1f}) {hub['kind']}" if hub else
                           "none - the distance is not measured")),
@@ -734,9 +803,13 @@ def runWindow():
             self.startButton.configure(state="disabled"); self.stopButton.configure(state="normal")
             self.next()
 
+        def capSource(self):
+            return self.source.get() == "cap holes"
+
         def settings(self):
             maxDistance = float(self.maxVar.get())
-            offsets = ((float(self.ohx.get()), float(self.ohy.get())), (float(self.obx.get()), float(self.oby.get())))
+            offsets = ((float(self.ohx.get()), float(self.ohy.get())), (float(self.obx.get()), float(self.oby.get())),
+                       (float(self.ocx.get()), float(self.ocy.get())))
             return maxDistance, offsets
 
         def next(self):
@@ -753,7 +826,8 @@ def runWindow():
             self.workStart = time.perf_counter()
             self.status.set(f"Picture {self.index + 1} of {len(self.files)}: {path.name} ...")
             threading.Thread(target=self._capWork, args=(path, self.model.get(), self.hubCentre(), self.bases,
-                                                         maxDistance, offsets), daemon=True).start()
+                                                         maxDistance, offsets,
+                                                         "cap" if self.capSource() else "hubcheck"), daemon=True).start()
 
         def stop(self):
             self.running = False
@@ -781,9 +855,11 @@ def runWindow():
                     if vals:
                         self.maxVar.set(f"{float(vals[0]):.1f}")
                         self.configOffsets = vals[1]
+                        self.source.set(vals[2])
                         self.fillOffsets()
-                    self.status.set("Models loaded: choose a hub picture and a caps folder" if not err
-                                    else f"Models not loaded: {err}")
+                    self.status.set(("Models loaded: choose the model and a caps folder (hub from the holes in each cap "
+                                     "picture)" if self.capSource() else "Models loaded: choose a hub picture and a caps "
+                                     "folder") if not err else f"Models not loaded: {err}")
                     if self.ready and any(i[0] == "hubwait" for i in items):
                         self.startHub()
                 elif item[0] == "hubwait":

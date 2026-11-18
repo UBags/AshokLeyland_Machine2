@@ -146,11 +146,15 @@ No per-check times were recorded with the report; when they are, put them in the
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
 - PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
   `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
-- **Cap seating by the hub-centre distance** (CHANGES 143): the hub check's centre (circle through its 4 / 5 holes or
-  bolts) is kept as `ImageProcessor.hubCentre`; the cap's centre (stage-2 ellipse of the cap mask, `camera/CapMaskFinder.py`
-  = the method frozen in CHANGES 139 - 142, window `DryRun_Cap_Centre_Mask_UI.py`) must be within 5 px of it (+ offset for
-  holes / bolts). Offsets per hub kind and model (CHANGES 147): DOSTPLUS holes 0.1,-1.4, DOSTPLUS bolts -0.6,2.2, DOST bolts -0.4,4.9 (CHANGES 149), DOST holes 0.3,0.5 (CHANGES 148; 18 seated silver caps each); max 5.0. Part-to-part
-  spread and holes-vs-bolts on the same model still to measure (window: Hub folder (pair by time), CHANGES 150; or the hub centre from the cap picture itself, CHANGES 151 - seated DOST caps of both positions within 3.5 px in the study, to confirm with the real hub check and then decide whether production takes the hub centre from the cap picture): Uddi sends the seating lines of a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
+- **Cap seating by the hub-centre distance** (CHANGES 143, 152): the cap's centre (stage-2 ellipse of the cap mask,
+  `camera/CapMaskFinder.py` = the method frozen in CHANGES 139 - 142) must be within 5 px of the hub centre + offset.
+  Since CHANGES 152 the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the cap in the
+  cap picture itself (`CheckCap.hubHoles`, `vision.cap.seating.hub.source=cap`; holes not found -> NOT seated), offsets
+  `offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3 (27 seated silver / 99 seated brass caps, cap centres with stand-in
+  YOLO boxes in the sandbox - confirm on the laptop). The hub check's centre (`ImageProcessor.hubCentre`) and the
+  holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
+  carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
+  limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

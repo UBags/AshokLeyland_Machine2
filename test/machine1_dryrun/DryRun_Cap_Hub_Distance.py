@@ -69,6 +69,35 @@ class StandInYolo:
         return [_Result(boxes)]
 
 
+class CircleBoxYolo:
+    """Sandbox stand-in for the object-aware YOLO, for the production cap paths (CHANGES 152), as YOLO puts a box round
+    the cap: a brass cap (mean R-B within the brass radius of the disc's centre above the brass limit) gets boxes 3 / 6 / 9 px round the brass cap circle
+    (CheckCap.brassCapAndBore on the disc put back in a full-size picture); a silver cap StandInYolo's squares (those
+    match the laptop's YOLO runs on silver; on brass they make MobileSAM take the bore round DOSTPLUS_cap_03 / 04 / 08)."""
+    def predict(self, img, conf=0.25, iou=0.7, verbose=False):
+        import cv2
+        import numpy as np
+        from camera.CheckCap import CheckCap
+        from camera import CapMaskFinder as CM
+        bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        h, w = bgr.shape[:2]
+        yy, xx = np.mgrid[:h, :w]
+        inner = np.hypot(xx - w / 2.0, yy - h / 2.0) < float(CheckCap.RADIUS_DOSTPLUS)
+        rb = bgr[..., 2].astype(float) - bgr[..., 0]
+        if rb[inner].mean() <= CheckCap.RB_THRESHOLD_DOSTPLUS:
+            return StandInYolo().predict(img)
+        x0 = max(int(round(CheckCap.CENTER[0])) - int(CM.DISC_RADIUS), 0)
+        y0 = max(int(round(CheckCap.CENTER[1])) - int(CM.DISC_RADIUS), 0)
+        full = np.zeros((720, 1280, 3), np.uint8)
+        # the disc comes brightened by CM.GAMMA: undone for the brass edge fit (as the cap check sees the picture)
+        undo = np.array([((i / 255.0) ** float(CM.GAMMA)) * 255 for i in range(256)]).clip(0, 255).astype(np.uint8)
+        full[y0:y0 + bgr.shape[0], x0:x0 + bgr.shape[1]] = cv2.LUT(bgr, undo)
+        cap, _ = CheckCap.brassCapAndBore(full)
+        if cap is None:
+            return StandInYolo().predict(img)
+        cx, cy, r = cap["cx"] - x0, cap["cy"] - y0, cap["radius"]
+        return [_Result([[cx - r - d, cy - r - d, cx + r + d, cy + r + d] for d in (3, 6, 9)])]
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
@@ -111,6 +140,54 @@ def main() -> int:
     check(f"H4 1.5 px noise on 5 centres: centre within 1.5 px", h and np.hypot(h["cx"] - true[0], h["cy"] - true[1]) < 1.5,
           h and round(float(np.hypot(h["cx"] - true[0], h["cy"] - true[1])), 2))
     check("H5 fewer than 3 centres: None", CH.hubCentreFromGroup(group(true, 147, 2, (635, 345), 250), (635, 345), 250) is None)
+
+    # ---- H6 - H7: the hub's holes round the cap in the cap picture itself (hub source "cap", CHANGES 152) -----------
+    # Machine 2 pictures, round this machine's cap.center: only where the cap seating runs (Machine 2)
+    if not CheckCap.SEATING_CHECK:
+        print("Seating is off for this machine (vision.cap.seating.check=False): H6 / H7 skipped.")
+    else:
+        data0 = HERE if (HERE / "cap_images").is_dir() else HERE.parent / "machine2_dryrun"
+        rd0 = lambda p: (lambda im: cv2.resize(im, (1280, 720)) if im.shape[:2] != (720, 1280) else im)(cv2.imread(str(p)))
+        misses, wrong, radii = [], [], []
+        pics = sorted(data0.glob("cap_images/*.jpg")) + sorted(data0.glob("hub_images/*.jpg"))
+        for f in pics:
+            model = "DOSTPLUS" if f.name.startswith("DOSTPLUS") else "DOST"
+            img = rd0(f)
+            hh = CheckCap.hubHoles(img, model)
+            if hh["found"]:
+                radii.append(round(hh["radius"], 1))
+            else:
+                misses.append((f.name, hh["reason"]))
+            if CheckCap.hubHoles(img, "DOST" if model == "DOSTPLUS" else "DOSTPLUS")["found"]:
+                wrong.append(f.name)
+        check(f"H6 the hub's holes found on all {len(pics)} cap and hub pictures (4 on DOST, 5 on DOSTPLUS), never with "
+              f"the other model's count; circle r {min(radii, default=0):.1f} - {max(radii, default=0):.1f}",
+              pics and not misses and not wrong, (misses, wrong))
+
+        def synthetic(shift=(0.0, 0.0), boltsDark=False, holes=True):
+            rng = np.random.default_rng(7)               # a textured face (a flat grey one has no darkest 6 %)
+            img = np.repeat(cv2.GaussianBlur(rng.normal(120, 14, (720, 1280)).clip(0, 255).astype(np.uint8), (0, 0), 2)[..., None],
+                            3, axis=2)
+            cx, cy = 644 + shift[0], 338 + shift[1]
+            for k in range(4):
+                a = np.deg2rad(20 + 90 * k)
+                if holes:
+                    cv2.circle(img, (int(round(cx + 150 * np.cos(a))), int(round(cy + 150 * np.sin(a)))), 12, (25, 25, 25), -1)
+                b = np.deg2rad(65 + 90 * k)
+                cv2.circle(img, (int(round(cx + 183 * np.cos(b))), int(round(cy + 183 * np.sin(b)))), 18,
+                           (20, 20, 20) if boltsDark else (235, 235, 235), -1)
+            return img, (cx, cy)
+        img, c = synthetic()
+        hA = CheckCap.hubHoles(img, "DOST")
+        img, c2 = synthetic(shift=(12.0, -9.0))
+        hB = CheckCap.hubHoles(img, "DOST")
+        img, _ = synthetic(boltsDark=True, holes=False)
+        hC = CheckCap.hubHoles(img, "DOST")
+        check("H7 holes (dark, r 150) found, not the bolts (bright, r 183): centre within 1 px; moved 12 / -9 px with the "
+              "picture; dark discs at the bolts' radius alone are never taken for the holes",
+              hA["found"] and np.hypot(hA["cx"] - c[0], hA["cy"] - c[1]) < 1.0 and abs(hA["radius"] - 150) < 1.5
+              and hB["found"] and np.hypot(hB["cx"] - c2[0], hB["cy"] - c2[1]) < 1.0 and not hC["found"],
+              (hA.get("cx"), hA.get("cy"), hA.get("radius"), hB.get("cx"), hB.get("cy"), hC["found"], hC["reason"]))
 
     # ---- S: the cycle's state ----------------------------------------------------------------------------------------
     IP = cps.ImageProcessor
@@ -231,7 +308,9 @@ def main() -> int:
     names = ("SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST", "SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST",
              "SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS", "SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS")
     saved = (CheckCap.SEATING_HUB_DISTANCE_CHECK,) + tuple(getattr(CheckCap, n) for n in names)
+    savedSource = CheckCap.SEATING_HUB_SOURCE
     try:
+        CheckCap.SEATING_HUB_SOURCE = "hubcheck"            # C1 / C2: the hub check's centre (CHANGES 143)
         CheckCap.SEATING_HUB_DISTANCE_CHECK = True
         for n in names:
             setattr(CheckCap, n, (0.0, 0.0))
@@ -248,6 +327,7 @@ def main() -> int:
         off = CheckCap.hubCentreDistance(seatedPic, dict(cx=0.0, cy=0.0, kind="holes", count=4), "DOST")
     finally:
         CheckCap.SEATING_HUB_DISTANCE_CHECK = saved[0]
+        CheckCap.SEATING_HUB_SOURCE = savedSource
         for n, v in zip(names, saved[1:]):
             setattr(CheckCap, n, v)
     check("C1 3 px within, 8 px not; the offset of the hub kind and the model (DOST bolts, DOSTPLUS holes); no hub centre / off: not applied",
@@ -269,11 +349,49 @@ def main() -> int:
         ok, _, _ = cps.assessPictures(MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, [seatedPic] * 6)
         return ok
     ox, oy = CheckCap.hubOffset("holes", "DOST")       # the configured offset: hub + offset lands on the cap centre
-    okOn = full(dict(cx=cc[0] - ox, cy=cc[1] - oy, kind="holes", count=4))
-    okFar = full(dict(cx=cc[0] - ox - 10, cy=cc[1] - oy, kind="holes", count=4))
-    okNone = full(None)
-    check("C2 checkCap (camera server path): hub centre on the cap OK, 10 px away NOT OK, none as before (OK)",
-          okOn and not okFar and okNone, (okOn, okFar, okNone))
+    try:
+        CheckCap.SEATING_HUB_SOURCE = "hubcheck"
+        okOn = full(dict(cx=cc[0] - ox, cy=cc[1] - oy, kind="holes", count=4))
+        okFar = full(dict(cx=cc[0] - ox - 10, cy=cc[1] - oy, kind="holes", count=4))
+        okNone = full(None)
+    finally:
+        CheckCap.SEATING_HUB_SOURCE = savedSource
+    check("C2 checkCap (camera server path, hub source hubcheck): hub centre on the cap OK, 10 px away NOT OK, none as "
+          "before (OK)", okOn and not okFar and okNone, (okOn, okFar, okNone))
+
+    # ---- C3 / C4: hub source "cap" (CHANGES 152), as configured for this machine ------------------------------------
+    if str(CheckCap.SEATING_HUB_SOURCE).strip().lower() != "cap" or not CheckCap.SEATING_HUB_DISTANCE_CHECK:
+        print("Hub source is not 'cap' or the distance rule is off on this machine: C3 / C4 skipped.")
+    else:
+        rows, wrong3 = [], []
+        expect = {f"DOST_cap_0{i}.jpg": True for i in range(1, 10)}
+        expect.update({"DOST_skewed_04.jpg": False, "DOST_skewed_05.jpg": False, "DOST_skewed_06.jpg": False})
+        for name, seated in sorted(expect.items()):
+            r = CheckCap.hubCentreDistance(rd(data / "cap_images" / name), None, "DOST")
+            rows.append((name, r["ok"], None if r["distance"] is None else round(r["distance"], 2)))
+            if not r["applied"] or r["ok"] != seated or (r["hub"] or {}).get("kind") != "cap holes":
+                wrong3.append((name, r["ok"], r["distance"], r["reason"][:120]))
+        print(f"      {rows}")
+        print(f"      {CheckCap.hubCentreDistance(seatedPic, None, 'DOST')['reason']}")
+        check(f"C3 DOST, hub from the holes in the cap picture (offset {CheckCap.hubOffset('cap holes', 'DOST')}, max "
+              f"{CheckCap.SEATING_HUB_DISTANCE_MAX}): 9 seated caps within, pushed-aside skewed 04 - 06 not", not wrong3, wrong3)
+        covered = seatedPic.copy()
+        yy, xx = np.mgrid[:720, :1280]
+        ring = np.hypot(xx - CheckCap.CENTER[0], yy - CheckCap.CENTER[1])
+        covered[(ring > 120) & (ring < 175)] = 140                      # the holes hidden (e.g. a cap lying on them)
+        okSeated = full(None)
+        IP.endOfCycle()
+        IP.setCurrentComponentName(qrCodeValue=QR["DOST"])
+        IP.currentPictures[cps.hubAndBottomBearingPictureKeyString] = rd(sorted(data.glob("hub_images/DOST_0*.jpg"))[0])
+        IP.currentPictures[cps.topBearingPictureKeyString] = rd(sorted(data.glob("top_bearing_images/DOST_bearing_0*.jpg"))[0])
+        IP.currentPictures[cps.nutAndPlateWasherPictureKeyString] = rd(sorted(data.glob("nut_washer_images/DOST_nut_0*.jpg"))[0])
+        IP.hubCentre = None
+        okCovered, _, _ = cps.assessPictures(MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, [covered] * 6)
+        hidden = CheckCap.hubCentreDistance(covered, None, "DOST")
+        check("C4 checkCap (camera server path, hub source cap, no hub check centre): seated DOST_cap_01 OK; the same "
+              "picture with the holes hidden NOT OK (holes not found)",
+              okSeated and not okCovered and hidden["applied"] and not hidden["ok"] and "holes" in hidden["reason"],
+              (okSeated, okCovered, hidden["reason"][:140]))
     IP.endOfCycle()
     print(f"{sum(results)}/{len(results)} checks passed")
     return 0 if all(results) else 1
