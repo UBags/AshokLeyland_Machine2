@@ -4250,3 +4250,16 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
 - **Run:** window under Xvfb (Python 3.12, stand-ins), both copies, 4/4: stability default 0.70, bottom 0.20, top 1.00;
   IoU default 0.50, bottom 0.20, top 1.00; 0.20 / 0.20 reach the settings; 0.18 refused. Copies identical apart from
   paths. MobileSAM / YOLO not re-run (limits only).
+
+## 142. DryRun_Cap_Centre_Mask_UI: the frozen cap mask method in its own window (2026-11-18)
+
+- **User:** copy the frozen cap mask window as `DryRun_Cap_Centre_Mask_UI.py`; the hub centre window goes on as a
+  study for the hub's centre (his laptop settings there: gamma 4.0, YOLO confidence 0.05, box merge 0.40, area
+  12000 - 40000: a mask on every picture, close on DOST, less so on DOSTPLUS).
+- **Now (both copies):** `DryRun_Cap_Centre_Mask_UI.py` = `DryRun_Hub_Centre_Mask_UI.py` as of CHANGES 141 (code
+  unchanged: defaults gamma 2.0, disc 160, YOLO confidence 0.15, stability 0.70, IoU 0.50, merge 0.50, area 15000 -
+  50000, ellipse fit 2.5 px / 300 tries), with its own name in the docstring and usage lines, default folder
+  `test/machine2_dryrun/cap_images`, results in `cap_centre_mask_results/`, window title "Cap centre masks". README
+  rows added.
+- **Run:** both copies compile, identical apart from paths; window under Xvfb (Python 3.12, stand-ins) 4/4 on both
+  (the CHANGES 141 spinner checks).
