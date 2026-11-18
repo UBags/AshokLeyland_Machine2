@@ -11,6 +11,9 @@ the next picture).
   1. "Folder..." (every jpg / jpeg / png / bmp in it, by name) or "Picture...", then Start. Default folder:
      test/machine2_dryrun/hub_images.
   2. "Seconds between pictures" (1 - 10, starts at 3), changeable during the run; Stop ends it.
+     "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 1.0 = picture as taken): the picture is brightened before MobileSAM
+     sees it, as the checks do (each pixel 255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened.
+     Applies from the next picture.
   3. "Masks shown": All, or mask 1 / 2 / 3 (MobileSAM's order: small to large). Outline colours: mask 1 cyan,
      mask 2 magenta, mask 3 yellow; prompt points blue dots; centre a small blue cross. No text on the picture.
   4. Per picture and mask, in the list at the bottom and in the terminal: SAM score, area, centroid, the fitted
@@ -23,7 +26,7 @@ opens (GPU if there is one). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py   [--sam <mobile_sam.pt>]
 Without a window:            python test/machine1_dryrun/DryRun_Hub_Centre_Mask_UI.py --batch <folder or picture>
-                             [--centre 644,340] [--radii 50,60] [--step 30] [--save]
+                             [--centre 644,340] [--radii 50,60] [--step 30] [--gamma 1.0] [--save]
 """
 import os
 import pathlib
@@ -170,6 +173,21 @@ def draw(picture, masks, measures, points, centre, show="All"):
     return marked
 
 
+def parseGamma(text):
+    gamma = float(text)
+    if not 1.0 <= gamma <= 6.0:
+        raise ValueError("gamma must be 1.0 - 6.0")
+    return gamma
+
+
+def applyGamma(picture, gamma):
+    """255 x (v / 255) ^ (1 / gamma), as the checks do: gamma > 1 brightens; 1.0 leaves the picture as it is."""
+    if abs(gamma - 1.0) < 1e-9:
+        return picture
+    table = np.array([((i / 255.0) ** (1.0 / gamma)) * 255 for i in range(256)]).clip(0, 255).astype(np.uint8)
+    return cv2.LUT(picture, table)
+
+
 def loadPicture(path):
     image = cv2.imread(str(path))
     if image is None:
@@ -184,15 +202,16 @@ def picturesIn(target):
     return sorted(p for p in target.iterdir() if p.suffix.lower() in EXTENSIONS)
 
 
-def processOne(segmenter, path, centre, radii, stepDeg, show="All"):
+def processOne(segmenter, path, centre, radii, stepDeg, show="All", gamma=1.0):
     """-> (marked picture or None, list of lines)."""
     picture = loadPicture(path)
     if picture is None:
         return None, [f"{path.name}: could not read the picture"]
+    picture = applyGamma(picture, gamma)
     masks, scores, points, (tEmbed, tDecode) = segmenter.segment(picture, centre, radii, stepDeg)
     measures = [measure(m, centre) for m in masks]
     lines = [f"{path.name}: {len(points)} prompt points (rings {', '.join(f'{r:g}' for r in radii)} px, every "
-             f"{stepDeg:g} deg round ({centre[0]:g}, {centre[1]:g})); time {tEmbed + tDecode:.2f} s "
+             f"{stepDeg:g} deg round ({centre[0]:g}, {centre[1]:g})); gamma {gamma:.1f}; time {tEmbed + tDecode:.2f} s "
              f"(embedding {tEmbed:.2f} s, decoder {tDecode:.2f} s)"]
     lines += ["    " + describe(i, float(scores[i]), m) for i, m in enumerate(measures)]
     return draw(picture, masks, measures, points, centre, show), lines
@@ -203,13 +222,14 @@ def runBatch():
     centre = parseCentre(argValue("--centre")) if "--centre" in sys.argv else defaultCentre()
     radii = parseRadii(argValue("--radii", "50,60"))
     step = parseStep(argValue("--step", "30"))
+    gamma = parseGamma(argValue("--gamma", "1.0"))
     segmenter = HubCentreSegmenter(argValue("--sam"))
     segmenter.load()
     print(f"MobileSAM on {segmenter.device}")
     files = picturesIn(target)
     outDir = (pathlib.Path(target) if pathlib.Path(target).is_dir() else pathlib.Path(target).parent) / "hub_centre_mask_results"
     for path in files:
-        marked, lines = processOne(segmenter, path, centre, radii, step)
+        marked, lines = processOne(segmenter, path, centre, radii, step, gamma=gamma)
         print("\n".join(lines), flush=True)
         if marked is not None and "--save" in sys.argv:
             outDir.mkdir(exist_ok=True)
@@ -245,6 +265,7 @@ def runWindow():
             self.radiiVar = tk.StringVar(master=root, value="50,60")
             self.stepVar = tk.StringVar(master=root, value="30")
             self.secondsVar = tk.IntVar(master=root, value=3)
+            self.gammaVar = tk.StringVar(master=root, value="1.0")
             self.showVar = tk.StringVar(master=root, value="All")
             self.saveVar = tk.BooleanVar(master=root, value=False)
             for label, var, width in (("Centre x,y", self.centreVar, 10), ("Ring radii (px)", self.radiiVar, 10),
@@ -253,6 +274,9 @@ def runWindow():
                 ttk.Entry(bar2, textvariable=var, width=width).pack(side="left", padx=(2, 10))
             ttk.Label(bar2, text="Seconds between pictures").pack(side="left")
             ttk.Spinbox(bar2, from_=1, to=10, textvariable=self.secondsVar, width=4).pack(side="left", padx=(2, 10))
+            ttk.Label(bar2, text="Gamma").pack(side="left")
+            ttk.Spinbox(bar2, from_=1.0, to=6.0, increment=0.2, format="%.1f", textvariable=self.gammaVar,
+                        width=5).pack(side="left", padx=(2, 10))
             ttk.Label(bar2, text="Masks shown").pack(side="left")
             ttk.Combobox(bar2, textvariable=self.showVar, values=["All", "Mask 1", "Mask 2", "Mask 3"], width=8,
                          state="readonly").pack(side="left", padx=(2, 10))
@@ -306,6 +330,12 @@ def runWindow():
         def settings(self):
             return parseCentre(self.centreVar.get()), parseRadii(self.radiiVar.get()), parseStep(self.stepVar.get())
 
+        def gamma(self):
+            try:
+                return parseGamma(self.gammaVar.get())
+            except Exception:
+                self.log(f"Gamma '{self.gammaVar.get()}' not 1.0 - 6.0: 1.0 used"); return 1.0
+
         def start(self):
             if not self.modelReady or self.modelError:
                 messagebox.showinfo("Hub centre masks", self.status.get()); return
@@ -342,7 +372,8 @@ def runWindow():
             self.status.set(f"{self.index + 1} / {len(self.files)}: {path.name} ...")
             self.root.update_idletasks()
             try:
-                marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get())
+                marked, lines = processOne(self.segmenter, path, centre, radii, stepDeg, self.showVar.get(),
+                                           self.gamma())
             except Exception as e:
                 marked, lines = None, [f"{path.name}: error {e}"]
             for line in lines:

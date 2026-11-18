@@ -4026,3 +4026,14 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   three masks' centres within about 6 px of 644,340; mask 2 the roundest (radius about 70-74, roundness 0.96-0.99).
   The window itself was not driven here (the sandbox's Tk Python has no torch; the run with a stand-in model was
   stopped at the user's request) - only compiled.
+
+## 131. Hub centre mask window: gamma spinner (2026-11-18)
+
+- **User:** a gamma spinner in `DryRun_Hub_Centre_Mask_UI.py`, default 1.0, steps of 0.2, at most 6.
+- "Gamma" spinbox 1.0 - 6.0, increment 0.2, start 1.0 (both copies); `--gamma` in `--batch`. The picture is brightened
+  before MobileSAM sees it, as the checks do (255 x (v / 255) ^ (1 / gamma); 1.0 = as taken); the marked picture shows
+  it brightened; the gamma is in each picture's line. Applies from the next picture; an entry outside 1.0 - 6.0 is
+  logged and 1.0 used (batch: refused).
+- **Run:** `--batch` with `--gamma 2.4` on one hub picture (masks found, gamma in the line); `--gamma 6.2` refused.
+  Window under Xvfb (Python 3.12, MobileSAM stood in): default 1.0, range 1.0 - 6.0, 3 steps up = 1.6, stops at 6.0,
+  a run at 2.4 logs "gamma 2.4".
