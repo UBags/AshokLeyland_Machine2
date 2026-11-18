@@ -343,6 +343,15 @@ MonitorGetQRCodeQueue (io2qrcode.q) ─▶ GetAndValidateQRCode ─▶ QRCodeDis
 
 At the end of the cycle (state 28; also at an abort), `doFinalProcessing` -> `finishCycle()` at once: the result box ("Component Successfully Done" / "Not Successfully Done" / "Aborted"), the record (with `cycleSettings:<QR>`) on `fe2db.q`, the data points reset, back to READ_QR_CODE with the QR code read requested. The tiles and the QR code line keep the finished cycle's values and pictures for `frontend.free.rotation.torque.display.sec` (5 s) after a completed cycle, 0.75 s after an abort (`ABORT_TILES_CLEAR_MSEC`, CHANGES §127), and are then cleared by `clearFinishedCycleTiles` (numbered, so a stale timer does nothing); a new QR code during that time clears them at once (CHANGES §123). An emergency or manual abort during those seconds takes the waiting-for-the-QR-code path (abort screen, no record). The frontend abort (Ctrl+Alt+Z, password `frontend.abort.password`) stays in the frontend (no message to the QR code or camera server, no queues cleared) and sends `fe2io.q` `{action: FrontendAbortRequest, data: reason}`; at the QR code it sends nothing. Machine settings are edited by the Administrator or Supervisor, with the limits of §8. Passwords, read from the properties file at each use: `frontend.abort.password` (Ctrl+Alt+Z); `machine.settings.password` to open Machine Settings and again at Save, where the prompt lists the changes and says that entering the password confirms them (no Yes / No since CHANGES §124); in addition at Save when the bypass switch changes, `machine.settings.bypass.password`, worded the same way (all `admin123` at delivery).
 
+### 5.1 Languages (CHANGES 156)
+
+- `frontend/FrontendI18n.py`: `tr(text)`, `trf(message, /, **values)`, `N_(text)` (marks a text for extraction), `bind(widget, text, setter="setText", fmt="{}")` (weak registry; set again on each change), `addListener` / `removeListener`, `setLanguage(code, save=True)`, `useSavedLanguage()` (at start), `readSavedLanguage` / `saveLanguage` (`Internal/frontend_language.txt`, written through a temporary file + `os.replace`), `reload`, `installIndicFonts(families)` (`QFont.insertSubstitutions` with `frontend.indic.fonts`). Catalogue: Babel `read_po` of the .po (non-fuzzy, translated entries), else `gettext.GNUTranslations` of the .mo; a missing text is shown in English; a translation whose placeholders do not match falls back to the English format.
+- `frontend/FrontendNotices.translateNotice(text)`: an exact match, else the patterns with a variable part (reasons translated recursively, tag names kept); unknown text stays English.
+- Main screen: `languageSelector` (QComboBox, item data = code) -> `languageChosen` -> `setLanguage`; listener `onLanguageChanged` rebuilds the run-time texts (mode, creator, QR code, date line, connection tiles, results, notices) and refits every font (`calculateAndSetIdealFontsForTitlesAndResults` fits every title and every result text and takes the smallest size; `fitInstructionFont` over all instructions).
+- Tiles (`CosThetaOutcomeContainer`): the title is bound; hint, result and the torque tiles' second line are shown through `tr`; `getResult()` returns the English status (`currentStatus`), so the record is unchanged; `retranslate()` redraws what is shown.
+- Dialogs (`SimplePopups`): `sg.Button(tr("X"), key="X")` - the event stays English; machine-settings labels `N_` and parsed back through `tr(label)`.
+- Catalogue upkeep: `python test/i18n/update_frontend_catalogues.py` (extract with Babel from `frontend/**.py` and the properties' `window.title` / `state.<N>.instruction`, update, compile); `--compile` after editing a .po.
+
 ## 6. Heartbeat and alarm server (`monitorAllConnections/HeartbeatAndAlarmServer.py`)
 
 **`launchConnectionAlarmMonitoringThread`**
@@ -448,15 +457,6 @@ Every message also carries `timestamp` and `producer`.
 | `hb2fe.q` | Per-server lamps, plus `redisstatus` |
 
 The sending and reading functions for each queue are in `utils/RedisUtils.py` and are named `send<What>From<A>To<B>` and `read<What>In<B>From<A>`.
-
-### 5.x Languages (CHANGES 156)
-
-- `frontend/FrontendI18n.py`: `tr(text)`, `trf(message, /, **values)`, `N_(text)` (marks a text for extraction), `bind(widget, text, setter="setText", fmt="{}")` (weak registry; set again on each change), `addListener` / `removeListener`, `setLanguage(code, save=True)`, `useSavedLanguage()` (at start), `readSavedLanguage` / `saveLanguage` (`Internal/frontend_language.txt`, written through a temporary file + `os.replace`), `reload`, `installIndicFonts(families)` (`QFont.insertSubstitutions` with `frontend.indic.fonts`). Catalogue: Babel `read_po` of the .po (non-fuzzy, translated entries), else `gettext.GNUTranslations` of the .mo; a missing text is shown in English; a translation whose placeholders do not match falls back to the English format.
-- `frontend/FrontendNotices.translateNotice(text)`: an exact match, else the patterns with a variable part (reasons translated recursively, tag names kept); unknown text stays English.
-- Main screen: `languageSelector` (QComboBox, item data = code) -> `languageChosen` -> `setLanguage`; listener `onLanguageChanged` rebuilds the run-time texts (mode, creator, QR code, date line, connection tiles, results, notices) and refits every font (`calculateAndSetIdealFontsForTitlesAndResults` fits every title and every result text and takes the smallest size; `fitInstructionFont` over all instructions).
-- Tiles (`CosThetaOutcomeContainer`): the title is bound; hint, result and the torque tiles' second line are shown through `tr`; `getResult()` returns the English status (`currentStatus`), so the record is unchanged; `retranslate()` redraws what is shown.
-- Dialogs (`SimplePopups`): `sg.Button(tr("X"), key="X")` - the event stays English; machine-settings labels `N_` and parsed back through `tr(label)`.
-- Catalogue upkeep: `python test/i18n/update_frontend_catalogues.py` (extract with Babel from `frontend/**.py` and the properties' `window.title` / `state.<N>.instruction`, update, compile); `--compile` after editing a .po.
 
 ## 10. Configuration keys (selection)
 
