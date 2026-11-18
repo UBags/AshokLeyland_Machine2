@@ -146,6 +146,9 @@ No per-check times were recorded with the report; when they are, put them in the
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
 - PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
   `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
+- **Cap mask method frozen** (CHANGES 139, `DryRun_Hub_Centre_Mask_UI.py`): YOLO boxes on the gamma-2.0 disc of radius
+  160, the first mask, two-stage ellipse fit. Not yet in `CheckCap.py`; a seating limit on the share of outline points
+  within 2.5 px needs the 13 Nov cap pictures labelled seated / skewed.
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

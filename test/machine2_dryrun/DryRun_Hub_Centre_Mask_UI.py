@@ -5,20 +5,19 @@ production changes.
   1. "Folder..." (every jpg / jpeg / png / bmp in it, by name) or "Picture...", then Start. Default folder:
      test/machine2_dryrun/hub_images. "Seconds between pictures" (1 - 10, starts at 1); Stop ends the run. The work runs
      off the window's thread: the status line shows the picture and its time so far; each picture's time goes to the list.
-  2. "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 3.0; 1.0 = as taken): the picture is brightened before MobileSAM sees it,
+  2. "Gamma" (1.0 - 6.0 in steps of 0.2, starts at 2.0; 1.0 = as taken): the picture is brightened before MobileSAM sees it,
      as the checks do (255 x (v / 255) ^ (1 / gamma)); the marked picture shows it brightened. Both modes.
   3. "Find masks only around the centre" (unticked at start): ring prompts - one point every "Angle step" degrees
      (default 30, from 0 = right, clockwise) on each ring of "Ring radii" px (default 50, 60) round "Centre" (default
      `cap.center`, Machine 2 644,340); one decoder call, MobileSAM's 3 masks (small to large). "Masks shown": All or
      mask 1 / 2 / 3. Outlines: mask 1 cyan, 2 magenta, 3 yellow; prompt points blue dots; centre blue cross.
-  4. Unticked: all masks on a disc of "Disc radius" (default 300) round the centre. The disc is cut out first (black
+  4. Unticked: all masks on a disc of "Disc radius" (default 160) round the centre. The disc is cut out first (black
      outside it; thin white circle on the marked picture) and everything runs on it alone. "Prompts":
-       - Grid points: MobileSAM's automatic mask generator, "Points per side" x "Points per side" (16 - 64, default 32)
-         (default 64) over the disc's square, only the points inside the disc used (about 21 % fewer); 256 points per decoder pass
+       - Grid points: MobileSAM's automatic mask generator, "Points per side" x "Points per side" (16 - 64, default 64) over the disc's square, only the points inside the disc used (about 21 % fewer); 256 points per decoder pass
          on a GPU, 64 on a CPU. Time grows with the number of points.
        - YOLO boxes (MobileSAMv2, as the hub check's MobileSAMv2AutomaticMaskGenerator): the object-aware YOLO model
          (models/MobileSAM/MobileSAMv2/weight/ObjectAwareModel.pt, through ModelManager) proposes boxes on the disc
-         ("YOLO confidence", default 0.25; its own box NMS 0.7); boxes whose centre lies outside the disc are left out;
+         ("YOLO confidence", default 0.15; its own box NMS 0.7); boxes whose centre lies outside the disc are left out;
          one MobileSAM decoder pass per 64 boxes, one mask per box. Tens of prompts instead of hundreds: much faster.
      Default prompts: YOLO boxes. Filters, both: "Min stability" (0.70 - 1.00, step 0.02, default 0.70; SAM's own
      stability score of the mask), "Min predicted IoU" (0.50 - 1.00, step 0.02, default 0.50), "Box merge IoU"
@@ -36,6 +35,9 @@ production changes.
      least squares to its inliers while the count rises. Both listed (centre, semi-axes, angle, RMS of all points,
      points within the tolerance); stage 1 drawn thin black, stage 2 white. Defaults (CHANGES 136, the user's
      settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between pictures, the rest as above.
+     FROZEN (CHANGES 139) as the method for the cap mask: YOLO boxes on the gamma-2.0 disc of radius 160, the
+     filters above, the first (largest) mask, then the two-stage ellipse fit (tolerance 2.5 px, 300 tries). A
+     wrong mask (a badly tilted cap) is not corrected; it shows as few outline points within the tolerance.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
      centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
   6. Every run writes <folder>/hub_centre_mask_results/details_<time>.csv (one row per picture, every value of the
