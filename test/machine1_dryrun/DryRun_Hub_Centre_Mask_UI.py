@@ -31,8 +31,9 @@ production changes.
      on a ring at "negative ring" x the radius (default 1.15), every "angle step" degrees (default 30), plus ("with its
      box") its bounding box grown by 4 px; one decoder call on the same embedding; MobileSAM's 3 masks listed with
      score, size, fitted circle, how far the outline lies off that circle (RMS / max px), IoU with the first mask and
-     how far the circle centre moved; the one with the highest score is drawn white (positive points blue, negative
-     black). Defaults (CHANGES 136, the user's settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between
+     how far the circle centre moved (positive points blue, negative black). Masks of radius above 0.9 x the disc's
+     are dropped (the cut-out disc's own edge). The cap mask drawn white: brass cap (mean R-B inside the first mask,
+     picture as taken, above the cap check's brass limit) - refined mask 1; silver - the first mask (CHANGES 137). Defaults (CHANGES 136, the user's settings): gamma 2.0, disc 160, YOLO confidence 0.15, 3 s between
      pictures, the rest as above.
   5. Per picture and mask, in the list at the bottom and in the terminal: score (predicted IoU), stability, area,
      centroid, fitted-ellipse centre, mean radius, roundness, distance from the centre; the picture's time.
@@ -76,6 +77,16 @@ WHOLE_DEFAULTS = dict(prompts="yolo", pointsPerSide=64, stabilityMin=0.70, iouMi
                       discRadius=160.0, minArea=1000, refine=True, refineRings=(0.5, 0.8), refineNegative=1.15,
                       refineStep=30.0, refineBox=True)
 DEFAULT_SAM = ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"
+DISC_EDGE_FRACTION = 0.9                                          # a mask of radius above this x the disc's = the disc
+
+
+def brassThreshold():
+    """R-B (mean, inside the cap mask, picture as taken) above which the cap is brass: the cap check's brass limit."""
+    try:
+        from camera.CheckCap import CheckCap
+        return float(CheckCap.RB_THRESHOLD_DOSTPLUS)
+    except Exception:
+        return 35.0
 
 
 def argValue(name, default=None):
@@ -478,8 +489,9 @@ _MEAS = ("score", "stability", "area", "cx", "cy", "circle_r", "ellipse_r", "rou
          "from_centre")
 CSV_COLUMNS = (["picture", "gamma", "disc", "prompts", "yolo_conf", "min_stability", "min_iou", "merge_iou", "min_area",
                 "boxes_found", "boxes_on_disc", "passed_filters", "masks_after_merge", "masks_kept", "t_yolo", "t_embed",
-                "t_decode", "t_grid", "t_masks"] + [f"first_{k}" for k in _MEAS]
-               + ["t_refine", "refine_positive", "refine_negative", "refine_box", "refine_pick"]
+                "t_decode", "t_grid", "t_masks", "dropped_disc_edge"] + [f"first_{k}" for k in _MEAS]
+               + ["cap_rb", "cap_colour", "cap_mask"]
+               + ["t_refine", "refine_positive", "refine_negative", "refine_box"]
                + [f"ref{i}_{k}" for i in (1, 2, 3) for k in _MEAS + ("iou_first", "shift")] + ["t_total"])
 
 
@@ -512,11 +524,12 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
     picture = loadPicture(path)
     if picture is None:
         return None, [f"{path.name}: could not read the picture"]
+    asTaken = picture
     picture = applyGamma(picture, gamma)
     crop, disc, (x0, y0) = cutDisc(picture, centre, s["discRadius"])
     tStart = time.perf_counter()
     found, secs, note = segmenter.segmentWhole(crop, disc, s)
-    kept, outside, small = [], 0, 0
+    kept, outside, small, edge = [], 0, 0, 0
     for d in found:
         seg = np.asarray(d["segmentation"]).astype(bool)
         inside = seg & disc
@@ -525,6 +538,10 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
             continue
         if inside.sum() < s["minArea"]:
             small += 1
+            continue
+        circle = measure(inside, (0.0, 0.0)).get("circle")
+        if circle is not None and circle[2] > DISC_EDGE_FRACTION * s["discRadius"]:
+            edge += 1                                         # the cut-out disc's own edge, not an object on it
             continue
         kept.append((d, inside))
     kept.sort(key=lambda t: -int(t[1].sum()))
@@ -538,7 +555,8 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
     lines = [f"{path.name}: disc r {s['discRadius']:g} round ({centre[0]:g}, {centre[1]:g}), {len(kept)} masks; "
              f"{note}; filters: stability >= {s['stabilityMin']:.2f}, predicted IoU >= {s['iouMin']:.2f}, box merge "
              f"IoU {s['nmsIou']:.2f}, area >= {s['minArea']} px; dropped {outside} (less than half inside the disc), "
-             f"{small} (smaller than the min area); gamma {gamma:.1f}; time {secs:.2f} s for the masks"]
+             f"{small} (smaller than the min area), {edge} (the disc's own edge: radius > {DISC_EDGE_FRACTION:g} x the "
+             f"disc's); gamma {gamma:.1f}; time {secs:.2f} s for the masks"]
     for i, ((d, _), meas) in enumerate(zip(kept, measures)):
         lines.append(f"    {describe(i, float(d.get('predicted_iou', 0.0)), meas)}, "
                      f"stability {float(d.get('stability_score', 0.0)):.3f}")
@@ -547,11 +565,20 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
                boxes_found=segmenter.lastTimes.get("boxesFound"), boxes_on_disc=segmenter.lastTimes.get("boxesOnDisc"),
                passed_filters=segmenter.lastTimes.get("passed"), masks_after_merge=segmenter.lastTimes.get("merged"),
                masks_kept=len(kept), t_yolo=segmenter.lastTimes.get("yolo"), t_embed=segmenter.lastTimes.get("embed"),
-               t_decode=segmenter.lastTimes.get("decode"), t_grid=segmenter.lastTimes.get("grid"), t_masks=secs)
+               t_decode=segmenter.lastTimes.get("decode"), t_grid=segmenter.lastTimes.get("grid"), t_masks=secs,
+               dropped_disc_edge=edge)
     row.update(_measureRow("first", measures[0], float(kept[0][0].get("predicted_iou", 0)),
                            float(kept[0][0].get("stability_score", 0))) if kept else {"first_area": None})
     marked = drawWhole(picture, measures)
-    refined = None
+    capMeas, capSource = (measures[0], "first mask") if kept else (None, None)
+    brass = False
+    if kept:
+        firstFull = full(kept[0][1])
+        rb = float((asTaken[..., 2].astype(np.float32) - asTaken[..., 0].astype(np.float32))[firstFull].mean())
+        brass = rb > brassThreshold()
+        row.update(cap_rb=rb, cap_colour="brass" if brass else "silver")
+        lines.append(f"    first mask R-B {rb:.1f} (picture as taken) -> {'brass' if brass else 'silver'} "
+                     f"(brass above {brassThreshold():g}, the cap check's limit)")
     if s["refine"] and kept:
         res = segmenter.refine(crop, kept[0][1], s)
         if res is None:
@@ -560,13 +587,12 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
             rmasks, rscores, points, labels, box, tRef = res
             rmeas = [measure(full(m & disc), centre) for m in rmasks]
             first = full(kept[0][1])
-            pick = int(np.argmax(rscores))
             lines.append(f"    refine (first mask's outline -> {int(labels.sum())} positive points on rings "
                          f"{', '.join(f'{f:g}' for f in s['refineRings'])} x its radius, {int((labels == 0).sum())} "
                          f"negative at {s['refineNegative']:g} x, every {s['refineStep']:g} deg"
-                         f"{', box' if box is not None else ''}): {tRef:.2f} s; picked the highest score, mask {pick + 1}")
+                         f"{', box' if box is not None else ''}): {tRef:.2f} s")
             row.update(t_refine=tRef, refine_positive=int(labels.sum()), refine_negative=int((labels == 0).sum()),
-                       refine_box=box is not None, refine_pick=pick + 1)
+                       refine_box=box is not None)
             for k, (m, sc, me) in enumerate(zip(rmasks, rscores, rmeas)):
                 iou = _iou(full(m & disc), first)
                 shift = (float(np.hypot(me["circle"][0] - measures[0]["circle"][0], me["circle"][1] - measures[0]["circle"][1]))
@@ -575,11 +601,17 @@ def processWhole(segmenter, path, centre, gamma=1.0, settings=None, csvPath=None
                              + (f", circle centre moved {shift:.1f} px" if shift is not None else ""))
                 row.update(_measureRow(f"ref{k + 1}", me, float(sc)))
                 row.update({f"ref{k + 1}_iou_first": iou, f"ref{k + 1}_shift": shift})
-            refined = rmeas[pick]
-            if refined["contour"] is not None:
-                cv2.drawContours(marked, [refined["contour"]], -1, (255, 255, 255), 2)
+            if brass:
+                capMeas, capSource = rmeas[0], "refined mask 1"
             for (px, py), lab in zip(points, labels):
                 cv2.circle(marked, (int(round(px + x0)), int(round(py + y0))), 3, POINT_COLOUR if lab else (0, 0, 0), -1)
+    if capMeas is not None:
+        lines.append(f"    cap mask (drawn white): {capSource} ({'brass: refined mask 1' if brass else 'silver: the first mask'})"
+                     + (f" - fitted circle ({capMeas['circle'][0]:.1f}, {capMeas['circle'][1]:.1f}) r {capMeas['circle'][2]:.1f}, "
+                        f"outline RMS {capMeas['edgeRms']:.2f} px" if capMeas.get("circle") else ""))
+        row["cap_mask"] = capSource
+        if capMeas["contour"] is not None:
+            cv2.drawContours(marked, [capMeas["contour"]], -1, (255, 255, 255), 2)
     total = time.perf_counter() - tStart
     lines[0] += f"; {total:.2f} s in all (with refine, measuring and drawing)"
     row["t_total"] = total

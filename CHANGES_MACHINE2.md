@@ -4151,3 +4151,26 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   moved 0.6-5.9 px and shrank (DOST_skewed_02: masks 1-2 r 100.0-100.6, 5.6-5.9 px off the first mask, RMS 1.44-1.54 px
   against 3.77) - worth watching on the laptop data. Refine 0.09-0.16 s on CPU. Window under Xvfb with stand-ins:
   defaults as above, a small mask dropped by the min area, refine lines, 2 CSV rows of 75 columns, the log file.
+
+## 137. Hub centre mask window: the disc's own edge dropped; cap mask by colour (brass: refined mask 1, silver: first mask) (2026-11-18)
+
+- **User's laptop run (29 cap pictures, real YOLO, defaults of §136):** "the white mask is slightly worse than the
+  original". Checked from the run's lines:
+  - on 6 of 29 the "first mask" was the cut-out disc itself (r 158.9: blacking out everything outside the disc makes
+    its edge an object); the refinement then worked on the disc, not the cap;
+  - on the other 23, the white mask (refined mask with the highest SAM score) was rougher than the first mask on 7 of
+    11 silver and 7 of 12 brass caps (outline off its fitted circle, mean RMS silver 2.56 vs 2.27 px, brass 2.13 vs
+    1.78; worst point 8.1 vs 7.1 and 6.6 vs 5.4 px). Silver: no refined mask consistently better (mask 2 2.21 vs
+    2.27). Brass: refined mask 1 the roundest on 7 of 12 (mean RMS 1.48), r about 83.2 - 83.5 on the seated brass caps -
+    as the brass edge fit of CHANGES 128 (82.9 - 84.3) - where the first mask (r 85.7 - 86.3) takes in a little of the
+    gap / rim. (Roundness is not proof of accuracy: a tilted cap is not round.)
+- **User's decision:** fix the disc mask; brass: refined mask 1.
+- **Now (both copies):** a mask whose fitted circle has a radius above 0.9 x the disc's is dropped and counted ("the
+  disc's own edge"). The cap's colour from the mean R-B inside the first mask on the picture as taken (before the
+  gamma), against the cap check's brass limit (`CheckCap.RB_THRESHOLD_DOSTPLUS`, 35 on Machine 2): brass -> the cap
+  mask is refined mask 1; silver -> the first mask; drawn white and named in a line with its fitted circle and RMS.
+  The pick by highest score is gone; the 3 refined masks are still listed. CSV: `dropped_disc_edge`, `cap_rb`,
+  `cap_colour`, `cap_mask` (78 columns).
+- **Run (sandbox, real MobileSAM, stand-in YOLO boxes):** a disc-sized mask dropped as the disc's edge, the cap then the
+  first mask; DOST_cap_01 / 06 R-B -9.4 / -15.6 -> silver, first mask (r 102.5 / 103.0); DOSTPLUS_cap_01 / 06 R-B 70.6 /
+  72.3 -> brass, refined mask 1 (r 83.3 / 83.8, RMS 0.40 / 0.67 px against the first mask's r 87.7 / 85.9).
