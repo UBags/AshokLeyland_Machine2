@@ -62,7 +62,7 @@ is not known whether that was their spindles (side) or the hub's own seating.
 | Bung (states 13, 24) `bung.outer.disc.center` | (643, 334) | (-2, +0) | segmented disc r 250, holes within r 135 (110 until 17 Nov, then 125) |  |
 | Bung seated position `bung.seating.seated.centre.dost` | (646, 325) | (+1, -9) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 241 x 249 at 122 deg | seating step |
 | Bung seated position `bung.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
-| Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it; silver hub circle: prompt ring r 95 + box ±125 round it in the hub picture (CHANGES 129) |
+| Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it; silver hub circle: prompt ring r 95 + box ±125 round it in the hub picture (CHANGES 129); cap mask: disc r 160 round it (CHANGES 143) |
 
 The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`) has no position: it is a placeholder.
 

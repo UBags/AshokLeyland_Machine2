@@ -157,7 +157,7 @@ On the Machine 2 PC with the new exe:
 5. **Time.** The bung check's time (the `check time` in the camera server's log) - each gamma now decodes about 220
    point prompts; it must stay well inside the 12 s timeout (expected: well under a second per gamma on the GPU).
 
-## 10. Cap seating: brass by fitted circles, silver by two rules (CHANGES 128, 129)
+## 10. Cap seating: brass by fitted circles, silver by two rules, both by the hub-centre distance (CHANGES 128, 129, 143)
 
 On the laptop after `git pull`: `DryRun_Cap_Production_Path.py` (12/12) and `DryRun_Cap_Silver_Seating.py` (6/6),
 both with the MobileSAM weights.
@@ -172,6 +172,13 @@ On the Machine 2 PC with the new exe:
    pictures of a hub and its own cap (the hub picture of the same cycle is used in production).
 4. **Time.** Silver seating now runs MobileSAM on two pictures (cap and hub); the cap check's time must stay well
    inside the 12 s timeout.
+5. **Hub-centre distance (CHANGES 143).** Laptop: `DryRun_Cap_Hub_Distance.py` (10/10; with the YOLO weights it uses
+   the real YOLO). Machine 2 PC: the hub check writes `[CheckHubAndBottomBearing] hub centre (x, y) from 4 holes`
+   (or bolts, circle r, spread); the cap check's seating line adds `cap centre (x, y) to hub centre (x, y) d px <= 5.0
+   (... cap +dx / +dy px; ...)`. The 5 px limit and the zero offsets are not measured yet (no hub and cap pictures of
+   the same part): send these lines for a shift of seated caps. If seated caps sit at a steady dx / dy (camera angle:
+   holes, bolt tips and the cap face are at three heights), that goes into `siemens.vision.cap.seating.hub.distance.offset.holes`
+   / `.bolts`; to stop the rule, `siemens.vision.cap.seating.hub.distance.check=False`.
 
 ## Results
 
@@ -187,4 +194,4 @@ On the Machine 2 PC with the new exe:
 | 7 State sync after a few weeks (MISMATCH / GAP lines, cycles in sync) | | | | |
 | 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |
 | 9 Bung: rotation dry run and Bung_Check_UI on the laptop; failing bungs now OK; [Bung] lines; check time | | | | |
-| 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time | | | | |
+| 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time; hub-centre distance lines (CHANGES 143) | | | | |

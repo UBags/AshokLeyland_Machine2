@@ -26,6 +26,7 @@ from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
 from Configuration import CosThetaConfigurator
+from camera.VisionConfig import vInt, vFloat
 from concurrent.futures import ThreadPoolExecutor
 
 # Import the core segmentation engine (STANDALONE VERSION v2.0)
@@ -43,9 +44,14 @@ except ImportError as e:
     HubAndBearingSegmenter = None  # Prevents NameError
 
 # "No bearing in centre" check: annulus (full-image pixels) whose mean gray value (after gamma 3.0) must stay below the limit
+HUB_CENTRE_CHECK_X = vInt("vision.hub.centre.check.x", 635)
+HUB_CENTRE_CHECK_Y = vInt("vision.hub.centre.check.y", 350)
+HUB_CENTRE_CHECK_OUTER_RADIUS = vInt("vision.hub.centre.check.outer.radius", 60)
+HUB_CENTRE_CHECK_INNER_RADIUS = vInt("vision.hub.centre.check.inner.radius", 20)
+HUB_CENTRE_CHECK_MAX_MEAN = vInt("vision.hub.centre.check.max.mean", 140)
 # The hub's centre from the winning group (CHANGES 143): a circle through the group's mask centres. Its radius tells
 # bolts from holes (both models: holes about 147 px from the centre, bolts about 182 px on Machine 2 pictures).
-HUB_CENTRE_BOLT_MIN_DISTANCE = 165.0
+HUB_CENTRE_BOLT_MIN_DISTANCE = vFloat("vision.hub.centre.bolt.min.distance", 165.0)
 
 
 def determine_smart_gamma_order(image: np.ndarray) -> List[int]:
@@ -184,8 +190,8 @@ class CheckHubAndBottomBearing:
         # Annular mask: centre and radii from vision.hub.centre.check.*
         h, w = gray.shape
         mask = np.zeros((h, w), dtype=np.uint8)
-        cv2.circle(mask, (635, 350), 60, 255, -1)  # Outer circle
-        cv2.circle(mask, (635, 350), 20, 0, -1)  # Inner circle (hole)
+        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_OUTER_RADIUS, 255, -1)  # Outer circle
+        cv2.circle(mask, (HUB_CENTRE_CHECK_X, HUB_CENTRE_CHECK_Y), HUB_CENTRE_CHECK_INNER_RADIUS, 0, -1)  # Inner circle (hole)
 
         # Extract pixels within mask
         masked_pixels = gray[mask > 0]
@@ -196,7 +202,7 @@ class CheckHubAndBottomBearing:
         logBoth('logDebug', _src, f"[ensureNoBearingInCentre] Average pixel value: {average:.2f}", MessageType.GENERAL)
 
         # True if below the limit (no bearing present)
-        return average < 140
+        return average < HUB_CENTRE_CHECK_MAX_MEAN
 
     @staticmethod
     def checkHubAndBottomBearing(

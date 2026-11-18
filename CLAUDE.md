@@ -123,7 +123,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 7 State sync logs (after a few weeks of production) | Pending - Plan A went in on 2026-11-15 |
 | 8 Picture clean-up lines, invalid QR notice + siren, MainProgram lines in the log, DB retry (CHANGES 110) | Not reported yet |
 | 9 Bung check: rotation dry run on the laptop, failing bungs now OK, `[Bung]` lines, check time (CHANGES 115) | Not reported yet |
-| 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time (CHANGES 128, 129) | Not reported yet |
+| 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time; hub-centre distance lines (CHANGES 128, 129, 143) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -146,9 +146,11 @@ No per-check times were recorded with the report; when they are, put them in the
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
 - PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
   `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
-- **Cap mask method frozen** (CHANGES 139, `DryRun_Hub_Centre_Mask_UI.py`): YOLO boxes on the gamma-2.0 disc of radius
-  160, masks of 15000 - 50000 px (CHANGES 140), the first mask, two-stage ellipse fit. Not yet in `CheckCap.py`; a seating limit on the share of outline points
-  within 2.5 px needs the 13 Nov cap pictures labelled seated / skewed.
+- **Cap seating by the hub-centre distance** (CHANGES 143): the hub check's centre (circle through its 4 / 5 holes or
+  bolts) is kept as `ImageProcessor.hubCentre`; the cap's centre (stage-2 ellipse of the cap mask, `camera/CapMaskFinder.py`
+  = the method frozen in CHANGES 139 - 142, window `DryRun_Cap_Centre_Mask_UI.py`) must be within 5 px of it (+ offset for
+  holes / bolts). Limit and offsets not measured (no hub + cap pictures of the same part): Uddi sends the seating lines of
+  a shift. A limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
 - Bung (states 13, 24) pictures: the 13 Nov set is labelled in CHANGES 100; confirm the seating step on the laptop.
 
 ## 9. Testing

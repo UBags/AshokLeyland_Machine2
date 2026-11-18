@@ -4263,3 +4263,46 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   rows added.
 - **Run:** both copies compile, identical apart from paths; window under Xvfb (Python 3.12, stand-ins) 4/4 on both
   (the CHANGES 141 spinner checks).
+
+## 143. Cap seating: the cap's centre against the hub's centre from the cycle's hub check (2026-11-18)
+
+- **User:** take the hub's centre from `checkHub()` (centre of its 4 / 5 holes or bolts), keep it in the camera server
+  for the later checks (cap, later the bung); find the cap mask by the frozen method and reject the cap when its centre
+  is more than 4 - 5 px from the hub's centre; the colour steps unchanged. Use the stage-2 ellipse centre, not the mask
+  centroid. The part leaves station 1 between the hub and cap pictures but comes back to exactly the same place (servo,
+  sensors); the differences between parts are LHS / RHS seating and the fixture's +/- 0.2 mm, and the rotation.
+- **Hub centre** (`CheckHubAndBottomBearing`): new `hubCentreFromGroup(group, annularCentre, outerRadius)` - the
+  least-squares circle through the winning group's mask centres, moved from the segmenter's cropped picture to full
+  picture pixels by the crop's corner (as `extract_annular_region` cuts it); `kind` 'bolts' when the circle radius is
+  at least `vision.hub.centre.bolt.min.distance` (165 px: holes about 147, bolts about 182 px on DOST and DOSTPLUS
+  pictures, measured by hand), else 'holes'; `count`, `spread`. Set as `lastHubCentre` by a check that passes (None at
+  the start of every check); logged `[CheckHubAndBottomBearing] hub centre (x, y) from N holes|bolts (circle r, spread)`.
+  The check's verdict is unchanged.
+- **Camera server:** `ImageProcessor.hubCentre` (new state attribute: in the snapshot sent to the worker, the changes
+  sent back, the state file - a restarted camera server takes it back -, its restart line); set from `lastHubCentre`
+  after a hub check that passes, None before every hub check, after one that fails and at the end of a cycle. Passed to
+  `CheckCap.checkCap(..., hubCentre=)` on both cap paths (`_assessCap`, `ImageProcessor.checkCap`).
+- **Cap mask** (new `camera/CapMaskFinder.py`): the method of `DryRun_Cap_Centre_Mask_UI.py` (CHANGES 139 - 142) for
+  production - gamma 2.0, disc r 160 round `cap.center` (which follows the knuckle frame), YOLO boxes (ModelManager's
+  object-aware model, conf 0.15) centred on the disc as box prompts through CheckCap's MobileSAM predictor, stability >=
+  0.70, predicted IoU >= 0.50, box merge 0.50, kept to the disc, dropped: less than half inside / under 15000 px / the
+  disc's own edge (circle r > 0.9 x 160) / over 50000 px; the largest left; two-stage ellipse fit (least squares, then
+  most outline points within 2.5 px: 300 RANSAC tries, fixed seed, refits). Keys `vision.cap.mask.*`.
+- **Seating rule** (`CheckCap.hubCentreDistance`, both cap colours, after the colour rules; `checkSeating` = the colour
+  rules (`_seatingByColour`, the former body, unchanged) AND this rule): with `vision.cap.seating.hub.distance.check` and
+  a hub centre, distance from the stage-2 ellipse centre to hub centre + `seating.hub.distance.offset.holes` / `.bolts`
+  must be <= `seating.hub.distance.max` (5.0 px). No cap mask -> NOT seated (reason logged); no hub centre -> rule not
+  applied (said in the reason). The seating line gives both centres, the distance, dx / dy, the offset and every mask
+  value. Marked picture: the cap ellipse green / red, the hub centre a blue cross; no text. Machine 2 on, Machine 1 off
+  (its seating is off anyway). Offsets 0, 0 and the 5 px limit are not measured: no hub and cap pictures of the same part.
+- **Reference commits:** `5250ceb` (CheckCap, CapMaskFinder, CheckHubAndBottomBearing with literal values) and
+  `1d199cd` (CheckHubAndBottomBearing with its five hub-centre-check values inline, as its baseline had them, so the
+  extracted entries still match; their `old_line` moved to 187 / 188 / 199). Both manifests point at them.
+- **Run:** `Verify_Vision_Config_Equivalence.py` ALL EQUIVALENT on both machines (308 parameters, 12 files). New
+  `DryRun_Cap_Hub_Distance.py` (both copies): Machine 2 10/10 (H1-H5 hub centre, S1-S2 state, C0 the production cap
+  mask equals the frozen window's on all 30 cap pictures, C1 the rule, C2 checkCap through `assessPictures`: hub centre
+  on the cap OK, 10 px away NOT OK, none OK); Machine 1 8/8 (C1 / C2 skipped, seating off). Stand-in YOLO boxes in the
+  sandbox (no YOLO weights here), so C0 proves the port, not YOLO; findCap took about 4 - 5 s per picture on this CPU.
+  Unchanged: `DryRun_Cap_Production_Path` 12/12, `DryRun_Cap_Silver_Seating` 6/6, `DryRun_Cap_Check` all as expected
+  (none of them sets a hub centre: rule not applied), `DryRun_Camera_State_File` 19/19 both, `DryRun_Vision_Check_Timeout`
+  23/23. Not run: the real hub check (needs YOLO), `DryRun_Knuckle_Frame.py --quick` (stopped at 500 s on this CPU).

@@ -240,7 +240,17 @@ strongest fall of brightness outward between `seating.silver.face.band.min` (60)
 `seating.silver.face.fit.min` (0.64) - a tilted cap shows its side wall on one side and its face edge stops being one
 circle; and the outline centre ≤ 20 px from the cap centre. The face-centre offset is logged only (a seated cap's face
 already sits ~8 px from the outline centre: camera angle). Marked picture: hub circle blue, cap green / red, face circle
-yellow. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+yellow. Then, brass and silver (CHANGES §143, `vision.cap.seating.hub.distance.check`): the hub check's centre - the
+least-squares circle through the winning group's 4 / 5 mask centres (`CheckHubAndBottomBearing.hubCentreFromGroup`,
+cropped-picture centres moved by the segmenter's crop corner; circle radius ≥ `vision.hub.centre.bolt.min.distance` 165 px
+= bolts, else holes), kept as `ImageProcessor.hubCentre` (state attribute: sent to the worker, in the state file, dropped
+at the end of a cycle and at a hub check that fails) - plus `seating.hub.distance.offset.holes` / `.bolts` (0, 0) must lie
+within `seating.hub.distance.max` (5 px) of the cap's centre: the stage-2 ellipse centre of the cap mask found by
+`camera/CapMaskFinder.py` (the method frozen in CHANGES §139-142: gamma 2.0, disc r 160 round `cap.center`, YOLO boxes
+conf 0.15 as box prompts, stability ≥ 0.70, predicted IoU ≥ 0.50, box merge 0.50, area 15000-50000 px after the disc's
+own edge, largest mask, ellipse fit 2.5 px / 300 RANSAC tries; keys `vision.cap.mask.*`). No cap mask -> NOT seated; no
+hub centre -> rule not applied (said in the reason). Marked picture: the cap ellipse green / red, the hub centre a blue
+cross. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position, the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
@@ -459,6 +469,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
+| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.holes` / `.offset.bolts` | True / 5.0 / 0,0 / 0,0 (Machine 1: False) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)
@@ -487,6 +498,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Cap_Check.py` | `CheckCap` on the cap pictures, seated / skewed / wrong cap / no cap (MobileSAM weights) |
 | `DryRun_Cap_Production_Path.py` | The cap check as the camera server runs it (`assessPictures`, three pictures): seated OK with one seating run, skewed / wrong cap / no cap NOT OK, 2 of 3, time per check |
 | `DryRun_Cap_Silver_Seating.py` | Silver cap seating, two rules (CHANGES §129): seated SEATED, skewed NOT SEATED, face fit alone separates them, hub centre uncovered on the cap pushed off the bore, no / blank hub picture -> rule 1 not checked |
+| `DryRun_Cap_Hub_Distance.py` | Cap seating by the hub-centre distance (CHANGES §143): hub centre from 4 / 5 holes or bolts, kept with the cycle (worker, state file, end of cycle), production cap mask = the frozen window's, the rule within / not within, checkCap OK / NOT OK by the hub centre |
 | Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` | The real check on a folder of pictures, shown one at a time |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |

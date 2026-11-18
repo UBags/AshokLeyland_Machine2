@@ -2,16 +2,17 @@
   "_baseline": "5728def",
   "baseline_per_file": {
     "camera/CheckKnuckle.py": "6846f37",
-    "camera/CheckHubAndBottomBearing.py": "3d91a76",
+    "camera/CheckHubAndBottomBearing.py": "1d199cd",
     "camera/CheckTopBearing.py": "8d7cdd5",
     "camera/CheckNutAndPlateWasher.py": "3d91a76",
     "camera/HexagonNutDetector.py": "4e04121",
-    "camera/CheckCap.py": "892041d",
+    "camera/CheckCap.py": "5250ceb",
     "camera/BungSegmenter.py": "0ff5470",
     "camera/HubAndBearingSegmenter.py": "3d91a76",
     "camera/KnuckleLocator.py": "f3aa0ed",
     "camera/VisionFrame.py": "2376cf9",
-    "camera/CheckNoBung.py": "0ff5470"
+    "camera/CheckNoBung.py": "0ff5470",
+    "camera/CapMaskFinder.py": "5250ceb"
   },
   "extracted": {
     "vision.bung.dostplus.hole.pair.distance.max": {
@@ -66,7 +67,7 @@
       "const": "HUB_CENTRE_CHECK_INNER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 158,
+      "old_line": 188,
       "old_literal": "20",
       "old_snippet": "(635, 350), 20,"
     },
@@ -74,7 +75,7 @@
       "const": "HUB_CENTRE_CHECK_MAX_MEAN",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 169,
+      "old_line": 199,
       "old_literal": "140",
       "old_snippet": "average < 140"
     },
@@ -82,7 +83,7 @@
       "const": "HUB_CENTRE_CHECK_OUTER_RADIUS",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 157,
+      "old_line": 187,
       "old_literal": "60",
       "old_snippet": "(635, 350), 60,"
     },
@@ -90,7 +91,7 @@
       "const": "HUB_CENTRE_CHECK_X",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 157,
+      "old_line": 187,
       "old_literal": "635",
       "old_snippet": "(635, 350)"
     },
@@ -98,7 +99,7 @@
       "const": "HUB_CENTRE_CHECK_Y",
       "file": "camera/CheckHubAndBottomBearing.py",
       "old_file": "camera/CheckHubAndBottomBearing.py",
-      "old_line": 157,
+      "old_line": 187,
       "old_literal": "350",
       "old_snippet": "(635, 350)"
     },
