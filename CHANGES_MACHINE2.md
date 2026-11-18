@@ -4422,3 +4422,23 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   `DryRun_Cap_Production_Path` 12/12 (Machine 2); `DryRun_Camera_State_File` 19/19 on both; `DryRun_Cap_Check` Machine 1
   all as expected (Machine 2 needs the YOLO weights: laptop); window test of `DryRun_Cap_Hub_Distance_UI` 8/8 on both
   (xvfb, checks stood in). Distances recomputed from `details_20261118-163312.csv` (above).
+
+## 148. DOST holes offset measured: 0.3,0.5 (the 0.3,-5.2 of CHANGES 147 was wrong) (2026-11-18)
+
+- **User (laptop):** `DryRun_Cap_Hub_Distance_UI` as DOST, hub picture `..._20261113151830811` (centre (643.8, 338.8)
+  from 4 holes), the 117 production pictures of 17 Nov. 8 OK, 109 NOT OK. Silver caps (all seated, user): 21 pictures;
+  colour rules SEATED on all 21; 8 OK, 13 NOT OK by the distance alone (5.2 .. 6.7 px against offset 0.3,-5.2). The
+  other NOT OK are brass caps checked as DOST (wrong cap, correct) and one cycle without a cap.
+- **Found:** raw cap - hub for the 21 silver caps: 18 at dx -1.5 .. +2.1, dy -0.8 .. +1.3; 3 (cycle 19:19:43) at
+  dy -9.6 .. -10.8. So the DOST holes offset is about (0.25, 0.55), not (0.3, -5.2). The CHANGES 147 value was worked out
+  from the DOST bolts offset (one hub picture) and the DOSTPLUS holes-vs-bolts gap, and was wrong by about 5.7 px.
+- **The 3 pictures of 19:19:43:** their own colour rules put the cap outline 10.8 - 11.0 px from `cap.center`
+  (1.1 - 2.5 px on the other 18), with the hub uncovered 0 px and the face fit 0.75 - 0.77: the whole part sat about
+  10 px higher in that cycle, so that cycle's own hub picture would be too. Against a hub picture of another part
+  they cannot be judged. They stay NOT OK in this pairing (9.9 - 11.1 px). Making them OK here would need max 11 px
+  (or an offset 5 px off the other 18), which would let skewed caps through. Not changed. To check: run the window
+  with the hub picture of that cycle (TrialImages `HubAndBottomBearing`, 17 Nov about 19:19).
+- **Now:** `siemens.vision.cap.seating.hub.distance.offset.holes.dost` = 0.3,0.5 (three properties files). The 18
+  seated silver caps are at 0.07 - 2.0 px from the target, all OK; max stays 5.0.
+- **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from `details_20261118-171917.csv`;
+  `DryRun_Cap_Hub_Distance.py` Machine 2 11/11 (C2 uses the configured offset).
