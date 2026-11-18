@@ -19,8 +19,8 @@ production changes.
          (models/MobileSAM/MobileSAMv2/weight/ObjectAwareModel.pt, through ModelManager) proposes boxes on the disc
          ("YOLO confidence", default 0.15; its own box NMS 0.7); boxes whose centre lies outside the disc are left out;
          one MobileSAM decoder pass per 64 boxes, one mask per box. Tens of prompts instead of hundreds: much faster.
-     Default prompts: YOLO boxes. Filters, both: "Min stability" (0.70 - 1.00, step 0.02, default 0.70; SAM's own
-     stability score of the mask), "Min predicted IoU" (0.50 - 1.00, step 0.02, default 0.50), "Box merge IoU"
+     Default prompts: YOLO boxes. Filters, both: "Min stability" (0.20 - 1.00, step 0.02, default 0.70; SAM's own
+     stability score of the mask), "Min predicted IoU" (0.20 - 1.00, step 0.02, default 0.50; lower ends 0.20 since CHANGES 141), "Box merge IoU"
      (0.30 - 1.00, step 0.05, default 0.50: of two masks whose boxes overlap more than this, the one with the higher predicted IoU is kept). Then each
      mask is kept to the disc; one with less than half of it inside the disc is dropped. Each mask outlined in its own
      colour, listed largest first. Every value used is in the picture's line.
@@ -161,8 +161,8 @@ def wholeSettings(prompts, pps, stability, iou, nms, conf, disc, minArea=WHOLE_D
     if not rings or any(not 0.05 <= r <= 0.98 for r in rings):
         raise ValueError("refine rings must be fractions of the radius, 0.05 - 0.98, e.g. 0.5,0.8")
     return dict(prompts=prompts, pointsPerSide=inRange("points per side", pps, 16, 64, int),
-                stabilityMin=inRange("min stability", stability, 0.70, 1.00),
-                iouMin=inRange("min predicted IoU", iou, 0.50, 1.00), nmsIou=inRange("box merge IoU", nms, 0.30, 1.00),
+                stabilityMin=inRange("min stability", stability, 0.20, 1.00),
+                iouMin=inRange("min predicted IoU", iou, 0.20, 1.00), nmsIou=inRange("box merge IoU", nms, 0.30, 1.00),
                 yoloConf=inRange("YOLO confidence", conf, 0.05, 0.95), discRadius=inRange("disc radius", disc, 20, 2000),
                 minArea=inRange("min area", minArea, 0, 1000000, int),
                 maxArea=inRange("max area", maxArea, 1000, 10000000, int), refine=bool(refine), refineRings=rings,
@@ -830,8 +830,8 @@ def runWindow():
             spin(bar3, "Points per side", self.ppsVar, 16, 64, 8, "%.0f", 4)
             spin(bar3, "YOLO confidence", self.confVar, 0.05, 0.95, 0.05, "%.2f")
             bar4 = ttk.Frame(root); bar4.pack(fill="x", padx=6)
-            spin(bar4, "Min stability", self.stabilityVar, 0.70, 1.00, 0.02, "%.2f")
-            spin(bar4, "Min predicted IoU", self.iouVar, 0.50, 1.00, 0.02, "%.2f")
+            spin(bar4, "Min stability", self.stabilityVar, 0.20, 1.00, 0.02, "%.2f")
+            spin(bar4, "Min predicted IoU", self.iouVar, 0.20, 1.00, 0.02, "%.2f")
             spin(bar4, "Box merge IoU", self.nmsVar, 0.30, 1.00, 0.05, "%.2f")
             spin(bar4, "Min area (px)", self.minAreaVar, 0, 50000, 250, "%.0f", 7)
             spin(bar4, "Max area (px)", self.maxAreaVar, 20000, 150000, 10000, "%.0f", 7)

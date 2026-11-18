@@ -4240,3 +4240,13 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   20000 refused. Window under Xvfb (Python 3.12, stand-ins), both copies, 4/4: min area 15000, max area 50000, range
   20000 - 150000 step 10000 (up -> 60000, top 150000, bottom 20000), both reach the settings. Both copies identical
   apart from paths. MobileSAM / YOLO not re-run (filter only).
+
+## 141. Hub centre mask window: min stability and min predicted IoU down to 0.20 (2026-11-18)
+
+- **User:** allow min stability down to 0.2 (default 0.7) and min predicted IoU down to 0.2 (default 0.5).
+- **Now (both copies):** spinners and `wholeSettings` checks 0.20 - 1.00 for both (step 0.02 unchanged); defaults
+  unchanged (0.70, 0.50). Both prompt paths take the values as set (grid: `pred_iou_thresh` /
+  `stability_score_thresh` of the generator; YOLO boxes: the keep mask in `_yoloMasks`); no other floor.
+- **Run:** window under Xvfb (Python 3.12, stand-ins), both copies, 4/4: stability default 0.70, bottom 0.20, top 1.00;
+  IoU default 0.50, bottom 0.20, top 1.00; 0.20 / 0.20 reach the settings; 0.18 refused. Copies identical apart from
+  paths. MobileSAM / YOLO not re-run (limits only).
