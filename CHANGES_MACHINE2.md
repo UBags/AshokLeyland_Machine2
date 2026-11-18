@@ -4373,3 +4373,20 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   on the same hub, so a model whose hub check wins on the other group may need its own value - to be seen in the hub
   check's `from N holes|bolts` lines with the seating lines of the same cycles.
 - **Run:** verifier ALL EQUIVALENT on both machines; the rule recomputed from the two CSVs with the new offset (above).
+
+## 146. Holes offset 0.1,-1.4 from 105 brass caps against two DOSTPLUS hub pictures (2026-11-18)
+
+- **User (laptop):** `DryRun_Cap_Hub_Distance_UI` as DOSTPLUS with hub picture `..._20261113153828283` (centre (644.2,
+  339.4) from 5 holes) on (a) the 29 cap pictures of 13 Nov and (b) 117 production pictures of 17 Nov (folder "Good Cap
+  - BUT MOST Not OK", three per cap check).
+- **Results:** (b) 93 of 93 brass caps OK (31 checks x 3 pictures); the 24 NOT OK are 21 silver caps checked as DOSTPLUS
+  (wrong cap, correct) and one check without a cap (3 pictures). (a) the 6 seated brass caps OK, the 7 skewed NOT OK.
+- **What the second hub picture shows:** the two DOSTPLUS hub pictures put the hub centre 2.6 px apart in y ((643.7,
+  342.0) in CHANGES 145, (644.2, 339.4) now), and the same 6 seated caps of 13 Nov came out at median cap - hub (0.35,
+  -2.67) against the first and (-0.15, -0.07) against the second. Against one fixed hub picture the 93 seated caps of
+  17 Nov scatter dx -2.5 .. +1.2, dy -2.7 .. +2.1. So the offset of CHANGES 145 (0.3, -2.7) was mostly the first hub
+  picture's own position; the true part-to-part behaviour still needs hub and cap pictures of the same cycle.
+- **Now:** `siemens.vision.cap.seating.hub.distance.offset.holes` = 0.1,-1.4 (between the two hub pictures; three
+  properties files). Largest seated distance over the three runs: 2.2 / 3.3 / 3.5 px (with 0.3,-2.7: 2.0 / 4.6 / 4.8 px,
+  too near the 5 px limit). Bolts stay 0.3,-2.7 (DOST data from one hub picture only). Max stays 5.0.
+- **Run:** verifier ALL EQUIVALENT on both machines; distances recomputed from the three CSVs (above).
