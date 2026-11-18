@@ -569,12 +569,17 @@ def fitCapEllipse(mask, tolerance, tries):
     if len(points) < 10:
         return None
     t0 = time.perf_counter()
+    # fitted round a whole-pixel origin near the outline's middle (CHANGES 144): the same outline gives the same
+    # ellipse here (cut-out disc) and in the cap check (full picture)
+    origin = np.floor(points.mean(0))
+    points = points - origin
     e1 = leastSquaresEllipse(points)
     d1 = ellipseDistances(points, e1)
     e2, inl2, rounds = mostInliersEllipse(points, e1, tolerance, tries)
     d2 = ellipseDistances(points, e2)
-    return dict(points=len(points), e1=e1, rms1=float(np.sqrt((d1 ** 2).mean())), in1=int((d1 <= tolerance).sum()),
-                e2=e2, rms2=float(np.sqrt((d2 ** 2).mean())), in2=int(inl2.sum()),
+    back = lambda e: (e[0] + float(origin[0]), e[1] + float(origin[1]), e[2], e[3], e[4])
+    return dict(points=len(points), e1=back(e1), rms1=float(np.sqrt((d1 ** 2).mean())), in1=int((d1 <= tolerance).sum()),
+                e2=back(e2), rms2=float(np.sqrt((d2 ** 2).mean())), in2=int(inl2.sum()),
                 rms2in=float(np.sqrt((d2[inl2] ** 2).mean())) if inl2.any() else None, rounds=rounds,
                 seconds=time.perf_counter() - t0)
 

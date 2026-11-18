@@ -4311,3 +4311,44 @@ Checked against the code of `b371775` (CHANGES 102); no code changed.
   hole circles too. With both offsets 0, a cycle whose hub check won on the other group than the cap face lines up
   with can be off by about 7 px, above the 5 px limit: the offsets have to be measured (hub check line + seating line
   of the same cycles) before the rule is relied on.
+
+## 144. Cap ellipse independent of where the outline lies; DryRun_Cap_Hub_Distance_UI (2026-11-18)
+
+- **User (laptop, CUDA, real YOLO):** `DryRun_Cap_Hub_Distance.py` 9/10 - C0 failed on DOST_cap_08: same cap mask (33099
+  px) but stage-2 centre (642.58, 339.12) in production against (641.93, 339.40) in the frozen window. Verifier ALL
+  EQUIVALENT on both machines; `DryRun_Cap_Production_Path` 12/12 (0.47 - 0.94 s per cap check on CUDA). Asked for a
+  window: pick a hub picture, run the hub check, get the hub centre; pick a caps folder, run the cap check on each
+  with that hub's centre and the model chosen; print everything needed to set the parameters.
+- **Cause of the C0 failure:** the window fits the ellipse to the outline in the cut-out disc's coordinates, the cap
+  check in the full picture's (the same outline shifted by the disc's corner). `cv2.fitEllipse` works in float32, so
+  the 5-point RANSAC ellipses come out slightly different at the two offsets, and where two candidates have nearly the
+  same count of points within 2.5 px a different one wins (DOST_cap_08: 562 of 588 either way, centres 0.7 px apart).
+  Reproduced: of 60 ragged synthetic ellipses, 15 gave a different stage-2 ellipse in the disc and in the full picture.
+- **Fix** (`CapMaskFinder.fitCapEllipse` and the `fitCapEllipse` of both centre-mask windows, both copies): the outline
+  points are moved to a whole-pixel origin near their middle (`floor(mean)`) before both stages and the ellipses moved
+  back: the same outline gives the same ellipse wherever it lies (0 of 60 differ). Reference commit `fb8f11f`, both
+  manifests point at it.
+- **New `DryRun_Cap_Hub_Distance_UI.py`** (both copies; window and `--batch`): Model (DOST / DOSTPLUS, the QR code both
+  checks get); "Hub picture..." runs the real hub check (marked picture shown with the hub centre as a blue cross; the
+  centre's x, y and holes / bolts filled in, editable or typed without a hub picture); "Caps folder..." + Start runs the
+  real `CheckCap.checkCap` as the camera server calls it (seating on, hub centre given; the step-3 earlier pictures:
+  the chosen hub picture and the model's stored top bearing / nut pictures, or chosen ones). "Max distance" and the
+  holes / bolts offsets can be changed between pictures. Per cap: verdict, time, the colour rules' seating verdict
+  (copied before the distance rule is added), the distance (cap centre, hub centre + offset, dx / dy), mask area /
+  stability / IoU, outline points within 2.5 px, ratio, RMS and every log line of the check; a cap the check stopped
+  before seating still gets the distance measured ("measured only"). At the end, from the caps the colour rules call
+  seated (names without "skewed"): dx / dy statistics per hub kind with the offset taken out, the suggested offset
+  (median) and max (largest deviation + 1.5 px), and each skewed cap against them. `run_<time>.txt` and
+  `details_<time>.csv` in `<caps folder>/cap_hub_distance_results/`; marked pictures with "Save marked pictures".
+- **`DryRun_Cap_Hub_Distance.py`:** new C0b - the same outline in the disc and in the full picture gives the same
+  stage-2 ellipse (20 synthetic outlines).
+- **Run:** verifier ALL EQUIVALENT on both machines. `DryRun_Cap_Hub_Distance_UI.py --batch` (sandbox: real MobileSAM,
+  stand-in YOLO boxes, hub centre typed 644.0, 333.0, holes - no hub check here, it needs YOLO) on the 16 DOST cap
+  pictures: OK 6, NOT OK 10; 9 seated by the colour rules; against one fixed hub centre the seated caps' dy spreads from
+  -4.7 to +6.5 px (different parts: what the per-part hub centre is for), so the suggested max came out 8.6 px - not a
+  value to use, the pairing is wrong; skewed 04 / 05 / 06 at 10 - 18 px, 01 / 02 / 03 within 1 - 3 px (caught by the
+  colour rules, not by the distance). Window under Xvfb (Python 3.12, checks stood in), both copies, 7/7: models loaded
+  and the defaults from the cap settings, the hub check fills the centre, 4 caps checked with that centre / max /
+  offsets, elapsed time shown, run file with hub line, caps and suggested offset / max, CSV rows, list.
+  `DryRun_Cap_Hub_Distance.py` (sandbox, stand-in YOLO): Machine 2 11/11 (C0 on all 30 cap pictures, C0b), Machine 1 9/9
+  (C1 / C2 skipped, seating off).

@@ -18,6 +18,8 @@ Checks
   S2 hubCentre in the state sent to the worker, in the state file (written and read back), dropped at the end of a cycle
   C0 the production cap mask (CapMaskFinder.findCap) equals the frozen window's (DryRun_Cap_Centre_Mask_UI) on the
      same boxes: same mask area, same stage-2 ellipse centre - on every cap picture
+  C0b the same cap outline in the cut-out disc and in the full picture gives the same ellipse (20 ragged synthetic
+     ellipses, shifted as the disc is cut): the cause of a 0.7 px difference on DOST_cap_08 on the laptop (CHANGES 144)
   C1 the rule: hub centre at the cap centre + (3, 0) px -> within; + (8, 0) -> NOT within; the bolts offset used for
      bolts, the holes offset for holes; no hub centre -> not applied (and said so); switched off -> not applied
   C2 checkCap with the seating step (Machine 2): a seated cap with the hub centre on its centre OK; the same cap with
@@ -149,6 +151,24 @@ def main() -> int:
     check("S2 hubCentre sent to the worker, kept in the state file, dropped at the end of a cycle",
           snap.get("hubCentre") == hubValue and written and loaded and restored == hubValue and cleared is None,
           (snap.get("hubCentre"), written, loaded, restored, cleared))
+
+    # ---- C0b: the ellipse does not depend on where the outline lies in the picture ---------------------------------
+    rng = np.random.default_rng(3)
+    differ = []
+    for k in range(20):
+        small = np.zeros((321, 321), np.uint8)
+        cv2.ellipse(small, (160 + int(rng.integers(-15, 15)), 160 + int(rng.integers(-15, 15))),
+                    (int(rng.uniform(80, 110)), int(rng.uniform(78, 105))), rng.uniform(0, 180), 0, 360, 1, -1)
+        speckle = (rng.random(small.shape) < 0.02).astype(np.uint8)
+        small = cv2.morphologyEx(np.maximum(small, cv2.dilate(speckle, None) * small.max()), cv2.MORPH_OPEN, None)
+        big = np.zeros((720, 1280), np.uint8)
+        big[180:501, 484:805] = small
+        a_, b_ = CM.fitCapEllipse(small, 2.5, 300), CM.fitCapEllipse(big, 2.5, 300)
+        d = float(np.hypot(a_["e2"][0] + 484 - b_["e2"][0], a_["e2"][1] + 180 - b_["e2"][1]))
+        if d > 1e-6:
+            differ.append((k, round(d, 3)))
+    check("C0b same outline in the disc and in the full picture: same stage-2 ellipse (20 synthetic outlines)",
+          not differ, differ)
 
     # ---- C: the cap ---------------------------------------------------------------------------------------------------
     if not os.path.isfile(args.sam):

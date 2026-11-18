@@ -172,8 +172,9 @@ On the Machine 2 PC with the new exe:
    pictures of a hub and its own cap (the hub picture of the same cycle is used in production).
 4. **Time.** Silver seating now runs MobileSAM on two pictures (cap and hub); the cap check's time must stay well
    inside the 12 s timeout.
-5. **Hub-centre distance (CHANGES 143).** Laptop: `DryRun_Cap_Hub_Distance.py` (10/10; with the YOLO weights it uses
-   the real YOLO). Machine 2 PC: the hub check writes `[CheckHubAndBottomBearing] hub centre (x, y) from 4 holes`
+5. **Hub-centre distance (CHANGES 143, 144).** Laptop: `DryRun_Cap_Hub_Distance.py` (11/11; with the YOLO weights it
+   uses the real YOLO) and `DryRun_Cap_Hub_Distance_UI.py` (a hub picture and the caps of the same parts: the suggested
+   offset and max). Machine 2 PC: the hub check writes `[CheckHubAndBottomBearing] hub centre (x, y) from 4 holes`
    (or bolts, circle r, spread); the cap check's seating line adds `cap centre (x, y) to hub centre (x, y) d px <= 5.0
    (... cap +dx / +dy px; ...)`. The 5 px limit and the zero offsets are not measured yet (no hub and cap pictures of
    the same part): send these lines for a shift of seated caps. If seated caps sit at a steady dx / dy (camera angle:
