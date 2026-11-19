@@ -5209,3 +5209,38 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   only, `--seed hubcheck` holes - hub check about 0, and the split pin parts' SAM centres steady within a part.
 - Run: verifier both ALL EQUIVALENT (395 parameters); `DryRun_SplitPin_Check_UI --auto --holes morphology` both PASS
   79/79; `DryRun_Tuning_Keys` both 231/231. Not run: anything with YOLO (sandbox).
+
+## 166. Hub holes by SAM: each hole refined by a MobileSAM box prompt; the dry run's offset suggestion fixed (2026-11-19)
+
+- **User's laptop re-run after 165 (all dry runs):** every good picture found, the other model never; ALL EQUIVALENT;
+  the other dry runs PASS. SAM missed 7 where the dark blobs found holes: bad bungs (A02, A17, A18, B04, B05, B10 as
+  before, and A19 - labelled bad, `hole_centre` null: the bung covers the holes, NOT OK is right) and NOT OK split pin
+  112450874.
+- **Found 1 - the dry run's suggested offsets were wrong:** it added mean(morphology - SAM) to the live offsets, which
+  are SAM offsets since 165 - the shift counted twice (e.g. cap.dost 0.2,-11.0, splitpin 0.5,-9.5, bung.dost 5.4,-22.4
+  printed). The real shifts of that run: split pin DOST (-0.36, -5.86), cap DOST (-0.19, -6.21), cap DOSTPLUS
+  (-0.02, +0.95), bung DOST (+0.18, -4.52), bung DOSTPLUS (+0.30, +0.13). Fixed: base = `MORPHOLOGY_OFFSETS`
+  (`_hub_holes_option.py`), the live value printed as "now". The 165 offsets were computed by hand from that base; they stand.
+- **Found 2 - DOST centres still in two modes with good seeds:** r ~147.4 and ~149, ~2 px apart in y; on one still part
+  (11:34 - 11:36, 12 frames) the SAM centre jumped 346.6 <-> 348.5 in y. The masks of `checkHub()`'s steps are either a
+  hole's whole outline or its darker lower part. `checkHub()` itself is not changed.
+- **Changed (`camera/FindHubHoles.py`):** a group that passes the gates is refined: each hole a MobileSAM box prompt of
+  +-18 (DOST) / 24 (DOSTPLUS) px on the picture as taken (a crop round the holes, the per-thread predictor), three
+  masks, the largest with an area 60 - 1200 / 60 - 2000 px taken, re-centred, prompted once more; a hole that moves more
+  than 6 px = not the holes (next gamma); the refined circle passes the gates again. Gates moved into `_failedGates`.
+  Reference commit fb1faf5; both manifests; 7 keys `vision.hubholes.sam.refine*` (both vendors, three files).
+- **Measured (sandbox, MobileSAM; YOLO stand-in boxes):** refinement prototype on DOST split pin frames of one still part:
+  sd (0.28, 0.09) px against SAM 346.6 <-> 348.5; 19 frames of the 11:20 - 11:28 part sd (0.63, 0.22) (dark blobs
+  1.26, 0.74); DOST caps 11 pictures sd (0.17, 0.18), refined - morph y +4.5 (165's cap shift -4.7: the r ~149 mode);
+  box shifted +-3 px: same centres within 0.1 px (2 iterations); DOSTPLUS caps no change (sd 0.6 / 0.9 vs dark blobs
+  0.5 / 0.7 - DOSTPLUS was steady already). In `FindHubHoles` with the stand-in: split pin DOST found r 148.2 - 148.3,
+  spread 0 - 0.9, y 346.7 - 347.1; a stand-in junk group that passed the gates before (r 146) now refused (a hole moved
+  16.8 px); two split pin pictures not found with the stand-in (the laptop's YOLO found them; stand-in only).
+- **Offsets:** unchanged (165's came from the r ~149 groups, which the refinement keeps). **Laptop re-run needed:**
+  `DryRun_Hub_Holes_SAM.py --wrong-model` - DOST centres in one mode, per-part sd, the printed offsets (now right) into
+  the properties if they differ by more than ~0.5 px.
+- Run: verifier both ALL EQUIVALENT (402 parameters, 14 files); `DryRun_Tuning_Keys` 231/231; with `--holes morphology`:
+  `DryRun_SplitPin_Check_UI --auto` PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance` 15/15;
+  `DryRun_Vision_Check_Timeout` 23/23, `DryRun_Camera_State_File` 19/19; `DryRun_Hub_Holes_SAM --tiled-yolo` as above.
+  `DryRun_Cap_Production_Path` 8/12 in the sandbox - same before this change (b4787b9): the stand-in boxes there sit on
+  the cap, not the holes. Not run: anything with the real YOLO (laptop).

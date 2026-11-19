@@ -83,6 +83,8 @@ def main() -> int:
     import camera.CheckCap as CC
     import camera.BungSegmenter as BS
     from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher as SP
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import MORPHOLOGY_OFFSETS
 
     if args.sam:
         import torch
@@ -183,9 +185,12 @@ def main() -> int:
             text = (f"{kind:8s} {model:8s} {len(d):3d} pictures: morphology - SAM mean ({m[0]:+.2f}, {m[1]:+.2f}) sd "
                     f"({sd[0]:.2f}, {sd[1]:.2f})")
             if (kind, model) in current:
-                old = current[(kind, model)]
-                text += (f"  ->  {keys[kind]}.{model.lower()} = {old[0] + m[0]:.1f},{old[1] + m[1]:.1f} "
-                         f"(now {float(old[0]):g},{float(old[1]):g})")
+                # the offsets were measured against the morphology centres (MORPHOLOGY_OFFSETS); the SAM centre sits
+                # mean(morphology - SAM) away, so the SAM offset is that base + the mean - never the live value + it
+                # (the live value is already a SAM offset; CHANGES 166)
+                base, now = MORPHOLOGY_OFFSETS[kind][model], current[(kind, model)]
+                text += (f"  ->  {keys[kind]}.{model.lower()} = {base[0] + m[0]:.1f},{base[1] + m[1]:.1f} "
+                         f"(morphology offset {base[0]:g},{base[1]:g} + mean; now {float(now[0]):g},{float(now[1]):g})")
             print(text)
     for model in ("DOST", "DOSTPLUS"):
         for hubKind in ("holes", "bolts"):

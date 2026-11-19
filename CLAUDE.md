@@ -157,7 +157,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
-| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165 pending; plant not yet |
+| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes -> per-hole refinement (CHANGES 166); re-run after 166 pending; plant not yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -193,8 +193,11 @@ No per-check times were recorded with the report; when they are, put them in the
 - **Hub-hole offsets for the SAM finder** (CHANGES 164, 165): set from Uddi's laptop run of 2026-11-19
   (`DryRun_Hub_Holes_SAM.py --wrong-model` / `--seed hubcheck`): cap 0.4,-4.8 / -0.7,-4.4, bung 5.2,-17.9 / 4.5,-15.8,
   split pin 0.9,-3.6 / 1.9,2.1, bolts seed -0.7,4.4 / -0.7,3.7. DOST SAM groups came in three circle radii (147 / 149 /
-  161, centres up to ~4.5 px apart in y): 147 went with uncorrected bolts seeds, 161 is not the holes - gated out
-  (`sam.radius` 140 - 155); a laptop re-run must show DOST at r ~149 only and the per-part spread of the centre.
+  161, centres up to ~4.5 px apart in y): 161 is not the holes - gated out (`sam.radius` 140 - 155). After 165 DOST still
+  came at r ~147.4 / ~149 with good seeds (whole outline vs its darker lower part): since CHANGES 166 every hole of a
+  passing group is refined by a MobileSAM box prompt (`vision.hubholes.sam.refine.*`; sandbox: sd 0.1 - 0.2 px on a still
+  part, the r ~149 mode). A laptop re-run of `DryRun_Hub_Holes_SAM.py --wrong-model` gives the DOST offsets (its
+  suggestion = dark-blob offset + mean since 166).
 - **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `FindHubHoles.findHoles` in the
   bung picture + `vision.bung.seating.hub.offset.<model>` (5.2,-17.9 / 4.5,-15.8 for the SAM centres, CHANGES 165); `position.source=fixed` = before. The
   user's good / bad labels of 2026-11-18 called A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px

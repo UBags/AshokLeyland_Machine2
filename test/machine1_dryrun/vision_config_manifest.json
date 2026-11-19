@@ -14,7 +14,7 @@
     "camera/CheckNoBung.py": "0ff5470",
     "camera/CapMaskFinder.py": "fb8f11f",
     "camera/CheckSplitPinAndWasher.py": "c18d18f",
-    "camera/FindHubHoles.py": "c18d18f"
+    "camera/FindHubHoles.py": "fb1faf5"
   },
   "extracted": {
     "vision.bung.dostplus.hole.pair.distance.max": {

@@ -296,7 +296,12 @@ whose winning group has the model's count and whose circle has a radius in `sam.
 178+), spread ≤ `sam.spread.max` 3 px, angle gaps within `sam.gap.max` 15° and its centre within `sam.seed.distance.max`
 8 px of the seed (the holes are concentric with the hub: in the sandbox, with stand-in boxes, four look-alike masks on
 the bare face made an evenly spaced square round a centre 15 px away) wins; a gamma that `checkHub()`'s logic
-calls the other model is noted and the next one tried. The annulus: holes r 147-151 with radius 10 (DOST) / 14.5
+calls the other model is noted and the next one tried. A group that passes is refined (§166, `sam.refine`): each hole
+gets a MobileSAM box prompt of ±`sam.refine.half.<model>` (18 / 24) px on the picture as taken, three masks, the largest
+with an area in `sam.refine.area.<model>` (60-1200 / 60-2000 px) taken (the hole's whole outline), re-centred and
+prompted again (`sam.refine.iterations` 2); a hole that moves more than `sam.refine.move.max` 6 px means the group was not
+the holes (next gamma), and the refined circle passes the same gates again. Without it the DOST groups came either as the
+whole outlines (r ~149) or their darker lower part (r ~147), centres 2-2.5 px apart in y on one still part. The annulus: holes r 147-151 with radius 10 (DOST) / 14.5
 (DOSTPLUS) px lie inside it; the stud tops (circle 182-196, inner edge 169 / 183 px) outside it but for a sliver below the
 mask area filter. The segmenter object is `HubAndBearingSegmenter`'s methods on a per-thread object (own `SamPredictor`
 and mask generator; the YOLO model shared behind a lock), not `checkHub()`'s own instance, which is not touched. The
