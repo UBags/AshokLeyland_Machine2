@@ -4923,3 +4923,37 @@ User's decisions on the review of this morning (report in the chat, nothing chan
   with the switch on); `DryRun_Bung_Hub_Holes` 6/6; `DryRun_Bung_Frame --no-yolo` 39/39 (the bung marks path);
   `DryRun_Cap_Production_Path` 12/12; `DryRun_Cap_Silver_Seating` 6/6. Not run: the windows, YOLO-based runs (laptop),
   the integrated all-servers cycle.
+
+## 158. Font adjustments -2 for Kannada and Hindi; QR code line fitted in English; creator line fitted to its label (2026-11-19)
+
+User (with screenshots of the main screen in the four languages): (1) font size adjustment -2 in Hindi and in Kannada;
+(2) the QR code widget's font from "QR Code :" plus 30 English characters, in English only, used for every language;
+(3) the "Created by CosTheta Technologies and Ashok Leyland" line a little bigger in every language - fixed or
+fitted? - and fitted dynamically.
+
+- **(1)** `language.kannada.fontsize.adjustment=-2`, `language.hindi.fontsize.adjustment=-2` (three files; English and
+  Tamil 0). The code defaults are now the same values (`FrontendI18n.DEFAULT_FONT_SIZE_ADJUSTMENTS`; before, every
+  language's default was 0, so Hindi's -1 differed from its default).
+- **(2)** `calculateAndSetIdealFontForQRCodeLabel`: fitted to `"   QR CODE : ABCDEFGHIJKLMNOPQRSTUVWXYZ0123   "`
+  (`QR_CODE_SAMPLE`, 30 characters) in 95 % of the label, in English, **without** the language's adjustment; fitted
+  once (the first call, after the window is shown) and the same font set again on every change of language. The label
+  shares its row with the notice, which comes and goes: the fit uses the label's width without the notice (a notice
+  shown at that moment is added back), so the size does not depend on what was on screen at start. Before: fitted to
+  the text shown at that moment - "QR CODE : " alone, so the QR code then ran past the widget - and refitted per
+  language. At 1920 x 1050: 23 pt in all four languages (the sample 858 px of the label's 1013 px). A notice shown
+  beside a long QR code narrows the label to about 805 px: a 30-character code at 23 pt could then lose its ends.
+- **(3)** It was already fitted to its widget (CHANGES 157; before that a scale factor of the same kind), but measured
+  wrongly: `_fitBold` took `self.creatorStatus.font()`, the font of the `SimpleMessageContainer` itself - the
+  application's default font, not the label's Segoe UI - and then set that default font on the label; and it filled
+  0.8 of the widget with three spaces each side. Now a `SimpleMessageContainer` is measured on its inner label
+  (`label()`, new) with the label's own font (also the date / time line), and the creator line is fitted to
+  `frontend.creator.fill.share` (**0.95**, new key) of the label less its border + padding (5 px each side), no
+  padding spaces, then the language's adjustment. At 1920 x 1050: English 13 pt (was 10), Kannada 11 (fit 13 - 2),
+  Tamil 10 (was 7), Hindi 15 (fit 17 - 2). Found on the way: the line was meant to be italic (`QFont(..., italic=True)`),
+  but its stylesheet's `font: bold` resets the style, so it has always been shown upright - not changed.
+- Run (Python 3.12 + PySide6 under Xvfb; Python 3.13): `DryRun_Frontend_Languages` 88/88 both copies (new L6: the QR
+  code line at its English fit in every language, one size, the sample within the label's width without the notice;
+  the creator line's size = fit at 0.95 + adjustment, larger than the old fit; the other families with -2 in Kannada
+  and Hindi); `DryRun_Tuning_Keys` 231/231 both vendors (T7: 0 / -2 / 0 / -2 = the code defaults; the new key).
+  Sizes at 1920 x 1050 (en / kn / ta / hi): instruction 19 / 18 / 13 / 23, connection 20 / 18 / 13 / 32, titles 16 /
+  14 / 13 / 17, hints 18 / 16 / 18 / 16, QR code 23 everywhere.

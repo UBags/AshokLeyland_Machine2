@@ -139,20 +139,24 @@ def currentLanguage() -> str:
     return _current
 
 
-# The properties name of each language, for language.<name>.fontsize.adjustment (CHANGES 157)
+# The properties name of each language, for language.<name>.fontsize.adjustment (CHANGES 157), and the code default
+# of each adjustment (= the properties value; CHANGES 158: Kannada and Hindi -2)
 PROPERTIES_NAMES: Dict[str, str] = {"en": "english", "kn": "kannada", "ta": "tamil", "hi": "hindi"}
+DEFAULT_FONT_SIZE_ADJUSTMENTS: Dict[str, int] = {"en": 0, "kn": -2, "ta": 0, "hi": -2}
 
 
 def fontSizeAdjustment(code: Optional[str] = None) -> int:
     """Points added to every font size the main screen fits to its widgets, for the language shown (CHANGES 157):
-    language.<english|kannada|tamil|hindi>.fontsize.adjustment in the properties file (Hindi -1, the others 0). Read
-    at each fit, so a changed value applies at the next change of language or start."""
-    name = PROPERTIES_NAMES.get(code or _current, "english")
+    language.<english|kannada|tamil|hindi>.fontsize.adjustment in the properties file (Kannada and Hindi -2, English
+    and Tamil 0). Read at each fit, so a changed value applies at the next change of language or start."""
+    code = code or _current
+    name = PROPERTIES_NAMES.get(code, "english")
+    default = DEFAULT_FONT_SIZE_ADJUSTMENTS.get(code, 0)
     try:
         from Configuration import CosThetaConfigurator
-        return int(CosThetaConfigurator.getTuning(f"language.{name}.fontsize.adjustment", 0))
+        return int(CosThetaConfigurator.getTuning(f"language.{name}.fontsize.adjustment", default))
     except Exception:
-        return 0
+        return default
 
 
 def adjustedPointSize(size: int, minimum: int = 4) -> int:

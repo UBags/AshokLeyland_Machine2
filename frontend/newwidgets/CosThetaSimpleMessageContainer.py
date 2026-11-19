@@ -51,6 +51,10 @@ class SimpleMessageContainer(QWidget):
     def getText(self):
         return self._container_label.text()
 
+    def label(self):
+        """The label that shows the text (its font and size are the ones to measure when fitting a font)."""
+        return self._container_label
+
     def setFont(self, newFont):
         self._font = newFont
         self._container_label.setFont(newFont)

@@ -170,11 +170,15 @@ finally:
 check("T6 the same problem is logged once per process", sum("[Configuration] x" in l for l in printed) == 1, str(printed))
 
 # T7 (CHANGES 157): the per-language font size adjustments
-from frontend.FrontendI18n import fontSizeAdjustment, PROPERTIES_NAMES
+from frontend.FrontendI18n import fontSizeAdjustment, PROPERTIES_NAMES, DEFAULT_FONT_SIZE_ADJUSTMENTS
 adjustments = {code: fontSizeAdjustment(code) for code in PROPERTIES_NAMES}
 inFiles = all(f"language.{n}.fontsize.adjustment" in files[name] for name in PROPERTIES for n in PROPERTIES_NAMES.values())
-check("T7 language.<english|kannada|tamil|hindi>.fontsize.adjustment in all three files: 0, 0, 0, -1",
-      inFiles and adjustments == {"en": 0, "kn": 0, "ta": 0, "hi": -1}, str(adjustments))
+fileValues = {code: {int(files[name][f"language.{n}.fontsize.adjustment"]) for name in PROPERTIES}
+              for code, n in PROPERTIES_NAMES.items()} if inFiles else {}
+check("T7 language.<english|kannada|tamil|hindi>.fontsize.adjustment in all three files: 0, -2, 0, -2 (CHANGES 158), "
+      "= the code defaults", inFiles and adjustments == {"en": 0, "kn": -2, "ta": 0, "hi": -2}
+      and adjustments == DEFAULT_FONT_SIZE_ADJUSTMENTS and all(v == {adjustments[c]} for c, v in fileValues.items()),
+      f"{adjustments} files {fileValues}")
 
 passed = sum(1 for _, ok in results if ok)
 failed = [name for name, ok in results if not ok]

@@ -74,7 +74,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `test/i18n/update_frontend_catalogues.py` and translate the new entries; results, button keys, logs and the DB stay
   English. The Indic translations are drafts awaiting a native speaker's review. Main-screen fonts are fitted per
   family with every text measured (`fittingPointSize`, QFontMetrics), then `language.<english|kannada|tamil|hindi>.
-  fontsize.adjustment` added (0 / 0 / 0 / -1; CHANGES 157).
+  fontsize.adjustment` added (0 / -2 / 0 / -2; CHANGES 157, 158). The QR code line: fitted once in English to
+  "QR CODE : " + 30 sample characters, no adjustment, same size in every language; the creator line fills
+  `frontend.creator.fill.share` (0.95) of its label (CHANGES 158).
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.

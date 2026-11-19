@@ -155,8 +155,14 @@ fe.setMaximumSize(16777215, 16777215)   # the frontend fixes its size after show
 fe.setGeometry(0, 0, 1920, 1050)
 fe.setFixedSize(1920, 1050)
 pump(1.5)
+fe._qrCodeFont = None       # the QR code line is fitted once: again for the plant screen's size (CHANGES 158)
 fe.onLanguageChanged()      # refits the fonts to the new size
 pump(0.5)
+from frontend.frontendutils.CosThetaLabelUtils import fittingPointSize as _fit   # noqa: E402
+from PySide6.QtGui import QFont as _QFont                                        # noqa: E402
+_qrBold = _QFont(fe.qrCodeLabel.font()); _qrBold.setWeight(_QFont.Weight.Bold)
+qrStartFit = _fit(fe.qrCodeLabel, [f"   QR CODE : {FE.QR_CODE_SAMPLE}   "], font=_qrBold, widthShare=0.95,
+                  heightShare=0.95, hMargin=-fe.noticeLabel.width() if fe.noticeLabel.isVisible() else 0)
 tiles = fe.resultsContainer.outcomeContainers()
 selector = fe.languageSelector
 check("L4 dropdown with English, Kannada, Tamil, Hindi (own scripts)",
@@ -201,12 +207,37 @@ def fontChecks(code):
     hintSizes = {t.image_label.font().pointSize() for t in tiles}
     check(f"L6 {code}: every tile hint fits 90 % of its picture area, one size for all ({sorted(hintSizes)})",
           not hintTooBig and len(hintSizes) == 1, str(hintTooBig[:2]))
+    # CHANGES 158: the QR code line fitted to "QR CODE : " + 30 sample characters in English, no adjustment, the same
+    # size in every language; the creator line measured on its label with its own font (Segoe UI),
+    # filling 95 % of it, then the adjustment
+    qrLabel = fe.qrCodeLabel
+    qrSizes.add(qrLabel.font().pointSize())
+    shown = f"   {I.tr('QR CODE : ')}{FE.QR_CODE_SAMPLE}   "
+    withoutNotice = qrLabel.width() + (fe.noticeLabel.width() if fe.noticeLabel.isVisible() else 0)
+    check(f"L6 {code}: QR code line at the English fit {qrStartFit} found at start (no adjustment); "
+          f"'{I.tr('QR CODE : ')}' + 30 sample characters within the label's width without the notice",
+          qrLabel.font().pointSize() == qrStartFit and len(FE.QR_CODE_SAMPLE) == 30
+          and QFontMetrics(qrLabel.font()).horizontalAdvance(shown) <= withoutNotice,
+          f"{qrLabel.font().pointSize()} pt, {QFontMetrics(qrLabel.font()).horizontalAdvance(shown)} of {withoutNotice} px "
+          f"({qrLabel.width()} px beside the notice)")
+    creator = fe.creatorStatus.label()
+    creatorFont = creator.font()
+    creatorBold = QFont(creatorFont); creatorBold.setWeight(QFont.Weight.Bold)
+    creatorFit = fittingPointSize(creator, [creator.text()], font=creatorBold, widthShare=FE.CREATOR_FILL_SHARE,
+                                  heightShare=FE.CREATOR_FILL_SHARE, hMargin=10, vMargin=10)
+    oldFit = fittingPointSize(creator, [f"   {creator.text()}   "], font=creatorBold, widthShare=0.8, heightShare=0.8)
+    check(f"L6 {code}: creator line {creatorFont.family()}, size fit {creatorFit} + adjustment {adjustment} "
+          f"(0.8 share with padding gave {oldFit})",
+          creatorFont.family() == "Segoe UI"
+          and creatorFont.pointSize() == max(4, creatorFit + adjustment) and creatorFit > oldFit,
+          str(creatorFont.pointSize()))
     titleFit = min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles)
     check(f"L6 {code}: tile titles at fit {titleFit} + adjustment {adjustment}",
           tiles[0].title_label.font().pointSize() == max(4, titleFit + adjustment),
           str(tiles[0].title_label.font().pointSize()))
 
 
+qrSizes = set()
 fontChecks("en")
 for code in ("kn", "ta", "hi"):
     selector.setCurrentIndex(selector.findData(code))
@@ -233,6 +264,7 @@ for code in ("kn", "ta", "hi"):
         folder = pathlib.Path(args.screenshots)
         folder.mkdir(parents=True, exist_ok=True)
         fe.grab().save(str(folder / f"frontend_{code}.png"))
+check("L6 the QR code line has one size in all four languages", len(qrSizes) == 1, str(sorted(qrSizes)))
 selector.setCurrentIndex(selector.findData("en"))
 pump(1.0)
 check("L4 back to English", [t.title_label.text() for t in tiles] == englishTitles

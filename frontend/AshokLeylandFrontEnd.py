@@ -601,21 +601,39 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     # The font fits below (CHANGES 157): each text measured with QFontMetrics (fittingPointSize - the drawn width and
     # height, not the number of characters), the largest size at which the texts fit the share of the widget the old
-    # code used (0.95 or 0.8), then the language's adjustment (language.<name>.fontsize.adjustment; Hindi -1).
-    # Call after self.show() and QApplication.processEvents() (the widgets have their real size), and again after a
-    # change of language (onLanguageChanged).
-    def _fitBold(self, widget, texts, share: float) -> QFont:
-        font = QFont(widget.font())
+    # code used (0.95 or 0.8), then the language's adjustment (language.<name>.fontsize.adjustment; Kannada and Hindi
+    # -2, CHANGES 158). Call after self.show() and QApplication.processEvents() (the widgets have their real size), and
+    # again after a change of language (onLanguageChanged).
+    # A SimpleMessageContainer (date / time, creator) is measured on its inner label, with the label's font: before
+    # CHANGES 158 the container's own font was measured - the application's default font, not the label's Segoe UI -
+    # and that default font was then set on the label, so the creator line lost its face (and was fitted wrongly).
+    def _fitBold(self, widget, texts, share: float, hMargin: int = 0, vMargin: int = 0, adjust: bool = True) -> QFont:
+        target = widget.label() if hasattr(widget, "label") else widget
+        font = QFont(target.font())
         font.setWeight(QFont.Weight.Bold)
-        font.setPointSize(adjustedPointSize(fittingPointSize(widget, texts, font=font, widthShare=share,
-                                                             heightShare=share)))
+        size = fittingPointSize(target, texts, font=font, widthShare=share, heightShare=share, hMargin=hMargin,
+                                vMargin=vMargin)
+        font.setPointSize(adjustedPointSize(size) if adjust else size)
         return font
 
     def calculateAndSetIdealFontForModeLabel(self):
         self.modeLabel.setFont(self._fitBold(self.modeLabel, [f"       {self.modeLabel.text()}       "], 0.95))
 
+    # The QR code line is fitted to "QR CODE : " and 30 sample characters, in English, whatever language is shown, and
+    # without the language's adjustment: one size for every language and every QR code (CHANGES 158; before, the
+    # text shown when it was fitted - "QR CODE : " alone - so a real QR code could run past the widget). Fitted once,
+    # at the first call (after the window is shown), to the label's width without a notice (the label shares its row
+    # with the notice, which comes and goes: a notice shown at that moment is added back), so the size does not depend
+    # on what was on the screen at start. Later calls (a change of language) set the same size again. A notice shown
+    # next to a long QR code narrows the label and can cut the code's end (centred text).
+    QR_CODE_SAMPLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123"
+
     def calculateAndSetIdealFontForQRCodeLabel(self):
-        self.qrCodeLabel.setFont(self._fitBold(self.qrCodeLabel, [f"   {self.qrCodeLabel.text()}   "], 0.95))
+        if getattr(self, "_qrCodeFont", None) is None:
+            notice = self.noticeLabel.width() if self.noticeLabel.isVisible() else 0
+            self._qrCodeFont = self._fitBold(self.qrCodeLabel, [f"   QR CODE : {self.QR_CODE_SAMPLE}   "], 0.95,
+                                             hMargin=-notice, adjust=False)
+        self.qrCodeLabel.setFont(self._qrCodeFont)
 
     def calculateAndSetIdealFontForDateTimeLabel(self):
         self.dateTimeStatus.setFont(self._fitBold(self.dateTimeStatus, [f"   {self.dateTimeStatus.getText()}   "], 0.8))
@@ -631,8 +649,14 @@ class AshokLeylandFrontEnd(QMainWindow):
             t.setFixedPointSize(size)
         return size
 
+    # The creator line: the largest size at which it fills frontend.creator.fill.share (0.95; it was 0.8, with three
+    # spaces each side) of its label, less the stylesheet's border and padding (3 + 2 px each side), then the
+    # language's adjustment (CHANGES 158)
+    CREATOR_FILL_SHARE: float = CosThetaConfigurator.getTuning("frontend.creator.fill.share", 0.95, minimum=0.1)
+
     def calculateAndSetIdealFontForCreatorLabel(self):
-        self.creatorStatus.setFont(self._fitBold(self.creatorStatus, [f"   {self.creatorStatus.getText()}   "], 0.8))
+        self.creatorStatus.setFont(self._fitBold(self.creatorStatus, [self.creatorStatus.getText()],
+                                                 AshokLeylandFrontEnd.CREATOR_FILL_SHARE, hMargin=10, vMargin=10))
 
     def setupMenu(self):
         """Set up menubar."""

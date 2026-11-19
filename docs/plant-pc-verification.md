@@ -222,6 +222,8 @@ On the Machine 2 PC, with the new exe:
    --compile`, then a new build).
 6. (CHANGES 157) In each language no instruction, connection message, tile title or tile hint is cut off; in Hindi the
    texts are one point smaller than the fit (`language.hindi.fontsize.adjustment=-1`), in the others at the fit.
+   Since CHANGES 158: Kannada and Hindi two points smaller (`-2`); the QR code line has the same size in all four
+   languages, with room for a 30-character code after "QR CODE :"; the creator line is larger than before.
    Reported by Uddi on 2026-11-19: the dialogs show Kannada, Tamil and Hindi correctly.
 
 ## 12. Exit: the DB server drains, MainProgram waits for it (CHANGES 157)
