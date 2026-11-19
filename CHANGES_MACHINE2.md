@@ -5360,3 +5360,20 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run (sandbox): `DryRun_Cap_Production_Path --holes morphology` 12/12 (was 8/12 here); without `--holes` 8/12 here
   (no YOLO: the hub check cannot run - said so in its output); Machine 1 copy: seating off, skipped. `DryRun_Cap_Check`
   and `DryRun_Bung_Check` need the YOLO weights even with `--holes morphology` (cap mask, bung holes): laptop.
+
+## 172. Bung window: where each check's time goes (2026-11-20)
+
+- **Uddi's Bung window run** (67 pictures, each as DOST and DOSTPLUS): no picture OK as both models; 12 OK as DOST, 15
+  as DOSTPLUS, all SEATED at 2.0 - 7.0 px; the pictures matching A05 / C14 (42.7 / 16.8 px), A17 (99.0) and B10 (63.7)
+  NOT OK. Times: OK 2.4 - 2.9 s (4.6 s the first), NOT OK up to 9.3 s.
+- **Sequence in the code** (as at `8a57f85`): the bung's hole pattern of the model's count, gamma by gamma (2.0, 7.75,
+  4.0, 6.5, 1.0) until a definitive answer (a square on a DOSTPLUS part = NOT OK); only when it passed, the seating step:
+  the hub's holes -> not found NOT SEATED -> seated position, face rules. One step outside that order: when the seating
+  step did not run (pattern failed, or no pattern at any gamma), `CheckBung.drawSeatingMarks` still looks for the hub's
+  holes, only to draw the reference oval on the NOT OK picture (CHANGES 157). With the dark blobs that took
+  milliseconds; with YOLO + MobileSAM up to all 6 gammas (3 - 4 s when the holes are covered), in production too. In
+  the dry run the hub check it runs on the picture first (not in production) adds to it.
+- **Changed (dry run only):** the Bung window prints a TIMES line per check: bung holes (and how many gammas), hub
+  holes in the seating step, the seating step's face part, hub holes for the marks only, the rest, and the dry run's
+  own hub check (not in production) separately.
+- Not run here: the window (tkinter / YOLO) - parsed only.

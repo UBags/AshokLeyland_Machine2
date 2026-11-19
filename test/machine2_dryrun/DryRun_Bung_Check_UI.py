@@ -129,8 +129,18 @@ class BungCheckWindow:
             BS.BungSegmenter.get_instance()                      # loads MobileSAM + YOLO once
             original = BS.BungSegmenter.segment_holes_single
 
+            self.times = {}
+            self.inSeating = False
+
+            def add(key, seconds):
+                self.times[key] = self.times.get(key, 0.0) + seconds
+                if key == "bung holes":
+                    self.times["gammas"] = self.times.get("gammas", 0) + 1
+
             def recording(segmenter, preprocessed_image, gamma, expected_count, model_type):
+                t = time.perf_counter()
                 result = original(segmenter, preprocessed_image, gamma, expected_count, model_type)
+                add("bung holes", time.perf_counter() - t)
                 self.last["result"] = result                     # the last call is the deciding gamma
                 return result
 
@@ -138,11 +148,42 @@ class BungCheckWindow:
             originalSeating = BS.check_bung_seating
 
             def recordingSeating(image_rgb, components, model_type):
-                result = originalSeating(image_rgb, components, model_type)
+                self.inSeating = True
+                t = time.perf_counter()
+                try:
+                    result = originalSeating(image_rgb, components, model_type)
+                finally:
+                    add("seating", time.perf_counter() - t)
+                    self.inSeating = False
                 self.last["seating"] = result
                 return result
 
             BS.check_bung_seating = recordingSeating
+            # step times (CHANGES 172): the hub's holes in the seating step / only for the marks on a picture whose
+            # seating did not run (CheckBung.drawSeatingMarks); the dry run's own hub check (production has state 5's)
+            from camera.FindHubHoles import FindHubHoles
+            originalFind = FindHubHoles.findHoles
+
+            def timedFind(anImage, model, hubCentre=None):
+                t = time.perf_counter()
+                try:
+                    return originalFind(anImage, model, hubCentre)
+                finally:
+                    add("hub holes (seating)" if self.inSeating else "hub holes (marks only)", time.perf_counter() - t)
+
+            FindHubHoles.findHoles = staticmethod(timedFind)
+            if FindHubHoles.hubCentreFromPicture is not None:
+                originalHubCheck = FindHubHoles.hubCentreFromPicture
+
+                def timedHubCheck(anImage, model):
+                    t = time.perf_counter()
+                    try:
+                        return originalHubCheck(anImage, model)
+                    finally:
+                        add("dry-run hub check (seating)" if self.inSeating else "dry-run hub check (marks only)",
+                            time.perf_counter() - t)
+
+                FindHubHoles.hubCentreFromPicture = staticmethod(timedHubCheck)
             self.BS = BS
             self.checks = {CHECKS[0]: CheckBung.checkBung, CHECKS[1]: CheckNoCapBung.checkNoCapBung}
             self.results.put(("ready",
@@ -206,6 +247,7 @@ class BungCheckWindow:
                 continue
             for asModel in (("DOST", "DOSTPLUS") if model == "Both" else (model,)):
                 self.last.clear()
+                self.times = {}
                 if _recorder is not None:
                     _recorder.clear()
                 t0 = time.time()
@@ -229,6 +271,7 @@ class BungCheckWindow:
                       flush=True)
                 if hubHoles:
                     print(f"HUBHOLES {path.name:28s} as {asModel:8s}  {_recorder.text(hubHoles)}", flush=True)
+                print(f"TIMES    {path.name:28s} as {asModel:8s}  {self.timesText(seconds)}", flush=True)
                 if seat is not None:
                     reason += f"; seating: {'SEATED' if seat['seated'] else 'NOT SEATED'} - {seat['reason']}"
                 shown = self.decorate(image, marked, ok, holes)
@@ -243,6 +286,21 @@ class BungCheckWindow:
                 if self.stopRequested.is_set():
                     break
         self.results.put(("done", None))
+
+    def timesText(self, total: float) -> str:
+        """Where the check's time went: the bung's holes (gammas), the seating step (its hub holes and the dry run's hub
+        check inside it), the hub holes looked for only to draw the marks, the rest. The dry run's hub check is not in
+        production (state 5 gives the centre)."""
+        t = self.times
+        hubCheckSeat, hubCheckMarks = t.get("dry-run hub check (seating)", 0.0), t.get("dry-run hub check (marks only)", 0.0)
+        holesSeat = t.get("hub holes (seating)", 0.0) - hubCheckSeat
+        holesMarks = t.get("hub holes (marks only)", 0.0) - hubCheckMarks
+        seatingRest = t.get("seating", 0.0) - t.get("hub holes (seating)", 0.0)
+        accounted = t.get("bung holes", 0.0) + t.get("seating", 0.0) + t.get("hub holes (marks only)", 0.0)
+        return (f"total {total:.2f} s = bung holes {t.get('bung holes', 0.0):.2f} s ({t.get('gammas', 0)} gammas)"
+                f" + hub holes {holesSeat:.2f} s + seating face {seatingRest:.2f} s"
+                f" + hub holes for the marks only {holesMarks:.2f} s + other {total - accounted:.2f} s"
+                f"  [dry run's own hub check, not in production: {hubCheckSeat + hubCheckMarks:.2f} s]")
 
     def holes(self):
         """Centres of the holes the deciding gamma found, in full-picture coordinates."""
