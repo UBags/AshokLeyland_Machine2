@@ -110,7 +110,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
 - Torque OK / NOT OK is the PLC's decision; the PC only records the values.
-- The split pin + washer check stays a placeholder (OK whenever a QR code is known) until production pictures exist.
+- Split pin + washer check (CHANGES 162): washer region round the nut, blue-marked legs, NOT OK when more than 2 marker
+  pixels lie more than 8 px outside the washer. Values from 3 OK parts (19 pictures) - strict like the bung check; the
+  NOT OK pictures 113431189 / 113432153 equal the OK frame 113433320 (camera noise) and pass - label to be confirmed.
 - IOServer reset rule: at start, cycle end and every abort one routine resets every per-cycle tag (not the settings)
   with retries and read-back, then arms `PLC_PC_CheckQRCode`. After a lost PLC connection: the last PLC_PC tag the
   PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
@@ -145,6 +147,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time; hub-centre distance lines (CHANGES 128, 129, 143) | Not reported yet |
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
+| 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -197,7 +200,7 @@ No per-check times were recorded with the report; when they are, put them in the
   cannot be judged there - say so rather than guessing.
 - Most used: `Verify_Vision_Config_Equivalence.py` (both folders), `DryRun_IOServer_Fault_Scenarios.py`,
   `DryRun_Knuckle_Frame.py --quick`, `DryRun_Vision_Check_Timeout.py`, `DryRun_Cap_Check.py`,
-  `DryRun_Cap_Production_Path.py`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`, `DryRun_Frontend_Languages.py`,
+  `DryRun_Cap_Production_Path.py`, `DryRun_SplitPin_Check_UI.py --auto`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`, `DryRun_Frontend_Languages.py`,
   `DryRun_All_Checks_UI.py` (window; `--auto` without one).
 - Sandbox notes: Python 3.13 has torch / OpenCV but no tkinter; Python 3.12 has Tk (and PySide6 under Xvfb) but no
   torch - windows are driven on 3.12 with the camera modules stood in, the real checks on 3.13 without a window.

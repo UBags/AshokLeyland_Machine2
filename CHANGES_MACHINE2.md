@@ -5030,3 +5030,54 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   texts translated in kn / ta / hi; "Done" within 90 % of both press displays in all four languages, size in the style
   sheet; refitted on a change of language; a text too wide at 36 pt made smaller until it fits; a torque keeps 36 pt;
   the row's 7 tiles one width with "Done" and a torque shown).
+
+## 162. Split pin and washer check: washer, blue-marked legs, legs turned round the nut (2026-11-19)
+
+- **User:** an algorithm for state 20 from the OK / NOT OK pictures: the washer must cover the nut (no washer = NOT OK);
+  each leg of the split pin is marked blue; good = both legs firmly turned round so that the pin locks the nut; the pin
+  goes in either way. Until now the check was a placeholder (OK whenever a QR code was known).
+- **Pictures:** 19 OK, 60 NOT OK (Machine 2 camera 192.168.250.64, 1280 x 720, 2026-11-19), after the user's relabelling
+  (2026111911464227, 2026111911361513, 113449396, 112729124, 113433320 moved to OK). They are bursts of a few parts:
+  the 19 OK are 3 parts; many NOT OK frames are the same part seconds before its OK frame. Kept in
+  `test/machine2_dryrun/splitpin_images/OK` and `NOT_OK` (13 MB).
+- **Found while measuring:** a leg that is straight, half bent, standing up or bent outwards ends beyond the washer's
+  edge; a leg turned round lies on the washer. A circle at the scallop tips misses legs lying in the valleys between
+  scallops, so the distance is measured from the washer's own outline. The bluish dark ring round the washer (S 72 - 104,
+  V 44 - 67) passed a loose blue threshold; the marker is taken at S >= 90, V >= 55.
+- **Check** (`camera/CheckSplitPinAndWasher.py`, `measure` / `markedPicture` / `checkSplitPinAndWasher`), on the part of
+  the picture within 222 px of `vision.splitpin.centre` (644,345):
+  1. washer = largest region with V >= 160, S <= 70 within 100 px of the centre (closed 9 x 9); circle fitted to its
+     outline. NOT OK if missing or smaller than 2,500 px (washer not found), tip radius (95th percentile of the outline)
+     outside 44 - 56 px (outline not round: out of place, or something pale - an unsplit pin - across it), or seen round
+     less than 90 % of the circle (does not cover the nut);
+  2. blue marker: hue 100 - 130, S >= 90, V >= 55, within 120 px of the washer centre, opened 2 x 2; fewer than 100 px
+     -> NOT OK (legs not found);
+  3. more than 2 marker pixels farther than 8.0 px outside the washer (distance transform of the filled washer) -> NOT OK
+     (a leg not turned round the nut).
+  Picture: washer outline green / red, the blue beyond the washer outlined red; values and reason in the log line
+  `CheckSplitPinAndWasher: OK|NOT OK in <s> - <reason>; washerArea ..., centre ..., tipRadius ..., cover ...,
+  markerPixels ..., outsidePixels ..., outsideMax ...`. No QR code or no picture -> NOT OK as before. The camera server's
+  vote (2 of 3 pictures) is unchanged.
+- **Measured:** OK pictures: washer region 3,689 - 4,640 px, tip radius 49.2 - 51.4, cover >= 0.986, marker >= 204 px,
+  at most 2 marker px beyond 8 px (furthest 8.6 px). NOT OK: 58 of 60 NOT OK. The 2 that pass, 113431189 and
+  113432153, are the same scene as the OK picture 113433320 taken 1 - 2 s later: mean difference 2.0 grey levels on a
+  blurred crop, the same as two frames of a still part (two different parts: about 26) - they cannot be told apart by
+  any picture rule; please confirm their label. **The margin is small:** the nearest NOT OK pictures (113448348,
+  113447333) have 3 and 5 pixels beyond 8 px against at most 2 on the OK ones, and are themselves 2.5 - 3 grey levels
+  from the OK frame 113449396. Strict on purpose (as the bung check): a doubtful picture is NOT OK. The values come
+  from 3 OK parts; more OK parts (one picture each, both directions) and a picture without a washer would firm them up.
+  Time: about 8 ms per picture on the sandbox CPU (the whole picture: 32 ms; same results and pictures).
+- **Configurable:** 17 keys `<vendor>.vision.splitpin.*` (centre, search radius, washer V / S / close kernel / area /
+  tip radius / cover, marker hue / S / V / search radius / pixels, leg outside distance / pixels) in the three
+  properties files; the allenbradley values are the Machine 2 values until Machine 1 is measured. Reference commits
+  996071e (logic) and 1e87cf6 (the part round the nut), `baseline_per_file` of both manifests at 1e87cf6.
+- **Dry run:** `DryRun_SplitPin_Check_UI.py` (both folders; the Machine 1 copy uses the Machine 2 pictures): window with
+  the check's own picture (zoom on the nut, on at start), verdict, expected verdict from OK/ / NOT_OK/, check time,
+  reason and values; Only mismatches; Save marked pictures; `--auto [folder]` without a window, exit 0 when every
+  labelled picture matched apart from the two named above. `DryRun_All_Checks_UI.py` now loads an OK split pin picture
+  from the dry-run folder by default.
+- Run: `DryRun_SplitPin_Check_UI.py --auto` both copies: 19/19 OK right, 58/60 NOT OK right, the 2 known, PASS; window
+  driven under Xvfb (Python 3.12). `Verify_Vision_Config_Equivalence.py` both: ALL EQUIVALENT (380 parameters, 13
+  files). `DryRun_All_Checks_UI.py --auto` (Machine 2): split pin OK in the vote; the other checks there need the model
+  weights, not in this sandbox. `DryRun_Tuning_Keys` 231/231, `DryRun_Logging_And_Live_Config` 37/37,
+  `DryRun_Camera_State_File` 19/19, `DryRun_Vision_Check_Timeout` 22/22 - each on both copies.

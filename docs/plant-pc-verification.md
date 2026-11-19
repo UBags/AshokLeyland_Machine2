@@ -240,6 +240,17 @@ On the Machine 2 PC, with the new exe:
 4. Any `[Configuration] ...` line in the log at start-up names a properties key that is missing or has a value of the
    wrong type: correct the properties file.
 
+## 13. Split pin and washer check (CHANGES 162)
+
+1. On the laptop: `python test\machine2_dryrun\DryRun_SplitPin_Check_UI.py` - go through the pictures (zoom on the
+   nut): green washer outline on the OK ones, red outline and the leg beyond the washer outlined red on the NOT OK
+   ones. `--auto` prints `RESULT: PASS`.
+2. On the machine: a pin with both legs turned round and pressed down -> OK; one leg left straight, half bent or
+   standing up -> NOT OK; no washer -> NOT OK. The log line `CheckSplitPinAndWasher: OK|NOT OK in <s> - ...` per
+   picture (three per check) gives `tipRadius`, `cover`, `markerPixels`, `outsidePixels`, `outsideMax`.
+3. Send the lines of a shift (and the pictures of any OK part called NOT OK, or the reverse): the limits come from 3
+   OK parts; `vision.splitpin.leg.outside.distance` (8.0) / `.pixels.max` (2) are the ones to look at.
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -257,3 +268,4 @@ On the Machine 2 PC, with the new exe:
 | 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time; hub-centre distance lines (CHANGES 143) | | | | |
 | 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | 2026-11-19 | | Dialogs: passed | Reported by Uddi: the dialogs come out correctly in the Indic scripts; the rest not reported yet |
 | 12 Exit: drained line; with PostgreSQL down the record in FailedRecords; no `[Configuration]` lines (CHANGES 157) | | | | |
+| 13 Split pin and washer: dry-run window; turned legs OK, straight / half-bent / standing leg NOT OK, no washer NOT OK; log lines of a shift (CHANGES 162) | | | | |

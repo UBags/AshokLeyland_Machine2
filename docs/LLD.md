@@ -84,7 +84,7 @@ The trigger in each state is the tag read in that state; the write states write 
 | 16/17 | No bung | CheckNoBung | Handshake. OK → 18 |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | Station2TorqueValueSet | → 19 |
 | 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue, RotationDuringTighteningDone | To FE; reset after 2.0 s → 20 |
-| 20/21 | Split pin and washer | CheckSplitPinAndWasher | Handshake. OK → 22 |
+| 20/21 | Split pin and washer | CheckSplitPinAndWasher (washer + blue legs inside it, CHANGES 162) | Handshake. OK → 22 |
 | 22/23 | Cap | CheckCap | Handshake. OK → 24 |
 | 24/25 | Bung for cap press | CheckBungForCapPress | Handshake. OK → 26 |
 | 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset after 1.5 s → 27 |
@@ -548,7 +548,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Cap_Silver_Seating.py` | Silver cap seating, two rules (CHANGES §129): seated SEATED, skewed NOT SEATED, face fit alone separates them, hub centre uncovered on the cap pushed off the bore, no / blank hub picture -> rule 1 not checked |
 | `DryRun_Cap_Hub_Distance.py` | Cap seating by the hub-centre distance (CHANGES §143; §152: H6 / H7 the holes in the cap picture, C3 / C4 hub source cap; Machine 1: H6 / H7 skipped): hub centre from 4 / 5 holes or bolts, kept with the cycle (worker, state file, end of cycle), production cap mask = the frozen window's, the rule within / not within, checkCap OK / NOT OK by the hub centre |
 | `DryRun_Cap_Hub_Distance_UI.py` | Window / `--batch` (CHANGES §144; §152: Hub source "cap holes" - no hub picture needed): hub check on a chosen hub picture -> hub centre; cap check with it on every picture of a caps folder; every value and the suggested offset / max from the seated caps; `--hub-folder` / Hub folder (pair by time) (§150): each cap against the hub picture of its own cycle; `--hub-from-cap` / Hub from the cap picture (§151): the hub check on the cap picture itself |
-| Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` | The real check on a folder of pictures, shown one at a time |
+| Windows: `DryRun_Knuckle_Check_UI`, `DryRun_Hub_Check`, `DryRun_TopBearing_Check`, `DryRun_NutWasher_Check`, `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI`, `DryRun_SplitPin_Check_UI` (also `--auto`, CHANGES 162) | The real check on a folder of pictures, shown one at a time |
 | `DryRun_Bung_Hub_Holes.py` | Bung seated position from the hub's holes in the bung picture (CHANGES §153): the 60 bung pictures of 13 Nov with stored hole-pattern centres; good SEATED, bad NOT SEATED, holes hidden NOT SEATED, picture moved, source fixed |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |

@@ -90,7 +90,8 @@ STATIONS = [
      ("bung.outer.disc.center",), None),
     ("nobung", "No Bung", MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, ("nobung.nut.detection.center",),
      "nut_washer_images/{T}_nut_01.jpg"),
-    ("splitpin", "Split Pin and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, (), None),
+    ("splitpin", "Split Pin and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, (),
+     "splitpin_images/OK/192.168.250.64_01_20261119113613847.jpg"),
     ("cap", "Cap", MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, ("cap.center",), "cap_images/{T}_cap_01.jpg"),
     ("bung2", "Bung (Cap Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, ("bung.outer.disc.center",), None),
 ]

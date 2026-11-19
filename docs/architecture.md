@@ -105,7 +105,7 @@ Read the columns as follows:
 | 8 Component press | 16 | `PLC_PC_ComponentPressDone` | Notify FE | — |
 | 9 Bung removed | 17 → 18 | `PLC_PC_CheckNoBung` | Camera: CheckNoBung | `PC_PLC_NoBungCheckOK/Done` |
 | 10 Torque round 2 | 19, 20 | same Station2 tags as step 5 | As step 5 | — |
-| 11 Split pin and washer | 21 → 22 | `PLC_PC_CheckSplitPinAndWasher` | Camera: CheckSplitPinAndWasher (**stub**) | `…OK/Done` |
+| 11 Split pin and washer | 21 → 22 | `PLC_PC_CheckSplitPinAndWasher` | Camera: CheckSplitPinAndWasher (washer + blue legs, CHANGES 162) | `…OK/Done` |
 | 12 Cap | 23 → 24 | `PLC_PC_CheckCap` | Camera: CheckCap | `PC_PLC_CapCheckOK/Done` |
 | 13 Bung before cap press | 25 → 26 | `PLC_PC_CheckBung` | Camera: CheckBung | `PC_PLC_BungCheckOK/Done` |
 | 14 Cap press | 27 | `PLC_PC_CapPressDone` | Notify FE | — |
@@ -287,7 +287,7 @@ A NOT OK result also sends `alarm.q`, which plays BadComponent.wav.
 | Nut and plate washer | Hex nut present; washer covers the bearing ring | NutDetector (YOLO + MobileSAM, hexagon rules); washer by colour difference from the top-bearing image inside the bearing ring | Nut found **and** diffR above 0.55 and diffRB above 5.57 | none (parsed only) |
 | NoCapBung (state 14) / Bung (state 25) | Bung placed correctly | YOLO + MobileSAM hole segmentation | DOST: 4 holes in a square. DOSTPLUS: 2 holes 75–100 px apart | model |
 | NoBung (state 17) | Bung removed | NutDetector only (a visible nut is taken to mean the bung is gone) | Nut found | none |
-| **Split pin and washer** | — | **Stub: returns True whenever a QR code exists** (`CheckSplitPinAndWasher.py:27-29`) | **Always passes** | — |
+| **Split pin and washer** | — | Washer region round the nut (present, round, all round); blue-marked legs; NOT OK when a leg ends more than 8 px outside the washer (CHANGES 162; was a stub) | Real check | — |
 | Cap | Cap present and the right colour | Brightness delta against the hub, top-bearing and nut images; R−B colour | DOST deltas 30/30/35 and R−B below −1. DOSTPLUS deltas 35/50/35 and R−B above 15 | model |
 
 ### Models
@@ -363,7 +363,7 @@ The web service and the MI dashboard query the old `hub_and_disc_assembly_schema
 
 | # | Severity | Finding | Where | Status |
 |---|---|---|---|---|
-| R1 | **High (safety/quality)** | The split pin and washer check is a stub that always passes | `camera/CheckSplitPinAndWasher.py:27-29` | V |
+| R1 | **High (safety/quality)** | The split pin and washer check is a stub that always passes | `camera/CheckSplitPinAndWasher.py:27-29` | V (resolved in CHANGES 162) |
 | R2 | **High** | Heartbeat-driven abort disabled (`currentStatus = True`); a dead camera, QR or DB server never stops the cycle | `IOServer.py:960-965` | V |
 | R3 | **High** | Camera results are not matched to the state. IO accepts whatever is on `camera2io.q` (`readDataInIOServerFromCameraServer` ignores the returned state, `IOServer.py:1140`), and the camera is never told about an abort. A check still running at E-stop can post its result **after** the queue clear; that result is then consumed at the next WRITE state of the following cycle (the knuckle step) | `IOServer.py:1140-1167`, `RedisUtils.py:2375` | I (race; timing-dependent) |
 | R4 | **High** | No timeout in WRITE states. If the camera sends nothing or a result tagged `INVALID_STATE` (e.g. camera disconnected: `TakePictures` returns an INVALID item, `CameraProcessorServer.py:257-259`), IO neither advances nor retries and waits forever. `MAX_SECONDS_TO_WAIT_FOR_CAMERA_FEEDBACK` is defined but unused (and, inside an IntEnum, it silently becomes an alias of state 5) | `IOServer.py:1161`, `StateMachine.py:38` | V |

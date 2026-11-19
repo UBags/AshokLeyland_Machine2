@@ -64,7 +64,9 @@ is not known whether that was their spindles (side) or the hub's own seating.
 | Bung seated position `bung.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
 | Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it; silver hub circle: prompt ring r 95 + box ±125 round it in the hub picture (CHANGES 129); cap mask: disc r 160 round it (CHANGES 143) |
 
-The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`) has no position: it is a placeholder.
+The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`, CHANGES 162): `splitpin.centre` (644, 345),
+washer looked for within 100 px of it (tip radius 44 - 56 px; the 19 OK pictures of 19 Nov: 49.2 - 51.4, centres
+(643 - 649, 339 - 346)), blue legs within 120 px of the washer centre. Not placed by the knuckle frame.
 
 ## Measured feature positions behind these settings (13 Nov pictures)
 

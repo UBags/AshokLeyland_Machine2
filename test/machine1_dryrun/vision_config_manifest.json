@@ -12,7 +12,8 @@
     "camera/KnuckleLocator.py": "f3aa0ed",
     "camera/VisionFrame.py": "2376cf9",
     "camera/CheckNoBung.py": "0ff5470",
-    "camera/CapMaskFinder.py": "fb8f11f"
+    "camera/CapMaskFinder.py": "fb8f11f",
+    "camera/CheckSplitPinAndWasher.py": "1e87cf6"
   },
   "extracted": {
     "vision.bung.dostplus.hole.pair.distance.max": {
