@@ -5179,3 +5179,33 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `DryRun_SplitPin_Check_UI --auto` both PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance` 15/15
   (Machine 2); `DryRun_Tuning_Keys` 231/231, `DryRun_Camera_State_File` 19/19, `DryRun_Vision_Check_Timeout` 22/22 both;
   the SAM path with the stand-in as above. Not run: anything with the real YOLO (laptop).
+
+## 165. Hub holes by SAM: offsets from the laptop run; DOST hole circle 140 - 155; bolts seed moved in the dry runs too (2026-11-19)
+
+- **User's laptop runs (real YOLO):** `DryRun_Hub_Holes_SAM.py --wrong-model` - 161 pictures compared; asked for the
+  other model, never found; SAM did not find the holes on 7 pictures where the dark blobs did: bung A02, A17, A18, B04,
+  B05, B10 (all labelled bad - a bung off its place covering holes; NOT OK is the right verdict there) and split pin
+  112450874 (a NOT OK picture). Every good picture: found. Times 0.9 - 2 s (wide pass + thin pass), 0.5 s with a seed.
+  `--seed hubcheck` (the real hub check as the seed, as in production): 10/10, SAM holes - hub check centre
+  (+0.1, -0.4) DOST holes, (0.0, -0.3) DOSTPLUS holes, (-0.65, +3.65) DOSTPLUS bolts (one picture).
+- **Found in the numbers:** DOSTPLUS SAM centres are steady (sd 0.2 - 0.6 px against the dark blobs). DOST groups came
+  in three circle radii, each with its own centre: r ~147 (26 split pin pictures, morph - SAM dy -6.9), r ~149 (39,
+  -5.2), r ~161 (13, -3.0) - for one still part (11:46, 6 frames) the SAM centre moved 3.4 px in y while the dark blobs
+  moved 0.7. r ~147 went with seeds from the bolts (41 of 46; the dry run's wide-pass seed from bolts was not moved by
+  the bolts offset - seed 4.5 - 5.8 px off), r ~149 with good seeds (holes seeds, or bolts seeds 2 - 4.5 px off), r ~161
+  is not the holes' circle (holes 147 - 151) - most likely stud slivers at the annulus edge.
+- **Changed:** `vision.hubholes.sam.radius` 140 - 165 -> 140 - 155 (the r ~161 groups refused, the next gamma tried);
+  the dry-run seed from the hub check's annulus moved by the bolts offset when that pass took the bolts, as production
+  moves the hub check's; `sam.seed.bolts.offset.dostplus` -0.7,3.6 -> -0.7,3.7 (measured). Reference commit c18d18f
+  (FindHubHoles, CheckSplitPinAndWasher); both manifests.
+- **Offsets for the SAM centres** (Machine 2; from the r ~149 groups = good seeds, morph - SAM mean added to the dark-blob
+  offsets): cap 0.2,-0.1 -> **0.4,-4.8** (7 pictures, sd 0.6 / 1.2) and -0.6,-5.3 -> **-0.7,-4.4** (14, sd 0.2 / 0.4);
+  bung 4.9,-13.7 -> **5.2,-17.9** (4, sd 0.6 / 1.3) and 4.2,-16.0 -> **4.5,-15.8** (29, sd 0.4 / 0.6); split pin
+  1.8,1.6 -> **0.9,-3.6** (39, sd 1.1 / 0.7) and DOSTPLUS -> **1.9,2.1** (no DOSTPLUS split pin pictures: the DOST washer
+  offset with the DOSTPLUS SAM / dark-blob shift of the cap, bung and hub pictures). Machine 1 (allenbradley) cap / bung
+  offsets stay 0,0; split pin and hubholes values follow Machine 2 (code defaults).
+- **Not settled:** the DOST cap and bung offsets rest on 7 and 4 pictures; the DOST spread with good seeds is still
+  about 1.2 px sd in y - the cap allows 5 px. To be confirmed by a laptop re-run after this change: DOST groups at r ~149
+  only, `--seed hubcheck` holes - hub check about 0, and the split pin parts' SAM centres steady within a part.
+- Run: verifier both ALL EQUIVALENT (395 parameters); `DryRun_SplitPin_Check_UI --auto --holes morphology` both PASS
+  79/79; `DryRun_Tuning_Keys` both 231/231. Not run: anything with YOLO (sandbox).

@@ -264,13 +264,13 @@ passes is taken - a better-spaced set of wrong blobs cannot hide the holes (abou
 cap, hub and bung pictures of the dry-run folders); False = the most evenly spaced combination first, then checked
 (§152). Not found: the reason of the most informative percentile tried (a circle failing the fewest checks, then a
 circle, then the most blobs), not the last one's (§157). Holes not found -> NOT seated. Target = hole circle centre +
-`seating.hub.distance.offset.cap.<dost|dostplus>` (Machine 2 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
+`seating.hub.distance.offset.cap.<dost|dostplus>` (Machine 2 since §165, for the SAM centres: 0.4,-4.8 / -0.7,-4.4; with the dark blobs 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
 caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
 move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position (CHANGES §153, `seating.position.source=hubholes`: `BungSegmenter.seated_position` = the
 hub's hole circle round the bung in the bung picture itself, `FindHubHoles.findHoles` (CHANGES §164) with the model's 4 / 5 holes, plus
-`seating.hub.offset.<dost|dostplus>` (Machine 2 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
+`seating.hub.offset.<dost|dostplus>` (Machine 2 since §165: 5.2,-17.9 / 4.5,-15.8; with the dark blobs 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
 seated centres below, as before), the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
@@ -286,13 +286,13 @@ dark-blob finder of §152 / §157 (`findHolesWithMorphology`, moved from `CheckC
 `vision.cap.seating.hub.holes.*`). SAM: the seed is this cycle's hub centre from `checkHub()` (`ImageProcessor.hubCentre`,
 its circle through 4 / 5 holes or bolts - concentric with the hub either way; passed by the cap check, otherwise from
 `FindHubHoles.hubCentreProvider`, set by the camera server, which the worker's restored state feeds); a centre from the
-bolts is moved by `sam.seed.bolts.offset.<dost|dostplus>` (-0.7,4.4 / -0.7,3.6: the stud tops are seen off the holes'
+bolts is moved by `sam.seed.bolts.offset.<dost|dostplus>` (-0.7,4.4 / -0.7,3.7 - DOSTPLUS measured on the laptop, §165: the stud tops are seen off the holes'
 centre). Without one (dry runs) one pass over `checkHub()`'s own annulus (`hub.segment.center`, r 116-253) gives it, taken
 only within `sam.wide.seed.max` 15 px of `hub.segment.center`. Then `checkHub()`'s steps, unchanged
 (`HubAndBearingSegmenter`: `preprocess_image` of the annulus `hubholes.sam.annulus.inner` 130 - `.outer.dost` 166 /
 `.dostplus` 172 px round the seed, YOLO boxes and grid prompts to MobileSAM, shape and area-ratio filters, distance and
 size groups, the equispacing filter, `select_best_group`), the gammas in `determine_smart_gamma_order`; the first gamma
-whose winning group has the model's count and whose circle has a radius in `sam.radius` 140-165 (holes 147-151; bolts
+whose winning group has the model's count and whose circle has a radius in `sam.radius` 140-155 (§165: SAM hole circles 147-149; a group at r ~161 is not the holes; bolts
 178+), spread ≤ `sam.spread.max` 3 px, angle gaps within `sam.gap.max` 15° and its centre within `sam.seed.distance.max`
 8 px of the seed (the holes are concentric with the hub: in the sandbox, with stand-in boxes, four look-alike masks on
 the bare face made an evenly spaced square round a centre 15 px away) wins; a gamma that `checkHub()`'s logic
@@ -542,8 +542,8 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.9,-13.7 and 4.2,-16.0 (Machine 1: 0,0) | 3 |
-| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.2,-0.1 and -0.6,-5.3 (Machine 1: 0,0) | 3 |
+| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 5.2,-17.9 and 4.5,-15.8 (SAM centres, §165; Machine 1: 0,0) | 3 |
+| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.4,-4.8 and -0.7,-4.4 (SAM centres, §165; Machine 1: 0,0) | 3 |
 | `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 

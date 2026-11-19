@@ -71,7 +71,7 @@ Their centres (the holes' outlines) differ from the dark-blob centres by a few p
 with the dark blobs) are to be replaced by the values `DryRun_Hub_Holes_SAM.py` prints on the laptop (CHANGES 164).
 
 The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`, CHANGES 162, 163): since CHANGES 163 the
-washer is looked for round the hub's hole circle centre in the same picture + `splitpin.hub.offset.dost` (1.8, 1.6)
+washer is looked for round the hub's hole circle centre in the same picture + `splitpin.hub.offset.dost` (0.9, -3.6 for the SAM centres since CHANGES 165; 1.8, 1.6 with the dark blobs)
 (DOSTPLUS not measured: the same); `splitpin.centre` (644, 345) only with `centre.source=fixed`; washer looked for within 100 px (tip radius 44 - 56 px; the 19 OK pictures of 19 Nov: 49.2 - 51.4, centres
 (643 - 649, 339 - 346)), blue legs within 120 px of the washer centre. Not placed by the knuckle frame.
 

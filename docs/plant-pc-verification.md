@@ -266,7 +266,8 @@ On the laptop first (models with the YOLO weights), after `git pull`, **before b
    `DryRun_Bung_Hub_Holes.py`, `DryRun_Cap_Hub_Distance.py` and build. Note the sd it prints: the cap rule allows 5 px.
 3. `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --seed hubcheck` - the real hub check on the hub pictures as the
    seed (as in production); it prints SAM holes - hub check centre for kind holes (about 0) and bolts -> put the bolts
-   value in `vision.hubholes.sam.seed.bolts.offset.<model>` (now -0.7,4.4 / -0.7,3.6, worked out from CHANGES 147).
+   value in `vision.hubholes.sam.seed.bolts.offset.<model>` (now -0.7,4.4 / -0.7,3.7; DOST from CHANGES 147, DOSTPLUS
+   measured on the laptop, one hub picture whose hub check took the bolts).
 4. Repeatability: two frames of the same part (e.g. split pin 113431189 / 113432153, or 113447333 / 113448348) should
    give SAM centres within about 1 px of each other.
 
@@ -298,4 +299,4 @@ On the Machine 2 PC with the new exe:
 | 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | 2026-11-19 | | Dialogs: passed | Reported by Uddi: the dialogs come out correctly in the Indic scripts; the rest not reported yet |
 | 12 Exit: drained line; with PostgreSQL down the record in FailedRecords; no `[Configuration]` lines (CHANGES 157) | | | | |
 | 13 Split pin and washer: dry-run window; turned legs OK, straight / half-bent / standing leg NOT OK, no washer NOT OK; log lines of a shift (CHANGES 162) | | | | |
-| 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | | | | |
+| 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | 2026-11-19 | | Laptop: found on every good picture, other model never; offsets set (CHANGES 165) | Reported by Uddi: `--wrong-model` 161 compared, 7 not found (6 bad bungs, 1 NOT OK split pin); `--seed hubcheck` 10/10. Re-run after 165 and the plant steps not reported yet |

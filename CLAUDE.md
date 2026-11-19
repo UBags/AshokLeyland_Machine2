@@ -157,7 +157,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
-| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Not reported yet |
+| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165 pending; plant not yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -184,18 +184,19 @@ No per-check times were recorded with the report; when they are, put them in the
   `camera/CapMaskFinder.py` = the method frozen in CHANGES 139 - 142) must be within 5 px of the hub centre + offset.
   Since CHANGES 152 the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the cap in the
   cap picture itself (`FindHubHoles.findHoles` - YOLO + MobileSAM since CHANGES 164, `vision.cap.seating.hub.source=cap`; holes not found -> NOT seated), offsets
-  `offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3 (27 seated silver / 99 seated brass caps, cap centres with stand-in
+  `offset.cap.dost` 0.4,-4.8 / `.dostplus` -0.7,-4.4 for the SAM centres since CHANGES 165 (before: 0.2,-0.1 / -0.6,-5.3 for the dark blobs, 27 seated silver / 99 seated brass caps, cap centres with stand-in
   YOLO boxes in the sandbox - confirm on the laptop). `holes.gate.each.combination=True` (CHANGES 157): the hole checks on
   every combination, the most evenly spaced passing one taken; False = CHANGES 152's order. The hub check's centre (`ImageProcessor.hubCentre`) and the
   holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
   carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
   limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
-- **Hub-hole offsets for the SAM finder** (CHANGES 164): the cap / bung / split pin offsets in the properties are still
-  the dark-blob ones (no YOLO in the sandbox; stand-in boxes gave centres too noisy to measure from); Uddi runs
-  `DryRun_Hub_Holes_SAM.py --wrong-model` on the laptop and puts its suggested offsets in the three properties files
-  before building.
+- **Hub-hole offsets for the SAM finder** (CHANGES 164, 165): set from Uddi's laptop run of 2026-11-19
+  (`DryRun_Hub_Holes_SAM.py --wrong-model` / `--seed hubcheck`): cap 0.4,-4.8 / -0.7,-4.4, bung 5.2,-17.9 / 4.5,-15.8,
+  split pin 0.9,-3.6 / 1.9,2.1, bolts seed -0.7,4.4 / -0.7,3.7. DOST SAM groups came in three circle radii (147 / 149 /
+  161, centres up to ~4.5 px apart in y): 147 went with uncorrected bolts seeds, 161 is not the holes - gated out
+  (`sam.radius` 140 - 155); a laptop re-run must show DOST at r ~149 only and the per-part spread of the centre.
 - **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `FindHubHoles.findHoles` in the
-  bung picture + `vision.bung.seating.hub.offset.<model>` (4.9,-13.7 / 4.2,-16.0); `position.source=fixed` = before. The
+  bung picture + `vision.bung.seating.hub.offset.<model>` (5.2,-17.9 / 4.5,-15.8 for the SAM centres, CHANGES 165); `position.source=fixed` = before. The
   user's good / bad labels of 2026-11-18 called A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
   off the hub centre like the bad ones. **Settled (Uddi, 2026-11-19):** on those pictures the hole is not visible or
   the label was wrong; NOT OK is right. The bung check is to be strict: the bung must sit straight so that it does not
