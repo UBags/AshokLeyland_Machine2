@@ -64,6 +64,12 @@ is not known whether that was their spindles (side) or the hub's own seating.
 | Bung seated position `bung.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
 | Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it; silver hub circle: prompt ring r 95 + box ±125 round it in the hub picture (CHANGES 129); cap mask: disc r 160 round it (CHANGES 143) |
 
+Hub holes in the cap, bung and split pin pictures (CHANGES 164, `camera/FindHubHoles.py`): YOLO + MobileSAM in the annulus
+`hubholes.sam.annulus.inner` 130 - `.outer.dost` 166 / `.dostplus` 172 px round this cycle's hub-check centre; holes
+on a circle of r 147 - 151 (hole radius about 10 DOST / 14.5 DOSTPLUS px), stud tops on r 182 - 196 (inner edge 169 / 183).
+Their centres (the holes' outlines) differ from the dark-blob centres by a few px per model: the offsets below (measured
+with the dark blobs) are to be replaced by the values `DryRun_Hub_Holes_SAM.py` prints on the laptop (CHANGES 164).
+
 The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`, CHANGES 162, 163): since CHANGES 163 the
 washer is looked for round the hub's hole circle centre in the same picture + `splitpin.hub.offset.dost` (1.8, 1.6)
 (DOSTPLUS not measured: the same); `splitpin.centre` (644, 345) only with `centre.source=fixed`; washer looked for within 100 px (tip radius 44 - 56 px; the 19 OK pictures of 19 Nov: 49.2 - 51.4, centres

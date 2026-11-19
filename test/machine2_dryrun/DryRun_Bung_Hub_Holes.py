@@ -3,7 +3,7 @@ DryRun_Bung_Hub_Holes - the bung's seated position from the hub's holes in the b
 
 The seating step (BungSegmenter.check_bung_seating) compares the bung's hole-pattern centre with the seated position;
 since CHANGES 153 that is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the bung in the same picture
-(CheckCap.hubHoles, the cap check's method) plus vision.bung.seating.hub.offset.<model>. The hole-pattern centres of the
+(camera/FindHubHoles.py since CHANGES 164: YOLO + MobileSAM; --holes morphology = the dark-blob finder) plus vision.bung.seating.hub.offset.<model>. The hole-pattern centres of the
 60 pictures of bung_images_20261113/ are read from hole_centres.json there (found by the production hole step with the
 point grid alone, CHANGES 153), so the hole step (YOLO, slow on a CPU) is not run here; the seating step is run for real
 (MobileSAM face mask).
@@ -43,6 +43,7 @@ def check(name, ok, detail=""):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
+    ap.add_argument("--holes", choices=("sam", "morphology"), default="sam")
     args = ap.parse_args()
     import cv2
     import numpy as np
@@ -52,7 +53,10 @@ def main() -> int:
     import camera.ModelManager as MMmod
     from mobile_sam import sam_model_registry, SamPredictor
     import camera.BungSegmenter as BS
-    from camera.CheckCap import CheckCap
+    from camera.CheckCap import CheckCap  # noqa: F401
+    from camera.FindHubHoles import FindHubHoles
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption(args.holes)
     if not BS.SEATING_CHECK:
         print("Bung seating is off for this machine (vision.bung.seating.check=False): nothing to check here.")
         return 0
@@ -79,9 +83,9 @@ def main() -> int:
         if info["user_label"] != "good":
             continue
         other = "DOST" if info["model"] == "DOSTPLUS" else "DOSTPLUS"
-        if not CheckCap.hubHoles(bgr, info["model"])["found"]:
+        if not FindHubHoles.findHoles(bgr, info["model"])["found"]:
             miss.append(name)
-        if CheckCap.hubHoles(bgr, other)["found"]:
+        if FindHubHoles.findHoles(bgr, other)["found"]:
             wrong.append(name)
     check("H1 the hub's holes found on every picture labelled good, never with the other model's count",
           not miss and not wrong, (miss, wrong))

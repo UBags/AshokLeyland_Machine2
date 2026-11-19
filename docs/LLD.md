@@ -252,7 +252,8 @@ own edge, largest mask, ellipse fit 2.5 px / 300 RANSAC tries, round a whole-pix
 (CHANGES §144); keys `vision.cap.mask.*`). No cap mask -> NOT seated; no
 hub centre -> rule not applied (said in the reason). Marked picture: the cap ellipse green / red, the hub centre a blue
 cross. **Hub source (CHANGES §152, `seating.hub.source`, Machine 2 `cap`):** the hub centre is taken from the cap picture
-itself - `CheckCap.hubHoles`: dark blobs (the darkest `seating.hub.holes.dark.percentiles` 6 / 9 / 12 % of the band
+itself - since CHANGES §164 by `FindHubHoles.findHoles` (YOLO + MobileSAM, see "Hub holes" below; the dark-blob finder
+described next is `FindHubHoles.findHolesWithMorphology`, `vision.hubholes.method=morphology`): dark blobs (the darkest `seating.hub.holes.dark.percentiles` 6 / 9 / 12 % of the band
 `seating.hub.holes.band` 128-168 px round `cap.center`, opened 5 px, area 150-2500 px, the 8 largest), the model's count
 (`holes.count.dost` 4 / `.dostplus` 5) most evenly spaced on a circle, accepted only with the circle radius in
 `holes.radius` 140-160 (holes 147-154; the bolts' circle is 182-196, bright, and outside the band - never taken),
@@ -268,7 +269,7 @@ caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behavi
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
 move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position (CHANGES §153, `seating.position.source=hubholes`: `BungSegmenter.seated_position` = the
-hub's hole circle round the bung in the bung picture itself, `CheckCap.hubHoles` with the model's 4 / 5 holes, plus
+hub's hole circle round the bung in the bung picture itself, `FindHubHoles.findHoles` (CHANGES §164) with the model's 4 / 5 holes, plus
 `seating.hub.offset.<dost|dostplus>` (Machine 2 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
 seated centres below, as before), the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
@@ -278,6 +279,30 @@ step did not run, `drawSeatingMarks` finds the hub's holes on the camera picture
 result picture with the bung masks painted (CHANGES §157). A value of `seating.position.source` /
 `cap.seating.hub.source` outside its choices is logged (`VisionConfig.expectOneOf`). Each uses its own
 `SamPredictor` per thread on the shared model.
+
+**Hub holes for the cap, bung and split pin checks (`camera/FindHubHoles.py`, CHANGES 164).** `FindHubHoles.findHoles(picture,
+model, hubCentre=None)` runs `vision.hubholes.method`: `sam` (both machines) = `findHolesWithSAM`, `morphology` = the
+dark-blob finder of §152 / §157 (`findHolesWithMorphology`, moved from `CheckCap.hubHoles` unchanged, keys
+`vision.cap.seating.hub.holes.*`). SAM: the seed is this cycle's hub centre from `checkHub()` (`ImageProcessor.hubCentre`,
+its circle through 4 / 5 holes or bolts - concentric with the hub either way; passed by the cap check, otherwise from
+`FindHubHoles.hubCentreProvider`, set by the camera server, which the worker's restored state feeds). Without one (dry runs)
+one pass over `checkHub()`'s own annulus (`hub.segment.center`, r 116-253) gives it. Then `checkHub()`'s steps, unchanged
+(`HubAndBearingSegmenter`: `preprocess_image` of the annulus `hubholes.sam.annulus.inner` 130 - `.outer.dost` 166 /
+`.dostplus` 172 px round the seed, YOLO boxes and grid prompts to MobileSAM, shape and area-ratio filters, distance and
+size groups, the equispacing filter, `select_best_group`), the gammas in `determine_smart_gamma_order`; the first gamma
+whose winning group has the model's count and whose circle has a radius in `sam.radius` 140-165 (holes 147-151; bolts
+178+), spread ≤ `sam.spread.max` 3 px, angle gaps within `sam.gap.max` 15° and its centre within `sam.seed.distance.max`
+8 px of the seed (the holes are concentric with the hub: in the sandbox, with stand-in boxes, four look-alike masks on
+the bare face made an evenly spaced square round a centre 15 px away) wins; a gamma that `checkHub()`'s logic
+calls the other model is noted and the next one tried. The annulus: holes r 147-151 with radius 10 (DOST) / 14.5
+(DOSTPLUS) px lie inside it; the stud tops (circle 182-196, inner edge 169 / 183 px) outside it but for a sliver below the
+mask area filter. The segmenter object is `HubAndBearingSegmenter`'s methods on a per-thread object (own `SamPredictor`
+and mask generator; the YOLO model shared behind a lock), not `checkHub()`'s own instance, which is not touched. The
+last `sam.cache.size` (12) results are kept (keyed on the picture, model and seed): the split pin check's six pictures
+are three pictures twice. Result: found, cx, cy, radius, spread, gap, count, points, gamma, seed, seedFrom, method,
+reason. The SAM centres are the holes' outlines on the disc face, the dark blobs their shadowed insides: the offsets
+of the cap, bung and split pin checks (measured with the dark blobs) must be re-measured for the SAM centres with
+`DryRun_Hub_Holes_SAM.py` on the laptop (YOLO weights) before the build - it prints the values (§164).
 
 **Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bung.outer.disc.center`:

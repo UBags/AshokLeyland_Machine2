@@ -4,7 +4,7 @@ camera server runs it. Everything needed to set the distance limit and the offse
 
   0. "Hub source" (CHANGES 152; starts at this machine's vision.cap.seating.hub.source, batch --hub-source):
      "cap holes" (production on Machine 2) - the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes
-     round the cap in each cap picture itself (CheckCap.hubHoles). No hub picture is needed: choose the model and a caps
+     round the cap in each cap picture itself (camera/FindHubHoles.py; --holes morphology = the dark-blob finder). No hub picture is needed: choose the model and a caps
      folder and Start. The offset is "cap offset dx,dy" (vision.cap.seating.hub.distance.offset.cap.<model>); the hole
      circle is drawn thin blue on the marked picture, its centre + offset as a blue cross. Points 2, 8 and 9 below and the
      holes / bolts offsets are for "hub check" only. Step 3 still needs a hub picture of the part (brightening): the
@@ -322,7 +322,8 @@ def runCap(checks, picture, model, hubCentre, bases, maxDistance, offsetHoles, o
     if capSource and rule is not None:          # the hub centre the check found (the holes in the cap picture)
         hubCentre = rule.get("hub")
     if capSource and not hubCentre:             # why the holes were not found (the seating reason has every rule)
-        holes = capClass.hubHoles(picture, model)
+        from camera.FindHubHoles import FindHubHoles
+        holes = FindHubHoles.findHoles(picture, model)
         holesReason = "" if holes["found"] else f"the hub's {holes['count']} holes round the cap not found ({holes['reason']})"
     return dict(ok=bool(ok), marked=marked if marked is not None else picture, seconds=secs, colour=seen.get("colour"),
                 seating=seen.get("seating"), rule=rule, measuredOnly=measuredOnly, messages=list(checks.messages),
@@ -908,4 +909,6 @@ def runWindow():
 
 
 if __name__ == "__main__":
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption()
     sys.exit(runBatch() if "--batch" in sys.argv else runWindow())

@@ -124,6 +124,11 @@ runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `
 | 20 | Split pin and washer (`CheckSplitPinAndWasher`, CHANGES 162, 163) | Expected washer centre = the hub's 4 / 5 holes in the picture (the cap check's method) + offset (holes not found = NOT OK); washer = bright region round it (present, round, all round the nut); legs = blue marker pixels; NOT OK when more than 2 marker pixels lie more than 8 px outside the washer (a leg not turned round the nut) | 2 of 3 |
 | 22 | Cap (`CheckCap`) | Which cap (brass / silver / none) by colour and brightness; must be the model's; brightening against the hub, top bearing and nut pictures; then (Machine 2) seating: brass by circles fitted to the cap and bore edges, silver by the hub centre left uncovered (hub circle from the cycle's hub picture) and the top face edge on one circle; both: the cap's centre (ellipse of the cap mask) within 5 px of the hub's centre - the circle through the hub's 4 / 5 holes round the cap in the same picture (CHANGES 152; before: the cycle's hub check, CHANGES 143) | steps before seating on 3, 2 must pass; seating once |
 
+**Hub holes in the cap, bung and split pin pictures (CHANGES 164, `camera/FindHubHoles.py`).** The three checks above
+that place their target from the hub's 4 / 5 holes in their own picture find those holes by YOLO + MobileSAM with
+`checkHub()`'s steps (unchanged), in a thin annulus (130 - 166 / 172 px) round this cycle's hub-check centre, where the
+holes lie and the bolts do not; the dark-blob finder of CHANGES 152 stays as `vision.hubholes.method=morphology`.
+
 **Frame (Machine 2, `camera/VisionFrame.py`).** From the two pins the knuckle check works out the camera's shift,
 rotation and zoom against the reference position (13 Nov 2026), and places every later check's centre (hub, top
 bearing, nut, no-bung, bung disc and seated positions, cap) for this cycle, per type (DOST / DOSTPLUS); the bung

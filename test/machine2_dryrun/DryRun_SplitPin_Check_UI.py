@@ -19,9 +19,12 @@ pictures, with this machine's settings, one picture at a time with the check's o
                     since CHANGES 163); 1 otherwise.
 
 Settings: <vendor>.vision.splitpin.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
-allenbradley, machine2 = siemens). Only OpenCV / NumPy - no Redis, PLC, camera or model needed.
+allenbradley, machine2 = siemens). The hub's holes (where the washer is looked for) by YOLO + MobileSAM since
+CHANGES 164: the models (models/MobileSAM with the YOLO weights) as in production; --holes morphology = the dark-blob
+finder with its own offsets (no models needed). No Redis, PLC or camera needed. Without this cycle's hub check, the
+hole finder first runs over the hub check's own annulus (slower than in production).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_SplitPin_Check_UI.py   [--auto [folder]]
+Run from the project root:   python test/machine2_dryrun/DryRun_SplitPin_Check_UI.py   [--auto [folder]] [--holes morphology]
 """
 import os
 import pathlib
@@ -254,8 +257,10 @@ def window():
 
 
 if __name__ == "__main__":
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption()
     if "--auto" in sys.argv:
         i = sys.argv.index("--auto")
-        folder = pathlib.Path(sys.argv[i + 1]) if len(sys.argv) > i + 1 else IMAGES
+        folder = pathlib.Path(sys.argv[i + 1]) if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else IMAGES
         sys.exit(auto(folder))
     window()

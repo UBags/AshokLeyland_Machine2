@@ -5109,3 +5109,63 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run: `DryRun_SplitPin_Check_UI.py --auto` both copies PASS (79 labelled, 79 right); window under Xvfb;
   `Verify_Vision_Config_Equivalence.py` both ALL EQUIVALENT (383 parameters, 13 files); `DryRun_All_Checks_UI.py --auto`
   split pin OK as DOST_LHS, NOT OK as DOSTPLUS_LHS (holes); the other checks there need the model weights (not in this sandbox).
+
+## 164. Hub holes by YOLO + MobileSAM for the cap, bung and split pin checks (FindHubHoles) (2026-11-19)
+
+- **User:** the dark-hole method (`CheckCap.hubHoles`) used by the cap (§152), bung (§153) and split pin (§163) checks
+  must give way to YOLO + MobileSAM as in `checkHub()`: writing on the hub face can fall anywhere, and no morphology gets
+  past it. Move `CheckCap.hubHoles` to `FindHubHoles.findHolesWithMorphology()`; new `FindHubHoles.findHolesWithSAM()`;
+  use what `checkHub()` knows - its centre for this cycle - to cut an annulus in which the holes are certain and the
+  bolts at most partly visible, then `checkHub()`'s logic to settle the 4 / 5 holes. `checkHub()` itself not to change
+  (it works; run as is it can take the holes or the bolts, even one or the other on the same picture).
+- **Found first** (asked in the turn before): the 6 hub pictures sent (all DOST) and the 10 of `hub_images/` gave the
+  right holes with the dark-blob finder, but their writing lies at r ~210, outside its band; the ink is as dark as some
+  holes (grey 65 - 70 against 58 / 64 on hub_1), so the spacing rules, not the darkness, kept it out.
+- **Geometry** (morphology centres, 16 hub pictures + split pin / cap ones): holes on a circle of r 150 (DOST) / 148
+  (DOSTPLUS), hole radius about 10 / 14.5 px -> holes span 140 - 161 / 133.5 - 163; stud tops on r 178 - 187 / 193 - 197,
+  inner edge from about 169 / 183. Stud-top centres (highlights) sit -3 .. +4.5 px off the hole circle's centre.
+- **New `camera/FindHubHoles.py`:**
+  - `findHolesWithMorphology` = the old `CheckCap.hubHoles`, `_holesAround`, `_holesGates`, `_informativeness` moved
+    unchanged with their values (same keys, `vision.cap.seating.hub.holes.*`; centre still `cap.center`).
+  - `findHolesWithSAM(picture, model, hubCentre)`: seed = this cycle's hub centre from `checkHub()` (`ImageProcessor.
+    hubCentre`; the cap check passes it, the bung and split pin checks get it through `FindHubHoles.hubCentreProvider`,
+    set by the camera server - the worker restores it with each job). Without one (dry runs): one pass over
+    `checkHub()`'s own annulus (`hub.segment.center`, r 116 - 253; holes or bolts, either gives the centre). Then the
+    annulus `vision.hubholes.sam.annulus.inner` 130 - `.outer.dost` 166 / `.dostplus` 172 px round the seed and
+    `checkHub()`'s steps, by calling `HubAndBearingSegmenter`'s own methods (`preprocess_image`, `segment_holes`:
+    YOLO boxes + grid prompts to MobileSAM, shape / area-ratio filters, distance and size groups, the equispacing filter;
+    `select_best_group`; gammas in `determine_smart_gamma_order`) on a per-thread object (own `SamPredictor` and mask
+    generator; YOLO shared behind a lock) - `checkHub()`, `CheckHubAndBottomBearing.py` and `HubAndBearingSegmenter.py`
+    are not changed. The first gamma wins whose group has the model's count and whose circle has r in `sam.radius`
+    140 - 165, spread <= `sam.spread.max` 3, gaps within `sam.gap.max` 15 deg and centre within `sam.seed.distance.max`
+    8 px of the seed; a gamma the equispacing step calls the other model is noted and the next tried. Results of the
+    last `sam.cache.size` 12 pictures kept (the split pin check's 6 pictures are 3 pictures twice).
+  - `findHoles` runs `vision.hubholes.method` (`sam` both machines; `morphology` = the old finder); its reason names the
+    gamma / darkest percentile; `describe` for log lines.
+- **Callers:** `CheckCap.hubCentreDistance` (source `cap`: `findHoles(picture, model, hubCentre)`), `BungSegmenter.
+  seated_position`, `CheckSplitPinAndWasher.expectedCentre`; their log lines add the method. `CheckCap` loses the moved
+  methods and values. Reference commits a74230e (all four files), 333763d (FindHubHoles' final logic) and 7c322df (Bung / split pin docstrings);
+  both manifests.
+  9 new keys `vision.hubholes.*` in the three properties files.
+- **Sandbox (no YOLO weights):** with YOLO returning no boxes (grid prompts only) nothing was found. With a stand-in that
+  puts a 30 px box every 14 px over the annulus (it knows nothing of holes; about 40 s a gamma on this CPU):
+  DOSTPLUS hubs / caps found at gamma 1 - 4, centres steady (morphology - SAM about (-0.6, +1.0), sd ~0.4); DOST found
+  on 20 of 21 split pin OK pictures and the hubs, but the small DOST holes gave unsteady centres - the 7 frames of one
+  still part ranged 7 x 12 px, sd 3 px - and on DOST_03 four look-alike masks on the bare face made a perfect square
+  round a centre 15 px off (the seed-distance gate added for that; the inner radius raised from 125 to 130 because the
+  stand-in filled r 126 - 137 with edge fragments). With the gates: DOST_03, DOST_01, DOSTPLUS_02, split pin 113449396
+  (missed before), 114643724, 114641234 found; asked for the other model, none of the 6 found. These stand-in numbers
+  say nothing about the real YOLO's steadiness: **the cap / bung / split pin offsets stay the dark-blob ones until the
+  laptop run**.
+- **Before the exe (laptop, plant-pc step 14):** `DryRun_Hub_Holes_SAM.py --wrong-model` (new, both folders: every
+  picture of hub / split pin / cap / bung sets, SAM against morphology, the mean difference per check and model and the
+  offsets that keep each target - `vision.cap.seating.hub.distance.offset.cap.*`, `vision.bung.seating.hub.offset.*`,
+  `vision.splitpin.hub.offset.*`; its sd decides whether the cap's 5 px rule holds) -> put its offsets in the
+  properties; then the cap / bung / split pin dry runs.
+- **Dry runs:** `--holes morphology` (`_hub_holes_option.py`, both folders) runs the old finder with the offsets
+  measured with it, for runs without the YOLO weights: `DryRun_SplitPin_Check_UI`, `DryRun_Bung_Hub_Holes`,
+  `DryRun_Cap_Hub_Distance` (H6 / H7 now test `findHolesWithMorphology`), `DryRun_Cap_Hub_Distance_UI`.
+- Run: `Verify_Vision_Config_Equivalence` both ALL EQUIVALENT (392 parameters, 14 files); with `--holes morphology`:
+  `DryRun_SplitPin_Check_UI --auto` both PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance` 15/15
+  (Machine 2); `DryRun_Tuning_Keys` 231/231, `DryRun_Camera_State_File` 19/19, `DryRun_Vision_Check_Timeout` 22/22 both;
+  the SAM path with the stand-in as above. Not run: anything with the real YOLO (laptop).

@@ -110,10 +110,17 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
 - Torque OK / NOT OK is the PLC's decision; the PC only records the values.
-- Split pin + washer check (CHANGES 162, 163): the hub's holes in the picture (`CheckCap.hubHoles`) + offset give the
+- Split pin + washer check (CHANGES 162, 163): the hub's holes in the picture (`FindHubHoles.findHoles`) + offset give the
   expected washer centre (holes not found = NOT OK; `centre.source=fixed` = the fixed centre); washer region round it,
   blue-marked legs, NOT OK when more than 2 marker pixels lie more than 8 px outside the washer. Values from 3 OK parts
   (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
+- **Hub holes for the cap, bung and split pin checks** (CHANGES 164): `camera/FindHubHoles.py`. `findHolesWithSAM` (default,
+  `vision.hubholes.method=sam`) = YOLO + MobileSAM with `checkHub()`'s steps in a thin annulus (130 - 166 / 172 px) round
+  this cycle's hub-check centre (`ImageProcessor.hubCentre`, via `hubCentreProvider`), so the holes are in and the bolts
+  out; `findHolesWithMorphology` = the old dark-blob finder (moved from `CheckCap.hubHoles`). **Do not change
+  `checkHub()`** (`CheckHubAndBottomBearing.checkHubAndBottomBearing`, `HubAndBearingSegmenter`): it works (Uddi,
+  2026-11-19); FindHubHoles uses its methods on its own per-thread object. Dry runs: `--holes morphology` runs the old
+  finder with its own offsets where the YOLO weights are missing (the sandbox).
 - IOServer reset rule: at start, cycle end and every abort one routine resets every per-cycle tag (not the settings)
   with retries and read-back, then arms `PLC_PC_CheckQRCode`. After a lost PLC connection: the last PLC_PC tag the
   PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
@@ -149,6 +156,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
+| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -174,14 +182,18 @@ No per-check times were recorded with the report; when they are, put them in the
 - **Cap seating by the hub-centre distance** (CHANGES 143, 152): the cap's centre (stage-2 ellipse of the cap mask,
   `camera/CapMaskFinder.py` = the method frozen in CHANGES 139 - 142) must be within 5 px of the hub centre + offset.
   Since CHANGES 152 the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the cap in the
-  cap picture itself (`CheckCap.hubHoles`, `vision.cap.seating.hub.source=cap`; holes not found -> NOT seated), offsets
+  cap picture itself (`FindHubHoles.findHoles` - YOLO + MobileSAM since CHANGES 164, `vision.cap.seating.hub.source=cap`; holes not found -> NOT seated), offsets
   `offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3 (27 seated silver / 99 seated brass caps, cap centres with stand-in
   YOLO boxes in the sandbox - confirm on the laptop). `holes.gate.each.combination=True` (CHANGES 157): the hole checks on
   every combination, the most evenly spaced passing one taken; False = CHANGES 152's order. The hub check's centre (`ImageProcessor.hubCentre`) and the
   holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
   carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
   limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
-- **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `CheckCap.hubHoles` in the
+- **Hub-hole offsets for the SAM finder** (CHANGES 164): the cap / bung / split pin offsets in the properties are still
+  the dark-blob ones (no YOLO in the sandbox; stand-in boxes gave centres too noisy to measure from); Uddi runs
+  `DryRun_Hub_Holes_SAM.py --wrong-model` on the laptop and puts its suggested offsets in the three properties files
+  before building.
+- **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `FindHubHoles.findHoles` in the
   bung picture + `vision.bung.seating.hub.offset.<model>` (4.9,-13.7 / 4.2,-16.0); `position.source=fixed` = before. The
   user's good / bad labels of 2026-11-18 called A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
   off the hub centre like the bad ones. **Settled (Uddi, 2026-11-19):** on those pictures the hole is not visible or
@@ -201,7 +213,7 @@ No per-check times were recorded with the report; when they are, put them in the
   cannot be judged there - say so rather than guessing.
 - Most used: `Verify_Vision_Config_Equivalence.py` (both folders), `DryRun_IOServer_Fault_Scenarios.py`,
   `DryRun_Knuckle_Frame.py --quick`, `DryRun_Vision_Check_Timeout.py`, `DryRun_Cap_Check.py`,
-  `DryRun_Cap_Production_Path.py`, `DryRun_SplitPin_Check_UI.py --auto`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`, `DryRun_Frontend_Languages.py`,
+  `DryRun_Cap_Production_Path.py`, `DryRun_SplitPin_Check_UI.py --auto`, `DryRun_Hub_Holes_SAM.py`, `DryRun_Bearing_Ring_Guard.py`, `DryRun_Camera_State_File.py`, `DryRun_Frontend_Languages.py`,
   `DryRun_All_Checks_UI.py` (window; `--auto` without one).
 - Sandbox notes: Python 3.13 has torch / OpenCV but no tkinter; Python 3.12 has Tk (and PySide6 under Xvfb) but no
   torch - windows are driven on 3.12 with the camera modules stood in, the real checks on 3.13 without a window.

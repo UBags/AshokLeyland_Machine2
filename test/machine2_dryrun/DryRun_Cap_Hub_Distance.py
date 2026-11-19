@@ -101,12 +101,16 @@ class CircleBoxYolo:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
+    ap.add_argument("--holes", choices=("sam", "morphology"), default="sam")
     args = ap.parse_args()
     import cv2
     import numpy as np
     import camera.ModelManager  # noqa: F401 - its import sets the timm / registry warning filters (as in production)
     import camera.CameraProcessorServer as cps
     from camera.CheckCap import CheckCap
+    from camera.FindHubHoles import FindHubHoles
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption(args.holes)
     from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing as CH, HUB_CENTRE_BOLT_MIN_DISTANCE
     from camera import CapMaskFinder as CM
     from statemachine.StateMachine import MachineState as MS
@@ -141,7 +145,7 @@ def main() -> int:
           h and round(float(np.hypot(h["cx"] - true[0], h["cy"] - true[1])), 2))
     check("H5 fewer than 3 centres: None", CH.hubCentreFromGroup(group(true, 147, 2, (635, 345), 250), (635, 345), 250) is None)
 
-    # ---- H6 - H7: the hub's holes round the cap in the cap picture itself (hub source "cap", CHANGES 152) -----------
+    # ---- H6 - H7: the dark-blob finder (FindHubHoles.findHolesWithMorphology since CHANGES 164; hub source "cap", CHANGES 152)
     # Machine 2 pictures, round this machine's cap.center: only where the cap seating runs (Machine 2)
     if not CheckCap.SEATING_CHECK:
         print("Seating is off for this machine (vision.cap.seating.check=False): H6 / H7 skipped.")
@@ -153,12 +157,12 @@ def main() -> int:
         for f in pics:
             model = "DOSTPLUS" if f.name.startswith("DOSTPLUS") else "DOST"
             img = rd0(f)
-            hh = CheckCap.hubHoles(img, model)
+            hh = FindHubHoles.findHolesWithMorphology(img, model)
             if hh["found"]:
                 radii.append(round(hh["radius"], 1))
             else:
                 misses.append((f.name, hh["reason"]))
-            if CheckCap.hubHoles(img, "DOST" if model == "DOSTPLUS" else "DOSTPLUS")["found"]:
+            if FindHubHoles.findHolesWithMorphology(img, "DOST" if model == "DOSTPLUS" else "DOSTPLUS")["found"]:
                 wrong.append(f.name)
         check(f"H6 the hub's holes found on all {len(pics)} cap and hub pictures (4 on DOST, 5 on DOSTPLUS), never with "
               f"the other model's count; circle r {min(radii, default=0):.1f} - {max(radii, default=0):.1f}",
@@ -178,11 +182,11 @@ def main() -> int:
                            (20, 20, 20) if boltsDark else (235, 235, 235), -1)
             return img, (cx, cy)
         img, c = synthetic()
-        hA = CheckCap.hubHoles(img, "DOST")
+        hA = FindHubHoles.findHolesWithMorphology(img, "DOST")
         img, c2 = synthetic(shift=(12.0, -9.0))
-        hB = CheckCap.hubHoles(img, "DOST")
+        hB = FindHubHoles.findHolesWithMorphology(img, "DOST")
         img, _ = synthetic(boltsDark=True, holes=False)
-        hC = CheckCap.hubHoles(img, "DOST")
+        hC = FindHubHoles.findHolesWithMorphology(img, "DOST")
         check("H7 holes (dark, r 150) found, not the bolts (bright, r 183): centre within 1 px; moved 12 / -9 px with the "
               "picture; dark discs at the bolts' radius alone are never taken for the holes",
               hA["found"] and np.hypot(hA["cx"] - c[0], hA["cy"] - c[1]) < 1.0 and abs(hA["radius"] - 150) < 1.5

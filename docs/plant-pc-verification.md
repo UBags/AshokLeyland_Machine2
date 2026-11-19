@@ -253,6 +253,30 @@ On the Machine 2 PC, with the new exe:
 3. Send the lines of a shift (and the pictures of any OK part called NOT OK, or the reverse): the limits come from 3
    OK parts; `vision.splitpin.leg.outside.distance` (8.0) / `.pixels.max` (2) are the ones to look at.
 
+## 14. Hub holes by YOLO + MobileSAM in the cap, bung and split pin checks (CHANGES 164)
+
+On the laptop first (models with the YOLO weights), after `git pull`, **before building the exe**:
+1. `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --wrong-model` - every picture of the four sets: the holes
+   found by SAM wherever the dark-blob finder found them, never the other model's; `RESULT: PASS`.
+2. The end of its output prints, per check and model, the mean difference between the two finders' centres and the
+   offset that keeps each check's target where it was (`vision.cap.seating.hub.distance.offset.cap.<model>`,
+   `vision.bung.seating.hub.offset.<model>`, `vision.splitpin.hub.offset.<model>`). The values in the properties are
+   still those measured with the dark-blob finder (no YOLO in the sandbox): replace them with the laptop's (all three properties
+   files, both `allenbradley.` and `siemens.`), then run `DryRun_SplitPin_Check_UI.py --auto`,
+   `DryRun_Bung_Hub_Holes.py`, `DryRun_Cap_Hub_Distance.py` and build. Note the sd it prints: the cap rule allows 5 px.
+3. Repeatability: two frames of the same part (e.g. split pin 113431189 / 113432153, or 113447333 / 113448348) should
+   give SAM centres within about 1 px of each other.
+
+On the Machine 2 PC with the new exe:
+4. The cap seating line (`hub from 4 cap holes (circle r .., spread .., gap .. deg, sam)`), the bung seating line (`...
+   deg (sam), DOST offset ...`) and the split pin line (`expectedFrom hub from 4 holes (...) r .. (sam), ...`) appear;
+   a good part NOT OK with `the hub's N holes not found (annulus ... from the hub centre given (4 holes): gamma ...)` is
+   the thing to report, with the picture.
+5. Times: the cap, bung and split pin checks each run YOLO + MobileSAM on the annulus now (up to 6 gammas, first success
+   wins); their check times must stay well inside the 12 s timeout.
+6. To go back: `siemens.vision.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
+   cap 0.2,-0.1 / -0.6,-5.3; bung 4.9,-13.7 / 4.2,-16.0; split pin 1.8,1.6).
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -271,3 +295,4 @@ On the Machine 2 PC, with the new exe:
 | 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | 2026-11-19 | | Dialogs: passed | Reported by Uddi: the dialogs come out correctly in the Indic scripts; the rest not reported yet |
 | 12 Exit: drained line; with PostgreSQL down the record in FailedRecords; no `[Configuration]` lines (CHANGES 157) | | | | |
 | 13 Split pin and washer: dry-run window; turned legs OK, straight / half-bent / standing leg NOT OK, no washer NOT OK; log lines of a shift (CHANGES 162) | | | | |
+| 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | | | | |

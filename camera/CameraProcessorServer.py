@@ -43,6 +43,7 @@ from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing
 from camera.CheckTopBearing import CheckTopBearing
 from camera.CheckNutAndPlateWasher import CheckNutAndPlateWasher
 from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher
+from camera.FindHubHoles import FindHubHoles
 from camera.CheckCap import CheckCap
 from camera.CheckNoCapBung import CheckNoCapBung
 from camera.CheckNoBung import CheckNoBung
@@ -1611,6 +1612,10 @@ class ImageProcessor():
 # *******************************MonitorSendResultQueue end*********************************************
 
 
+
+# The cap, bung and split pin checks find the hub's holes round this cycle's hub centre (checkHub's circle, kept in
+# ImageProcessor.hubCentre; the worker gets it with each job's state) - CHANGES 164
+FindHubHoles.hubCentreProvider = staticmethod(lambda: ImageProcessor.hubCentre)
 
 # **************************************************************************************************
 
