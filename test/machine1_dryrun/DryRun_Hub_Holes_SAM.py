@@ -20,8 +20,10 @@ offsets that keep every check's target where it was:
 few px off by the camera's slight angle - so the two centres differ by a steady amount per model).
 
 Seed (the annulus centre): --seed none (default) = as without this cycle's hub check: one pass over checkHub()'s own
-annulus first (holes or bolts), its centre then used - the production run uses this cycle's hub check instead;
---seed morphology = the morphology circle's centre (faster). --wrong-model also asks for the other model's holes
+annulus first (holes or bolts), its centre then used; --seed morphology = the morphology circle's centre (faster);
+--seed hubcheck = the hub pictures only: the real checkHub() on the picture, its centre (holes or bolts) as the seed,
+as in production - and per model and kind the mean of SAM holes - hub check centre, i.e. the value for
+vision.hubholes.sam.seed.bolts.offset.<model> (kind bolts; kind holes should be about 0). --wrong-model also asks for the other model's holes
 (must not be found). --sets hub,splitpin,cap,bung, --limit N per set.
 
 Models: ModelManager's (models/MobileSAM: MobileSAM and the object-aware YOLO), as in production - on the laptop.
@@ -68,7 +70,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sets", default="hub,splitpin,cap,bung")
     ap.add_argument("--limit", type=int, default=10 ** 6)
-    ap.add_argument("--seed", choices=("none", "morphology"), default="none")
+    ap.add_argument("--seed", choices=("none", "morphology", "hubcheck"), default="none")
     ap.add_argument("--wrong-model", action="store_true")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--tiled-yolo", action="store_true")
@@ -110,7 +112,11 @@ def main() -> int:
         F.yoloModelProvider = staticmethod(lambda: TiledBoxYolo())
 
     sets = [s.strip() for s in args.sets.split(",") if s.strip()]
-    rows, failures = [], []
+    if args.seed == "hubcheck":
+        sets = ["hub"]
+    QR = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
+          "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
+    rows, failures, seedRows = [], [], []
     for kind, path, model in pictures(sets, args.limit):
         image = cv2.imread(str(path))
         if image is None:
@@ -119,6 +125,12 @@ def main() -> int:
         morph = F.findHolesWithMorphology(image, model)
         seed = dict(cx=morph["cx"], cy=morph["cy"], count=morph["count"], kind="morphology holes") \
             if args.seed == "morphology" and morph["found"] else None
+        if args.seed == "hubcheck":
+            from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing as CH
+            _, hubOk, _ = CH.checkHubAndBottomBearing(image.copy(), QR[model])
+            seed = CH.lastHubCentre if hubOk else None
+            if seed is None:
+                failures.append(f"{path.name}: the hub check did not pass / gave no centre")
         F._cache.clear()
         t0 = time.perf_counter()
         sam = F.findHolesWithSAM(image, model, seed)
@@ -140,6 +152,11 @@ def main() -> int:
                 failures.append(f"{path.name}: SAM did not find the holes that morphology found")
         else:
             line += " | morph NOT FOUND"
+        if args.seed == "hubcheck" and seed is not None and sam["found"]:
+            e = (sam["cx"] - float(seed["cx"]), sam["cy"] - float(seed["cy"]))
+            line += (f" | hub check {seed.get('kind')} ({seed['cx']:.1f}, {seed['cy']:.1f}): SAM - hub check "
+                     f"({e[0]:+.1f}, {e[1]:+.1f})")
+            seedRows.append((model, seed.get("kind"), e))
         line += f"  {secs:.1f} s  [seed: {sam.get('seedFrom')}]"
         if args.wrong_model:
             other = "DOST" if model == "DOSTPLUS" else "DOSTPLUS"
@@ -170,6 +187,15 @@ def main() -> int:
                 text += (f"  ->  {keys[kind]}.{model.lower()} = {old[0] + m[0]:.1f},{old[1] + m[1]:.1f} "
                          f"(now {float(old[0]):g},{float(old[1]):g})")
             print(text)
+    for model in ("DOST", "DOSTPLUS"):
+        for hubKind in ("holes", "bolts"):
+            e = np.array([r[2] for r in seedRows if r[0] == model and r[1] == hubKind])
+            if len(e):
+                m, sd = e.mean(axis=0), e.std(axis=0)
+                print(f"hub check {model:8s} {hubKind:5s} {len(e):3d} pictures: SAM holes - hub check centre ({m[0]:+.2f}, "
+                      f"{m[1]:+.2f}) sd ({sd[0]:.2f}, {sd[1]:.2f})"
+                      + (f"  ->  vision.hubholes.sam.seed.bolts.offset.{model.lower()} = {m[0]:.1f},{m[1]:.1f}"
+                         if hubKind == "bolts" else ""))
     for f in failures:
         print("FAIL:", f)
     print("RESULT:", "PASS" if not failures else f"{len(failures)} FAILURE(S)", f"({len(rows)} pictures compared)")

@@ -285,8 +285,10 @@ model, hubCentre=None)` runs `vision.hubholes.method`: `sam` (both machines) = `
 dark-blob finder of §152 / §157 (`findHolesWithMorphology`, moved from `CheckCap.hubHoles` unchanged, keys
 `vision.cap.seating.hub.holes.*`). SAM: the seed is this cycle's hub centre from `checkHub()` (`ImageProcessor.hubCentre`,
 its circle through 4 / 5 holes or bolts - concentric with the hub either way; passed by the cap check, otherwise from
-`FindHubHoles.hubCentreProvider`, set by the camera server, which the worker's restored state feeds). Without one (dry runs)
-one pass over `checkHub()`'s own annulus (`hub.segment.center`, r 116-253) gives it. Then `checkHub()`'s steps, unchanged
+`FindHubHoles.hubCentreProvider`, set by the camera server, which the worker's restored state feeds); a centre from the
+bolts is moved by `sam.seed.bolts.offset.<dost|dostplus>` (-0.7,4.4 / -0.7,3.6: the stud tops are seen off the holes'
+centre). Without one (dry runs) one pass over `checkHub()`'s own annulus (`hub.segment.center`, r 116-253) gives it, taken
+only within `sam.wide.seed.max` 15 px of `hub.segment.center`. Then `checkHub()`'s steps, unchanged
 (`HubAndBearingSegmenter`: `preprocess_image` of the annulus `hubholes.sam.annulus.inner` 130 - `.outer.dost` 166 /
 `.dostplus` 172 px round the seed, YOLO boxes and grid prompts to MobileSAM, shape and area-ratio filters, distance and
 size groups, the equispacing filter, `select_best_group`), the gammas in `determine_smart_gamma_order`; the first gamma

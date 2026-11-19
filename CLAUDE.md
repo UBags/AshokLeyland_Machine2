@@ -116,7 +116,8 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
 - **Hub holes for the cap, bung and split pin checks** (CHANGES 164): `camera/FindHubHoles.py`. `findHolesWithSAM` (default,
   `vision.hubholes.method=sam`) = YOLO + MobileSAM with `checkHub()`'s steps in a thin annulus (130 - 166 / 172 px) round
-  this cycle's hub-check centre (`ImageProcessor.hubCentre`, via `hubCentreProvider`), so the holes are in and the bolts
+  this cycle's hub-check centre (`ImageProcessor.hubCentre`, via `hubCentreProvider`; a bolts centre moved by
+  `sam.seed.bolts.offset.<model>`), so the holes are in and the bolts
   out; `findHolesWithMorphology` = the old dark-blob finder (moved from `CheckCap.hubHoles`). **Do not change
   `checkHub()`** (`CheckHubAndBottomBearing.checkHubAndBottomBearing`, `HubAndBearingSegmenter`): it works (Uddi,
   2026-11-19); FindHubHoles uses its methods on its own per-thread object. Dry runs: `--holes morphology` runs the old

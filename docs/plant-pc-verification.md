@@ -264,17 +264,20 @@ On the laptop first (models with the YOLO weights), after `git pull`, **before b
    still those measured with the dark-blob finder (no YOLO in the sandbox): replace them with the laptop's (all three properties
    files, both `allenbradley.` and `siemens.`), then run `DryRun_SplitPin_Check_UI.py --auto`,
    `DryRun_Bung_Hub_Holes.py`, `DryRun_Cap_Hub_Distance.py` and build. Note the sd it prints: the cap rule allows 5 px.
-3. Repeatability: two frames of the same part (e.g. split pin 113431189 / 113432153, or 113447333 / 113448348) should
+3. `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --seed hubcheck` - the real hub check on the hub pictures as the
+   seed (as in production); it prints SAM holes - hub check centre for kind holes (about 0) and bolts -> put the bolts
+   value in `vision.hubholes.sam.seed.bolts.offset.<model>` (now -0.7,4.4 / -0.7,3.6, worked out from CHANGES 147).
+4. Repeatability: two frames of the same part (e.g. split pin 113431189 / 113432153, or 113447333 / 113448348) should
    give SAM centres within about 1 px of each other.
 
 On the Machine 2 PC with the new exe:
-4. The cap seating line (`hub from 4 cap holes (circle r .., spread .., gap .. deg, sam)`), the bung seating line (`...
+5. The cap seating line (`hub from 4 cap holes (circle r .., spread .., gap .. deg, sam)`), the bung seating line (`...
    deg (sam), DOST offset ...`) and the split pin line (`expectedFrom hub from 4 holes (...) r .. (sam), ...`) appear;
    a good part NOT OK with `the hub's N holes not found (annulus ... from the hub centre given (4 holes): gamma ...)` is
    the thing to report, with the picture.
-5. Times: the cap, bung and split pin checks each run YOLO + MobileSAM on the annulus now (up to 6 gammas, first success
+6. Times: the cap, bung and split pin checks each run YOLO + MobileSAM on the annulus now (up to 6 gammas, first success
    wins); their check times must stay well inside the 12 s timeout.
-6. To go back: `siemens.vision.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
+7. To go back: `siemens.vision.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
    cap 0.2,-0.1 / -0.6,-5.3; bung 4.9,-13.7 / 4.2,-16.0; split pin 1.8,1.6).
 
 ## Results
