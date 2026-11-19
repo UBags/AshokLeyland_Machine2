@@ -6,8 +6,13 @@ Each leg of the split pin is marked blue. Looking down on the nut, a pin that lo
 and lying on the washer; a leg that is straight, half bent, standing up or bent outwards ends beyond the washer's
 edge. So:
 
+  0. Where the washer should be (CHANGES 163, CENTRE_SOURCE "hubholes"): the hub's holes round the nut in this picture
+     (CheckCap.hubHoles - the cap and bung checks' method: 4 holes DOST, 5 DOSTPLUS, on a circle of r 140 - 160 px);
+     the expected washer centre = the hole circle's centre + HUB_OFFSET_DOST / HUB_OFFSET_DOSTPLUS.
+     - holes not found                                                     -> NOT OK, the hub's holes not found
+     CENTRE_SOURCE "fixed": the expected centre is CENTRE (CHANGES 162).
   1. Washer: the largest bright, unsaturated region (V >= WASHER_V_MIN, S <= WASHER_S_MAX) within SEARCH_RADIUS of
-     CENTRE, closed with a WASHER_CLOSE_KERNEL square. A circle fitted to its outline gives the washer's centre; the
+     the expected centre, closed with a WASHER_CLOSE_KERNEL square. A circle fitted to its outline gives the washer's centre; the
      95th percentile of the outline's distance from it is the tip radius of the scalloped edge.
      - no such region, or smaller than WASHER_AREA_MIN pixels             -> NOT OK, washer not found (no washer)
      - tip radius outside WASHER_TIP_RADIUS_MIN .. WASHER_TIP_RADIUS_MAX  -> NOT OK, washer outline not round (the
@@ -21,12 +26,12 @@ edge. So:
        outside the washer (not turned round the nut)
 
 The picture returned has outlines only: the washer outline (green OK / red NOT OK) and, when NOT OK because of a
-leg, the outline of the marker beyond the washer (red). Values and the reason go to the log.
+leg, the outline of the marker beyond the washer (red); the hub's hole circle thin blue. Values and the reason go to
+the log.
 
-Measured on 19 OK and 60 NOT OK pictures of 2026-11-19 (Machine 2, 1280 x 720): every OK picture passes; 58 of the 60
-NOT OK pictures are NOT OK. The two that pass (113431189, 113432153) are the same scene as the OK picture 113433320
-taken 1 - 2 s later: their difference is camera noise (mean 2.0 grey levels on a blurred crop, as between two frames
-of a still part).
+Measured on 21 OK and 58 NOT OK pictures of 2026-11-19 (Machine 2, 1280 x 720, DOST; labels as corrected by the user):
+every picture as labelled. The hub's 4 holes were found in all 79; the washer centre sits (-0.1 .. +3.5, -5.8 .. +5.2)
+px from the hole circle's centre (the washer is loose on the nut; HUB_OFFSET = the mean of the 3 parts' means).
 """
 
 import time
@@ -35,12 +40,13 @@ from typing import Dict, Tuple
 import cv2
 import numpy as np
 
-from utils.RedisUtils import DOST
+from utils.RedisUtils import DOST, DOSTPLUS
 from BaseUtils import getFullyQualifiedName
 from Configuration import CosThetaConfigurator
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
-from camera.VisionConfig import vFloat, vInt, vTuple
+from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
+from camera.VisionConfig import expectOneOf
 
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
@@ -49,6 +55,7 @@ CosThetaConfigurator.getInstance()
 
 GREEN = (0, 255, 0)
 RED = (0, 0, 255)
+BLUE = (255, 0, 0)
 
 
 def _filled(mask: np.ndarray) -> np.ndarray:
@@ -61,41 +68,73 @@ def _filled(mask: np.ndarray) -> np.ndarray:
 
 class CheckSplitPinAndWasher():
 
-    CENTRE = vTuple("vision.splitpin.centre", (644, 345))  # nominal centre of the nut in the 1280 x 720 picture
-    SEARCH_RADIUS = vInt("vision.splitpin.search.radius", 100)  # the washer is looked for within this distance of CENTRE
-    WASHER_V_MIN = vInt("vision.splitpin.washer.v.min", 160)
-    WASHER_S_MAX = vInt("vision.splitpin.washer.s.max", 70)
-    WASHER_CLOSE_KERNEL = vInt("vision.splitpin.washer.close.kernel", 9)
-    WASHER_AREA_MIN = vInt("vision.splitpin.washer.area.min", 2500)  # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
-    WASHER_TIP_RADIUS_MIN = vFloat("vision.splitpin.washer.tip.radius.min", 44.0)  # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
-    WASHER_TIP_RADIUS_MAX = vFloat("vision.splitpin.washer.tip.radius.max", 56.0)
-    WASHER_COVER_MIN = vFloat("vision.splitpin.washer.cover.min", 0.9)  # share of the circle round which the washer region is seen
-    MARKER_HUE_MIN = vInt("vision.splitpin.marker.hue.min", 100)
-    MARKER_HUE_MAX = vInt("vision.splitpin.marker.hue.max", 130)
-    MARKER_S_MIN = vInt("vision.splitpin.marker.s.min", 90)
-    MARKER_V_MIN = vInt("vision.splitpin.marker.v.min", 55)
-    MARKER_SEARCH_RADIUS = vInt("vision.splitpin.marker.search.radius", 120)
-    MARKER_PIXELS_MIN = vInt("vision.splitpin.marker.pixels.min", 100)  # OK pictures: 204 and more
-    LEG_OUTSIDE_DISTANCE = vFloat("vision.splitpin.leg.outside.distance", 8.0)  # px beyond the washer's own edge
-    LEG_OUTSIDE_PIXELS_MAX = vInt("vision.splitpin.leg.outside.pixels.max", 2)
+    CENTRE_SOURCE = "hubholes"  # "hubholes": expected washer centre from the hub's holes; "fixed": CENTRE
+    HUB_OFFSET_DOST = (1.8, 1.6)  # washer centre - hub hole circle centre (DOST, 21 OK pictures of 3 parts)
+    HUB_OFFSET_DOSTPLUS = (1.8, 1.6)  # not measured (no DOSTPLUS pictures): the DOST value
+    CENTRE = (644, 345)  # nominal centre of the nut in the 1280 x 720 picture (CENTRE_SOURCE "fixed")
+    SEARCH_RADIUS = 100  # the washer is looked for within this distance of CENTRE
+    WASHER_V_MIN = 160
+    WASHER_S_MAX = 70
+    WASHER_CLOSE_KERNEL = 9
+    WASHER_AREA_MIN = 2500  # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
+    WASHER_TIP_RADIUS_MIN = 44.0  # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
+    WASHER_TIP_RADIUS_MAX = 56.0
+    WASHER_COVER_MIN = 0.9  # share of the circle round which the washer region is seen
+    MARKER_HUE_MIN = 100
+    MARKER_HUE_MAX = 130
+    MARKER_S_MIN = 90
+    MARKER_V_MIN = 55
+    MARKER_SEARCH_RADIUS = 120
+    MARKER_PIXELS_MIN = 100  # OK pictures: 204 and more
+    LEG_OUTSIDE_DISTANCE = 8.0  # px beyond the washer's own edge
+    LEG_OUTSIDE_PIXELS_MAX = 2
 
     @staticmethod
-    def measure(anImage: np.ndarray) -> Dict:
+    def expectedCentre(anImage: np.ndarray, model: str = DOST) -> Dict:
+        """Where the washer should be: dict(found, centre, holes, reason). CENTRE_SOURCE "hubholes": the hub's hole
+        circle in this picture + HUB_OFFSET_<model>; "fixed": CENTRE."""
+        C = CheckSplitPinAndWasher
+        expectOneOf("vision.splitpin.centre.source", C.CENTRE_SOURCE, ("hubholes", "fixed"))
+        if str(C.CENTRE_SOURCE).strip().lower() != "hubholes":
+            return dict(found=True, centre=(float(C.CENTRE[0]), float(C.CENTRE[1])), holes=None, reason="fixed centre")
+        from camera.CheckCap import CheckCap
+        holes = CheckCap.hubHoles(anImage, DOSTPLUS if model == DOSTPLUS else DOST)
+        if not holes["found"]:
+            return dict(found=False, centre=None, holes=holes,
+                        reason=(f"the hub's {holes.get('count')} holes not found ({holes.get('reason')}; darkest "
+                                f"{holes.get('percentile')} %)"))
+        dx, dy = C.HUB_OFFSET_DOSTPLUS if model == DOSTPLUS else C.HUB_OFFSET_DOST
+        centre = (float(holes["cx"]) + float(dx), float(holes["cy"]) + float(dy))
+        return dict(found=True, centre=centre, holes=holes,
+                    reason=(f"hub from {holes['count']} holes ({holes['cx']:.1f}, {holes['cy']:.1f}) r "
+                            f"{holes['radius']:.1f}, {'DOSTPLUS' if model == DOSTPLUS else 'DOST'} offset "
+                            f"({float(dx):g}, {float(dy):g})"))
+
+    @staticmethod
+    def measure(anImage: np.ndarray, model: str = DOST) -> Dict:
         """Every value of the check on a BGR picture (1280 x 720). 'reason' is '' when OK. Masks under '_masks' (the
         outside mask in the coordinates of the part looked at, which starts at '_offset')."""
         C = CheckSplitPinAndWasher
         result = {"ok": False, "reason": ""}
-        # everything the check looks at lies within SEARCH_RADIUS + MARKER_SEARCH_RADIUS of CENTRE: work on that part
+        expected = CheckSplitPinAndWasher.expectedCentre(anImage, model)
+        result["_masks"] = {"holes": expected["holes"]}
+        if not expected["found"]:
+            result["reason"] = expected["reason"]
+            return result
+        ex, ey = expected["centre"]
+        result.update(expected=(round(ex, 1), round(ey, 1)), expectedFrom=expected["reason"])
+        # everything the check looks at lies within SEARCH_RADIUS + MARKER_SEARCH_RADIUS of the expected centre: work
+        # on that part
         reach = int(C.SEARCH_RADIUS + C.MARKER_SEARCH_RADIUS) + 2
-        x0, y0 = max(0, int(C.CENTRE[0]) - reach), max(0, int(C.CENTRE[1]) - reach)
-        part = anImage[y0:int(C.CENTRE[1]) + reach, x0:int(C.CENTRE[0]) + reach]
+        x0, y0 = max(0, int(round(ex)) - reach), max(0, int(round(ey)) - reach)
+        part = anImage[y0:int(round(ey)) + reach, x0:int(round(ex)) + reach]
         result["_offset"] = (x0, y0)
         hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
         H, S, V = (hsv[..., i].astype(np.int16) for i in range(3))
         h, w = H.shape
         yy, xx = np.mgrid[:h, :w]
         xx, yy = xx + x0, yy + y0                        # full-picture coordinates
-        r0 = np.hypot(xx - C.CENTRE[0], yy - C.CENTRE[1])
+        r0 = np.hypot(xx - ex, yy - ey)
         bright = ((V >= C.WASHER_V_MIN) & (S <= C.WASHER_S_MAX) & (r0 <= C.SEARCH_RADIUS)).astype(np.uint8)
         k = max(1, int(C.WASHER_CLOSE_KERNEL))
         closed = cv2.morphologyEx(bright, cv2.MORPH_CLOSE, np.ones((k, k), np.uint8))
@@ -109,7 +148,7 @@ class CheckSplitPinAndWasher():
         result["washerArea"] = area
         contours, _ = cv2.findContours(region.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         outline = max(contours, key=cv2.contourArea) + np.array([x0, y0], dtype=np.int32)   # full-picture coordinates
-        result["_masks"] = {"outline": outline}
+        result["_masks"]["outline"] = outline
         if area < C.WASHER_AREA_MIN:
             result["reason"] = f"washer not found (bright region {area} px < {C.WASHER_AREA_MIN})"
             return result
@@ -117,7 +156,8 @@ class CheckSplitPinAndWasher():
         solution = np.linalg.lstsq(np.c_[2 * points, np.ones(len(points))], (points ** 2).sum(1), rcond=None)[0]
         cx, cy = float(solution[0]), float(solution[1])
         tipRadius = float(np.percentile(np.hypot(points[:, 0] - cx, points[:, 1] - cy), 95))
-        result.update(centre=(round(cx, 1), round(cy, 1)), tipRadius=round(tipRadius, 1))
+        result.update(centre=(round(cx, 1), round(cy, 1)), tipRadius=round(tipRadius, 1),
+                      offsetFromExpected=round(float(np.hypot(cx - ex, cy - ey)), 1))
         if not (C.WASHER_TIP_RADIUS_MIN <= tipRadius <= C.WASHER_TIP_RADIUS_MAX):
             result["reason"] = (f"washer outline not round (tip radius {tipRadius:.1f} px outside "
                                 f"{C.WASHER_TIP_RADIUS_MIN} - {C.WASHER_TIP_RADIUS_MAX}; washer out of place or "
@@ -159,6 +199,9 @@ class CheckSplitPinAndWasher():
         marked = anImage.copy()
         masks = result.get("_masks", {})
         colour = GREEN if result.get("ok") else RED
+        holes = masks.get("holes")
+        if holes and holes.get("found"):
+            cv2.circle(marked, (int(round(holes["cx"])), int(round(holes["cy"]))), int(round(holes["radius"])), BLUE, 1)
         if "outline" in masks:
             cv2.drawContours(marked, [masks["outline"]], -1, colour, 2)
         outside = masks.get("outside")
@@ -167,13 +210,13 @@ class CheckSplitPinAndWasher():
             contours, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE,
                                            offset=tuple(int(v) for v in result.get("_offset", (0, 0))))
             cv2.drawContours(marked, contours, -1, RED, 2)
-        if not masks:
+        if "outline" not in masks:
             cv2.rectangle(marked, (2, 2), (marked.shape[1] - 3, marked.shape[0] - 3), RED, 4)
         return marked
 
     @staticmethod
     def summary(result: Dict) -> str:
-        keys = ("washerArea", "centre", "tipRadius", "cover", "markerPixels", "outsidePixels", "outsideMax")
+        keys = ("expected", "expectedFrom", "washerArea", "centre", "offsetFromExpected", "tipRadius", "cover", "markerPixels", "outsidePixels", "outsideMax")
         return ", ".join(f"{k} {result[k]}" for k in keys if k in result)
 
     @staticmethod
@@ -186,8 +229,10 @@ class CheckSplitPinAndWasher():
         if anImage is None:
             logBoth('logError', _src, "CheckSplitPinAndWasher: NOT OK - no picture", MessageType.ISSUE)
             return anImage, False
+        modelName, _, _ = getModel_LHSRHS_AndTonnage(componentQRCode)
+        model = DOSTPLUS if modelName == DOSTPLUS else DOST          # an unknown model is taken as DOST (as CheckCap)
         started = time.perf_counter()
-        result = CheckSplitPinAndWasher.measure(anImage)
+        result = CheckSplitPinAndWasher.measure(anImage, model)
         marked = CheckSplitPinAndWasher.markedPicture(anImage, result)
         elapsed = time.perf_counter() - started
         values = CheckSplitPinAndWasher.summary(result)
