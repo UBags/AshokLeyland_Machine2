@@ -100,6 +100,33 @@ def line(path, expected, verdict, elapsed, reason):
             + (f"   {reason}" if reason else ""))
 
 
+def skipSwitch(items) -> list:
+    """skip.splitpin.and.washer.check (CHANGES 173): True -> checkSplitPinAndWasher returns OK with the picture as taken,
+    whatever the picture (here a NOT OK one); False -> the check's own result. The switch is read through getTuning at
+    every check; set here by standing in for getTuning."""
+    from Configuration import CosThetaConfigurator as C
+    bad = [p for p, e in items if e == "NOT OK"][:1] or [p for p, _ in items][:1]
+    if not bad:
+        return []
+    image = cv2.resize(cv2.imread(str(bad[0])), (1280, 720))
+    real = C.getTuning
+    out = []
+    try:
+        for value in (True, False):
+            C.getTuning = classmethod(lambda cls, key, default, minimum=None, _v=value: _v
+                                      if key == "skip.splitpin.and.washer.check" else real(key, default, minimum))
+            picture, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, QR)
+            expected = True if value else bool(CheckSplitPinAndWasher.measure(image)["ok"])
+            same = picture is not None and (not value or (picture.shape == image.shape and (picture == image).all()))
+            print(f"  skip.splitpin.and.washer.check={value}: {bad[0].name} -> {'OK' if ok else 'NOT OK'}"
+                  + (" (picture as taken)" if value and same else ""), flush=True)
+            if bool(ok) != expected or not same:
+                out.append((bad[0].name, f"switch {value}", "OK" if ok else "NOT OK"))
+    finally:
+        C.getTuning = real
+    return out
+
+
 def auto(folder: pathlib.Path) -> int:
     items = picturesIn(folder)
     counts, mismatches, known = {}, [], []
@@ -120,6 +147,7 @@ def auto(folder: pathlib.Path) -> int:
         print(f"  known disagreement: {name} labelled {e}, checked {v} ({KNOWN_DISAGREEMENTS[name]})")
     for name, e, v in mismatches:
         print(f"  MISMATCH: {name} expected {e}, checked {v}")
+    mismatches += skipSwitch(items)
     print("RESULT:", "PASS" if not mismatches else f"FAIL ({len(mismatches)} mismatch(es))", f"({labelled} labelled)")
     return 0 if not mismatches else 1
 

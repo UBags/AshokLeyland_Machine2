@@ -84,7 +84,7 @@ The trigger in each state is the tag read in that state; the write states write 
 | 16/17 | No bung | CheckNoBung | Handshake. OK → 18 |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | Station2TorqueValueSet | → 19 |
 | 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue, RotationDuringTighteningDone | To FE; reset after 2.0 s → 20 |
-| 20/21 | Split pin and washer | CheckSplitPinAndWasher (washer placed from the hub's holes, blue legs inside it, CHANGES 162, 163) | Handshake. OK → 22 |
+| 20/21 | Split pin and washer | CheckSplitPinAndWasher (washer placed from the hub's holes, blue legs inside it, CHANGES 162, 163; `skip.splitpin.and.washer.check=True`: pictures taken, check not run, OK, CHANGES 173) | Handshake. OK → 22 |
 | 22/23 | Cap | CheckCap | Handshake. OK → 24 |
 | 24/25 | Bung for cap press | CheckBungForCapPress | Handshake. OK → 26 |
 | 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset after 1.5 s → 27 |
@@ -275,8 +275,9 @@ seated centres below, as before), the top-face mask's roundness ≥ 0.925 (DOST 
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 6% of it outside the model's reference oval (code default 2%)
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
 red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119); when the seating
-step did not run, `drawSeatingMarks` finds the hub's holes on the camera picture as taken (`source_rgb`), never on the
-result picture with the bung masks painted (CHANGES §157). A value of `seating.position.source` /
+step did not run (pattern failed or none), the hub's holes are not looked for and no oval is drawn (CHANGES §173; from
+§157 to §172 `drawSeatingMarks` looked for them on the camera picture only to draw the oval - up to 3 - 4 s with YOLO +
+MobileSAM). A value of `seating.position.source` /
 `cap.seating.hub.source` outside its choices is logged (`VisionConfig.expectOneOf`). Each uses its own
 `SamPredictor` per thread on the shared model.
 
@@ -529,6 +530,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `picture.retention.days.trial` / `picture.retention.days.main` | 30 / 60 (0 = no clean-up) | 1 |
 | `<vendor>.vision.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
 | Tuning block (CHANGES 154, `getTuning`, read at import): `plc.settings.write.attempts` / `.frontend.abort.write.attempts` / `.vision.result.reset.attempts` / `.reset.write.attempts` / `.reference.read.attempts`, `plc.write.retry.interval.sec`, `plc.reset.float.tolerance`, `plc.trigger.held.warning.sec`; `qrcode.invalid.notice.sec`, `qrcode.line.quiet.sec`; `camera.worker.*` (ready / stop timeout, timeouts in a row, restart back-off base / max, transfer warning), `camera.bearing.ring.guard.max.wait.sec`; `db.idle.poll.sec`, `db.insert.max.attempts`, `db.insert.retry.gap.sec`, `db.day.check.interval.sec`, `db.statement.timeout.ms`; `frontend.status.stale.after.intervals`, `.abort.tiles.clear.msec`, `.state.sync.poll.interval.msec`, `.outcome.second.line.(min.)point.size`; `log.slave.queue.size` / `.pending.limit`, `log.master.file.batch` / `.stop.check.interval.sec`, `log.suppressed.repeat.every`; `redis.io.state.stream.maxlen`; `supervisor.grace.sec`; `endpoints.webservice.port`, `.mi.port`, `.showscreen.*`; `debug.print.checkbung.*` / `.checknocapbung.*` | 3 / 3 / 5 / 5 / 3, 0.2, 0.001, 3.0; 10.0, 0.3; 600 / 3 / 3 / 1 / 60 / 1.0, 5.0; 1.0, 3, 5.0, 60, 5000; 3, 750, 250, 13 / 8; 5000 / 20000, 200 / 0.5, 100; 500; 2.0; 8000, 8050, 8100 / 8099 / 1.0 / 0.6; False (success.evaluation True) | 1-7 |
+| `skip.splitpin.and.washer.check` (CHANGES 173; tuning block, read at every check): True = at state 20 the camera takes the pictures, `checkSplitPinAndWasher` returns OK without running the check (picture as taken, "check skipped" in the log); False = the check runs and decides | False | 3 |
 | `mainprogram.stop.min.wait.sec` / `mainprogram.db.drain.wait.max.sec` (CHANGES 157; replace `mainprogram.stop.wait.sec`): the wait after the stop command, until the DB server reports `fe2db.q` drained | 2.0 / 20.0 | 1-7 |
 | `language.<english\|kannada\|tamil\|hindi>.fontsize.adjustment` (CHANGES 157, 158): points added to every fitted main-screen font in that language (not the QR code line) | 0 / -2 / 0 / -2 | 5 |
 | `frontend.creator.fill.share` (CHANGES 158): share of its label the creator line is fitted to | 0.95 | 5 |

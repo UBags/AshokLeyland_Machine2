@@ -5377,3 +5377,22 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   holes in the seating step, the seating step's face part, hub holes for the marks only, the rest, and the dry run's
   own hub check (not in production) separately.
 - Not run here: the window (tkinter / YOLO) - parsed only.
+
+## 173. Bung: no hub-hole search for the marks of a NOT OK picture; skip.splitpin.and.washer.check (2026-11-20)
+
+- **Bung (Uddi: "Skip this. Not required at all"):** `CheckBung.drawSeatingMarks` no longer looks for the hub's holes
+  when the seating step did not run (hole pattern failed or no pattern at any gamma); it draws only what the check
+  found (no reference oval on such a picture). From CHANGES 157 to 172 it ran `seated_position` there only to draw the
+  oval - with YOLO + MobileSAM up to all 6 gammas (3 - 4 s when the holes are covered), in production too. Verdicts
+  unchanged: the decision sequence is (a) the bung's pattern of the model's count, (b) only then the hub's holes, (c)
+  not found -> NOT SEATED, (d) seated position and face rules. `CheckNoCapBung` uses the same function. `CheckBung` is
+  not in the verifier's manifest (no vision keys of its own).
+- **Split pin:** new key `skip.splitpin.and.washer.check` (tuning block, three properties files, delivered False),
+  read through `getTuning` at every check: True -> `checkSplitPinAndWasher` returns OK with the picture as taken and
+  logs "check skipped" (the camera server still takes the pictures and runs its 2-of-3 vote, all OK); False -> the
+  check runs and its result decides. Reference commit 2484023 (CheckSplitPinAndWasher), both manifests.
+- **Dry runs:** `DryRun_SplitPin_Check_UI --auto` checks the switch (True: a NOT OK picture -> OK, picture unchanged;
+  False: NOT OK). `DryRun_Tuning_Keys` picks the new key up by itself.
+- Run: verifier both ALL EQUIVALENT (408 parameters); `DryRun_Tuning_Keys` both 235/235; `DryRun_SplitPin_Check_UI
+  --auto --holes morphology` both PASS 79/79 + switch; `DryRun_Bung_Hub_Holes --holes morphology` 6/6. Not run: the
+  bung window / bung checks with YOLO (laptop).

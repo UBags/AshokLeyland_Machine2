@@ -242,6 +242,10 @@ On the Machine 2 PC, with the new exe:
 
 ## 13. Split pin and washer check (CHANGES 162)
 
+`skip.splitpin.and.washer.check` (CHANGES 173, delivered False): True = at the split pin step the pictures are still
+taken but the check is not run and the step is OK (log: `CheckSplitPinAndWasher: OK - check skipped`). Check the
+delivered exe has False unless the plant wants the check off.
+
 1. On the laptop: `python test\machine2_dryrun\DryRun_SplitPin_Check_UI.py` - go through the pictures (zoom on the
    nut): green washer outline on the OK ones, red outline and the leg beyond the washer outlined red on the NOT OK
    ones. `--auto` prints `RESULT: PASS`.

@@ -118,7 +118,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
 - Torque OK / NOT OK is the PLC's decision; the PC only records the values.
-- Split pin + washer check (CHANGES 162, 163): the hub's holes in the picture (`FindHubHoles.findHoles`) + offset give the
+- Split pin + washer check (CHANGES 162, 163): `skip.splitpin.and.washer.check=True` (tuning block, read at every check;
+  CHANGES 173) = pictures still taken, the check not run, always OK; False (delivered) = the check below decides.
+  The hub's holes in the picture (`FindHubHoles.findHoles`) + offset give the
   expected washer centre (holes not found = NOT OK; `centre.source=fixed` = the fixed centre); washer region round it,
   blue-marked legs, NOT OK when more than 2 marker pixels lie more than 8 px outside the washer. Values from 3 OK parts
   (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
@@ -128,7 +130,8 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   holes and bolts, `checkHub()`'s steps up to the candidate sets passing its equidistant / equal-angle filters, the best
   set of each group, the top 3; the holes = the smallest total mask area among the sets with a hole-circle radius
   (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (c) everything after the
-  holes exactly as at `8a57f85` (CHANGES 163), in the same order. `findHolesWithSAM_Slow` (`sam_slow`) = the CHANGES
+  holes exactly as at `8a57f85` (CHANGES 163), in the same order. Bung: the hub's holes only when the bung's own pattern
+  passed - not for the marks of a NOT OK picture (CHANGES 173). `findHolesWithSAM_Slow` (`sam_slow`) = the CHANGES
   164 - 166 thin-annulus finder, kept; `findHolesWithMorphology` = the old dark-blob finder (moved from
   `CheckCap.hubHoles`; its offsets are the dark-blob ones, not those in the properties since 165). **Do not change
   `checkHub()`** (`CheckHubAndBottomBearing.checkHubAndBottomBearing`, `HubAndBearingSegmenter`): it works (Uddi,
