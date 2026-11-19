@@ -75,8 +75,11 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   English. The Indic translations are drafts awaiting a native speaker's review. Main-screen fonts are fitted per
   family with every text measured (`fittingPointSize`, QFontMetrics), then `language.<english|kannada|tamil|hindi>.
   fontsize.adjustment` added (0 / -2 / 0 / -2; CHANGES 157, 158). The QR code line: fitted once in English to
-  "QR CODE : " + 30 sample characters, no adjustment, same size in every language; the creator line fills
-  `frontend.creator.fill.share` (0.95) of its label (CHANGES 158).
+  "QR CODE : " + 40 sample characters when the window has its final size, no adjustment, same size in every language,
+  never refitted; the creator line fills `frontend.creator.fill.share` (0.95) of its label (CHANGES 158, 159). Fitted
+  fonts of the QR code, mode, creator and date lines are also written into the label's style sheet (`applyFont` /
+  `styleSheetWithFont`: the sheets carry `font: bold`, which takes precedence over setFont); a "Frontend fonts (...)"
+  line logs each family's size at start and at every change of language (CHANGES 159).
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.

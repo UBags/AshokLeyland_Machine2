@@ -86,6 +86,31 @@ def fittingPointSize(widget, texts, font=None, widthShare: float = 1.0, heightSh
     return low
 
 
+def styleSheetWithFont(styleSheet: str, font) -> str:
+    """styleSheet with its font declaration replaced by the font's own (style, weight, size, family), so that the style
+    sheet and the font set agree (CHANGES 159). Qt gives a style sheet's font precedence over setFont(): the frontend's
+    label style sheets carry "font: bold", and a font set with setFont() alone can be replaced on a re-polish (a new
+    style sheet, a style change) by the font the widget had when the style sheet was applied."""
+    import re
+    body = re.sub(r"(?<![-\w])font\s*:[^;]*;?", "", styleSheet or "").strip()
+    if body and not body.endswith(";"):
+        body += ";"
+    parts = (["italic"] if font.italic() else []) + (["bold"] if font.bold() else [])
+    family = font.family().replace('"', "")
+    return f'{body} font: {" ".join(parts + [str(int(font.pointSize())) + "pt"])} "{family}";'.strip()
+
+
+def applyFont(label, font) -> None:
+    """Set font on a label both ways - setFont() and inside its style sheet (styleSheetWithFont) - starting from the
+    label's style sheet as it was before the first applyFont (kept as the property "_baseStyleSheet")."""
+    base = label.property("_baseStyleSheet")
+    if base is None:
+        base = label.styleSheet()
+        label.setProperty("_baseStyleSheet", base)
+    label.setFont(font)
+    label.setStyleSheet(styleSheetWithFont(base, font))
+
+
 def largestFittingPointSize(label, text: str, hMargin: int = 16, vMargin: int = 8,
                             minPointSize: int = 6, maxPointSize: int = 200) -> int:
     """The largest point size (label's font face and weight) at which text fits the label as it is laid out now:

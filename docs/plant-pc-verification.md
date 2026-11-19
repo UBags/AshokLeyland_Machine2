@@ -224,6 +224,10 @@ On the Machine 2 PC, with the new exe:
    texts are one point smaller than the fit (`language.hindi.fontsize.adjustment=-1`), in the others at the fit.
    Since CHANGES 158: Kannada and Hindi two points smaller (`-2`); the QR code line has the same size in all four
    languages, with room for a 30-character code after "QR CODE :"; the creator line is larger than before.
+   Since CHANGES 159: room for 40 characters; the QR code line keeps its start size through every change of language
+   and every QR code. The console / log has a line `Frontend fonts (start, en, window W x H): QR n pt / w px, mode ...,
+   creator ...` at start and one at each change of language: send these lines if a size looks wrong (a "(drawn n)"
+   means Qt draws another size than the one set).
    Reported by Uddi on 2026-11-19: the dialogs show Kannada, Tamil and Hindi correctly.
 
 ## 12. Exit: the DB server drains, MainProgram waits for it (CHANGES 157)

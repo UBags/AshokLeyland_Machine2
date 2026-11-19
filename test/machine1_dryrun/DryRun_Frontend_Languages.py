@@ -156,7 +156,7 @@ fe.setGeometry(0, 0, 1920, 1050)
 fe.setFixedSize(1920, 1050)
 pump(1.5)
 fe._qrCodeFont = None       # the QR code line is fitted once: again for the plant screen's size (CHANGES 158)
-fe.onLanguageChanged()      # refits the fonts to the new size
+fe.fitFontsOnceShown()      # refits the fonts to the new size, the QR code line once (CHANGES 159)
 pump(0.5)
 from frontend.frontendutils.CosThetaLabelUtils import fittingPointSize as _fit   # noqa: E402
 from PySide6.QtGui import QFont as _QFont                                        # noqa: E402
@@ -177,7 +177,7 @@ EXPECT = {"kn": ("ನಕಲ್ ಪರಿಶೀಲನೆ", "ಫಲಿತಾಂಶ
           "hi": ("नकल जाँच", "परिणाम की प्रतीक्षा", "डेटाबेस बंद: अगली साइकिल रोकी गई", "मोड", " क्रियाएँ ")}
 menuActions = [a for a in fe.menuBar().actions()]
 from frontend.frontendutils.CosThetaLabelUtils import fittingPointSize, largestFittingPointSize   # noqa: E402
-from PySide6.QtGui import QFont                                    # noqa: E402
+from PySide6.QtGui import QFont, QFontInfo                         # noqa: E402
 
 
 def fontChecks(code):
@@ -215,8 +215,10 @@ def fontChecks(code):
     shown = f"   {I.tr('QR CODE : ')}{FE.QR_CODE_SAMPLE}   "
     withoutNotice = qrLabel.width() + (fe.noticeLabel.width() if fe.noticeLabel.isVisible() else 0)
     check(f"L6 {code}: QR code line at the English fit {qrStartFit} found at start (no adjustment); "
-          f"'{I.tr('QR CODE : ')}' + 30 sample characters within the label's width without the notice",
-          qrLabel.font().pointSize() == qrStartFit and len(FE.QR_CODE_SAMPLE) == 30
+          f"'{I.tr('QR CODE : ')}' + 40 sample characters within the label's width without the notice; the size in "
+          f"its style sheet, drawn at that size",
+          qrLabel.font().pointSize() == qrStartFit and len(FE.QR_CODE_SAMPLE) == 40
+          and f"{qrStartFit}pt" in qrLabel.styleSheet() and QFontInfo(qrLabel.font()).pointSize() == qrStartFit
           and QFontMetrics(qrLabel.font()).horizontalAdvance(shown) <= withoutNotice,
           f"{qrLabel.font().pointSize()} pt, {QFontMetrics(qrLabel.font()).horizontalAdvance(shown)} of {withoutNotice} px "
           f"({qrLabel.width()} px beside the notice)")
@@ -227,8 +229,9 @@ def fontChecks(code):
                                   heightShare=FE.CREATOR_FILL_SHARE, hMargin=10, vMargin=10)
     oldFit = fittingPointSize(creator, [f"   {creator.text()}   "], font=creatorBold, widthShare=0.8, heightShare=0.8)
     check(f"L6 {code}: creator line {creatorFont.family()}, size fit {creatorFit} + adjustment {adjustment} "
-          f"(0.8 share with padding gave {oldFit})",
-          creatorFont.family() == "Segoe UI"
+          f"(0.8 share with padding gave {oldFit}); the size in its style sheet, drawn at that size",
+          creatorFont.family() == "Segoe UI" and f"{creatorFont.pointSize()}pt" in creator.styleSheet()
+          and QFontInfo(creatorFont).pointSize() == creatorFont.pointSize()
           and creatorFont.pointSize() == max(4, creatorFit + adjustment) and creatorFit > oldFit,
           str(creatorFont.pointSize()))
     titleFit = min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles)
@@ -265,6 +268,16 @@ for code in ("kn", "ta", "hi"):
         folder.mkdir(parents=True, exist_ok=True)
         fe.grab().save(str(folder / f"frontend_{code}.png"))
 check("L6 the QR code line has one size in all four languages", len(qrSizes) == 1, str(sorted(qrSizes)))
+# a QR code shown, then cleared, then the language changed (each sets a new style sheet): the size stays (CHANGES 159)
+fe.setQRCodeContainerDisplay("7204838$400112VA1D$BURSTX$30.10.2026$X$"); pump(0.3)
+afterCode = fe.qrCodeLabel.font().pointSize()
+fe.setQRCodeContainerDisplay(""); pump(0.3)
+selector.setCurrentIndex(selector.findData("ta")); pump(0.8)
+afterTamil = fe.qrCodeLabel.font().pointSize()
+selector.setCurrentIndex(selector.findData("hi")); pump(0.8)
+check("L6 QR code line: a QR code shown, cleared, the language changed twice - the size stays the start fit",
+      afterCode == afterTamil == fe.qrCodeLabel.font().pointSize() == qrStartFit
+      and QFontInfo(fe.qrCodeLabel.font()).pointSize() == qrStartFit, f"{afterCode} / {afterTamil} / {qrStartFit}")
 selector.setCurrentIndex(selector.findData("en"))
 pump(1.0)
 check("L4 back to English", [t.title_label.text() for t in tiles] == englishTitles

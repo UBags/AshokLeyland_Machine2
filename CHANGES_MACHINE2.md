@@ -4957,3 +4957,37 @@ fitted? - and fitted dynamically.
   and Hindi); `DryRun_Tuning_Keys` 231/231 both vendors (T7: 0 / -2 / 0 / -2 = the code defaults; the new key).
   Sizes at 1920 x 1050 (en / kn / ta / hi): instruction 19 / 18 / 13 / 23, connection 20 / 18 / 13 / 32, titles 16 /
   14 / 13 / 17, hints 18 / 16 / 18 / 16, QR code 23 everywhere.
+
+## 159. QR code line fitted once (40 characters) and kept; fitted fonts carried in the style sheets; font log line (2026-11-19)
+
+User (screenshots of the laptop run after CHANGES 158): (1) "Created by CosTheta ..." still very small; (2) the QR code
+line is right at start in English, but after a change of language it goes back to the large font: work it out once,
+in English, at the start and never change it; 40 characters instead of 30, so that it also fits beside a notice.
+
+- **Not reproduced here, diagnosis by reading.** In the sandbox (Python 3.12, PySide6 6.9.1 - the version of
+  `requirements.txt` - Linux, Xvfb) the QR code line kept its start size through every change of language and the creator
+  line followed its fit (13 / 11 / 10 / 15 pt). Two things fit the laptop screenshots, where the creator line has the same
+  small size in all four languages (not its fit, which differs per language) and the QR code line returns to its
+  initial large size:
+  1. the labels' style sheets carry `font: bold`, and Qt gives a style sheet's font precedence over `setFont()`: on a
+     re-polish (a new style sheet - `setQRCodeContainerDisplay` sets one at every change of language and QR code - or
+     a style change) the font can come back to the one the label had when the sheet was applied (the QR label's
+     initial size, the creator's initial 12 pt). Not reproduced on Linux; the Windows style may behave otherwise.
+  2. the start fits ran right after `showMaximized()` + one `processEvents()`; on Windows the maximise can land later,
+     so the widgets did not yet have their final size, and the QR font (fitted once) was fitted to that.
+- **Now:**
+  - `CosThetaLabelUtils.styleSheetWithFont(sheet, font)` / `applyFont(label, font)`: the fitted font is set with
+    `setFont()` **and** written into the label's style sheet (`font: bold <n>pt "<family>"`, the sheet's own `font:` replaced;
+    the base sheet kept in the property `_baseStyleSheet`). Used for the QR code, mode, creator and date lines;
+    `setQRCodeContainerDisplay` adds the QR font to each new sheet. A sheet and the font can no longer disagree.
+  - QR code line: `QR_CODE_SAMPLE` 40 characters; fitted once in `fitFontsOnceShown` (`QTimer.singleShot(0)` after the
+    window got its fixed size at the end of `__init__`, which also refits every other family); `onLanguageChanged`
+    no longer touches it. At 1920 x 1050: 19 pt (23 with 30 characters), the same in all four languages.
+  - `logFittedFonts`: console / log line "Frontend fonts (start | language changed, <lang>, window W x H): QR n pt / w px,
+    mode ..., creator ..., date ..., instruction ..., connection ..." - "(drawn n)" when Qt draws another size than set.
+    If the laptop still shows a wrong size, these lines show which.
+- Run (Python 3.12, PySide6 6.9.1, Xvfb): `DryRun_Frontend_Languages` 89/89 both copies (L6 now: 40 sample characters;
+  the size in the QR code and creator lines' style sheets and drawn at it; new: a QR code shown, cleared and the
+  language changed twice - the QR size stays its start fit); `DryRun_Tuning_Keys` 231/231. Creator at 1920 x 1050:
+  13 / 11 / 10 / 15 pt (en / kn / ta / hi) on a 534 px label. Not run: Windows - the two causes above are not proven
+  there; the font line will show it.

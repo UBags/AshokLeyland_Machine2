@@ -39,6 +39,7 @@ from PySide6.QtGui import (
     QPixmap,
     QImage,
     QFont,
+    QFontInfo,
     QAction, QKeyEvent,
 )
 
@@ -73,7 +74,8 @@ from frontend.SimplePopups import (
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
     getConfirmation, getJustPassword, showErrorMessage, updateMachineSettingsDialog, canChangeMachineSettings)
-from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize, fittingPointSize
+from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize, fittingPointSize, applyFont, \
+    styleSheetWithFont
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
@@ -289,11 +291,11 @@ class AshokLeylandFrontEnd(QMainWindow):
             QApplication.processEvents()
             self.resultsContainer.fitInstructionFont(self.machineState.getAllInstructions())
             self.calculateAndSetIdealFontForModeLabel()
-            self.calculateAndSetIdealFontForQRCodeLabel()
             self.calculateAndSetIdealFontForDateTimeLabel()
             self.calculateAndSetIdealFontForCreatorLabel()
             self.calculateAndSetIdealFontForConnectionStatus()
             self.resultsContainer.calculateAndSetIdealFontsForTitlesAndResults()
+            # (the QR code line is fitted once, in fitFontsOnceShown, when the window has its final size)
             self.setInitialInstruction()
             self.setQRCodeContainerDisplay(displayString="")
             self.createWorkers()
@@ -311,8 +313,42 @@ class AshokLeylandFrontEnd(QMainWindow):
             printBoldBlue("*****************")
             self.setFixedWidth(AshokLeylandFrontEnd.CURRENT_WIDTH)
             self.setFixedHeight(AshokLeylandFrontEnd.CURRENT_HEIGHT)
+            # the fonts once more when the window has its final size (on Windows the maximise can land after the
+            # processEvents above); the QR code line is fitted here, once (CHANGES 159)
+            QTimer.singleShot(0, self.fitFontsOnceShown)
         except Exception as e:
             print(e)
+
+    def fitFontsOnceShown(self) -> None:
+        """All font fits with the window at its final size; the QR code line's font is worked out here, once."""
+        try:
+            QApplication.processEvents()
+            self.calculateAndSetIdealFontForQRCodeLabel()
+            self.calculateAndSetIdealFontForModeLabel()
+            self.calculateAndSetIdealFontForDateTimeLabel()
+            self.calculateAndSetIdealFontForCreatorLabel()
+            self.calculateAndSetIdealFontForConnectionStatus()
+            self.resultsContainer.calculateAndSetIdealFontsForTitlesAndResults()
+            self.resultsContainer.fitInstructionFont(self.machineState.getAllInstructions())
+            self.logFittedFonts("start")
+        except Exception as e:
+            printRed(f"Frontend: could not fit the fonts: {e}")
+
+    def logFittedFonts(self, when: str) -> None:
+        """One line with each family's font as set and as Qt draws it (QFontInfo), and the widget's width (CHANGES 159):
+        a size that is not the one set shows at once in the log."""
+        def one(name, label):
+            set_ = label.font().pointSize()
+            drawn = QFontInfo(label.font()).pointSize()
+            return f"{name} {set_} pt{'' if drawn == set_ else f' (drawn {drawn})'} / {label.width()} px"
+        try:
+            line = ", ".join([one("QR", self.qrCodeLabel), one("mode", self.modeLabel),
+                              one("creator", self.creatorStatus.label()), one("date", self.dateTimeStatus.label()),
+                              one("instruction", self.resultsContainer.instructionLabel),
+                              one("connection", self.cameraServerConnectionStatusContainer.label())])
+            printBlue(f"Frontend fonts ({when}, {currentLanguage()}, window {self.width()} x {self.height()}): {line}")
+        except Exception as e:
+            printRed(f"Frontend: could not log the fonts: {e}")
 
     def connectToRedis(self, forceRenew = False):
         if forceRenew:
@@ -607,6 +643,14 @@ class AshokLeylandFrontEnd(QMainWindow):
     # A SimpleMessageContainer (date / time, creator) is measured on its inner label, with the label's font: before
     # CHANGES 158 the container's own font was measured - the application's default font, not the label's Segoe UI -
     # and that default font was then set on the label, so the creator line lost its face (and was fitted wrongly).
+    def _applyFitted(self, widget, font: QFont) -> None:
+        """A fitted font onto a label, or a SimpleMessageContainer's label, through setFont and its style sheet."""
+        if hasattr(widget, "label"):
+            widget.setFont(font)                  # keeps the container's own copy in step
+            applyFont(widget.label(), font)
+        else:
+            applyFont(widget, font)
+
     def _fitBold(self, widget, texts, share: float, hMargin: int = 0, vMargin: int = 0, adjust: bool = True) -> QFont:
         target = widget.label() if hasattr(widget, "label") else widget
         font = QFont(target.font())
@@ -617,16 +661,14 @@ class AshokLeylandFrontEnd(QMainWindow):
         return font
 
     def calculateAndSetIdealFontForModeLabel(self):
-        self.modeLabel.setFont(self._fitBold(self.modeLabel, [f"       {self.modeLabel.text()}       "], 0.95))
+        self._applyFitted(self.modeLabel, self._fitBold(self.modeLabel, [f"       {self.modeLabel.text()}       "], 0.95))
 
-    # The QR code line is fitted to "QR CODE : " and 30 sample characters, in English, whatever language is shown, and
-    # without the language's adjustment: one size for every language and every QR code (CHANGES 158; before, the
-    # text shown when it was fitted - "QR CODE : " alone - so a real QR code could run past the widget). Fitted once,
-    # at the first call (after the window is shown), to the label's width without a notice (the label shares its row
-    # with the notice, which comes and goes: a notice shown at that moment is added back), so the size does not depend
-    # on what was on the screen at start. Later calls (a change of language) set the same size again. A notice shown
-    # next to a long QR code narrows the label and can cut the code's end (centred text).
-    QR_CODE_SAMPLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123"
+    # The QR code line is fitted to "QR CODE : " and 40 sample characters (CHANGES 159; 30 in CHANGES 158 - 40 leaves
+    # room for the notice beside it), in English, without the language's adjustment, ONCE: when the window has its
+    # final size (fitFontsOnceShown), to the label's width without a notice (a notice shown then is added back). The
+    # font is kept in _qrCodeFont and carried in the label's style sheet (setQRCodeContainerDisplay), so a change of
+    # language, a new QR code or a re-polish cannot change it; nothing refits it afterwards.
+    QR_CODE_SAMPLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCD"
 
     def calculateAndSetIdealFontForQRCodeLabel(self):
         if getattr(self, "_qrCodeFont", None) is None:
@@ -634,9 +676,11 @@ class AshokLeylandFrontEnd(QMainWindow):
             self._qrCodeFont = self._fitBold(self.qrCodeLabel, [f"   QR CODE : {self.QR_CODE_SAMPLE}   "], 0.95,
                                              hMargin=-notice, adjust=False)
         self.qrCodeLabel.setFont(self._qrCodeFont)
+        self.setQRCodeContainerDisplay(displayString=getattr(self, "qrCodeDisplayString", ""))
 
     def calculateAndSetIdealFontForDateTimeLabel(self):
-        self.dateTimeStatus.setFont(self._fitBold(self.dateTimeStatus, [f"   {self.dateTimeStatus.getText()}   "], 0.8))
+        self._applyFitted(self.dateTimeStatus,
+                          self._fitBold(self.dateTimeStatus, [f"   {self.dateTimeStatus.getText()}   "], 0.8))
 
     def calculateAndSetIdealFontForConnectionStatus(self):
         """One fixed size for the 4 connection status tiles: the largest at which every one of their 8 messages (OK and
@@ -655,8 +699,8 @@ class AshokLeylandFrontEnd(QMainWindow):
     CREATOR_FILL_SHARE: float = CosThetaConfigurator.getTuning("frontend.creator.fill.share", 0.95, minimum=0.1)
 
     def calculateAndSetIdealFontForCreatorLabel(self):
-        self.creatorStatus.setFont(self._fitBold(self.creatorStatus, [self.creatorStatus.getText()],
-                                                 AshokLeylandFrontEnd.CREATOR_FILL_SHARE, hMargin=10, vMargin=10))
+        self._applyFitted(self.creatorStatus, self._fitBold(self.creatorStatus, [self.creatorStatus.getText()],
+                                                            AshokLeylandFrontEnd.CREATOR_FILL_SHARE, hMargin=10, vMargin=10))
 
     def setupMenu(self):
         """Set up menubar."""
@@ -879,12 +923,13 @@ class AshokLeylandFrontEnd(QMainWindow):
                 self.languageSelector.blockSignals(False)
             QApplication.processEvents()
             self.calculateAndSetIdealFontForModeLabel()
-            self.calculateAndSetIdealFontForQRCodeLabel()
             self.calculateAndSetIdealFontForDateTimeLabel()
             self.calculateAndSetIdealFontForCreatorLabel()
             self.calculateAndSetIdealFontForConnectionStatus()
             self.resultsContainer.calculateAndSetIdealFontsForTitlesAndResults()
             self.resultsContainer.fitInstructionFont(self.machineState.getAllInstructions())
+            # the QR code line is not refitted (fitted once, in English, at start; its style sheet carries the font)
+            self.logFittedFonts("language changed")
         except Exception as e:
             printRed(f"Frontend: could not show the texts in the new language: {e}")
 
@@ -1276,14 +1321,19 @@ class AshokLeylandFrontEnd(QMainWindow):
 
     def setQRCodeContainerDisplay(self, displayString : str = ""):
         displayString = displayString.strip()
+        # the style sheet carries the QR code line's font once it is fitted (CHANGES 159): a new style sheet alone could
+        # bring back the font the label had when its first style sheet was applied
+        qrFont = getattr(self, "_qrCodeFont", None)
         if (displayString is None) or (displayString == ""):
-            self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_no_qr_code.format(
-                QColor(Qt.GlobalColor.black).name()))
+            sheet = modeLabelStylesheet_with_no_qr_code.format(QColor(Qt.GlobalColor.black).name())
+            self.qrCodeLabel.setStyleSheet(styleSheetWithFont(sheet, qrFont) if qrFont is not None else sheet)
             self.qrCodeLabel.setText(tr("QR CODE : "))
         else:
-            self.qrCodeLabel.setStyleSheet(modeLabelStylesheet_with_qr_code.format(
-                QColor(Qt.GlobalColor.black).name()))
+            sheet = modeLabelStylesheet_with_qr_code.format(QColor(Qt.GlobalColor.black).name())
+            self.qrCodeLabel.setStyleSheet(styleSheetWithFont(sheet, qrFont) if qrFont is not None else sheet)
             self.qrCodeLabel.setText(f"{tr('QR CODE : ')}{displayString}")
+        if qrFont is not None:
+            self.qrCodeLabel.setFont(qrFont)
         self.qrCodeDisplayString = displayString        # shown again in a new language
 
     @Slot()
