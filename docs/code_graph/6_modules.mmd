@@ -1,0 +1,210 @@
+flowchart LR
+  subgraph pkg__root_["(root)"]
+    MainProgram["MainProgram<br/><small>643 lines</small>"]
+    OtherServices["OtherServices<br/><small>76 lines</small>"]
+  end
+  subgraph pkg_camera["camera"]
+    camera_BungSegmenter["BungSegmenter<br/><small>2048 lines</small>"]
+    camera_CameraProcessorServer["CameraProcessorServer<br/><small>1725 lines</small>"]
+    camera_CameraStateFile["CameraStateFile<br/><small>97 lines</small>"]
+    camera_CapMaskFinder["CapMaskFinder<br/><small>289 lines</small>"]
+    camera_CheckBung["CheckBung<br/><small>508 lines</small>"]
+    camera_CheckCap["CheckCap<br/><small>1034 lines</small>"]
+    camera_CheckHubAndBottomBearing["CheckHubAndBottomBearing<br/><small>613 lines</small>"]
+    camera_CheckKnuckle["CheckKnuckle<br/><small>1091 lines</small>"]
+    camera_CheckNoBung["CheckNoBung<br/><small>202 lines</small>"]
+    camera_CheckNoCapBung["CheckNoCapBung<br/><small>487 lines</small>"]
+    camera_CheckNutAndPlateWasher["CheckNutAndPlateWasher<br/><small>817 lines</small>"]
+    camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>244 lines</small>"]
+    camera_CheckTopBearing["CheckTopBearing<br/><small>2216 lines</small>"]
+    camera_FindHubHoles["FindHubHoles<br/><small>492 lines</small>"]
+    camera_HexagonNutDetector["HexagonNutDetector<br/><small>2952 lines</small>"]
+    camera_HubAndBearingSegmenter["HubAndBearingSegmenter<br/><small>3734 lines</small>"]
+    camera_KnuckleLocator["KnuckleLocator<br/><small>491 lines</small>"]
+    camera_ModelManager["ModelManager<br/><small>447 lines</small>"]
+    camera_RTSPCam["RTSPCam<br/><small>1239 lines</small>"]
+    camera_VisionCheckWorker["VisionCheckWorker<br/><small>376 lines</small>"]
+    camera_VisionFrame["VisionFrame<br/><small>354 lines</small>"]
+  end
+  subgraph pkg_costhetaio_allenbradley["costhetaio.allenbradley"]
+    costhetaio_allenbradley_AllenBradleyPLCDataIO["AllenBradleyPLCDataIO<br/><small>106 lines</small>"]
+  end
+  subgraph pkg_costhetaio_commonplc["costhetaio.commonplc"]
+    costhetaio_commonplc_MockPLC["MockPLC<br/><small>291 lines</small>"]
+    costhetaio_commonplc_MockPLCDataIO["MockPLCDataIO<br/><small>42 lines</small>"]
+    costhetaio_commonplc_PLCDataIO["PLCDataIO<br/><small>141 lines</small>"]
+    costhetaio_commonplc_PLCDataIOFactory["PLCDataIOFactory<br/><small>44 lines</small>"]
+    costhetaio_commonplc_PLCIOServer["PLCIOServer<br/><small>3323 lines</small>"]
+  end
+  subgraph pkg_costhetaio_qrcodescanner["costhetaio.qrcodescanner"]
+    costhetaio_qrcodescanner_QRCodeScanningServer["QRCodeScanningServer<br/><small>711 lines</small>"]
+  end
+  subgraph pkg_costhetaio_siemens["costhetaio.siemens"]
+    costhetaio_siemens_SiemensPLCDataIO["SiemensPLCDataIO<br/><small>73 lines</small>"]
+    costhetaio_siemens_plc_backend["plc_backend<br/><small>250 lines</small>"]
+  end
+  subgraph pkg_endpoints["endpoints"]
+    endpoints_AshokLeylandWebService["AshokLeylandWebService<br/><small>385 lines</small>"]
+    endpoints_AshokLeyland_MI_Light["AshokLeyland_MI_Light<br/><small>446 lines</small>"]
+    endpoints_EndpointsDB["EndpointsDB<br/><small>240 lines</small>"]
+    endpoints_ShowScreen["ShowScreen<br/><small>156 lines</small>"]
+  end
+  subgraph pkg_frontend["frontend"]
+    frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2453 lines</small>"]
+    frontend_CosThetaMonitorDimensions["CosThetaMonitorDimensions<br/><small>425 lines</small>"]
+    frontend_CosThetaStylesheets["CosThetaStylesheets<br/><small>138 lines</small>"]
+    frontend_FrontendI18n["FrontendI18n<br/><small>288 lines</small>"]
+    frontend_FrontendNotices["FrontendNotices<br/><small>73 lines</small>"]
+    frontend_SimplePopups["SimplePopups<br/><small>2025 lines</small>"]
+  end
+  subgraph pkg_frontend_frontendutils["frontend.frontendutils"]
+    frontend_frontendutils_CosThetaImageUtils["CosThetaImageUtils<br/><small>496 lines</small>"]
+    frontend_frontendutils_CosThetaLabelUtils["CosThetaLabelUtils<br/><small>120 lines</small>"]
+    frontend_frontendutils_FrontEndLogger["FrontEndLogger<br/><small>83 lines</small>"]
+  end
+  subgraph pkg_frontend_newwidgets["frontend.newwidgets"]
+    frontend_newwidgets_CosThetaOutcomeContainer["CosThetaOutcomeContainer<br/><small>458 lines</small>"]
+    frontend_newwidgets_CosThetaResultsContainer["CosThetaResultsContainer<br/><small>413 lines</small>"]
+    frontend_newwidgets_CosThetaSimpleMessageContainer["CosThetaSimpleMessageContainer<br/><small>124 lines</small>"]
+    frontend_newwidgets_ToggleMessageContainer["ToggleMessageContainer<br/><small>121 lines</small>"]
+  end
+  subgraph pkg_frontend_widgets["frontend.widgets"]
+    frontend_widgets_CosThetaExitingSplashScreen["CosThetaExitingSplashScreen<br/><small>43 lines</small>"]
+    frontend_widgets_CosThetaInitialSplashScreen["CosThetaInitialSplashScreen<br/><small>43 lines</small>"]
+    frontend_widgets_CosThetaSeparators["CosThetaSeparators<br/><small>18 lines</small>"]
+  end
+  subgraph pkg_logutils["logutils"]
+    logutils_CentralLoggers["CentralLoggers<br/><small>542 lines</small>"]
+  end
+  subgraph pkg_monitorAllConnections["monitorAllConnections"]
+    monitorAllConnections_HeartbeatAndAlarmServer["HeartbeatAndAlarmServer<br/><small>329 lines</small>"]
+  end
+  subgraph pkg_persistence["persistence"]
+    persistence_DBServer["DBServer<br/><small>723 lines</small>"]
+    persistence_Persistence["Persistence<br/><small>2985 lines</small>"]
+    persistence_PostgresBackupUtility["PostgresBackupUtility<br/><small>1351 lines</small>"]
+  end
+  subgraph pkg_utils["utils"]
+    utils_IPUtils["IPUtils<br/><small>109 lines</small>"]
+    utils_ImageNormalisationWithMask["ImageNormalisationWithMask<br/><small>2659 lines</small>"]
+    utils_PictureRetention["PictureRetention<br/><small>100 lines</small>"]
+    utils_ProcessSupervisor["ProcessSupervisor<br/><small>113 lines</small>"]
+    utils_ShutdownWait["ShutdownWait<br/><small>47 lines</small>"]
+    utils_StateSync["StateSync<br/><small>214 lines</small>"]
+  end
+  MainProgram --> frontend_SimplePopups
+  MainProgram --> persistence_Persistence
+  MainProgram --> persistence_PostgresBackupUtility
+  MainProgram --> utils_IPUtils
+  MainProgram --> utils_PictureRetention
+  MainProgram --> utils_ShutdownWait
+  MainProgram -.-> camera_CameraProcessorServer
+  MainProgram -.-> camera_CameraStateFile
+  MainProgram -.-> costhetaio_commonplc_PLCIOServer
+  MainProgram -.-> costhetaio_qrcodescanner_QRCodeScanningServer
+  MainProgram -.-> frontend_AshokLeylandFrontEnd
+  MainProgram -.-> logutils_CentralLoggers
+  MainProgram -.-> monitorAllConnections_HeartbeatAndAlarmServer
+  MainProgram -.-> persistence_DBServer
+  MainProgram -.-> utils_ProcessSupervisor
+  OtherServices --> utils_IPUtils
+  OtherServices -.-> endpoints_AshokLeylandWebService
+  OtherServices -.-> endpoints_AshokLeyland_MI_Light
+  OtherServices -.-> endpoints_ShowScreen
+  camera_BungSegmenter --> camera_ModelManager
+  camera_BungSegmenter -.-> camera_FindHubHoles
+  camera_CameraProcessorServer --> camera_CheckBung
+  camera_CameraProcessorServer --> camera_CheckCap
+  camera_CameraProcessorServer --> camera_CheckHubAndBottomBearing
+  camera_CameraProcessorServer --> camera_CheckKnuckle
+  camera_CameraProcessorServer --> camera_CheckNoBung
+  camera_CameraProcessorServer --> camera_CheckNoCapBung
+  camera_CameraProcessorServer --> camera_CheckNutAndPlateWasher
+  camera_CameraProcessorServer --> camera_CheckSplitPinAndWasher
+  camera_CameraProcessorServer --> camera_CheckTopBearing
+  camera_CameraProcessorServer --> camera_FindHubHoles
+  camera_CameraProcessorServer --> camera_RTSPCam
+  camera_CameraProcessorServer --> camera_VisionFrame
+  camera_CameraProcessorServer -.-> camera_CameraStateFile
+  camera_CameraProcessorServer -.-> camera_ModelManager
+  camera_CameraProcessorServer -.-> camera_VisionCheckWorker
+  camera_CheckBung --> camera_BungSegmenter
+  camera_CheckCap --> camera_FindHubHoles
+  camera_CheckCap -.-> camera_CapMaskFinder
+  camera_CheckCap -.-> camera_ModelManager
+  camera_CheckHubAndBottomBearing --> camera_HubAndBearingSegmenter
+  camera_CheckKnuckle -.-> camera_KnuckleLocator
+  camera_CheckKnuckle -.-> camera_VisionFrame
+  camera_CheckNoBung --> camera_HexagonNutDetector
+  camera_CheckNoCapBung --> camera_BungSegmenter
+  camera_CheckNoCapBung --> camera_CheckBung
+  camera_CheckNutAndPlateWasher --> camera_CheckTopBearing
+  camera_CheckNutAndPlateWasher --> camera_HexagonNutDetector
+  camera_CheckSplitPinAndWasher --> camera_FindHubHoles
+  camera_CheckTopBearing --> utils_ImageNormalisationWithMask
+  camera_FindHubHoles -.-> camera_CheckCap
+  camera_FindHubHoles -.-> camera_CheckHubAndBottomBearing
+  camera_FindHubHoles -.-> camera_HubAndBearingSegmenter
+  camera_FindHubHoles -.-> camera_ModelManager
+  camera_HexagonNutDetector --> camera_ModelManager
+  camera_HexagonNutDetector --> utils_ImageNormalisationWithMask
+  camera_HubAndBearingSegmenter --> camera_ModelManager
+  camera_HubAndBearingSegmenter --> utils_ImageNormalisationWithMask
+  camera_KnuckleLocator --> camera_VisionFrame
+  camera_KnuckleLocator -.-> camera_ModelManager
+  camera_RTSPCam --> utils_IPUtils
+  camera_VisionCheckWorker -.-> camera_CameraProcessorServer
+  costhetaio_allenbradley_AllenBradleyPLCDataIO --> costhetaio_commonplc_PLCDataIO
+  costhetaio_commonplc_MockPLCDataIO --> costhetaio_commonplc_MockPLC
+  costhetaio_commonplc_MockPLCDataIO --> costhetaio_commonplc_PLCDataIO
+  costhetaio_commonplc_PLCDataIOFactory --> costhetaio_commonplc_PLCDataIO
+  costhetaio_commonplc_PLCDataIOFactory -.-> costhetaio_allenbradley_AllenBradleyPLCDataIO
+  costhetaio_commonplc_PLCDataIOFactory -.-> costhetaio_commonplc_MockPLCDataIO
+  costhetaio_commonplc_PLCDataIOFactory -.-> costhetaio_siemens_SiemensPLCDataIO
+  costhetaio_commonplc_PLCIOServer --> costhetaio_commonplc_PLCDataIO
+  costhetaio_commonplc_PLCIOServer --> costhetaio_commonplc_PLCDataIOFactory
+  costhetaio_commonplc_PLCIOServer --> persistence_Persistence
+  costhetaio_qrcodescanner_QRCodeScanningServer --> persistence_Persistence
+  costhetaio_siemens_SiemensPLCDataIO --> costhetaio_commonplc_PLCDataIO
+  costhetaio_siemens_SiemensPLCDataIO --> costhetaio_siemens_plc_backend
+  endpoints_AshokLeylandWebService --> endpoints_EndpointsDB
+  endpoints_AshokLeyland_MI_Light --> endpoints_EndpointsDB
+  endpoints_EndpointsDB --> persistence_Persistence
+  frontend_AshokLeylandFrontEnd --> frontend_CosThetaMonitorDimensions
+  frontend_AshokLeylandFrontEnd --> frontend_CosThetaStylesheets
+  frontend_AshokLeylandFrontEnd --> frontend_FrontendI18n
+  frontend_AshokLeylandFrontEnd --> frontend_FrontendNotices
+  frontend_AshokLeylandFrontEnd --> frontend_SimplePopups
+  frontend_AshokLeylandFrontEnd --> frontend_frontendutils_CosThetaImageUtils
+  frontend_AshokLeylandFrontEnd --> frontend_frontendutils_CosThetaLabelUtils
+  frontend_AshokLeylandFrontEnd --> frontend_frontendutils_FrontEndLogger
+  frontend_AshokLeylandFrontEnd --> frontend_newwidgets_CosThetaResultsContainer
+  frontend_AshokLeylandFrontEnd --> frontend_newwidgets_CosThetaSimpleMessageContainer
+  frontend_AshokLeylandFrontEnd --> frontend_newwidgets_ToggleMessageContainer
+  frontend_AshokLeylandFrontEnd --> frontend_widgets_CosThetaExitingSplashScreen
+  frontend_AshokLeylandFrontEnd --> frontend_widgets_CosThetaInitialSplashScreen
+  frontend_AshokLeylandFrontEnd --> frontend_widgets_CosThetaSeparators
+  frontend_AshokLeylandFrontEnd --> persistence_Persistence
+  frontend_AshokLeylandFrontEnd --> utils_StateSync
+  frontend_FrontendNotices --> frontend_FrontendI18n
+  frontend_SimplePopups --> frontend_FrontendI18n
+  frontend_SimplePopups --> persistence_Persistence
+  frontend_frontendutils_CosThetaImageUtils --> frontend_CosThetaMonitorDimensions
+  frontend_frontendutils_CosThetaLabelUtils --> frontend_CosThetaStylesheets
+  frontend_frontendutils_CosThetaLabelUtils --> frontend_frontendutils_CosThetaImageUtils
+  frontend_newwidgets_CosThetaOutcomeContainer --> frontend_CosThetaMonitorDimensions
+  frontend_newwidgets_CosThetaOutcomeContainer --> frontend_CosThetaStylesheets
+  frontend_newwidgets_CosThetaOutcomeContainer --> frontend_FrontendI18n
+  frontend_newwidgets_CosThetaOutcomeContainer --> frontend_frontendutils_CosThetaImageUtils
+  frontend_newwidgets_CosThetaOutcomeContainer --> frontend_frontendutils_CosThetaLabelUtils
+  frontend_newwidgets_CosThetaResultsContainer --> frontend_CosThetaMonitorDimensions
+  frontend_newwidgets_CosThetaResultsContainer --> frontend_CosThetaStylesheets
+  frontend_newwidgets_CosThetaResultsContainer --> frontend_FrontendI18n
+  frontend_newwidgets_CosThetaResultsContainer --> frontend_frontendutils_CosThetaLabelUtils
+  frontend_newwidgets_CosThetaResultsContainer --> frontend_newwidgets_CosThetaOutcomeContainer
+  frontend_newwidgets_CosThetaSimpleMessageContainer --> frontend_CosThetaMonitorDimensions
+  frontend_newwidgets_ToggleMessageContainer --> frontend_FrontendI18n
+  frontend_widgets_CosThetaExitingSplashScreen --> frontend_CosThetaMonitorDimensions
+  frontend_widgets_CosThetaInitialSplashScreen --> frontend_CosThetaMonitorDimensions
+  frontend_widgets_CosThetaSeparators --> frontend_frontendutils_CosThetaImageUtils
+  persistence_DBServer --> persistence_Persistence

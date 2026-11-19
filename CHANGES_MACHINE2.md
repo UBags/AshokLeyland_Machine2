@@ -5257,3 +5257,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   drawing on a DOSTPLUS cap picture (5 holes) and bung A01 (4 holes) by the dark blobs - rings on the holes. The cap and
   bung windows' own check paths need the YOLO weights (cap mask, bung holes): not run here; the windows themselves
   need tkinter (not in the sandbox's torch Python) - parsed, not opened.
+
+## 168. Code graph of the live code; must-read in CLAUDE.md (2026-11-20)
+
+- **Asked:** go through the code, draw a detailed graph, store it in docs and make it a must-read in CLAUDE.md.
+- **Added (docs only, no code changed):** `docs/code_graph/CODE_GRAPH.md` with six diagrams (Mermaid source `*.mmd`,
+  rendered `*.svg`): runtime topology, Redis wiring (every stream / key with writer and reader), camera server and the
+  dependencies between vision checks, IOServer threads and PLC layer, the 28-state cycle, import graph of the live
+  modules. Generator scripts in `docs/code_graph/tools/` (`graph.py` AST reachability from `MainProgram` /
+  `OtherServices`, `mermaid_modules.py`, `redisgraph.py` send/read call sites, `smoke.py` import test, `build_doc.py`).
+  CLAUDE.md: must-read note at the top; `docs/README.md`: new first row.
+- **Found:** 87 of 379 modules are live. Redis call sites agree with HLD §4, with two details now written down: the
+  IOServer also writes `camera2fe.q` (NOT OK when the camera is down or late, `_pictureNotOkWithoutAnswer`), and
+  `cycleSettings:<QR>` is written only by the IOServer (FE and DB read it).
+- **Run (sandbox):** Python 3.11 venv from `requirements.txt` without the Windows / CUDA-only packages (torch 2.11 from
+  PyPI, MobileSAM from GitHub): 73 of 85 live modules import; the other 12 need tkinter (11 frontend files) or
+  `winsound` (heartbeat server). All six diagrams render with mermaid-cli 11. `6_modules.mmd` regenerates identically.

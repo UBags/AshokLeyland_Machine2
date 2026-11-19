@@ -1,0 +1,41 @@
+flowchart LR
+  MP["MainProgram"]
+  IO["P4 IOServer"]
+  CAM["P2 Camera"]
+  QR["P3 QR code"]
+  FE["P6 Frontend"]
+  DB["P5 DB server"]
+  HB["P7 Heartbeat + alarm"]
+  LOG["P1 Logging"]
+
+  IO -->|"io2qrcode.q · arm read"| QR
+  IO -->|"io2qrcodeabort.q · abort read"| QR
+  QR -->|"qrcode2io.q · code + status"| IO
+  QR -->|"qrcode2fe.q · code + display string"| FE
+  QR -->|"qrcode2camera.q · component QR"| CAM
+  IO -->|"io2camera.q · take picture N + request id / END_OF_CYCLE"| CAM
+  CAM -->|"camera2io.q · OK / NOT OK + request id"| IO
+  CAM -->|"camera2fe.q · original + processed PNG, result"| FE
+  IO -->|"camera2fe.q · NOT OK when camera down / timeout"| FE
+  IO -->|"io2frontend.q · state, torque, events"| FE
+  IO -->|"io2festate.q · every state change (state sync)"| FE
+  IO -->|"emergency.q · emergency abort"| FE
+  FE -->|"fe2io.q · password-protected abort request"| IO
+  FE -->|"fe2db.q · cycle record (FIFO, acked)"| DB
+  CAM & QR & IO & FE & DB -->|"*2hb.q · ALIVE / DEAD"| HB
+  CAM & QR -->|"alarm.q · siren"| HB
+  HB -->|"hb2io.q · per-server status"| IO
+  HB -->|"hb2fe.q · per-server status"| FE
+  MP & FE -->|"stopcommandQ"| ALL(("all servers"))
+  ALL -->|"stoppedresponseQ"| MP
+  ALL -.->|"filelogging / consolelogging"| LOG
+
+  subgraph KEYS["Redis keys (not streams)"]
+    K1["cycleSettings:&lt;QR&gt; · IO writes → FE, DB read (2-day TTL)"]
+    K2["io:state · IO → FE (snapshot for a frontend started mid-cycle)"]
+    K3["camera:activeRequest · IO → camera, FE"]
+    K4["feNotice:&lt;name&gt; · IO, camera, QR → FE"]
+    K5["log:cycleContext · IO → loggers"]
+    K6["ioserver:started · IO (restart detection)"]
+    K7["redis.healthcheck.q · HB, MainProgram"]
+  end

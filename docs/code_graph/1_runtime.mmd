@@ -1,0 +1,50 @@
+flowchart TB
+  subgraph WIN["Machine 2 PC (Windows, D:\AshokLeyland)"]
+    VBS["Start-Hub-And-Disc-application - Production.vbs<br/>(Startup folder, at logon)"]
+    BAT["Startup.bat<br/>(desktop, manual)"]
+    subgraph MAINEXE["MainProgram.exe = MainProgram.py"]
+      MP["MainProgram<br/>Redis check + flush · picture clean-up · pg backup<br/>chooseMode · login · monitorStop"]
+      SUP["utils/ProcessSupervisor<br/>restart dead server, ≤10/h"]
+      P1["P1 Logging<br/>logutils.CentralLoggers"]
+      P2["P2 Camera server<br/>camera/CameraProcessorServer"]
+      P2W["VisionCheckWorker<br/>(child process, 12 s deadline)"]
+      P3["P3 QR code server<br/>costhetaio/qrcodescanner"]
+      P4["P4 IOServer<br/>costhetaio/commonplc/PLCIOServer<br/>28-state machine"]
+      P5["P5 DB server<br/>persistence/DBServer"]
+      P6["P6 Frontend (PySide6)<br/>frontend/AshokLeylandFrontEnd"]
+      P7["P7 Heartbeat + alarm<br/>monitorAllConnections"]
+    end
+    subgraph OSEXE["OtherServices.exe = OtherServices.py"]
+      WS["endpoints/AshokLeylandWebService (Flask)"]
+      MI["endpoints/AshokLeyland_MI_Light (dashboard)"]
+      SS["endpoints/ShowScreen (screen share)"]
+      EDB["endpoints/EndpointsDB"]
+    end
+    REDIS[("Redis<br/>WSL Ubuntu-22.04 :6379")]
+    PG[("PostgreSQL :5432<br/>ashok_leyland_test / _production")]
+    FS[("Image folders + Temp/camera_server_state.pkl")]
+  end
+  PLC["PLC<br/>M2: Siemens S7-1515 (pyS7)<br/>M1: Allen-Bradley (pycomm3)"]
+  CAM["RTSP camera"]
+  QRS["QR scanner (serial COM)"]
+  WAV["Speakers (siren / bad-component WAV)"]
+
+  VBS --> BAT --> MP
+  VBS --> OSEXE
+  MP -- spawn --> P1 & P2 & P3 & P4 & P5 & P6 & P7
+  MP --> SUP
+  SUP -. restarts .-> P2 & P3 & P4 & P5 & P6 & P7
+  P2 -- spawn --> P2W
+  P1 & P2 & P3 & P4 & P5 & P6 & P7 <--> REDIS
+  P4 <-->|PLCDataIO| PLC
+  P2 --> CAM
+  P3 --> QRS
+  P7 --> WAV
+  P5 --> PG
+  P5 --> FS
+  P2 --> FS
+  P3 -->|duplicate check| PG
+  P4 -->|machine_settings| PG
+  P6 -->|login, users, reports, settings| PG
+  MP -->|pg_dump| PG
+  WS & MI --> EDB --> PG

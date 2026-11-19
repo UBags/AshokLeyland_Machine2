@@ -2,6 +2,7 @@
 
 | File | What it is |
 |---|---|
+| **`code_graph/CODE_GRAPH.md`** | **Must read.** Graphs of the live code: runtime topology, Redis wiring, camera server and vision-check dependencies, IOServer threads and PLC layer, the 28-state cycle, import graph of the 87 live modules (Mermaid + SVG; generator scripts in `code_graph/tools/`) |
 | `HLD.md` | High-level design: processes, queues, Redis keys, the cycle, failure handling, configuration |
 | `LLD.md` | Low-level design: IOServer threads and state table, each server's internals, database schema, message fields, tests |
 | `PLC_Interface_Spec.md` | PC–PLC tags, addresses, handshakes and timings: the protocol as built (fixed by the PLC design), with a sign-off table |

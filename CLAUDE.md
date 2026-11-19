@@ -3,6 +3,14 @@
 Working notes for Claude (and anyone else) on this repository. Read this first; the design is in `docs/HLD.md` and
 `docs/LLD.md`, the PLC interface in `docs/PLC_Interface_Spec.md`, the history in `CHANGES_MACHINE2.md`.
 
+> **MUST READ before changing any code: [`docs/code_graph/CODE_GRAPH.md`](docs/code_graph/CODE_GRAPH.md).**
+> Graphs of the live code: runtime topology, every Redis stream / key with its writer and reader, the camera server
+> and the dependencies between vision checks, the IOServer threads and PLC layer, the 28-state cycle, and the import
+> graph of the 87 live modules (of 379; the rest are dry runs, archive and old versions). Check which processes and
+> checks a change touches there first. Keep it in step: when a process, queue, key, thread, check or state changes,
+> update the matching `.mmd` in `docs/code_graph/`, run `python3 docs/code_graph/tools/build_doc.py` (and regenerate
+> `6_modules.mmd` and the SVGs, see its §7).
+
 ## 1. What this is
 
 PC software for CosTheta's hub-and-disc assembly SPM at Ashok Leyland. The PLC runs the machine; the PC reads the

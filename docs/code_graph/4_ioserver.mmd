@@ -1,0 +1,32 @@
+flowchart TB
+  subgraph IOS["PLCIOServer (costhetaio/commonplc/PLCIOServer.py)"]
+    SM["MachineStateMachine<br/>statemachine/StateMachine.py (28 states)"]
+    RL["Continuous Read Loop<br/>poll trigger tags of current READ state"]
+    DL["Continuous Do Loop<br/>WRITE states: wait camera2io.q / qrcode2io.q → OK, Done"]
+    CK["Connection Keep Alive<br/>reconnect · PLC-restart detection"]
+    EM["Emergency Monitoring<br/>PLC_PC_EmergencyAbort → abortCycle"]
+    TG["PC Connection Status Toggle<br/>PC_PLC_ConnectionStatus square wave"]
+    HBT["IO Heartbeat → io2hb.q"]
+    CHB["Combined Heartbeat Update ← hb2io.q<br/>_applyServerStatuses (server-down rules)"]
+    FA["Frontend Abort Listener ← fe2io.q"]
+    MS["Monitor Stop ← stopcommandQ"]
+    TR["Tag Request Listener (publishTags / receiveTags)"]
+    UT["UpdateTagsToDefaultProcessor + DelayedJobScheduler<br/>scheduled tag resets (torque, vision result)"]
+    RST["resetForNextCycle: every per-cycle tag, retries + read-back,<br/>then arm PLC_PC_CheckQRCode"]
+  end
+  RL & DL --> SM
+  EM & FA & CK --> RST
+  subgraph PIO["PLC access layer"]
+    F["PLCDataIOFactory.createPLCDataIO(plc.vendor)"]
+    B["PLCDataIO (abstract)<br/>open · read · write · readMany · RLock"]
+    S["SiemensPLCDataIO → siemens/plc_backend (pyS7)<br/>tags from IOServerProperties.yaml"]
+    AB["AllenBradleyPLCDataIO (pycomm3 LogixDriver)"]
+    MK["MockPLCDataIO → MockPLC (dry runs)"]
+  end
+  IOS -->|"dataIOForReads / dataIOForWrites"| F --> B
+  S -. implements .-> B
+  AB -. implements .-> B
+  MK -. implements .-> B
+  S & AB --> PLC["PLC"]
+  IOS -->|"settings per model"| PG[("machine_settings")]
+  IOS --> K["cycleSettings:&lt;QR&gt;, io:state, io2festate.q"]

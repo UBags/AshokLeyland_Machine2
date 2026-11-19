@@ -1,0 +1,69 @@
+stateDiagram-v2
+  direction LR
+  [*] --> S1
+  S1: 1 READ_QR_CODE (QR server)
+  S2: 2 WRITE_QR_CODE (side, model, settings → PLC)
+  S3: 3 read · knuckle
+  S4: 4 write · knuckle
+  S5: 5 read · hub + bottom bearing
+  S6: 6 write · hub
+  S7: 7 read · top bearing
+  S8: 8 write · top bearing
+  S9: 9 read · nut + plate washer
+  S10: 10 write · nut + washer
+  S11: 11 TIGHTENING_TORQUE_1_DONE
+  S12: 12 TIGHTENING_TORQUE_1 (value)
+  S13: 13 read · bung for component press
+  S14: 14 write · bung
+  S15: 15 COMPONENT_PRESS_DONE
+  S16: 16 read · no bung
+  S17: 17 write · no bung
+  S18: 18 TIGHTENING_TORQUE_2_DONE
+  S19: 19 TIGHTENING_TORQUE_2 (value)
+  S20: 20 read · split pin + washer
+  S21: 21 write · split pin
+  S22: 22 read · cap
+  S23: 23 write · cap
+  S24: 24 read · bung for cap press
+  S25: 25 write · bung
+  S26: 26 CAP_PRESS_DONE
+  S27: 27 FREE_ROTATION_TORQUE_1_DONE
+  S28: 28 FREE_ROTATION_TORQUE_1 (value)
+  S1 --> S2
+  S2 --> S3
+  S3 --> S4
+  S4 --> S3: NOT OK (retake)
+  S4 --> S5
+  S5 --> S6
+  S6 --> S5: NOT OK
+  S6 --> S7
+  S7 --> S8
+  S8 --> S7: NOT OK
+  S8 --> S9
+  S9 --> S10
+  S10 --> S9: NOT OK
+  S10 --> S11
+  S11 --> S12
+  S12 --> S13
+  S12 --> S20: Skip_Second_Tightening (bypass 13–19)
+  S13 --> S14
+  S14 --> S13: NOT OK
+  S14 --> S15
+  S15 --> S16
+  S16 --> S17
+  S17 --> S16: NOT OK
+  S17 --> S18
+  S18 --> S19
+  S19 --> S20
+  S20 --> S21
+  S21 --> S20: NOT OK
+  S21 --> S22
+  S22 --> S23
+  S23 --> S22: NOT OK
+  S23 --> S24
+  S24 --> S25
+  S25 --> S24: NOT OK
+  S25 --> S26
+  S26 --> S27
+  S27 --> S28
+  S28 --> S1: cycle end → reset tags, arm QR, FE → fe2db.q

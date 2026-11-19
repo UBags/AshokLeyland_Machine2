@@ -1,0 +1,31 @@
+flowchart TB
+  IN["io2camera.q"] --> M["MonitorGetPicQueue<br/>(GenericQueueProcessor thread)"]
+  M --> T["TakePictures<br/>RTSPCam frames"]
+  T --> C["ConverterScalerAndProcessor<br/>resize per state"]
+  C -->|"assess(state, images, timeout)"| W["VisionCheckWorker<br/>child process · 12 s deadline · restart on hang"]
+  W --> A["assessPictures(state)"]
+  IP["ImageProcessor (class state)<br/>QR code · earlier pictures · hubCentre<br/>top-bearing ring · knuckle frame"]
+  SF[("Temp/camera_server_state.pkl<br/>camera/CameraStateFile")]
+  IP <--> SF
+  C <--> IP
+  A -->|"S3 knuckle"| K["CheckKnuckle<br/>checkKnuckleBySegmentation"]
+  K --> KL["KnuckleLocator"] --> VF["VisionFrame"]
+  A -->|"S5 hub + bottom bearing"| H["CheckHubAndBottomBearing"] --> HS["HubAndBearingSegmenter"]
+  A -->|"S7 top bearing"| TB["CheckTopBearing<br/>(outputs ring geometry)"]
+  A -->|"S9 nut + plate washer"| N["CheckNutAndPlateWasher"] --> HN["HexagonNutDetector"]
+  N --> TB
+  A -->|"S13 bung for component press"| NCB["CheckNoCapBung"] --> BS["BungSegmenter"]
+  NCB --> CB
+  A -->|"S16 no bung"| NB["CheckNoBung"] --> HN
+  A -->|"S20 split pin + washer"| SP["CheckSplitPinAndWasher"]
+  A -->|"S22 cap"| CP["CheckCap"] --> CMF["CapMaskFinder"]
+  A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
+  SP & CP --> FH["FindHubHoles<br/>sam (default) / morphology"]
+  BS -.-> FH
+  FH -.->|"reuses checkHub() steps"| HS
+  HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
+  FH -.-> MM
+  CP -.-> MM
+  ALLV["every check"] -.-> VC["VisionConfig<br/>vInt / vFloat / vTuple … ← &lt;vendor&gt;.vision.* keys"]
+  W -->|"result + images"| OUT1["camera2io.q"] & OUT2["camera2fe.q"]
+  W -->|"NOT OK"| OUT3["alarm.q"]
