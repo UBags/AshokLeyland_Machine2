@@ -23,7 +23,11 @@ Settings: <vendor>.vision.cap.* in ApplicationConfiguration.properties (vendor f
 machine2 = siemens). The seating step uses MobileSAM through ModelManager (models/MobileSAM), loaded in the background
 when the window opens; no Redis, PLC or camera needed (the check's log messages are collected by this window).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Check_UI.py   [--sam <mobile_sam.pt>]
+  7. The hub's holes the seating step used (FindHubHoles, CHANGES 164 - 166): each hole ringed blue, the hole circle's
+     centre a blue cross; the "HUBHOLES" line gives centre, radius, spread, gap, method, gamma and seed (or why not
+     found). --holes morphology = the dark-blob finder with its own offsets (where the YOLO weights are missing).
+
+Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Check_UI.py   [--sam <mobile_sam.pt>] [--holes morphology]
 (--sam: load MobileSAM from that file instead of through ModelManager, which also needs the YOLO weights)
 """
 import os
@@ -108,11 +112,17 @@ def earlierPictures(folder: pathlib.Path | None, model: str):
     return found
 
 
+_recorder = None  # HubHolesRecorder, installed in __main__: the hub's holes ringed on the picture, HUBHOLES line
+
+
 def runCheck(image, model: str, earlier):
     """(ok, marked picture, reason, summary) of the real check."""
     _messages.clear()
+    if _recorder is not None:
+        _recorder.clear()
     marked, ok = CheckCap.checkCap(image.copy(), dict(earlier), QR[model])
     ok = bool(ok)
+    holes = _recorder.take() if _recorder is not None else []
     errors = [m.replace("CheckCap seating: ", "").replace("CheckCap: ", "")
               for level, m in _messages if level in ("logError", "logCritical")]
     reason = ""
@@ -122,7 +132,11 @@ def runCheck(image, model: str, earlier):
         reason = ": ".join(x for x in ((final[0].replace("CAP NOT DETECTED - ", "") if final else ""),
                                        (detail[0] if detail else "")) if x)
     summary = next((m.replace("CheckCap summary: ", "") for level, m in _messages if m.startswith("CheckCap summary:")), "")
-    return ok, (marked if marked is not None else image), reason or "", summary
+    marked = marked if marked is not None else image
+    if holes:
+        marked = _recorder.draw(marked, holes)
+        summary = (summary + "\n    " if summary else "") + f"HUBHOLES {_recorder.text(holes)}"
+    return ok, marked, reason or "", summary
 
 
 class CapCheckWindow:
@@ -285,6 +299,10 @@ class CapCheckWindow:
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import HubHolesRecorder, applyHolesOption
+    applyHolesOption()
+    _recorder = HubHolesRecorder()
     root = tk.Tk()
     CapCheckWindow(root)
     root.mainloop()

@@ -66,21 +66,32 @@ def picturesIn(folder: pathlib.Path):
     return found
 
 
+_recorder = None  # HubHolesRecorder, installed in __main__: the hub's holes ringed on the picture, HUBHOLES line
+
+
 def runCheck(path: pathlib.Path):
     """(verdict, marked picture or None, seconds, reason, values) of the real check on one file."""
     image = cv2.imread(str(path))
     if image is None:
         return "UNREADABLE", None, 0.0, "the file could not be read as a picture", ""
     image = cv2.resize(image, (1280, 720))
+    if _recorder is not None:
+        _recorder.clear()
     started = time.perf_counter()
     result = CheckSplitPinAndWasher.measure(image)
     marked = CheckSplitPinAndWasher.markedPicture(image, result)
     elapsed = time.perf_counter() - started
+    holes = _recorder.take() if _recorder is not None else []
+    if holes:
+        marked = _recorder.draw(marked, holes)
     # the production entry point too (its log line), on the same picture
     _messages.clear()
     _, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, QR)
     assert bool(ok) == bool(result["ok"]), "checkSplitPinAndWasher and measure disagree"
-    return ("OK" if result["ok"] else "NOT OK"), marked, elapsed, result["reason"], CheckSplitPinAndWasher.summary(result)
+    values = CheckSplitPinAndWasher.summary(result)
+    if holes:
+        values += f"\n      HUBHOLES {_recorder.text(holes)}"
+    return ("OK" if result["ok"] else "NOT OK"), marked, elapsed, result["reason"], values
 
 
 def line(path, expected, verdict, elapsed, reason):
@@ -257,8 +268,9 @@ def window():
 
 
 if __name__ == "__main__":
-    from _hub_holes_option import applyHolesOption
+    from _hub_holes_option import HubHolesRecorder, applyHolesOption
     applyHolesOption()
+    _recorder = HubHolesRecorder()
     if "--auto" in sys.argv:
         i = sys.argv.index("--auto")
         folder = pathlib.Path(sys.argv[i + 1]) if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else IMAGES

@@ -5244,3 +5244,16 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `DryRun_Vision_Check_Timeout` 23/23, `DryRun_Camera_State_File` 19/19; `DryRun_Hub_Holes_SAM --tiled-yolo` as above.
   `DryRun_Cap_Production_Path` 8/12 in the sandbox - same before this change (b4787b9): the stand-in boxes there sit on
   the cap, not the holes. Not run: anything with the real YOLO (laptop).
+
+## 167. Cap, bung and split pin windows show the hub's holes (2026-11-19)
+
+- **Asked:** the three dry-run windows to check the hub holes visually.
+- **Changed (test only):** `_hub_holes_option.HubHolesRecorder` (both folders) records every `FindHubHoles.findHoles`
+  result while a window runs; `DryRun_Cap_Check_UI`, `DryRun_Bung_Check_UI` and `DryRun_SplitPin_Check_UI` ring each hole
+  found (blue) and cross the hole circle's centre on the picture shown (outlines only), and print a `HUBHOLES` line
+  (`FindHubHoles.describe`: centre, radius, spread, gap, method, gamma, seed, or why not found) in the list / terminal.
+  `--holes morphology` now on the cap and bung windows too. No vision file changed.
+- Run (sandbox): `DryRun_SplitPin_Check_UI --auto --holes morphology` PASS 79/79 with HUBHOLES lines; the recorder and
+  drawing on a DOSTPLUS cap picture (5 holes) and bung A01 (4 holes) by the dark blobs - rings on the holes. The cap and
+  bung windows' own check paths need the YOLO weights (cap mask, bung holes): not run here; the windows themselves
+  need tkinter (not in the sandbox's torch Python) - parsed, not opened.

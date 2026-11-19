@@ -27,8 +27,11 @@ round the same centre. One "[Bung] ..." log line per gamma.
   ellipse and how much of it lies outside the model's reference oval; the line after HOLES
   starts "SEATING" (SEATED / NOT SEATED and both values; "not run" when the holes did not pass). On the picture the
   top-face outline is green (seated) or red.
+  Hub holes (the seated position comes from them, FindHubHoles, CHANGES 153, 164 - 166): each hole ringed blue, the
+  hole circle's centre a blue cross; the terminal line "HUBHOLES" gives centre, radius, spread, gap, method, gamma and
+  seed (or why not found). --holes morphology = the dark-blob finder with its own offsets (no YOLO weights).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py
+Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py   [--holes morphology]
 """
 import os
 import pathlib
@@ -55,6 +58,9 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 WAIT_CHOICES = ("0.5", "1", "2", "3", "5", "10", "20")
 CHECKS = ("CheckBung (state 24)", "CheckNoCapBung (state 13)")
 VIEW_W, VIEW_H = 1120, 630
+
+
+_recorder = None  # HubHolesRecorder, installed in __main__: the hub's holes ringed on the picture, HUBHOLES line
 
 
 class BungCheckWindow:
@@ -200,6 +206,8 @@ class BungCheckWindow:
                 continue
             for asModel in (("DOST", "DOSTPLUS") if model == "Both" else (model,)):
                 self.last.clear()
+                if _recorder is not None:
+                    _recorder.clear()
                 t0 = time.time()
                 try:
                     marked, ok, gamma = check(image.copy(), QR[asModel], None)
@@ -208,6 +216,7 @@ class BungCheckWindow:
                 except Exception as e:
                     marked, ok, holes, reason = None, False, [], f"exception: {e}"
                 seconds = time.time() - t0
+                hubHoles = _recorder.take() if _recorder is not None else []
                 seat = self.last.get("seating")
                 holesOK = ok or (seat is not None)          # seating runs only after the hole pattern passed
                 print(f"HOLES    {path.name:28s} as {asModel:8s}  {len(holes)} holes  "
@@ -218,9 +227,13 @@ class BungCheckWindow:
                     print(f"SEATING  {path.name:28s} as {asModel:8s}  {seatText}", flush=True)
                 print(f"RESULT   {path.name:28s} as {asModel:8s}  {'OK' if ok else 'NOT OK'}  {seconds:5.2f} s",
                       flush=True)
+                if hubHoles:
+                    print(f"HUBHOLES {path.name:28s} as {asModel:8s}  {_recorder.text(hubHoles)}", flush=True)
                 if seat is not None:
                     reason += f"; seating: {'SEATED' if seat['seated'] else 'NOT SEATED'} - {seat['reason']}"
                 shown = self.decorate(image, marked, ok, holes)
+                if hubHoles:
+                    shown = _recorder.draw(shown, hubHoles)
                 if save:
                     cv2.imwrite(str(outFolder / f"{'OK' if ok else 'NOTOK'}_{path.stem}_as_{asModel}.png"), shown)
                 self.advance.clear()
@@ -313,6 +326,10 @@ class BungCheckWindow:
 
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import HubHolesRecorder, applyHolesOption
+    applyHolesOption()
+    _recorder = HubHolesRecorder()
     window = tk.Tk()
     window.geometry("1180x960")
     BungCheckWindow(window)
