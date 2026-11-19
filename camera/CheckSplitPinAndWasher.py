@@ -46,7 +46,8 @@ from Configuration import CosThetaConfigurator
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
-from camera.VisionConfig import expectOneOf, vFloat, vInt, vStr, vTuple
+from camera.FindHubHoles import FindHubHoles
+from camera.VisionConfig import expectOneOf
 
 import warnings
 warnings.filterwarnings('ignore', '.*h264.*', )
@@ -68,26 +69,26 @@ def _filled(mask: np.ndarray) -> np.ndarray:
 
 class CheckSplitPinAndWasher():
 
-    CENTRE_SOURCE = vStr("vision.splitpin.centre.source", "hubholes")  # "hubholes": expected washer centre from the hub's holes; "fixed": CENTRE
-    HUB_OFFSET_DOST = vTuple("vision.splitpin.hub.offset.dost", (1.8, 1.6))  # washer centre - hub hole circle centre (DOST, 21 OK pictures of 3 parts)
-    HUB_OFFSET_DOSTPLUS = vTuple("vision.splitpin.hub.offset.dostplus", (1.8, 1.6))  # not measured (no DOSTPLUS pictures): the DOST value
-    CENTRE = vTuple("vision.splitpin.centre", (644, 345))  # nominal centre of the nut in the 1280 x 720 picture (CENTRE_SOURCE "fixed")
-    SEARCH_RADIUS = vInt("vision.splitpin.search.radius", 100)  # the washer is looked for within this distance of the expected centre
-    WASHER_V_MIN = vInt("vision.splitpin.washer.v.min", 160)
-    WASHER_S_MAX = vInt("vision.splitpin.washer.s.max", 70)
-    WASHER_CLOSE_KERNEL = vInt("vision.splitpin.washer.close.kernel", 9)
-    WASHER_AREA_MIN = vInt("vision.splitpin.washer.area.min", 2500)  # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
-    WASHER_TIP_RADIUS_MIN = vFloat("vision.splitpin.washer.tip.radius.min", 44.0)  # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
-    WASHER_TIP_RADIUS_MAX = vFloat("vision.splitpin.washer.tip.radius.max", 56.0)
-    WASHER_COVER_MIN = vFloat("vision.splitpin.washer.cover.min", 0.9)  # share of the circle round which the washer region is seen
-    MARKER_HUE_MIN = vInt("vision.splitpin.marker.hue.min", 100)
-    MARKER_HUE_MAX = vInt("vision.splitpin.marker.hue.max", 130)
-    MARKER_S_MIN = vInt("vision.splitpin.marker.s.min", 90)
-    MARKER_V_MIN = vInt("vision.splitpin.marker.v.min", 55)
-    MARKER_SEARCH_RADIUS = vInt("vision.splitpin.marker.search.radius", 120)
-    MARKER_PIXELS_MIN = vInt("vision.splitpin.marker.pixels.min", 100)  # OK pictures: 204 and more
-    LEG_OUTSIDE_DISTANCE = vFloat("vision.splitpin.leg.outside.distance", 8.0)  # px beyond the washer's own edge
-    LEG_OUTSIDE_PIXELS_MAX = vInt("vision.splitpin.leg.outside.pixels.max", 2)
+    CENTRE_SOURCE = "hubholes"  # "hubholes": expected washer centre from the hub's holes; "fixed": CENTRE
+    HUB_OFFSET_DOST = (1.8, 1.6)  # washer centre - hub hole circle centre (DOST, 21 OK pictures of 3 parts)
+    HUB_OFFSET_DOSTPLUS = (1.8, 1.6)  # not measured (no DOSTPLUS pictures): the DOST value
+    CENTRE = (644, 345)  # nominal centre of the nut in the 1280 x 720 picture (CENTRE_SOURCE "fixed")
+    SEARCH_RADIUS = 100  # the washer is looked for within this distance of CENTRE
+    WASHER_V_MIN = 160
+    WASHER_S_MAX = 70
+    WASHER_CLOSE_KERNEL = 9
+    WASHER_AREA_MIN = 2500  # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
+    WASHER_TIP_RADIUS_MIN = 44.0  # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
+    WASHER_TIP_RADIUS_MAX = 56.0
+    WASHER_COVER_MIN = 0.9  # share of the circle round which the washer region is seen
+    MARKER_HUE_MIN = 100
+    MARKER_HUE_MAX = 130
+    MARKER_S_MIN = 90
+    MARKER_V_MIN = 55
+    MARKER_SEARCH_RADIUS = 120
+    MARKER_PIXELS_MIN = 100  # OK pictures: 204 and more
+    LEG_OUTSIDE_DISTANCE = 8.0  # px beyond the washer's own edge
+    LEG_OUTSIDE_PIXELS_MAX = 2
 
     @staticmethod
     def expectedCentre(anImage: np.ndarray, model: str = DOST) -> Dict:
@@ -97,17 +98,15 @@ class CheckSplitPinAndWasher():
         expectOneOf("vision.splitpin.centre.source", C.CENTRE_SOURCE, ("hubholes", "fixed"))
         if str(C.CENTRE_SOURCE).strip().lower() != "hubholes":
             return dict(found=True, centre=(float(C.CENTRE[0]), float(C.CENTRE[1])), holes=None, reason="fixed centre")
-        from camera.CheckCap import CheckCap
-        holes = CheckCap.hubHoles(anImage, DOSTPLUS if model == DOSTPLUS else DOST)
+        holes = FindHubHoles.findHoles(anImage, DOSTPLUS if model == DOSTPLUS else DOST)
         if not holes["found"]:
             return dict(found=False, centre=None, holes=holes,
-                        reason=(f"the hub's {holes.get('count')} holes not found ({holes.get('reason')}; darkest "
-                                f"{holes.get('percentile')} %)"))
+                        reason=f"the hub's {holes.get('count')} holes not found ({holes.get('reason')})")
         dx, dy = C.HUB_OFFSET_DOSTPLUS if model == DOSTPLUS else C.HUB_OFFSET_DOST
         centre = (float(holes["cx"]) + float(dx), float(holes["cy"]) + float(dy))
         return dict(found=True, centre=centre, holes=holes,
                     reason=(f"hub from {holes['count']} holes ({holes['cx']:.1f}, {holes['cy']:.1f}) r "
-                            f"{holes['radius']:.1f}, {'DOSTPLUS' if model == DOSTPLUS else 'DOST'} offset "
+                            f"{holes['radius']:.1f} ({holes.get('method')}), {'DOSTPLUS' if model == DOSTPLUS else 'DOST'} offset "
                             f"({float(dx):g}, {float(dy):g})"))
 
     @staticmethod
