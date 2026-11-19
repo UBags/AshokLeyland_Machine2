@@ -5310,7 +5310,7 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - **Dry runs:** `DryRun_Hub_Holes_SAM.py --method sam|sam_slow` (default sam), `--seed hubcheck` default for every set
   (the real checkHub() on the picture), per-gamma sets printed, area ranges per model at the end; `_hub_holes_option`
   installs `hubCentreFromPicture` (real checkHub() on the picture, cached) for the windows and dry runs.
-- Code graph: `3_camera.mmd` (FindHubHoles methods, bung edge) and its SVG, `CODE_GRAPH.src.md` note; CODE_GRAPH.md rebuilt.
+- Code graph: `3_camera.mmd` (FindHubHoles methods, bung edge labelled) and its SVG, `CODE_GRAPH.src.md` note; CODE_GRAPH.md rebuilt.
 - Run: verifier both ALL EQUIVALENT (408 parameters, 14 files); `DryRun_Tuning_Keys` both 231/231; with `--holes
   morphology`: `DryRun_SplitPin_Check_UI --auto` both PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance`
   15/15; `DryRun_Camera_State_File` 19/19. Not run: anything with the real YOLO (laptop) - the new finder's results,

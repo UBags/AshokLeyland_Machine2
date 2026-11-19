@@ -22,7 +22,6 @@ flowchart TB
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
   SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus) / sam_slow / morphology"]
   BS -.->|"bung seated position"| FH
-  BS -.-> FH
   FH -.->|"reuses checkHub() steps"| HS
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
   FH -.-> MM
