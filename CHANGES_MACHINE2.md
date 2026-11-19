@@ -4991,3 +4991,18 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   language changed twice - the QR size stays its start fit); `DryRun_Tuning_Keys` 231/231. Creator at 1920 x 1050:
   13 / 11 / 10 / 15 pt (en / kn / ta / hi) on a 534 px label. Not run: Windows - the two causes above are not proven
   there; the font line will show it.
+
+## 160. Frontend dry runs: offscreen only on Linux (2026-11-19)
+
+- **Found from the laptop log of 2026-11-19:** `DryRun_Frontend_Languages.py` set `QT_QPA_PLATFORM=offscreen` whenever
+  `DISPLAY` was not set - always on Windows, which has no such variable. The offscreen platform has no system fonts
+  ("QFontDatabase: Cannot find font directory ...", "This plugin does not support propagateSizeHints()"), so on the
+  laptop every measured font size was wrong (instruction fit 10 pt there against 19 pt in the sandbox). Not a fault of
+  the application, which runs on the normal Windows platform. Now offscreen only on Linux without a display (the
+  sandbox). `DryRun_FEServer_Cycles.py` skipped its Tk check F13 on Windows for the same reason: now only on Linux
+  without a display. Both copies.
+- The same log showed both `git pull`s aborted by a local change to `ApplicationConfiguration.properties`, so the
+  laptop was still at CHANGES 157 when the screenshots after CHANGES 158 / 159 were taken; after the pull the user
+  reports the three fixes visible.
+- Run (sandbox): `DryRun_Frontend_Languages` 89/89 both copies under Xvfb, and 89/89 without a display (offscreen
+  still chosen on Linux); `DryRun_FEServer_Cycles` compiled (the change is the condition only), not run.

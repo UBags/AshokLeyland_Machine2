@@ -30,7 +30,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("COSTHETA_PLC_VENDOR", "siemens" if HERE.name.startswith("machine2") else "allenbradley")
-if not os.environ.get("DISPLAY"):
+# offscreen only on Linux without a display (the sandbox): Windows has no DISPLAY variable, and offscreen there has no
+# system fonts, so every measured size was wrong (CHANGES 160)
+if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.modules.setdefault('winsound', types.SimpleNamespace(PlaySound=lambda *a, **k: None, SND_FILENAME=0, SND_ASYNC=0,
                                                          Beep=lambda *a: None))

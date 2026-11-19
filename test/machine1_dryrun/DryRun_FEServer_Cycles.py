@@ -742,7 +742,7 @@ def driver():
 
         # ---------------- F13 (2026-11-13) ----------------
         print("\n=== F13. The Tk test windows that play the servers: bypass option ===", flush=True)
-        if not os.environ.get("DISPLAY"):
+        if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):     # Windows has no DISPLAY (CHANGES 160)
             print("     (no DISPLAY: F13 needs one for Tk - run under xvfb-run)", flush=True)
         else:
             import importlib.util as _ilu, tkinter as _tk
