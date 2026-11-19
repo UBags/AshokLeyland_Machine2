@@ -203,7 +203,8 @@ flowchart TB
   A -->|"S20 split pin + washer"| SP["CheckSplitPinAndWasher"]
   A -->|"S22 cap"| CP["CheckCap"] --> CMF["CapMaskFinder"]
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
-  SP & CP --> FH["FindHubHoles<br/>sam (default) / morphology"]
+  SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus) / sam_slow / morphology"]
+  BS -.->|"bung seated position"| FH
   BS -.-> FH
   FH -.->|"reuses checkHub() steps"| HS
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
@@ -224,7 +225,8 @@ SVG: [`3_camera.svg`](3_camera.svg)
   - `CheckNutAndPlateWasher` uses the top-bearing ring from `CheckTopBearing` (stored in `ImageProcessor`).
   - `CheckNoCapBung` imports `CheckBung`; both use `BungSegmenter`.
   - `FindHubHoles` (cap, bung, split pin) reuses `checkHub()`'s steps from `HubAndBearingSegmenter` on its own
-    per-thread object — **do not change `checkHub()`** (CLAUDE.md §5).
+    per-thread object — **do not change `checkHub()`** (CLAUDE.md §5). Its `sam` method (CHANGES 169) needs this
+    cycle's hub-check centre (`ImageProcessor.hubCentre`, set by the hub check, read through `hubCentreProvider`).
   - Model users (`ModelManager`, lazy YOLO + MobileSAM): hub, nut / no-bung (`HexagonNutDetector`), knuckle locator,
     `FindHubHoles` (sam), cap.
 

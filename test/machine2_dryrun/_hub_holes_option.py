@@ -1,8 +1,11 @@
 """
 --holes sam|morphology for the dry runs whose checks find the hub's holes (cap, bung, split pin; CHANGES 164).
 
-  sam (default)  as in production: camera/FindHubHoles.findHolesWithSAM (YOLO + MobileSAM; needs models/MobileSAM with
-                 the YOLO weights - the laptop)
+  sam (default)  as in production: camera/FindHubHoles.findHolesWithSAM (CHANGES 169: YOLO + MobileSAM in the wide
+                 annulus round the hub-check centre; needs models/MobileSAM with the YOLO weights - the laptop). A dry
+                 run has no hub check in its cycle: the real checkHub() is run once on the picture itself and its
+                 centre used (FindHubHoles.hubCentreFromPicture), as production uses the state-5 hub check's
+  sam_slow       FindHubHoles.findHolesWithSAM_Slow (CHANGES 164 - 166)
   morphology     the dark-blob finder of CHANGES 152 - 163 (FindHubHoles.findHolesWithMorphology) with the offsets that
                  were measured with it (below), so that a run without the YOLO weights (the sandbox) checks the rest of
                  the check as before. The offsets now in the properties belong to the SAM centres.
@@ -39,8 +42,30 @@ def applyHolesOption(method: str | None = None) -> str:
         print("Hub holes: dark-blob finder (--holes morphology) with the offsets measured with it - not the production "
               "method", flush=True)
     else:
-        print("Hub holes: YOLO + MobileSAM (FindHubHoles.findHolesWithSAM), as in production", flush=True)
+        FindHubHoles.hubCentreFromPicture = staticmethod(hubCheckOnPicture)
+        print(f"Hub holes: YOLO + MobileSAM (FindHubHoles.{'findHolesWithSAM_Slow' if method == 'sam_slow' else 'findHolesWithSAM'}"
+              "), as in production; the hub centre from the real checkHub() on each picture", flush=True)
     return method
+
+
+QR = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
+      "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
+_hubCheckCache = {}
+
+
+def hubCheckOnPicture(anImage, model):
+    """The real checkHub() on this picture (dry runs: no hub check in their cycle): its hub centre (holes or bolts) or
+    None when it did not pass. Kept for the last 12 pictures (the split pin check gets each picture twice)."""
+    import zlib
+    import numpy as np
+    from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing as CH
+    key = (zlib.crc32(np.ascontiguousarray(anImage[::4, ::4]).tobytes()), anImage.shape, model)
+    if key not in _hubCheckCache:
+        _, ok, _ = CH.checkHubAndBottomBearing(anImage.copy(), QR["DOSTPLUS" if model == "DOSTPLUS" else "DOST"])
+        _hubCheckCache[key] = dict(CH.lastHubCentre) if ok and CH.lastHubCentre else None
+        while len(_hubCheckCache) > 12:
+            _hubCheckCache.pop(next(iter(_hubCheckCache)))
+    return _hubCheckCache[key]
 
 
 class HubHolesRecorder:

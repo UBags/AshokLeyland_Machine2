@@ -43,7 +43,7 @@ import cv2
 import numpy as np
 
 from utils.RedisUtils import DOST, DOSTPLUS
-from camera.VisionConfig import expectOneOf
+from camera.VisionConfig import expectOneOf, vBool, vFloat, vInt, vList, vStr, vTuple
 
 
 class _LockedYolo:
@@ -59,33 +59,33 @@ class _LockedYolo:
 
 class FindHubHoles:
 
-    METHOD = "sam"  # "sam" (wide annulus, CHANGES 169), "sam_slow" (thin annulus, 164 - 166) or "morphology" (dark blobs)
+    METHOD = vStr("vision.hubholes.method", "sam")  # "sam" (wide annulus, CHANGES 169), "sam_slow" (thin annulus, 164 - 166) or "morphology" (dark blobs)
     # SAM: the annulus round the seed (this cycle's hub centre) in which the holes lie and the bolts do not
-    SAM_ANNULUS_INNER = 130  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
-    SAM_ANNULUS_OUTER_DOST = 166  # holes to 161, stud tops from 169
-    SAM_ANNULUS_OUTER_DOSTPLUS = 172  # holes to 163, stud tops from 183
-    SAM_HOLES_RADIUS = (140.0, 155.0)  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
-    SAM_SPREAD_MAX = 3.0  # px, the holes' distances from that circle (sd)
-    SAM_GAP_MAX = 15.0  # deg, an angle between neighbouring holes off 360 / count
-    SAM_SEED_DISTANCE_MAX = 8.0  # px, the holes' circle centre from the seed
+    SAM_ANNULUS_INNER = vInt("vision.hubholes.sam.annulus.inner", 130)  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
+    SAM_ANNULUS_OUTER_DOST = vInt("vision.hubholes.sam.annulus.outer.dost", 166)  # holes to 161, stud tops from 169
+    SAM_ANNULUS_OUTER_DOSTPLUS = vInt("vision.hubholes.sam.annulus.outer.dostplus", 172)  # holes to 163, stud tops from 183
+    SAM_HOLES_RADIUS = vTuple("vision.hubholes.sam.radius", (140.0, 155.0))  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
+    SAM_SPREAD_MAX = vFloat("vision.hubholes.sam.spread.max", 3.0)  # px, the holes' distances from that circle (sd)
+    SAM_GAP_MAX = vFloat("vision.hubholes.sam.gap.max", 15.0)  # deg, an angle between neighbouring holes off 360 / count
+    SAM_SEED_DISTANCE_MAX = vFloat("vision.hubholes.sam.seed.distance.max", 8.0)  # px, the holes' circle centre from the seed
     # checkHub()'s centre from the bolts sits off the holes' centre (the stud tops are higher; CHANGES 96, 147): added to
     # a seed from bolts, per model (holes - bolts; DOST from the CHANGES 147 offsets, DOSTPLUS measured on the laptop,
     # DryRun_Hub_Holes_SAM --seed hubcheck, CHANGES 165)
-    SAM_SEED_BOLTS_OFFSET_DOST = (-0.7, 4.4)
-    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = (-0.7, 3.7)
-    SAM_WIDE_SEED_MAX = 15.0  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
-    SAM_CACHE_SIZE = 12  # pictures whose result is kept
+    SAM_SEED_BOLTS_OFFSET_DOST = vTuple("vision.hubholes.sam.seed.bolts.offset.dost", (-0.7, 4.4))
+    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = vTuple("vision.hubholes.sam.seed.bolts.offset.dostplus", (-0.7, 3.7))
+    SAM_WIDE_SEED_MAX = vFloat("vision.hubholes.sam.wide.seed.max", 15.0)  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
+    SAM_CACHE_SIZE = vInt("vision.hubholes.sam.cache.size", 12)  # pictures whose result is kept
     # Each hole of the group found, refined on the picture as taken (CHANGES 166): MobileSAM box prompt of +-half px round
     # it, three masks, the largest with an area in refine.area taken (the hole's whole outline), centred again on it and
     # prompted once more (iterations). Without it the DOST groups came either as the whole outlines or as their darker
     # lower part - centres 2 - 2.5 px apart in y on one still part; refined, the centre holds within 0.1 - 0.2 px sd.
-    SAM_REFINE = True
-    SAM_REFINE_HALF_DOST = 18  # px; holes r ~10
-    SAM_REFINE_HALF_DOSTPLUS = 24  # px; holes r ~14.5
-    SAM_REFINE_AREA_DOST = (60, 1200)  # px
-    SAM_REFINE_AREA_DOSTPLUS = (60, 2000)  # px
-    SAM_REFINE_ITERATIONS = 2
-    SAM_REFINE_MOVE_MAX = 6.0  # px; more = the group was not the holes
+    SAM_REFINE = vBool("vision.hubholes.sam.refine", True)
+    SAM_REFINE_HALF_DOST = vInt("vision.hubholes.sam.refine.half.dost", 18)  # px; holes r ~10
+    SAM_REFINE_HALF_DOSTPLUS = vInt("vision.hubholes.sam.refine.half.dostplus", 24)  # px; holes r ~14.5
+    SAM_REFINE_AREA_DOST = vTuple("vision.hubholes.sam.refine.area.dost", (60, 1200))  # px
+    SAM_REFINE_AREA_DOSTPLUS = vTuple("vision.hubholes.sam.refine.area.dostplus", (60, 2000))  # px
+    SAM_REFINE_ITERATIONS = vInt("vision.hubholes.sam.refine.iterations", 2)
+    SAM_REFINE_MOVE_MAX = vFloat("vision.hubholes.sam.refine.move.max", 6.0)  # px; more = the group was not the holes
 
     # "sam" since CHANGES 169 (findHolesWithSAM): a wide annulus round this cycle's hub-check centre that holds the holes
     # (circle r ~148) and the bolts (circle r 178 - 196); checkHub()'s steps up to the candidate sets that pass its
@@ -94,30 +94,30 @@ class FindHubHoles:
     # ~148, bolts 178 and more) and a total mask area <= HOLES_AREA_MAX_<model> (a DOST stud top's mask is larger than a
     # hole's: holes 2100 - 2700, bolts ~4200 in the sandbox; DOSTPLUS holes and stud tops both 3000 - 3500, so there the
     # radius decides), the one with the smallest total mask area is the holes.
-    WIDE_ANNULUS_INNER = 116  # px round the hub-check centre (checkHub's own 116 - 253)
-    WIDE_ANNULUS_OUTER = 253
-    CANDIDATES_MAX = 3  # candidate sets kept per gamma (least distance variance first)
-    HOLES_AREA_MAX_DOST = 3400  # px, total mask area of the 4 holes at most
-    HOLES_AREA_MAX_DOSTPLUS = 4500  # px, total mask area of the 5 holes at most
-    HOLES_CIRCLE_RADIUS = (135.0, 165.0)  # px, circle through the holes
+    WIDE_ANNULUS_INNER = vInt("vision.hubholes.annulus.inner", 116)  # px round the hub-check centre (checkHub's own 116 - 253)
+    WIDE_ANNULUS_OUTER = vInt("vision.hubholes.annulus.outer", 253)
+    CANDIDATES_MAX = vInt("vision.hubholes.candidates.max", 3)  # candidate sets kept per gamma (least distance variance first)
+    HOLES_AREA_MAX_DOST = vInt("vision.hubholes.holes.area.max.dost", 3400)  # px, total mask area of the 4 holes at most
+    HOLES_AREA_MAX_DOSTPLUS = vInt("vision.hubholes.holes.area.max.dostplus", 4500)  # px, total mask area of the 5 holes at most
+    HOLES_CIRCLE_RADIUS = vTuple("vision.hubholes.holes.circle.radius", (135.0, 165.0))  # px, circle through the holes
 
     # Morphology (CHANGES 152, 157; moved from CheckCap, same keys). The holes (dark, at r ~150) - never the bolts
     # (bright stud tops at r 182 - 196): dark blobs only, searched in the band round cap.center, the circle through them
     # must have a radius in holes.radius, all the holes of the model (DOST 4, DOSTPLUS 5) evenly spaced.
-    SEATING_HUB_HOLES_BAND = (128, 168)  # px from cap.center
-    SEATING_HUB_HOLES_DARK_PERCENTILES = [6.0, 9.0, 12.0]  # darkest % of the band, tried in turn
-    SEATING_HUB_HOLES_AREA = (150, 2500)  # px, one hole's dark blob
-    SEATING_HUB_HOLES_OPEN = 5  # px; opening that drops thin dark lines
-    SEATING_HUB_HOLES_BLOBS_KEEP = 8  # largest blobs tried
-    SEATING_HUB_HOLES_RADIUS = (140.0, 160.0)  # px, hole circle
-    SEATING_HUB_HOLES_SPREAD_MAX = 3.0  # px, holes off the circle (sd)
-    SEATING_HUB_HOLES_GAP_MAX = 15.0  # deg, a gap off 360 / count
+    SEATING_HUB_HOLES_BAND = vTuple("vision.cap.seating.hub.holes.band", (128, 168))  # px from cap.center
+    SEATING_HUB_HOLES_DARK_PERCENTILES = vList("vision.cap.seating.hub.holes.dark.percentiles", [6.0, 9.0, 12.0])  # darkest % of the band, tried in turn
+    SEATING_HUB_HOLES_AREA = vTuple("vision.cap.seating.hub.holes.area", (150, 2500))  # px, one hole's dark blob
+    SEATING_HUB_HOLES_OPEN = vInt("vision.cap.seating.hub.holes.open", 5)  # px; opening that drops thin dark lines
+    SEATING_HUB_HOLES_BLOBS_KEEP = vInt("vision.cap.seating.hub.holes.blobs.keep", 8)  # largest blobs tried
+    SEATING_HUB_HOLES_RADIUS = vTuple("vision.cap.seating.hub.holes.radius", (140.0, 160.0))  # px, hole circle
+    SEATING_HUB_HOLES_SPREAD_MAX = vFloat("vision.cap.seating.hub.holes.spread.max", 3.0)  # px, holes off the circle (sd)
+    SEATING_HUB_HOLES_GAP_MAX = vFloat("vision.cap.seating.hub.holes.gap.max", 15.0)  # deg, a gap off 360 / count
     # the model's hole count (both methods)
-    SEATING_HUB_HOLES_COUNT_DOST = 4
-    SEATING_HUB_HOLES_COUNT_DOSTPLUS = 5
+    SEATING_HUB_HOLES_COUNT_DOST = vInt("vision.cap.seating.hub.holes.count.dost", 4)
+    SEATING_HUB_HOLES_COUNT_DOSTPLUS = vInt("vision.cap.seating.hub.holes.count.dostplus", 5)
     # True: the radius / spread / angle-gap checks are applied to every combination of blobs and the most evenly spaced
     # combination that passes them is taken; False: the most evenly spaced combination first, then checked. CHANGES 157.
-    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = True
+    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = vBool("vision.cap.seating.hub.holes.gate.each.combination", True)
 
     # This cycle's hub centre (dict cx, cy, ... from checkHub(); ImageProcessor.hubCentre) when the caller does not
     # pass one: set by the camera server. samModelProvider / yoloModelProvider replace ModelManager's models (tests).

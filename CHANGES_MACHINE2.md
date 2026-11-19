@@ -5273,3 +5273,45 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - **Run (sandbox):** Python 3.11 venv from `requirements.txt` without the Windows / CUDA-only packages (torch 2.11 from
   PyPI, MobileSAM from GitHub): 73 of 85 live modules import; the other 12 need tkinter (11 frontend files) or
   `winsound` (heartbeat server). All six diagrams render with mermaid-cli 11. `6_modules.mmd` regenerates identically.
+
+## 169. Hub holes: new findHolesWithSAM - wide annulus round the hub-check centre, candidate sets, holes by radius and mask area (2026-11-20)
+
+- **Why:** Uddi ran the CHANGES 164 - 166 finder in the windows: slow and completely wrong results. His design
+  (2026-11-20), built as given: (a) the hub centre from this cycle's `checkHub()` (`ImageProcessor.hubCentre`); (b) an
+  annulus round it holding the holes and the bolts, `checkHub()`'s routine up to the sets that pass its equidistant /
+  equal-angle filters, the top 2 - 3 sets, the holes told from the bolts (bolt masks larger); no holes -> NOT OK;
+  (c) everything after the holes exactly as at `8a57f85` (CHANGES 163), in the same order.
+- **Checked against `8a57f85`:** the cap, bung (states 24 and 13) and split pin code after the hole step is that
+  commit's (only the hole call and its log text differ; the camera server's `_assessCap` and 2-of-3 logic unchanged);
+  the siemens values are that commit's except the three offsets changed in 165.
+- **Changed (`camera/FindHubHoles.py`):** `findHolesWithSAM` -> `findHolesWithSAM_Slow` (method `sam_slow`, kept). New
+  `findHolesWithSAM` (method `sam`): (1) the hub-check centre as it is (given / `hubCentreProvider` / dry runs'
+  `hubCentreFromPicture`), none -> not found; (2) annulus 116 - 253 round it, per gamma in checkHub()'s smart order
+  checkHub()'s steps (`_candidateSets`: the mask generator, shape classification, area-ratio and shape filters, distance
+  and size groups, small / off-centre groups dropped, 4- and 5-polygon candidates per group through the equidistant
+  (strict, else relaxed) and equal-angle filters, as `filter_subgroups_by_equispacing` steps 1 - 3) without the final
+  pick; (3) of the model's count, the best set of each group, the 3 best; among those with circle r 135 - 165 and total
+  mask area <= `holes.area.max.<model>`, the smallest area = the holes; else the next gamma; none -> not found.
+  Reference commit bf52a06; both manifests; 6 keys (`vision.hubholes.annulus.inner/outer`, `.candidates.max`,
+  `.holes.area.max.dost/.dostplus`, `.holes.circle.radius`) in the three properties files; `method` takes `sam_slow`.
+- **Holes or bolts - the one departure from "smallest total mask area" alone, and why:** in the sandbox (MobileSAM, YOLO
+  replaced by boxes of 36 px every 26 px, CPU) DOST hole sets had total area 2045 - 2891 and bolt sets 3022 - 4342, but
+  DOSTPLUS hole sets 3028 - 3495 and bolt sets 3027 - 3434 (a DOSTPLUS hole, r ~14.5, is as large as a stud top), and
+  at some gammas the three best sets were all bolts. So the sets are first restricted to a hole-circle radius (holes
+  ~148, bolts 178 - 196: the part's geometry), and the "best set" is taken per group (holes and bolts are different
+  distance groups; before, several 5-subsets of the bolt group filled the top 3). The area cutoffs (3400 / 4500) are
+  provisional: `DryRun_Hub_Holes_SAM.py` prints the laptop's ranges.
+- **Sandbox runs (stand-in boxes; say nothing about the real YOLO's masks or speed):** hub pictures DOST_01 - 05
+  found (r 146 - 150.5, at gamma 1 except DOST_05 / DOST_01 at gamma 3), asked as DOSTPLUS never found; DOSTPLUS_01
+  and _03 found (r 150.9 / 148.3, gamma 3), DOSTPLUS_02 not found (only bolt-radius sets at every gamma); 27 - 340 s a
+  picture on this CPU with ~300 stand-in boxes. The run was stopped before the cap / split pin / bung pictures (CPU).
+  The SAM centres sat 6 - 7 px below the dark-blob centres on DOST (outline vs shadowed inside, as in 165): the
+  offsets must be measured for this finder.
+- **Dry runs:** `DryRun_Hub_Holes_SAM.py --method sam|sam_slow` (default sam), `--seed hubcheck` default for every set
+  (the real checkHub() on the picture), per-gamma sets printed, area ranges per model at the end; `_hub_holes_option`
+  installs `hubCentreFromPicture` (real checkHub() on the picture, cached) for the windows and dry runs.
+- Code graph: `3_camera.mmd` (FindHubHoles methods, bung edge) and its SVG, `CODE_GRAPH.src.md` note; CODE_GRAPH.md rebuilt.
+- Run: verifier both ALL EQUIVALENT (408 parameters, 14 files); `DryRun_Tuning_Keys` both 231/231; with `--holes
+  morphology`: `DryRun_SplitPin_Check_UI --auto` both PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance`
+  15/15; `DryRun_Camera_State_File` 19/19. Not run: anything with the real YOLO (laptop) - the new finder's results,
+  speed, area cutoffs and the offsets all come from the laptop run.

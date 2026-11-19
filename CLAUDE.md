@@ -122,11 +122,15 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   expected washer centre (holes not found = NOT OK; `centre.source=fixed` = the fixed centre); washer region round it,
   blue-marked legs, NOT OK when more than 2 marker pixels lie more than 8 px outside the washer. Values from 3 OK parts
   (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
-- **Hub holes for the cap, bung and split pin checks** (CHANGES 164): `camera/FindHubHoles.py`. `findHolesWithSAM` (default,
-  `vision.hubholes.method=sam`) = YOLO + MobileSAM with `checkHub()`'s steps in a thin annulus (130 - 166 / 172 px) round
-  this cycle's hub-check centre (`ImageProcessor.hubCentre`, via `hubCentreProvider`; a bolts centre moved by
-  `sam.seed.bolts.offset.<model>`), so the holes are in and the bolts
-  out; `findHolesWithMorphology` = the old dark-blob finder (moved from `CheckCap.hubHoles`). **Do not change
+- **Hub holes for the cap, bung and split pin checks** (CHANGES 164, 169; Uddi's design of 2026-11-20 - do not deviate):
+  `camera/FindHubHoles.py`. `findHolesWithSAM` (default, `vision.hubholes.method=sam`): (a) this cycle's hub-check centre
+  (`ImageProcessor.hubCentre`, via `hubCentreProvider`; none -> NOT OK); (b) a wide annulus (116 - 253) round it holding
+  holes and bolts, `checkHub()`'s steps up to the candidate sets passing its equidistant / equal-angle filters, the best
+  set of each group, the top 3; the holes = the smallest total mask area among the sets with a hole-circle radius
+  (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (c) everything after the
+  holes exactly as at `8a57f85` (CHANGES 163), in the same order. `findHolesWithSAM_Slow` (`sam_slow`) = the CHANGES
+  164 - 166 thin-annulus finder, kept; `findHolesWithMorphology` = the old dark-blob finder (moved from
+  `CheckCap.hubHoles`; its offsets are the dark-blob ones, not those in the properties since 165). **Do not change
   `checkHub()`** (`CheckHubAndBottomBearing.checkHubAndBottomBearing`, `HubAndBearingSegmenter`): it works (Uddi,
   2026-11-19); FindHubHoles uses its methods on its own per-thread object. Dry runs: `--holes morphology` runs the old
   finder with its own offsets where the YOLO weights are missing (the sandbox).
@@ -165,7 +169,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
-| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes -> per-hole refinement (CHANGES 166); re-run after 166 pending; plant not yet |
+| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run with it pending; plant not yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

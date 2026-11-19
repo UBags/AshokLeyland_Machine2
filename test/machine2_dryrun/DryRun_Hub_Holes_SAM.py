@@ -19,7 +19,13 @@ offsets that keep every check's target where it was:
 (the SAM masks are the holes' outlines on the disc face; the dark blobs are the shadowed inside of each hole, seen a
 few px off by the camera's slight angle - so the two centres differ by a steady amount per model).
 
-Seed (the annulus centre): --seed none (default) = as without this cycle's hub check: one pass over checkHub()'s own
+Method (CHANGES 169): --method sam (default) = FindHubHoles.findHolesWithSAM, the wide annulus round the hub-check
+centre with the candidate sets; per picture each gamma's sets (total mask area, circle r) are printed, and at the end
+the area ranges of the hole sets and of the others (bolts) per model - for vision.hubholes.holes.area.max.<model>;
+--method sam_slow = findHolesWithSAM_Slow (CHANGES 164 - 166).
+
+Seed (the annulus centre): --seed hubcheck (default since CHANGES 169, every set) = the real checkHub() on the picture,
+its centre as the seed, as production takes the hub check's; --seed none = as without this cycle's hub check: one pass over checkHub()'s own
 annulus first (holes or bolts), its centre then used; --seed morphology = the morphology circle's centre (faster);
 --seed hubcheck = the hub pictures only: the real checkHub() on the picture, its centre (holes or bolts) as the seed,
 as in production - and per model and kind the mean of SAM holes - hub check centre, i.e. the value for
@@ -70,7 +76,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sets", default="hub,splitpin,cap,bung")
     ap.add_argument("--limit", type=int, default=10 ** 6)
-    ap.add_argument("--seed", choices=("none", "morphology", "hubcheck"), default="none")
+    ap.add_argument("--seed", choices=("none", "morphology", "hubcheck"), default="hubcheck")
+    ap.add_argument("--method", choices=("sam", "sam_slow"), default="sam")
     ap.add_argument("--wrong-model", action="store_true")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--tiled-yolo", action="store_true")
@@ -114,8 +121,8 @@ def main() -> int:
         F.yoloModelProvider = staticmethod(lambda: TiledBoxYolo())
 
     sets = [s.strip() for s in args.sets.split(",") if s.strip()]
-    if args.seed == "hubcheck":
-        sets = ["hub"]
+    find = F.findHolesWithSAM if args.method == "sam" else F.findHolesWithSAM_Slow
+    areaRows = []                                  # (model, kind of set: holes / other, total mask area, radius)
     QR = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
           "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
     rows, failures, seedRows = [], [], []
@@ -135,7 +142,7 @@ def main() -> int:
                 failures.append(f"{path.name}: the hub check did not pass / gave no centre")
         F._cache.clear()
         t0 = time.perf_counter()
-        sam = F.findHolesWithSAM(image, model, seed)
+        sam = find(image, model, seed)
         secs = time.perf_counter() - t0
         line = f"{kind:8s} {path.name[-28:]:28s} {model:8s} "
         if sam["found"]:
@@ -163,11 +170,17 @@ def main() -> int:
         if args.wrong_model:
             other = "DOST" if model == "DOSTPLUS" else "DOSTPLUS"
             F._cache.clear()
-            wrong = F.findHolesWithSAM(image, other, seed)
+            wrong = find(image, other, seed)
             line += f"  as {other}: {'FOUND (wrong)' if wrong['found'] else 'not found'}"
             if wrong["found"]:
                 failures.append(f"{path.name}: {other} holes found on a {model} hub")
         print(line, flush=True)
+        low, high = (float(v) for v in F.HOLES_CIRCLE_RADIUS)
+        for looked in sam.get("candidates") or []:
+            print(f"           gamma {looked['gamma']}: sets (total mask area, circle r): "
+                  + ", ".join(f"({c['area']}, {c['radius']})" for c in looked["sets"]), flush=True)
+            for c in looked["sets"]:
+                areaRows.append((model, "holes" if low <= c["radius"] <= high else "other", c["area"], c["radius"]))
 
     print()
     current = {("cap", "DOST"): CC.CheckCap.SEATING_HUB_DISTANCE_OFFSET_CAP_DOST,
@@ -201,6 +214,14 @@ def main() -> int:
                       f"{m[1]:+.2f}) sd ({sd[0]:.2f}, {sd[1]:.2f})"
                       + (f"  ->  vision.hubholes.sam.seed.bolts.offset.{model.lower()} = {m[0]:.1f},{m[1]:.1f}"
                          if hubKind == "bolts" else ""))
+    for model in ("DOST", "DOSTPLUS"):
+        for what in ("holes", "other"):
+            a = [r[2] for r in areaRows if r[0] == model and r[1] == what]
+            if a:
+                print(f"mask area {model:8s} {what:5s} sets (circle r {'in' if what == 'holes' else 'outside'} "
+                      f"vision.hubholes.holes.circle.radius): {len(a)}, total area {min(a)} - {max(a)}, median "
+                      f"{int(np.median(a))}  (vision.hubholes.holes.area.max.{model.lower()} now "
+                      f"{F.HOLES_AREA_MAX_DOSTPLUS if model == 'DOSTPLUS' else F.HOLES_AREA_MAX_DOST})")
     for f in failures:
         print("FAIL:", f)
     print("RESULT:", "PASS" if not failures else f"{len(failures)} FAILURE(S)", f"({len(rows)} pictures compared)")
