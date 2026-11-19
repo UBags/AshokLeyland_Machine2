@@ -10,7 +10,9 @@ import os
 import redis
 import time
 from redis import Redis
-from utils.RedisUtils import checkRedisHealth, clearQueues, getStopCommandFromQueue, sendStopCommand
+from utils.RedisUtils import checkRedisHealth, clearQueues, getStopCommandFromQueue, sendStopCommand, \
+    databaseServerStoppedSince, _PROCESS_STARTED_AT as _MAIN_PROGRAM_STARTED_AT
+from utils.ShutdownWait import waitForDatabaseServer
 from Configuration import CosThetaConfigurator
 from utils.CosThetaPrintUtils import printBoldBlue
 
@@ -174,6 +176,10 @@ def checkIPs():
 # printBoldBlue(f"MainProgram process is {os.getpid()}")
 # os.system(f"start /B start /wait cmd.exe @cmd /k python MainSubProgram.py {currentMode} {currentBatchNumber} {username} {rolename}")
 
+# The DB server's multiprocessing.Process as it is now (the supervisor may have restarted it); set in main()
+_databaseServerProcess = lambda: None
+
+
 def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool = True, exitAfterwards : bool = True):
     """Send the stop command, then end every server process. exitAfterwards: sys.exit() at the end (the callers in
     the main thread). monitorStop passes False: it runs in a thread, where sys.exit() only ends the thread (SystemExit
@@ -182,10 +188,20 @@ def stopProcesses(currentProcessPIDs: list, endingSplashScreenBeingShown : bool 
     if endingSplashScreenBeingShown:
         time.sleep(CosThetaConfigurator.getInstance().getEndScreenTime() + 2)
     sendStopCommand(redisConnection, aProducer="MainProgram")
-    # wait before ending the servers: the DB server drains fe2db.q only after the stop, and a failed insert waits
-    # db.insert.retry.gap.sec (5 s) before its next attempt; a record still on the queue is lost at the next start,
-    # which flushes Redis (CHANGES 155; was 2 s)
-    time.sleep(CosThetaConfigurator.getTuning("mainprogram.stop.wait.sec", 6.0, minimum=0.0))
+    # Wait before ending the servers (CHANGES 157; a fixed 6 s in CHANGES 155, 2 s before): the DB server drains fe2db.q
+    # after the stop command - a failed insert then goes to FailedRecords/ at once - and sends its stopped response.
+    # At least mainprogram.stop.min.wait.sec (the other servers act on the stop), at most mainprogram.db.drain.wait.max.sec
+    # (one record with PostgreSQL hanging: duplicate check and insert, each up to the 5 s connect timeout, plus the
+    # statement timeout and the pictures); a record still on the queue then is lost (the next start flushes Redis).
+    outcome, waited = waitForDatabaseServer(
+        isDrained=lambda: databaseServerStoppedSince(redisConnection, _MAIN_PROGRAM_STARTED_AT),
+        process=_databaseServerProcess,
+        minimumWait=CosThetaConfigurator.getTuning("mainprogram.stop.min.wait.sec", 2.0, minimum=0.0),
+        maximumWait=CosThetaConfigurator.getTuning("mainprogram.db.drain.wait.max.sec", 20.0, minimum=0.0))
+    message = {"drained": f"DB server drained fe2db.q after the stop command ({waited:.1f} s)",
+               "not running": f"DB server not running at the stop ({waited:.1f} s): records left on fe2db.q are lost",
+               "timed out": f"DB server did not report fe2db.q drained within {waited:.1f} s: records left on it are lost"}[outcome]
+    (printBoldGreen if outcome == "drained" else printBoldRed)(message)
     for pid in currentProcessPIDs:
         try:
             if psutil.pid_exists(pid):
@@ -598,6 +614,12 @@ def main():
                 supervisor.add(name, target, args, known[var], restartArgs=restartArgs.get(name))
         supervisor.start()
         printBoldBlue("Process supervisor started: a server process that dies is restarted")
+
+    global _databaseServerProcess
+    _startedDBServer = locals().get("P5")
+    _supervisor = locals().get("supervisor")
+    _databaseServerProcess = ((lambda: _supervisor.process("DB server")) if _supervisor is not None
+                              else (lambda: _startedDBServer))
 
     startingTime: float = time.time()
 

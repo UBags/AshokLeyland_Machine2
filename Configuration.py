@@ -3189,6 +3189,7 @@ class CosThetaConfigurator():
             raw = CosThetaConfigurator.getValue(key, default=None)
         except Exception:
             raw = None
+        fromFile = False
         if raw is None or str(raw).strip() == "":
             cls.reportConfigurationProblem(key, f"{key} not found in the properties file; default {default!r} used")
             value = default
@@ -3220,8 +3221,11 @@ class CosThetaConfigurator():
             if problem:
                 cls.reportConfigurationProblem(key, f"{key}={text!r} not valid ({problem}); default {default!r} used")
                 value = default
+            else:
+                fromFile = True
         if minimum is not None and isinstance(value, (int, float)) and not isinstance(value, bool) and value < minimum:
-            cls.reportConfigurationProblem(key, f"{key}={value!r} below its minimum {minimum!r}; {minimum!r} used")
+            if fromFile:
+                cls.reportConfigurationProblem(key, f"{key}={value!r} below its minimum {minimum!r}; {minimum!r} used")
             value = type(default)(minimum)
         return value
 

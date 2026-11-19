@@ -220,6 +220,19 @@ On the Machine 2 PC, with the new exe:
 5. A native speaker of each language reads the screen and the dialogs; wrong words go into the .po files
    (`Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` in the repo, then `python test/i18n/update_frontend_catalogues.py
    --compile`, then a new build).
+6. (CHANGES 157) In each language no instruction, connection message, tile title or tile hint is cut off; in Hindi the
+   texts are one point smaller than the fit (`language.hindi.fontsize.adjustment=-1`), in the others at the fit.
+   Reported by Uddi on 2026-11-19: the dialogs show Kannada, Tamil and Hindi correctly.
+
+## 12. Exit: the DB server drains, MainProgram waits for it (CHANGES 157)
+
+1. Exit normally: the MainProgram window prints `DB server drained fe2db.q after the stop command (x.x s)` - about 2 s.
+2. Stop PostgreSQL (or make it unreachable), run one component to the end, then Exit: the line still says `drained`
+   (within a few seconds), and `<basefolder>\Test|Production\FailedRecords\` holds the cycle's record as JSON
+   (`_failureReason ... (after the stop command: written to disk without a retry)`), with its picture files.
+3. `DB server did not report fe2db.q drained within 20.0 s` or `DB server not running at the stop` is the thing to report.
+4. Any `[Configuration] ...` line in the log at start-up names a properties key that is missing or has a value of the
+   wrong type: correct the properties file.
 
 ## Results
 
@@ -236,4 +249,5 @@ On the Machine 2 PC, with the new exe:
 | 8 Picture clean-up lines; invalid QR notice + siren; MainProgram lines in the log; DB retry | | | | |
 | 9 Bung: rotation dry run and Bung_Check_UI on the laptop; failing bungs now OK; [Bung] lines; check time | | | | |
 | 10 Cap seating: seated brass / silver OK; tilted and pushed-aside silver NOT OK; seating lines; check time; hub-centre distance lines (CHANGES 143) | | | | |
-| 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | | | | |
+| 11 Frontend languages: dist check; the four languages on screen and in a dialog; restart keeps the choice; DB row and log English; native-speaker review (CHANGES 156) | 2026-11-19 | | Dialogs: passed | Reported by Uddi: the dialogs come out correctly in the Indic scripts; the rest not reported yet |
+| 12 Exit: drained line; with PostgreSQL down the record in FailedRecords; no `[Configuration]` lines (CHANGES 157) | | | | |

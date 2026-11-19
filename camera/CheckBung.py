@@ -56,17 +56,20 @@ PRINT_RESULT_PAINTING = CosThetaConfigurator.getTuning("debug.print.checkbung.re
 PRINT_SUCCESS_EVALUATION = CosThetaConfigurator.getTuning("debug.print.checkbung.success.evaluation", True)
 
 
-def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str) -> None:
+def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str,
+                     source_rgb: np.ndarray | None = None) -> None:
     """Seating marks on the result picture (RGB, no text): the model's reference oval (thick yellow contour, centred on
     the seated position), the hole-pattern centre (thick blue cross) and, with the seated position from the hub's holes
     (CHANGES 153), the hub's hole circle (thin blue). The seated position is the seating step's, else worked out here
-    (BungSegmenter.seated_position); none found (hub's holes covered): no oval."""
+    (BungSegmenter.seated_position) on source_rgb - the camera picture as taken, never the result picture, on which the
+    bung masks are already painted (CHANGES 157); source_rgb None: image_rgb (only for a picture with nothing drawn on
+    it). None found (hub's holes covered): no oval."""
     dostplus = model == "DOSTPLUS"
     oval = BS_MODULE.SEATING_REFERENCE_OVAL_DOSTPLUS if dostplus else BS_MODULE.SEATING_REFERENCE_OVAL_DOST
     seated_at, hub = seating.get("seated_at"), seating.get("hub")
     if seated_at is None and "seated_at" not in seating:
         try:
-            place = BS_MODULE.seated_position(image_rgb, model)
+            place = BS_MODULE.seated_position(image_rgb if source_rgb is None else source_rgb, model)
             seated_at, hub = place["point"], place["hub"]
         except Exception:
             seated_at, hub = None, None
@@ -355,7 +358,8 @@ class CheckBung:
                         # Always (holes passed or not, seating run or not): the reference oval, and the hole-pattern
                         # centre of the holes found
                         drawSeatingMarks(result_image, seating if seating is not None else
-                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model)
+                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model,
+                                         source_rgb=anImage_rgb)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckBung] Painted {len(components)} masks on image", MessageType.GENERAL)
@@ -375,7 +379,7 @@ class CheckBung:
                     logBoth('logError', _src, f"[CheckBung] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
                 no_pattern = anImage_rgb.copy()
-                drawSeatingMarks(no_pattern, {}, model)          # the reference oval only (no hole pattern)
+                drawSeatingMarks(no_pattern, {}, model, source_rgb=anImage_rgb)   # the reference oval only (no hole pattern)
                 result_bgr = cv2.cvtColor(no_pattern, cv2.COLOR_RGB2BGR)
                 return _maybe_crop(result_bgr), False, None
 

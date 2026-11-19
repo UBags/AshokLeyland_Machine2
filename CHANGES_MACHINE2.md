@@ -4839,3 +4839,87 @@ its dialogs; part names translated / transliterated (नकल हब बेय�
   `getAllInstructions`) 211/211 Siemens, 218/218 Allen-Bradley. Screenshots in the four languages looked at (Kannada, Tamil, Hindi
   shaped correctly after the font fallbacks; nothing clipped). Not run: the exe (Nuitka) on Windows, and the fonts on the
   plant PC - Nirmala UI is expected there.
+
+## 157. Review findings of 2026-11-19 acted on: DB drain at Exit, hole checks per combination, font fits by measured width, configuration problems logged (2026-11-19)
+
+User's decisions on the review of this morning (report in the chat, nothing changed then):
+
+- **Exit with records on `fe2db.q` (root fix of CHANGES 155's fixed wait):**
+  - DB server (`persistence/DBServer.py`): after the stop command a failed insert goes to `FailedRecords/` at once
+    (`handleFailedInsert`: no retry, reason "... (after the stop command: written to disk without a retry)"); once one
+    has failed, the records still queued go there without an attempt ("not tried: an insert already failed after the
+    stop command"); the retry gap ends at the stop command; a `FailedRecords/` file that cannot be written then waits
+    0.5 s (not 5 s) between tries. When the queue is drained: `reportDrained` sends the stopped response
+    (`RedisUtils.sendStoppedResponseFromDatabaseServer`, producer `DBServer`, on the existing `stoppedResponse.q`,
+    which nothing read before).
+  - MainProgram `stopProcesses`: `utils/ShutdownWait.waitForDatabaseServer` - at least `mainprogram.stop.min.wait.sec`
+    **2.0** (the other servers act on the stop; the wait before CHANGES 155), then until the DB server's response
+    (`RedisUtils.databaseServerStoppedSince`, sent since MainProgram started; other producers' responses left in
+    place), at most `mainprogram.db.drain.wait.max.sec` **20.0**, earlier when the DB server process is no longer
+    running (`supervisor.process("DB server")`, else the one started). Prints `drained` / `not running` / `timed out`
+    with the seconds. Replaces `mainprogram.stop.wait.sec` (6.0).
+  - **Why 20 s:** one record with PostgreSQL *hanging* (the slow case; a stopped PostgreSQL refuses at once):
+    duplicate check (5 s connect timeout, `PGCONNECT_TIMEOUT`) + insert (5 s connect + up to 5 s statement timeout) +
+    the pictures (~1 s) = about 16 s, plus margin. After the first failure the rest go to disk without an attempt, so
+    several records do not add 16 s each. Normal Exit: about 2 s (the minimum); the DB server drains in well under it.
+- **Hub holes (`CheckCap.hubHoles`):** `vision.cap.seating.hub.holes.gate.each.combination` (both vendors **True**):
+  the radius / spread / angle-gap checks on every combination of blobs, the most evenly spaced one that passes taken;
+  **False** = CHANGES 152's route (the most evenly spaced first, then checked). Synthetic: 4 holes at r 150 (spread
+  0.6 px, gaps 2 deg) plus 4 evenly spaced dark spots at r 132: True finds the holes, False reports "circle r 134.4
+  outside 140 - 160". Real pictures: the 100 cap, hub and bung pictures of the dry-run folders give the same circle
+  both ways; time 34.6 vs 33.8 ms per picture (the whole finder; the extra checks under 2 ms with 56 combinations).
+  **Reason:** when no percentile finds the holes, the result of the most informative try is returned - a circle failing
+  the fewest checks, then any circle, then the most blobs - instead of the last percentile's ("0 dark blobs" at 12 %
+  hid that 6 % had found a circle at the wrong radius). With the switch on, a failing reason starts "none of the N
+  combinations of M blobs passes; most evenly spaced: ...".
+- **Bung marks:** `CheckBung.drawSeatingMarks(..., source_rgb=)` - when the seating step did not run (wrong hole count,
+  segmenter error, no pattern) the hub's holes are looked for on the camera picture as taken (`anImage_rgb`), not on
+  the result picture with the bung masks painted (both bung checks).
+- **Font fits by measured width (frontend):** new `CosThetaLabelUtils.fittingPointSize(widget, texts, font, widthShare,
+  heightShare, ...)`: the largest size at which every text of a family fits, each measured with `QFontMetrics.size`
+  (drawn width and lines; binary search); `largestFittingPointSize` now calls it (kept). Every family: instruction (all
+  28 instructions, 95 %), connection status (all 8 messages), tile titles, results (Result Awaited / OK / Not OK /
+  Bypassed), **tile hints** (new: one size for the 14 hints, inside 90 % of the picture area, at most the designed
+  18 pt - in Tamil the hint "Component Press" had run past its tile), mode, QR code (now also refitted on a change of
+  language), date / time, creator, the torque tiles' second line. Then `language.<english|kannada|tamil|hindi>.fontsize.
+  adjustment` (0 / 0 / 0 / **-1**; `FrontendI18n.fontSizeAdjustment` / `adjustedPointSize`; read at each fit). The key
+  names are `language.<name>.fontsize.adjustment` (the request wrote `fontsize,adjustment`; a comma cannot be part of a
+  key here). Tamil catalogue: the "Place / Bung for / Component Press" hint broken over three lines like the English one
+  (a 25-letter first line forced the hints to 10 pt; now 18).
+  Measured at 1920 x 1050 (Xvfb): instruction 19 / 20 / 13 / 24 pt (en / kn / ta / hi; Hindi fit 25 - 1), connection
+  20 / 20 / 13 / 33, titles 16 / 16 / 13 / 18, hints 18 / 18 / 18 / 17; nothing cut off.
+- **Dialogs in Indic scripts:** checked by the user on the plant PC - shown correctly (plant check 11, dialogs passed).
+- **Configuration problems logged:** `CosThetaConfigurator.reportConfigurationProblem(key, message)` - printed and in the
+  log file (`[Configuration] ...`), once per process for each key and problem; only for a key that is missing or a
+  value outside its expected set. `getTuning`: missing key -> default (logged); bool other than true/false/yes/no/on/off/
+  1/0, an int key that is not a whole number ("3.7"; "4.0" is accepted), a float key that is not a number -> the default
+  (logged; before, "Ture" read as False and "3.7" as 3); a value from the file below its minimum -> the minimum (logged).
+  `VisionConfig`: a missing vision key and an invalid value now go through the same report (invalid ones were printed
+  only). `expectOneOf` (Configuration and VisionConfig): `vision.cap.seating.hub.source` (cap / hubcheck) and
+  `vision.bung.seating.position.source` (hubholes / fixed) checked where they are used - an unknown value is logged and
+  keeps its old meaning (hubcheck / fixed). Every vision module imported on both vendors and every tuning key read: no
+  report (all keys present and valid).
+- **Change User Role:** Enter in the role box submits (the event was compared with `"_role-_Enter"`).
+- **Small points:** `addListener(self.onLanguageChanged)` right after `initializeUI()` (it sat between `setFixedWidth`
+  and `setFixedHeight`, after everything that could fail in that block); `trf`: if even the English text cannot be
+  filled (a code error), it is shown unfilled and printed instead of raising into the screen's code.
+- **Bung check, user's answer to CHANGES 153's question:** on the 6 good-labelled pictures that come out NOT OK the hole
+  is not visible or the label was wrong - NOT OK is right. The check is to be strict: the bung must sit straight so
+  that it does not fall or unseat on the way from Station 1 to Station 4, where the 2.5 t hydro-pneumatic press can
+  damage the machine on a badly seated bung. Nothing changed; noted in CLAUDE.md §8.
+- **Reference commits:** `d8a33f8` CheckCap (e81a162 + this logic, values written in; the switch written in as True),
+  `8eb97d9` BungSegmenter (95967fc + the `expectOneOf` line); both manifests point at them. `547f29a` was a first attempt
+  that kept the configurable values in CheckCap / BungSegmenter (the verifier needs them written in) - superseded, left in
+  the history (it also carries this change's Configuration / VisionConfig code).
+- **Run (sandbox, Python 3.13 with torch CPU and MobileSAM; frontend on Python 3.12 under Xvfb; Redis, PostgreSQL):**
+  `Verify_Vision_Config_Equivalence.py` ALL EQUIVALENT on both machines; `DryRun_Tuning_Keys` 227/227 both vendors (new
+  T6: 13 checks of missing / wrong-type / below-minimum / valid values and `expectOneOf`, logged once; T7 the language
+  adjustments); `DryRun_DBServer_No_Record_Loss` both copies (a)-(f) PASS (new (f): stop with the database failing, 3
+  records - 1 attempt, 3 files, 2 not tried, drained and the response in 1.3 s; (c) now also checks the response);
+  `DryRun_DBServer_And_Persistence` 66/66; `DryRun_Heartbeat_And_Startup` 29/29 both copies (H10 asks for the drain; new
+  H10b the wait: 2 s minimum, ends when drained, 20 s maximum, 2 s when the process is gone);
+  `DryRun_Frontend_Languages` 79/79 both copies (new L6 per language: instructions, connection messages, tile hints fit
+  as drawn; sizes = fit + adjustment); `DryRun_Cap_Hub_Distance` 15/15 (H6 holes on all 40 cap / hub pictures, C3 / C4
+  with the switch on); `DryRun_Bung_Hub_Holes` 6/6; `DryRun_Bung_Frame --no-yolo` 39/39 (the bung marks path);
+  `DryRun_Cap_Production_Path` 12/12; `DryRun_Cap_Silver_Seating` 6/6. Not run: the windows, YOLO-based runs (laptop),
+  the integrated all-servers cycle.

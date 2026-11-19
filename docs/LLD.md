@@ -257,7 +257,12 @@ itself - `CheckCap.hubHoles`: dark blobs (the darkest `seating.hub.holes.dark.pe
 (`holes.count.dost` 4 / `.dostplus` 5) most evenly spaced on a circle, accepted only with the circle radius in
 `holes.radius` 140-160 (holes 147-154; the bolts' circle is 182-196, bright, and outside the band - never taken),
 spread ≤ 3 px and every angle gap within 15° of 360 / count; then once more with the band round that circle (a part off
-`cap.center` would cut holes at the band's edge). Holes not found -> NOT seated. Target = hole circle centre +
+`cap.center` would cut holes at the band's edge). With `seating.hub.holes.gate.each.combination` True (CHANGES §157,
+both machines) the radius / spread / gap checks are applied to every combination and the most evenly spaced one that
+passes is taken - a better-spaced set of wrong blobs cannot hide the holes (about 1 ms more; same result on the 100
+cap, hub and bung pictures of the dry-run folders); False = the most evenly spaced combination first, then checked
+(§152). Not found: the reason of the most informative percentile tried (a circle failing the fewest checks, then a
+circle, then the most blobs), not the last one's (§157). Holes not found -> NOT seated. Target = hole circle centre +
 `seating.hub.distance.offset.cap.<dost|dostplus>` (Machine 2 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
 caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
@@ -268,7 +273,10 @@ hub's hole circle round the bung in the bung picture itself, `CheckCap.hubHoles`
 seated centres below, as before), the top-face mask's roundness ≥ 0.952 (DOST) / 0.96 (DOSTPLUS), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 2% of it outside the model's reference oval
 (`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
-red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119). Each uses its own
+red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119); when the seating
+step did not run, `drawSeatingMarks` finds the hub's holes on the camera picture as taken (`source_rgb`), never on the
+result picture with the bung masks painted (CHANGES §157). A value of `seating.position.source` /
+`cap.seating.hub.source` outside its choices is logged (`VisionConfig.expectOneOf`). Each uses its own
 `SamPredictor` per thread on the shared model.
 
 **Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
@@ -345,9 +353,9 @@ At the end of the cycle (state 28; also at an abort), `doFinalProcessing` -> `fi
 
 ### 5.1 Languages (CHANGES 156)
 
-- `frontend/FrontendI18n.py`: `tr(text)`, `trf(message, /, **values)`, `N_(text)` (marks a text for extraction), `bind(widget, text, setter="setText", fmt="{}")` (weak registry; set again on each change), `addListener` / `removeListener`, `setLanguage(code, save=True)`, `useSavedLanguage()` (at start), `readSavedLanguage` / `saveLanguage` (`Internal/frontend_language.txt`, written through a temporary file + `os.replace`), `reload`, `installIndicFonts(families)` (`QFont.insertSubstitutions` with `frontend.indic.fonts`). Catalogue: Babel `read_po` of the .po (non-fuzzy, translated entries), else `gettext.GNUTranslations` of the .mo; a missing text is shown in English; a translation whose placeholders do not match falls back to the English format.
+- `frontend/FrontendI18n.py`: `tr(text)`, `trf(message, /, **values)` (if even the English text cannot be filled - a code error - it is shown unfilled and printed, never raised; CHANGES §157), `N_(text)` (marks a text for extraction), `bind(widget, text, setter="setText", fmt="{}")` (weak registry; set again on each change), `addListener` / `removeListener`, `setLanguage(code, save=True)`, `useSavedLanguage()` (at start), `readSavedLanguage` / `saveLanguage` (`Internal/frontend_language.txt`, written through a temporary file + `os.replace`), `reload`, `installIndicFonts(families)` (`QFont.insertSubstitutions` with `frontend.indic.fonts`). Catalogue: Babel `read_po` of the .po (non-fuzzy, translated entries), else `gettext.GNUTranslations` of the .mo; a missing text is shown in English; a translation whose placeholders do not match falls back to the English format.
 - `frontend/FrontendNotices.translateNotice(text)`: an exact match, else the patterns with a variable part (reasons translated recursively, tag names kept); unknown text stays English.
-- Main screen: `languageSelector` (QComboBox, item data = code) -> `languageChosen` -> `setLanguage`; listener `onLanguageChanged` rebuilds the run-time texts (mode, creator, QR code, date line, connection tiles, results, notices) and refits every font (`calculateAndSetIdealFontsForTitlesAndResults` fits every title and every result text and takes the smallest size; `fitInstructionFont` over all instructions).
+- Main screen: `languageSelector` (QComboBox, item data = code) -> `languageChosen` -> `setLanguage`; listener `onLanguageChanged` rebuilds the run-time texts (mode, creator, QR code, date line, connection tiles, results, notices) and refits every font. Font fits (CHANGES §157): `CosThetaLabelUtils.fittingPointSize(widget, texts, ...)` - the largest size at which **every** text of a family fits (each measured with `QFontMetrics.size`: drawn width and lines, not the number of characters; binary search) - then `FrontendI18n.adjustedPointSize` adds `language.<english|kannada|tamil|hindi>.fontsize.adjustment` (0 / 0 / 0 / -1). Families: tile titles, results (Result Awaited / OK / Not OK / Bypassed), tile hints (at most the designed 18 pt), instruction (all 28 instructions), connection status (8 messages), mode, QR code, date / time, creator (the share of the widget the old code used, 0.95 / 0.8), the torque tiles' second line. `onLanguageChanged` is registered right after `initializeUI`.
 - Tiles (`CosThetaOutcomeContainer`): the title is bound; hint, result and the torque tiles' second line are shown through `tr`; `getResult()` returns the English status (`currentStatus`), so the record is unchanged; `retranslate()` redraws what is shown.
 - Dialogs (`SimplePopups`): `sg.Button(tr("X"), key="X")` - the event stays English; machine-settings labels `N_` and parsed back through `tr(label)`.
 - Catalogue upkeep: `python test/i18n/update_frontend_catalogues.py` (extract with Babel from `frontend/**.py` and the properties' `window.title` / `state.<N>.instruction`, update, compile); `--compile` after editing a .po.
@@ -386,6 +394,16 @@ At the end of the cycle (state 28; also at an abort), `doFinalProcessing` -> `fi
    removed from the queue. If that file cannot be written either, the record stays and is tried again after the gap.
    (CHANGES §110: before, the attempts ran back to back, the pictures were saved again at each, and the JSON had no
    picture paths.)
+5. After the stop command (CHANGES §157) `doWork` drains `fe2db.q` and then sends its stopped response
+   (`sendStoppedResponseFromDatabaseServer`, producer `DBServer`, on `stoppedResponse.q`). During the drain a failed
+   insert goes to `FailedRecords/` at once (no retry; the retry gap ends at the stop), and once one has failed the
+   records still queued go there without an attempt ("not tried: an insert already failed after the stop command").
+   MainProgram's `stopProcesses` waits for that response (`utils/ShutdownWait.waitForDatabaseServer`,
+   `RedisUtils.databaseServerStoppedSince`): at least `mainprogram.stop.min.wait.sec` (2 s), at most
+   `mainprogram.db.drain.wait.max.sec` (20 s: one record with PostgreSQL hanging - duplicate check and insert, each up
+   to the 5 s connect timeout, the 5 s statement timeout, the pictures), earlier if the DB server process is no longer
+   running; it prints which (drained / not running / timed out). Before: a fixed 6 s (§155), so a record whose insert
+   failed at Exit was killed between its retries and lost when the next start flushed Redis.
 
 **Other threads**
 
@@ -488,6 +506,9 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `picture.retention.days.trial` / `picture.retention.days.main` | 30 / 60 (0 = no clean-up) | 1 |
 | `<vendor>.vision.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
 | Tuning block (CHANGES 154, `getTuning`, read at import): `plc.settings.write.attempts` / `.frontend.abort.write.attempts` / `.vision.result.reset.attempts` / `.reset.write.attempts` / `.reference.read.attempts`, `plc.write.retry.interval.sec`, `plc.reset.float.tolerance`, `plc.trigger.held.warning.sec`; `qrcode.invalid.notice.sec`, `qrcode.line.quiet.sec`; `camera.worker.*` (ready / stop timeout, timeouts in a row, restart back-off base / max, transfer warning), `camera.bearing.ring.guard.max.wait.sec`; `db.idle.poll.sec`, `db.insert.max.attempts`, `db.insert.retry.gap.sec`, `db.day.check.interval.sec`, `db.statement.timeout.ms`; `frontend.status.stale.after.intervals`, `.abort.tiles.clear.msec`, `.state.sync.poll.interval.msec`, `.outcome.second.line.(min.)point.size`; `log.slave.queue.size` / `.pending.limit`, `log.master.file.batch` / `.stop.check.interval.sec`, `log.suppressed.repeat.every`; `redis.io.state.stream.maxlen`; `supervisor.grace.sec`; `endpoints.webservice.port`, `.mi.port`, `.showscreen.*`; `debug.print.checkbung.*` / `.checknocapbung.*` | 3 / 3 / 5 / 5 / 3, 0.2, 0.001, 3.0; 10.0, 0.3; 600 / 3 / 3 / 1 / 60 / 1.0, 5.0; 1.0, 3, 5.0, 60, 5000; 3, 750, 250, 13 / 8; 5000 / 20000, 200 / 0.5, 100; 500; 2.0; 8000, 8050, 8100 / 8099 / 1.0 / 0.6; False (success.evaluation True) | 1-7 |
+| `mainprogram.stop.min.wait.sec` / `mainprogram.db.drain.wait.max.sec` (CHANGES 157; replace `mainprogram.stop.wait.sec`): the wait after the stop command, until the DB server reports `fe2db.q` drained | 2.0 / 20.0 | 1-7 |
+| `language.<english\|kannada\|tamil\|hindi>.fontsize.adjustment` (CHANGES 157): points added to every fitted main-screen font in that language | 0 / 0 / 0 / -1 | 5 |
+| Reading the properties (CHANGES 157): a missing key, a value not of the expected type (True / False, a whole number, a number), a tuning value below its minimum, a vision value invalid for its type and a method choice outside its set are logged once per process (`CosThetaConfigurator.reportConfigurationProblem`: printed and in the log file; `getTuning`, `VisionConfig`, `expectOneOf`) and the default is used; a valid value logs nothing | - | all |
 | `<vendor>.vision.frame.*` (reference spindle, type spindles, nominal pins per type and side, 18 centres per type), `<vendor>.vision.knuckle.locator.*` (spindle, bosses, lower arm, type rule) | Machine 2 values, measured 13 Nov 2026 (allenbradley: the same, not measured for Machine 1) | 3 |
 | `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
@@ -513,7 +534,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Camera_Stale_Frames.py` | Only new frames are inspected; stalled stream / camera not connected → NOT OK with the reason; timeouts in a row; camera answer timeout raised |
 | Integrated cycle | All processes with simulators, down to the DB row |
 | Frontend / DB / index and day-folder | FE workers (F7b: production counts read off the GUI thread, a 3 s database read does not stall it, the last counts kept when the database is down); inserts; record loss (b: 3 attempts 5 s apart, pictures saved once, the picture files in the FailedRecords JSON; d: one failure then success; e: the heartbeat's one kept-open connection, replaced when broken); indexes; day folder |
-| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R6 (R6: the check survives a recovery); database backup at shutdown (H10) |
+| `DryRun_Heartbeat_And_Startup.py` | Heartbeat rules; Redis health check R1–R6 (R6: the check survives a recovery); database backup at shutdown (H10); the wait for the DB server's drain after the stop command (H10b, CHANGES 157) |
 | Knuckle, vision timeout, supervisor, endpoints | Knuckle retake; 12 s kill and restart; process restart |
 | `DryRun_Knuckle_Frame.py` | Knuckle by segmentation on every knuckle picture with each QR code; the frame on the pictures as taken and with simulated camera moves; the centres written into the checks, restored, dropped at cycle end and retake (MobileSAM weights) |
 | `DryRun_CheckKnuckle_Images.py` | The `regions` knuckle method (Machine 1; Machine 2 before CHANGES 102) |
@@ -530,7 +551,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `DryRun_Bung_Hub_Holes.py` | Bung seated position from the hub's holes in the bung picture (CHANGES §153): the 60 bung pictures of 13 Nov with stored hole-pattern centres; good SEATED, bad NOT SEATED, holes hidden NOT SEATED, picture moved, source fixed |
 | `DryRun_Bung_Rotation` | Seated bung pictures turned about the seated centre in 15° steps: OK as their own model and NOT OK as the other at every angle (`--no-yolo`: the point grid alone) |
 | `Study_Knuckle_Segmentation.py`, `Study_Boss_Grid_Masks.py`, `Diag_Cap_Seating.py`, `PlantPC_Vision_Timing.py` | Study and diagnostic tools (not tests) |
-| `DryRun_Tuning_Keys.py` | The tuning keys read through `getTuning` (CHANGES 154): in all three properties files, value = code default, typed like the default; a missing key gives the default |
+| `DryRun_Tuning_Keys.py` | The tuning keys read through `getTuning` (CHANGES 154): in all three properties files, value = code default, typed like the default; a missing key gives the default; missing / wrong-type / below-minimum values logged once, valid ones not, the language font adjustments (CHANGES 157) |
 | `DryRun_Frontend_Languages.py` | The frontend's languages (CHANGES 156): catalogues complete with the same placeholders, .mo = .po; `tr` / `trf` / `bind` / the language file; notices; the real frontend in each language (tiles, results English inside, instruction, notice, menus, titles fit at 1920 x 1050); `--screenshots DIR` |
 | `Verify_Vision_Config_Equivalence` | AST equality of vision code before and after refactors (`KnuckleLocator.py` and `VisionFrame.py` in its manifest since CHANGES §105, reference f3aa0ed) |
 

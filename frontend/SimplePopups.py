@@ -1365,7 +1365,7 @@ def changeRole(currentUser: str, currentRole: str = "Supervisor", modal: bool = 
             submitted = False
             break
         else:
-            if event in ("Submit", "_role-_Enter"):
+            if event in ("Submit", "-role-_Enter"):
                 submitted = True
                 # print('Clicked Submit')
                 username = values['-username-']

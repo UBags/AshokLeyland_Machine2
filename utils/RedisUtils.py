@@ -322,6 +322,35 @@ def sendStoppedResponse(redisConnection: redis.client.Redis, aProducer: str = "P
     sendData(redisConnection=redisConnection, data={genericdataKeyString: stoppedResponse}, queueName=stoppedResponseQ, aProducer=aProducer)
 
 
+# The DB server's stopped response (CHANGES 157): sent once it has drained fe2db.q after the stop command; MainProgram
+# waits for it (up to mainprogram.db.drain.wait.max.sec) before ending the server processes.
+DATABASE_SERVER_STOPPED_PRODUCER : str = "DBServer"
+
+
+def sendStoppedResponseFromDatabaseServer(redisConnection: redis.client.Redis) -> bool:
+    return bool(sendData(redisConnection=redisConnection, data={genericdataKeyString: stoppedResponse},
+                         queueName=stoppedResponseQ, aProducer=DATABASE_SERVER_STOPPED_PRODUCER))
+
+
+def databaseServerStoppedSince(redisConnection: redis.client.Redis, since: float) -> bool:
+    """True when the DB server's stopped response, sent at or after `since` (time.time()), is on the stopped-response
+    queue. Read without removing anything (other processes' stopped responses stay where they are)."""
+    if redisConnection is None:
+        return False
+    for _, data in redisConnection.xrange(stoppedResponseQ):
+        def field(name):
+            value = data.get(name.encode("utf-8"), data.get(name))
+            return value.decode("utf-8") if isinstance(value, bytes) else value
+        if field(producerKeyString) != DATABASE_SERVER_STOPPED_PRODUCER or field(genericdataKeyString) != stoppedResponse:
+            continue
+        try:
+            if float(field(timeKeyString)) >= since:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
 # ***********************************************************************************
 
 sleep_ms: int = 5000

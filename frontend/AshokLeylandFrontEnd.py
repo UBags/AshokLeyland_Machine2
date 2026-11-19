@@ -39,7 +39,7 @@ from PySide6.QtGui import (
     QPixmap,
     QImage,
     QFont,
-    QFontMetrics, QAction, QKeyEvent,
+    QAction, QKeyEvent,
 )
 
 from redis import Redis
@@ -73,13 +73,13 @@ from frontend.SimplePopups import (
     createProductionReportByModelName, createProductionReportByModelNameAndDateLimits,
     createProductionReportOfTodayByModelName, createProductionReportByDateLimits, createProductionReportOfToday,
     getConfirmation, getJustPassword, showErrorMessage, updateMachineSettingsDialog, canChangeMachineSettings)
-from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
+from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize, fittingPointSize
 from frontend.frontendutils.FrontEndLogger import (
     # NOTE: This import appears to be unused - verify and remove if not needed
     sendStopToAll)
 from frontend.newwidgets.CosThetaResultsContainer import CosThetaResultsContainer
 from frontend.FrontendI18n import (installIndicFonts, tr, trf, N_, bind, addListener, useSavedLanguage, setLanguage, currentLanguage,
-                                   loadNote, LANGUAGES)
+                                   loadNote, LANGUAGES, adjustedPointSize)
 from frontend.FrontendNotices import translateNotice
 from frontend.newwidgets.CosThetaSimpleMessageContainer import SimpleMessageContainer
 from frontend.newwidgets.ToggleMessageContainer import ToggleMessageContainer
@@ -276,6 +276,10 @@ class AshokLeylandFrontEnd(QMainWindow):
         try:
             self.labelHeight = CosThetaConfigurator.getInstance().getLabelInitialHeight()
             self.initializeUI()
+            # a change of language re-shows the texts built at run time and fits the fonts again; registered as soon as
+            # the widgets exist, so that a later failure in this start-up block cannot leave the screen deaf to it
+            # (CHANGES 157; it sat between setFixedWidth and setFixedHeight at the end of this block)
+            addListener(self.onLanguageChanged)
             self.splashScreenPath = f"{get_project_root()}/internalimages/SplashScreen.png"
             splash = CosThetaInitialSplashScreen(self.splashScreenPath,
                                                  CosThetaConfigurator.getInstance().getSplashScreenTime())
@@ -306,7 +310,6 @@ class AshokLeylandFrontEnd(QMainWindow):
             printBlue("Started FE Server")
             printBoldBlue("*****************")
             self.setFixedWidth(AshokLeylandFrontEnd.CURRENT_WIDTH)
-            addListener(self.onLanguageChanged)     # texts built at run time, and the font sizes, again
             self.setFixedHeight(AshokLeylandFrontEnd.CURRENT_HEIGHT)
         except Exception as e:
             print(e)
@@ -596,84 +599,40 @@ class AshokLeylandFrontEnd(QMainWindow):
 
         self.update()
 
-    # Call this after self.show(), then QApplication.processEvents(), then self.resultsContainer.calculateAndSetIdealFontForInstructionLabel()
-    def calculateAndSetIdealFontForModeLabel(self):
-        currentModeFont = self.modeLabel.font()
-        currentFontPointSize = currentModeFont.pointSize()
-        currentModeFont.setWeight(QFont.Weight.Bold)
-        metrics = QFontMetrics(currentModeFont)
-        labelTextRect = metrics.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignLeft, f"       {self.modeLabel.text()}       ")
-        textWidth = labelTextRect.width()
-        textHeight = labelTextRect.height()
-        modeLabelWidth = self.modeLabel.width()
-        modeLabelHeight = self.modeLabel.height()
-        reductionFactor = min(modeLabelWidth * 1.0 / textWidth,
-                              modeLabelHeight * 1.0 / textHeight) * 0.95
-        fontSize = int(reductionFactor * currentFontPointSize)
-        currentModeFont.setPointSize(fontSize)
-        self.modeLabel.setFont(currentModeFont)
+    # The font fits below (CHANGES 157): each text measured with QFontMetrics (fittingPointSize - the drawn width and
+    # height, not the number of characters), the largest size at which the texts fit the share of the widget the old
+    # code used (0.95 or 0.8), then the language's adjustment (language.<name>.fontsize.adjustment; Hindi -1).
+    # Call after self.show() and QApplication.processEvents() (the widgets have their real size), and again after a
+    # change of language (onLanguageChanged).
+    def _fitBold(self, widget, texts, share: float) -> QFont:
+        font = QFont(widget.font())
+        font.setWeight(QFont.Weight.Bold)
+        font.setPointSize(adjustedPointSize(fittingPointSize(widget, texts, font=font, widthShare=share,
+                                                             heightShare=share)))
+        return font
 
-    # Call this after self.show(), then QApplication.processEvents(), then self.resultsContainer.calculateAndSetIdealFontForInstructionLabel()
+    def calculateAndSetIdealFontForModeLabel(self):
+        self.modeLabel.setFont(self._fitBold(self.modeLabel, [f"       {self.modeLabel.text()}       "], 0.95))
+
     def calculateAndSetIdealFontForQRCodeLabel(self):
-        currentQRCodeFont = self.qrCodeLabel.font()
-        currentFontPointSize = currentQRCodeFont.pointSize()
-        currentQRCodeFont.setWeight(QFont.Weight.Bold)
-        metrics = QFontMetrics(currentQRCodeFont)
-        labelTextRect = metrics.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignCenter, f"   {self.qrCodeLabel.text()}   ")
-        textWidth = labelTextRect.width()
-        textHeight = labelTextRect.height()
-        qrCodeLabelWidth = self.qrCodeLabel.width()
-        qrCodeLabelHeight = self.qrCodeLabel.height()
-        reductionFactor = min(qrCodeLabelWidth * 1.0 / textWidth,
-                              qrCodeLabelHeight * 1.0 / textHeight) * 0.95
-        fontSize = int(reductionFactor * currentFontPointSize)
-        currentQRCodeFont.setPointSize(fontSize)
-        self.qrCodeLabel.setFont(currentQRCodeFont)
+        self.qrCodeLabel.setFont(self._fitBold(self.qrCodeLabel, [f"   {self.qrCodeLabel.text()}   "], 0.95))
 
     def calculateAndSetIdealFontForDateTimeLabel(self):
-        currentDateTimeFont = self.dateTimeStatus.font()
-        currentFontPointSize = currentDateTimeFont.pointSize()
-        currentDateTimeFont.setWeight(QFont.Weight.Bold)
-        metrics = QFontMetrics(currentDateTimeFont)
-
-        labelTextRect = metrics.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignLeft, f"   {self.dateTimeStatus.getText()}   ")
-        textWidth = labelTextRect.width()
-        textHeight = labelTextRect.height()
-        datetimeLabelWidth = self.dateTimeStatus.width()
-        datetimeLabelHeight = self.dateTimeStatus.height()
-        reductionFactor = min(datetimeLabelWidth * 1.0 / textWidth,
-                              datetimeLabelHeight * 1.0 / textHeight) * 0.8
-        fontSize = int(reductionFactor * currentFontPointSize)
-        currentDateTimeFont.setPointSize(fontSize)
-        self.dateTimeStatus.setFont(currentDateTimeFont)
+        self.dateTimeStatus.setFont(self._fitBold(self.dateTimeStatus, [f"   {self.dateTimeStatus.getText()}   "], 0.8))
 
     def calculateAndSetIdealFontForConnectionStatus(self):
-        """One fixed size for the 4 connection status tiles: the largest at which the longest message,
-        "QRCode Scanner not connected", fits its tile. Call after the window has been shown."""
+        """One fixed size for the 4 connection status tiles: the largest at which every one of their 8 messages (OK and
+        NOT OK, in the language shown) fits its tile - each measured, CHANGES 157 - then the language's adjustment."""
         tiles = [self.cameraServerConnectionStatusContainer, self.qrCodeServerConnectionStatusContainer,
                  self.ioServerConnectionStatusContainer, self.dbServerConnectionStatusContainer]
-        longest = max(((t, tr(text)) for t in tiles for text in (t._okText, t._notokText)), key=lambda x: len(x[1]))
-        size = largestFittingPointSize(longest[0].label(), longest[1])
+        size = adjustedPointSize(min(largestFittingPointSize(t.label(), tr(text))
+                                     for t in tiles for text in (t._okText, t._notokText)))
         for t in tiles:
             t.setFixedPointSize(size)
         return size
 
     def calculateAndSetIdealFontForCreatorLabel(self):
-        currentCreatorFont = self.creatorStatus.font()
-        currentFontPointSize = currentCreatorFont.pointSize()
-        currentCreatorFont.setWeight(QFont.Weight.Bold)
-        metrics = QFontMetrics(currentCreatorFont)
-
-        labelTextRect = metrics.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignLeft, f"   {self.creatorStatus.getText()}   ")
-        textWidth = labelTextRect.width()
-        textHeight = labelTextRect.height()
-        creatorLabelWidth = self.creatorStatus.width()
-        creatorLabelHeight = self.creatorStatus.height()
-        reductionFactor = min(creatorLabelWidth * 1.0 / textWidth,
-                              creatorLabelHeight * 1.0 / textHeight) * 0.8
-        fontSize = int(reductionFactor * currentFontPointSize)
-        currentCreatorFont.setPointSize(fontSize)
-        self.creatorStatus.setFont(currentCreatorFont)
+        self.creatorStatus.setFont(self._fitBold(self.creatorStatus, [f"   {self.creatorStatus.getText()}   "], 0.8))
 
     def setupMenu(self):
         """Set up menubar."""
@@ -896,6 +855,7 @@ class AshokLeylandFrontEnd(QMainWindow):
                 self.languageSelector.blockSignals(False)
             QApplication.processEvents()
             self.calculateAndSetIdealFontForModeLabel()
+            self.calculateAndSetIdealFontForQRCodeLabel()
             self.calculateAndSetIdealFontForDateTimeLabel()
             self.calculateAndSetIdealFontForCreatorLabel()
             self.calculateAndSetIdealFontForConnectionStatus()

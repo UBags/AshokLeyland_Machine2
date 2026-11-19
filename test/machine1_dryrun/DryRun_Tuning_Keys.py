@@ -128,6 +128,54 @@ for key, uses in sorted(keys.items()):
 check("T5 a missing key gives the code default", C.getTuning("no.such.tuning.key", 7.5) == 7.5
       and C.getTuning("no.such.tuning.key", 3, minimum=5) == 5)
 
+# T6 (CHANGES 157): a missing key, a value of the wrong type and a value below the minimum are logged once and give the
+# default (the minimum); a valid value logs nothing
+reported = []
+_report = C.reportConfigurationProblem.__func__
+C.reportConfigurationProblem = classmethod(lambda cls, key, message: reported.append((key, message)))
+_getValue = C.getValue
+fake = {"t.bool.typo": "Ture", "t.bool.ok": "False", "t.int.frac": "3.7", "t.int.whole": "4.0", "t.int.ok": "8000",
+        "t.float.bad": "abc", "t.float.ok": "0.25", "t.low": "1", "t.str": "x,y"}
+C.getValue = classmethod(lambda cls, key, default=None: fake.get(key, default))
+try:
+    cases = [("t.bool.typo", True, None, True, True), ("t.bool.ok", True, None, False, False),
+             ("t.int.frac", 3, None, 3, True), ("t.int.whole", 3, None, 4, False), ("t.int.ok", 1, None, 8000, False),
+             ("t.float.bad", 1.5, None, 1.5, True), ("t.float.ok", 1.0, None, 0.25, False), ("t.low", 3, 2, 2, True),
+             ("t.str", "a", None, "x,y", False), ("t.missing", 5, None, 5, True), ("t.missing2", 1, 4, 4, True)]
+    for key, default, minimum, expected, logged in cases:
+        reported.clear()
+        got = C.getTuning(key, default, minimum=minimum)
+        check(f"T6 {key}={fake.get(key)!r} (default {default!r}, minimum {minimum}): {expected!r}, "
+              f"{'logged' if logged else 'nothing logged'}",
+              got == expected and type(got) is type(default) and (len(reported) == 1) == logged and len(reported) <= 1,
+              f"{got!r} {reported}")
+    reported.clear()
+    okChoice = C.expectOneOf("t.source", " Cap ", ("cap", "hubcheck"))
+    badChoice = C.expectOneOf("t.source", "hub", ("cap", "hubcheck"))
+    check("T6 expectOneOf: ' Cap ' accepted silently, 'hub' logged", okChoice and not badChoice and len(reported) == 1,
+          str(reported))
+finally:
+    C.getValue = _getValue
+    C.reportConfigurationProblem = classmethod(_report)
+reported.clear()
+C._configurationProblemsReported.discard(("t.once", "x"))
+printed = []
+import builtins
+_print = builtins.print
+builtins.print = lambda *a, **k: printed.append(" ".join(map(str, a)))
+try:
+    C.reportConfigurationProblem("t.once", "x"); C.reportConfigurationProblem("t.once", "x")
+finally:
+    builtins.print = _print
+check("T6 the same problem is logged once per process", sum("[Configuration] x" in l for l in printed) == 1, str(printed))
+
+# T7 (CHANGES 157): the per-language font size adjustments
+from frontend.FrontendI18n import fontSizeAdjustment, PROPERTIES_NAMES
+adjustments = {code: fontSizeAdjustment(code) for code in PROPERTIES_NAMES}
+inFiles = all(f"language.{n}.fontsize.adjustment" in files[name] for name in PROPERTIES for n in PROPERTIES_NAMES.values())
+check("T7 language.<english|kannada|tamil|hindi>.fontsize.adjustment in all three files: 0, 0, 0, -1",
+      inFiles and adjustments == {"en": 0, "kn": 0, "ta": 0, "hi": -1}, str(adjustments))
+
 passed = sum(1 for _, ok in results if ok)
 failed = [name for name, ok in results if not ok]
 print(f"RESULT {passed}/{len(results)} checks passed" + (f"; FAILED: {failed}" if failed else ""))

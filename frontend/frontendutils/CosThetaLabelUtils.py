@@ -52,19 +52,44 @@ def createResultLabel(result = "No Result", width = (1366  - 100) / 4, labelHeig
     return result_label
 
 
+def fittingPointSize(widget, texts, font=None, widthShare: float = 1.0, heightShare: float = 1.0, hMargin: int = 0,
+                     vMargin: int = 0, minPointSize: int = 4, maxPointSize: int = 200) -> int:
+    """The largest point size at which EVERY one of texts fits the widget as it is laid out now (CHANGES 157): each text
+    measured with QFontMetrics (QFontMetrics.size - lines and the drawn width, so a Kannada, Tamil or Hindi text is
+    measured as drawn, not by its number of characters) against widthShare x the widget's width less hMargin and
+    heightShare x its height less vMargin. font: the face / weight to measure with (default the widget's). Call after
+    the window has been shown and the layout has run (the widget has its real size)."""
+    from PySide6.QtGui import QFont, QFontMetrics
+    font = QFont(font if font is not None else widget.font())
+    width = widget.width() * widthShare - hMargin
+    height = widget.height() * heightShare - vMargin
+    texts = [str(t) for t in texts if t] or [" "]
+
+    def fits(size: int) -> bool:
+        font.setPointSize(size)
+        metrics = QFontMetrics(font)
+        for text in texts:
+            needed = metrics.size(0, text)
+            if needed.width() > width or needed.height() > height:
+                return False
+        return True
+
+    low, high = minPointSize, maxPointSize
+    if not fits(low):
+        return low
+    while low < high:                       # the largest size that fits (fitting is monotonic in the size)
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle - 1
+    return low
+
+
 def largestFittingPointSize(label, text: str, hMargin: int = 16, vMargin: int = 8,
                             minPointSize: int = 6, maxPointSize: int = 200) -> int:
     """The largest point size (label's font face and weight) at which text fits the label as it is laid out now:
     its width less hMargin and its height less vMargin (the stylesheet's border and padding). Call after the window
-    has been shown and the layout has run (the label has its real size)."""
-    from PySide6.QtGui import QFont, QFontMetrics
-    font = QFont(label.font())
-    width, height = label.width() - hMargin, label.height() - vMargin
-    size = minPointSize
-    for candidate in range(minPointSize, maxPointSize + 1):
-        font.setPointSize(candidate)
-        metrics = QFontMetrics(font)
-        if metrics.horizontalAdvance(text) > width or metrics.height() > height:
-            break
-        size = candidate
-    return size
+    has been shown and the layout has run (the label has its real size). One text: fittingPointSize for several."""
+    return fittingPointSize(label, [text], hMargin=hMargin, vMargin=vMargin, minPointSize=minPointSize,
+                            maxPointSize=maxPointSize)

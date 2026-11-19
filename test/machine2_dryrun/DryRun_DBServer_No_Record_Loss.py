@@ -1,8 +1,9 @@
 """DBServer record-loss dry run: burst of 5 records, a record whose insert keeps failing (retried 5 s apart, its
 pictures saved once, then written to FailedRecords/ with the picture files, without blocking the queue), a record
 whose first attempt fails and second succeeds (stored, pictures saved once), the heartbeat's kept-open connection
-(one connection for many checks; a broken connection is replaced), and a stop command with 3 records pending
-(drained first). Needs Redis + PostgreSQL; run from a scratch directory."""
+(one connection for many checks; a broken connection is replaced), a stop command with 3 records pending
+(drained first, then the stopped response for MainProgram), and a stop command with the database failing (one attempt,
+then FailedRecords/ without retries; CHANGES 157). Needs Redis + PostgreSQL; run from a scratch directory."""
 import sys, os, time, glob, json
 import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -100,10 +101,45 @@ print("RESULT (e) heartbeat: 20 checks ->", n20, "connection(s); after the conne
 print("CHECK (e)", "PASS" if okE else "FAIL")
 hb.close()
 
-# (c) stop command arrives while 3 records are still pending -> drained before stopping
+# (c) stop command arrives while 3 records are still pending -> drained before stopping, then the stopped response
+#     for MainProgram (CHANGES 157)
+r.delete(stoppedResponseQ)
+stopAt = time.time()
 for i in range(3): send(f"C{i}")
 sendStopCommand(r, aProducer="test")
 time.sleep(6)
-rc = rows("BURSTC"); print("RESULT (c) stop with 3 pending: stored", len(rc), "| DBServer stopped:", dp.stopped, "| fe2db.q length:", r.xlen(fe2dbq))
+rc = rows("BURSTC")
+drainedC = databaseServerStoppedSince(r, stopAt)
+print("RESULT (c) stop with 3 pending: stored", len(rc), "| DBServer stopped:", dp.stopped, "| fe2db.q length:",
+      r.xlen(fe2dbq), "| stopped response:", drainedC)
+print("CHECK (c)", "PASS" if len(rc) == 3 and dp.stopped and r.xlen(fe2dbq) == 0 and drainedC else "FAIL")
+r.delete(stopQ)
+
+# (f) stop command with the database failing and 3 records pending (CHANGES 157): the first record gets one attempt and
+#     goes to FailedRecords/ without a retry, the other two go there without an attempt; drained and the stopped
+#     response sent within a second or two (before: 3 attempts 5 s apart per record)
+for f in glob.glob("C:/AshokLeylandImages/Test/FailedRecords/*BURSTF*.json"): os.remove(f)
+r.delete(stoppedResponseQ)
+dp2 = DBS.DataPersistence(mode="Test", username="admin")
+time.sleep(2)
+attemptsF = []
+def failing(**kw):
+    attemptsF.append(kw.get("qr_code", "")); return False
+DBS.insertData = failing
+stopAt = time.time()
+for i in range(3): send(f"F{i}")
+sendStopCommand(r, aProducer="test")
+t0 = time.monotonic()
+while time.monotonic() - t0 < 15 and not databaseServerStoppedSince(r, stopAt):
+    time.sleep(0.1)
+drainSecs = time.monotonic() - t0
+filesF = sorted(glob.glob("C:/AshokLeylandImages/Test/FailedRecords/*BURSTF*.json"))
+reasons = [json.load(open(f)).get("_failureReason", "") for f in filesF]
+DBS.insertData = orig
+okF = (len(attemptsF) == 1 and len(filesF) == 3 and r.xlen(fe2dbq) == 0 and dp2.stopped and drainSecs < 5
+       and "without a retry" in reasons[0] and sum("not tried" in x for x in reasons) == 2)
+print("RESULT (f) stop with the database failing: insert attempts", len(attemptsF), "| failed-record files",
+      len(filesF), "| drained and stopped response after", f"{drainSecs:.1f} s", "| reasons:", reasons)
+print("CHECK (f)", "PASS" if okF else "FAIL")
 r.delete(stopQ)
 os._exit(0)

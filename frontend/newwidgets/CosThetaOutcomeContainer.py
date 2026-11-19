@@ -13,7 +13,7 @@ from numpy import ndarray
 from typing import Union
 import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - its stylesheets are the CosThetaStylesheets ones (imported above); kept for its import-time effects
 from Configuration import CosThetaConfigurator
-from frontend.FrontendI18n import tr, bind, N_
+from frontend.FrontendI18n import tr, bind, N_, adjustedPointSize
 from frontend.frontendutils.CosThetaImageUtils import convertNDArrayToPixmap, getPixmapImage, resize_pixmap
 import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
 import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
@@ -72,7 +72,7 @@ class CosThetaOutcomeContainer(QFrame):
         self.image_label.setContentsMargins(0,0,0,0)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setStyleSheet(emptyImageStylesheet)
-        self.image_label.setFont(CosThetaOutcomeContainer.EMPTY_IMAGE_FONT)
+        self.image_label.setFont(self.hintFont())
         # print(f"{self.image_label.width() = }, {self.image_label.height() = }")
 
         initialResult : str = self.default_status
@@ -170,6 +170,21 @@ class CosThetaOutcomeContainer(QFrame):
         font.setPointSize(pointSize)
         self.title_label.setFont(font)
 
+    def hintFont(self) -> QFont:
+        """The font of the hint shown while the tile waits for its result (EMPTY_IMAGE_FONT at the size the screen fitted,
+        setHintPointSize; CHANGES 157)."""
+        font = QFont(CosThetaOutcomeContainer.EMPTY_IMAGE_FONT)
+        size = getattr(self, "_hintPointSize", None)
+        if size:
+            font.setPointSize(int(size))
+        return font
+
+    def setHintPointSize(self, pointSize: int):
+        """Fixed size of the hint (e.g. "Knuckle\nCheck"), the same for all 14 tiles; shown at once if the hint is up."""
+        self._hintPointSize = int(pointSize)
+        if self._showingHint:
+            self.image_label.setFont(self.hintFont())
+
     def setResultPointSize(self, pointSize: int):
         """Fixed size of "Result Awaited" / OK / Not OK; set once after the first render, the same for all 14 tiles."""
         font = QFont(self.result_label.font())
@@ -246,7 +261,7 @@ class CosThetaOutcomeContainer(QFrame):
     def setDefault(self):
         # self.setImageAndResult(self.default_pixmap, self.default_status)
         self.image_label.setStyleSheet(emptyImageStylesheet)
-        self.image_label.setFont(CosThetaOutcomeContainer.EMPTY_IMAGE_FONT)
+        self.image_label.setFont(self.hintFont())
         self.image_label.setTextFormat(Qt.TextFormat.PlainText)
         self.image_label.setText(tr(self.imageHint))
         self._showingHint, self._twoLineArgs, self._displayText = True, None, None
@@ -323,9 +338,11 @@ class CosThetaOutcomeContainer(QFrame):
         self.update()
 
     def _secondLinePointSize(self, text: str) -> int:
-        """SECOND_LINE_POINT_SIZE, reduced if needed so that the text fits within 90% of the display's width (so it
-        cannot run past the tile edge on a smaller screen or with a wider font)."""
-        size = CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE
+        """SECOND_LINE_POINT_SIZE with the language's adjustment (CHANGES 157), reduced if needed so that the text fits
+        within 90% of the display's width (so it cannot run past the tile edge on a smaller screen or with a wider
+        font)."""
+        size = adjustedPointSize(CosThetaOutcomeContainer.SECOND_LINE_POINT_SIZE,
+                                 CosThetaOutcomeContainer.SECOND_LINE_MIN_POINT_SIZE)
         try:
             available = self.image_label.width() * 0.9
             if available <= 0:

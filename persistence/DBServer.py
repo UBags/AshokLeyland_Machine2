@@ -29,6 +29,7 @@ from utils.RedisUtils import (
     fe2dbq,
     sendHeartbeatFromDBServerToHeartbeatServer,
     getStopCommandFromQueue,
+    sendStoppedResponseFromDatabaseServer,
     validate_image,
     ALIVE,
     DEAD,
@@ -82,6 +83,9 @@ class DataPersistence():
         self.kwargs = kwargs
         self.stopped : bool = False
         self.stopRequested : bool = False
+        # an insert failed after the stop command: the database is taken as down for the rest of the drain, and the
+        # records still on fe2db.q go to FailedRecords/ without another attempt (CHANGES 157)
+        self.failedAfterStop : bool = False
         self.failedAttempts : dict = {}
         self.savedPictureFiles : dict = {}    # messageId -> {column: picture file}: saved once, reused on a retry
         self.heartbeatDbConnection = None     # the heartbeat thread's kept-open connection, made there (CHANGES 110)
@@ -303,6 +307,7 @@ class DataPersistence():
                 if self.stopRequested:
                     printBoldRed("DBServer: fe2db.q drained after stop command; stopping")
                     self.stopped = True
+                    self.reportDrained()
                     break
                 time.sleep(DataPersistence.IDLE_POLL_SECS)
             if self.stopped:
@@ -368,6 +373,12 @@ class DataPersistence():
                         SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource,
                                                               "Finished savings images",
                                                               Logger.SUCCESS)
+                    if self.stopRequested and self.failedAfterStop:
+                        # the database already failed during this drain: to disk at once (MainProgram is waiting)
+                        self.currentModelName = None
+                        self.handleFailedInsert(messageId, qrCode, "not tried: an insert already failed after the "
+                                                                   "stop command")
+                        raise _RecordSkipped()
                     knucklePictureFile : str = pictureFiles["check_knuckle_imagefile"]
                     hubAndBottomBearingPictureFile : str = pictureFiles["check_hub_and_bottom_bearing_imagefile"]
                     topBearingPictureFile : str = pictureFiles["check_top_bearing_imagefile"]
@@ -521,7 +532,12 @@ class DataPersistence():
             return
         attempts = self.failedAttempts.get(messageId, 0) + 1
         self.failedAttempts[messageId] = attempts
-        if attempts < DataPersistence.MAX_INSERT_ATTEMPTS:
+        if self.stopRequested:
+            # after the stop command no retry: MainProgram ends the servers once the queue is drained (or its wait
+            # runs out), and the next start flushes Redis - so the record goes to disk now (CHANGES 157)
+            self.failedAfterStop = True
+            reason = f"{reason} (after the stop command: written to disk without a retry)"
+        elif attempts < DataPersistence.MAX_INSERT_ATTEMPTS:
             printBoldYellow(f"Insert attempt {attempts} failed for QR {qrCode}; will retry in "
                             f"{DataPersistence.INSERT_RETRY_GAP_SECS:g} s ({reason})")
             self._waitBeforeRetry()
@@ -557,12 +573,32 @@ class DataPersistence():
             SlaveConsoleLogger.getInstance().logTakeAction(DataPersistence.logSource, msg, Logger.PROBLEM)
         except Exception as e:
             printBoldRed(f"Could not write failed record for QR {qrCode} to disk: {e}; it stays on {fe2dbq}")
-            self._waitBeforeRetry()                     # e.g. disk full: do not spin on the same record
+            if self.stopRequested:                      # _waitBeforeRetry returns at once after a stop command
+                time.sleep(0.5)
+            else:
+                self._waitBeforeRetry()                 # e.g. disk full: do not spin on the same record
+
+    def reportDrained(self) -> None:
+        """fe2db.q is drained after the stop command: tell MainProgram, which waits for this before ending the server
+        processes (CHANGES 157)."""
+        try:
+            sent = sendStoppedResponseFromDatabaseServer(self.redisConnection)
+        except Exception as e:
+            sent = False
+            printBoldRed(f"DBServer: could not send the stopped response ({e})")
+        message = ("fe2db.q drained after the stop command; stopped response sent to MainProgram" if sent else
+                   "fe2db.q drained after the stop command; the stopped response could not be sent")
+        try:
+            SlaveFileLogger.getInstance().logInfo(DataPersistence.logSource, message,
+                                                  Logger.SUCCESS if sent else Logger.RISK)
+        except Exception:
+            pass
 
     def _waitBeforeRetry(self) -> None:
-        """The gap before the next attempt at a failed record (stops early if the server is stopped)."""
+        """The gap before the next attempt at a failed record (ends early when the server is stopped or a stop command
+        came: the next attempt is then the last one, CHANGES 157)."""
         end = time.monotonic() + DataPersistence.INSERT_RETRY_GAP_SECS
-        while not self.stopped and time.monotonic() < end:
+        while not self.stopped and not self.stopRequested and time.monotonic() < end:
             self.lastWorkLoopAt = time.monotonic()      # waiting on purpose: not a stuck work thread
             time.sleep(0.1)
 

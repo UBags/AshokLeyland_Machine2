@@ -120,7 +120,14 @@ def trf(message: str, /, **values) -> str:
     try:
         return translated.format(**values)
     except (KeyError, IndexError, ValueError):
+        pass
+    try:
         return message.format(**values)
+    except (KeyError, IndexError, ValueError) as e:
+        # the English text itself does not match the values (a code error): shown unfilled, never raised into the
+        # screen's code, and printed so that it is found (CHANGES 157)
+        print(f"[FrontendI18n] text {message!r} cannot be filled with {sorted(values)}: {type(e).__name__} {e}")
+        return message
 
 
 def N_(text: str) -> str:
@@ -130,6 +137,27 @@ def N_(text: str) -> str:
 
 def currentLanguage() -> str:
     return _current
+
+
+# The properties name of each language, for language.<name>.fontsize.adjustment (CHANGES 157)
+PROPERTIES_NAMES: Dict[str, str] = {"en": "english", "kn": "kannada", "ta": "tamil", "hi": "hindi"}
+
+
+def fontSizeAdjustment(code: Optional[str] = None) -> int:
+    """Points added to every font size the main screen fits to its widgets, for the language shown (CHANGES 157):
+    language.<english|kannada|tamil|hindi>.fontsize.adjustment in the properties file (Hindi -1, the others 0). Read
+    at each fit, so a changed value applies at the next change of language or start."""
+    name = PROPERTIES_NAMES.get(code or _current, "english")
+    try:
+        from Configuration import CosThetaConfigurator
+        return int(CosThetaConfigurator.getTuning(f"language.{name}.fontsize.adjustment", 0))
+    except Exception:
+        return 0
+
+
+def adjustedPointSize(size: int, minimum: int = 4) -> int:
+    """A fitted font size with the language's adjustment, never below minimum."""
+    return max(int(minimum), int(size) + fontSizeAdjustment())
 
 
 def languageName(code: str) -> str:

@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 00:00+0000\n"
+"POT-Creation-Date: 2026-11-19 00:00+0530\n"
 "PO-Revision-Date: 2026-11-19 00:00+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: hi\n"
@@ -14,159 +14,159 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: frontend/AshokLeylandFrontEnd.py:378 frontend/AshokLeylandFrontEnd.py:880
+#: frontend/AshokLeylandFrontEnd.py:381 frontend/AshokLeylandFrontEnd.py:839
 #, python-brace-format
 msgid "IN {mode} MODE"
 msgstr "{mode} मोड में"
 
-#: frontend/AshokLeylandFrontEnd.py:386
+#: frontend/AshokLeylandFrontEnd.py:389
 msgid "Mode"
 msgstr "मोड"
 
-#: frontend/AshokLeylandFrontEnd.py:392 frontend/AshokLeylandFrontEnd.py:881
+#: frontend/AshokLeylandFrontEnd.py:395 frontend/AshokLeylandFrontEnd.py:840
 #, python-brace-format
 msgid "{mode} - Knuckle, Hub, and Disc Assembly"
 msgstr "{mode} - नकल, हब और डिस्क असेंबली"
 
-#: frontend/AshokLeylandFrontEnd.py:453
+#: frontend/AshokLeylandFrontEnd.py:456
 msgid "Camera connected"
 msgstr "कैमरा जुड़ा है"
 
-#: frontend/AshokLeylandFrontEnd.py:454
+#: frontend/AshokLeylandFrontEnd.py:457
 msgid "Camera not connected"
 msgstr "कैमरा नहीं जुड़ा"
 
-#: frontend/AshokLeylandFrontEnd.py:460
+#: frontend/AshokLeylandFrontEnd.py:463
 msgid "I/O Module connected"
 msgstr "I/O मॉड्यूल जुड़ा है"
 
-#: frontend/AshokLeylandFrontEnd.py:461
+#: frontend/AshokLeylandFrontEnd.py:464
 msgid "I/O Module not connected"
 msgstr "I/O मॉड्यूल नहीं जुड़ा"
 
-#: frontend/AshokLeylandFrontEnd.py:468
+#: frontend/AshokLeylandFrontEnd.py:471
 msgid "Database connected"
 msgstr "डेटाबेस जुड़ा है"
 
-#: frontend/AshokLeylandFrontEnd.py:469
+#: frontend/AshokLeylandFrontEnd.py:472
 msgid "Database not connected"
 msgstr "डेटाबेस नहीं जुड़ा"
 
-#: frontend/AshokLeylandFrontEnd.py:476
+#: frontend/AshokLeylandFrontEnd.py:479
 msgid "QRCode Scanner connected"
 msgstr "QR कोड स्कैनर जुड़ा है"
 
-#: frontend/AshokLeylandFrontEnd.py:477
+#: frontend/AshokLeylandFrontEnd.py:480
 msgid "QRCode Scanner not connected"
 msgstr "QR कोड स्कैनर नहीं जुड़ा"
 
-#: frontend/AshokLeylandFrontEnd.py:485
+#: frontend/AshokLeylandFrontEnd.py:488
 msgid "CONNECTION STATUS OF DEVICES"
 msgstr "उपकरणों की कनेक्शन स्थिति"
 
-#: frontend/AshokLeylandFrontEnd.py:529 frontend/AshokLeylandFrontEnd.py:883
+#: frontend/AshokLeylandFrontEnd.py:532 frontend/AshokLeylandFrontEnd.py:842
 msgid "Created by CosTheta Technologies and Ashok Leyland"
 msgstr "कॉसथीटा टेक्नोलॉजीज़ और अशोक लेलैंड द्वारा निर्मित"
 
-#: frontend/AshokLeylandFrontEnd.py:575
+#: frontend/AshokLeylandFrontEnd.py:578
 msgid "DATE / RUNNING DURATION PANEL"
 msgstr "तारीख / चालू अवधि पैनल"
 
-#: frontend/AshokLeylandFrontEnd.py:681
+#: frontend/AshokLeylandFrontEnd.py:640
 msgid "Change Own Password"
 msgstr "अपना पासवर्ड बदलें"
 
-#: frontend/AshokLeylandFrontEnd.py:685 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/AshokLeylandFrontEnd.py:644 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
 #: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
 msgid "Exit"
 msgstr "बाहर निकलें"
 
-#: frontend/AshokLeylandFrontEnd.py:689
+#: frontend/AshokLeylandFrontEnd.py:648
 msgid "Add New User"
 msgstr "नया उपयोगकर्ता जोड़ें"
 
-#: frontend/AshokLeylandFrontEnd.py:693
+#: frontend/AshokLeylandFrontEnd.py:652
 msgid "Manage Other Users Passwords"
 msgstr "अन्य उपयोगकर्ताओं के पासवर्ड प्रबंधित करें"
 
-#: frontend/AshokLeylandFrontEnd.py:697
+#: frontend/AshokLeylandFrontEnd.py:656
 msgid "Change User Role"
 msgstr "उपयोगकर्ता की भूमिका बदलें"
 
-#: frontend/AshokLeylandFrontEnd.py:701
+#: frontend/AshokLeylandFrontEnd.py:660
 msgid "Activate an Inactive User"
 msgstr "निष्क्रिय उपयोगकर्ता को सक्रिय करें"
 
-#: frontend/AshokLeylandFrontEnd.py:705 frontend/SimplePopups.py:1145
+#: frontend/AshokLeylandFrontEnd.py:664 frontend/SimplePopups.py:1145
 msgid "Inactivate User"
 msgstr "उपयोगकर्ता को निष्क्रिय करें"
 
-#: frontend/AshokLeylandFrontEnd.py:709
+#: frontend/AshokLeylandFrontEnd.py:668
 msgid "Create Production Report By Model Name"
 msgstr "मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:713
+#: frontend/AshokLeylandFrontEnd.py:672
 msgid "Create Production Report By Model Name For a Period"
 msgstr "एक अवधि के लिए मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:717
+#: frontend/AshokLeylandFrontEnd.py:676
 msgid "Create Production Report By Model Name For Today"
 msgstr "आज के लिए मॉडल नाम के अनुसार उत्पादन रिपोर्ट बनाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:721
+#: frontend/AshokLeylandFrontEnd.py:680
 msgid "Create Production Report for a Period for all Models"
 msgstr "सभी मॉडलों के लिए एक अवधि की उत्पादन रिपोर्ट बनाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:725
+#: frontend/AshokLeylandFrontEnd.py:684
 msgid "Create Full Production Report for Today for all Models"
 msgstr "सभी मॉडलों के लिए आज की पूरी उत्पादन रिपोर्ट बनाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:729
+#: frontend/AshokLeylandFrontEnd.py:688
 msgid "About"
 msgstr "परिचय"
 
-#: frontend/AshokLeylandFrontEnd.py:733
+#: frontend/AshokLeylandFrontEnd.py:692
 msgid "Help"
 msgstr "सहायता"
 
-#: frontend/AshokLeylandFrontEnd.py:738
+#: frontend/AshokLeylandFrontEnd.py:697
 msgid "(Z)Manual Abort"
 msgstr "(Z)मैनुअल रद्द"
 
-#: frontend/AshokLeylandFrontEnd.py:748
+#: frontend/AshokLeylandFrontEnd.py:707
 msgid "Actions"
 msgstr "क्रियाएँ"
 
-#: frontend/AshokLeylandFrontEnd.py:755
+#: frontend/AshokLeylandFrontEnd.py:714
 msgid "Administration"
 msgstr "प्रशासन"
 
-#: frontend/AshokLeylandFrontEnd.py:761
+#: frontend/AshokLeylandFrontEnd.py:720
 msgid "Activate / Inactivate"
 msgstr "सक्रिय / निष्क्रिय"
 
-#: frontend/AshokLeylandFrontEnd.py:766
+#: frontend/AshokLeylandFrontEnd.py:725
 msgid "Report"
 msgstr "रिपोर्ट"
 
-#: frontend/AshokLeylandFrontEnd.py:776 frontend/AshokLeylandFrontEnd.py:850
+#: frontend/AshokLeylandFrontEnd.py:735 frontend/AshokLeylandFrontEnd.py:809
 msgid "Information"
 msgstr "जानकारी"
 
-#: frontend/AshokLeylandFrontEnd.py:782 frontend/AshokLeylandFrontEnd.py:785 frontend/SimplePopups.py:1942
+#: frontend/AshokLeylandFrontEnd.py:741 frontend/AshokLeylandFrontEnd.py:744 frontend/SimplePopups.py:1942
 #: frontend/SimplePopups.py:1947
 msgid "Machine Settings"
 msgstr "मशीन सेटिंग्स"
 
-#: frontend/AshokLeylandFrontEnd.py:813
+#: frontend/AshokLeylandFrontEnd.py:772
 msgid "Close Application"
 msgstr "एप्लिकेशन बंद करें"
 
-#: frontend/AshokLeylandFrontEnd.py:813
+#: frontend/AshokLeylandFrontEnd.py:772
 msgid "Are you sure you want to exit the application ?"
 msgstr "क्या आप वाकई एप्लिकेशन से बाहर निकलना चाहते हैं ?"
 
-#: frontend/AshokLeylandFrontEnd.py:851
+#: frontend/AshokLeylandFrontEnd.py:810
 msgid ""
 "Software Version: v 1.0\n"
 "\n"
@@ -182,11 +182,11 @@ msgstr ""
 "यह एप्लिकेशन फ्रंट एक्सल के नकल, हब और डिस्क की असेंबली की जाँच और रिकॉर्डिंग करता है: हर कंपोनेंट की हर विज़न जाँच, "
 "टॉर्क और प्रेस, उसके QR कोड के साथ।\n"
 
-#: frontend/AshokLeylandFrontEnd.py:861
+#: frontend/AshokLeylandFrontEnd.py:820
 msgid "Help about using the menu"
 msgstr "मेनू के उपयोग में सहायता"
 
-#: frontend/AshokLeylandFrontEnd.py:862
+#: frontend/AshokLeylandFrontEnd.py:821
 msgid ""
 "When any of the menu choices are being used, \n"
 "the remaining menu items will be clickable.\n"
@@ -202,7 +202,7 @@ msgstr ""
 "या रद्द नहीं होती, तब तक किसी अन्य मेनू आइटम पर क्लिक करने पर \n"
 "सिस्टम कोई कार्रवाई नहीं करेगा।\n"
 
-#: frontend/AshokLeylandFrontEnd.py:1159
+#: frontend/AshokLeylandFrontEnd.py:1119
 #, python-brace-format
 msgid ""
 "Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
@@ -213,7 +213,7 @@ msgstr ""
 "\n"
 "उपयोगकर्ता: {user}; वर्तमान कंपोनेंट का प्रोसेसिंग समय: {processing}    ; आज उत्पादित कंपोनेंट - {todayCount}"
 
-#: frontend/AshokLeylandFrontEnd.py:1263
+#: frontend/AshokLeylandFrontEnd.py:1223
 msgid ""
 "Frontend abort (this screen only).\n"
 "Enter the password:"
@@ -221,64 +221,64 @@ msgstr ""
 "फ्रंटएंड रद्द (केवल यह स्क्रीन)।\n"
 "पासवर्ड दर्ज करें:"
 
-#: frontend/AshokLeylandFrontEnd.py:1268 frontend/FrontendNotices.py:56
+#: frontend/AshokLeylandFrontEnd.py:1228 frontend/FrontendNotices.py:56
 msgid "Wrong password - nothing aborted"
 msgstr "गलत पासवर्ड - कुछ भी रद्द नहीं हुआ"
 
-#: frontend/AshokLeylandFrontEnd.py:1298 frontend/AshokLeylandFrontEnd.py:1302
+#: frontend/AshokLeylandFrontEnd.py:1258 frontend/AshokLeylandFrontEnd.py:1262
 msgid "QR CODE : "
 msgstr "QR कोड : "
 
-#: frontend/AshokLeylandFrontEnd.py:1582 frontend/AshokLeylandFrontEnd.py:1606 frontend/FrontendI18n.py:234
+#: frontend/AshokLeylandFrontEnd.py:1542 frontend/AshokLeylandFrontEnd.py:1566 frontend/FrontendI18n.py:262
 msgid "Done"
 msgstr "पूर्ण"
 
-#: frontend/AshokLeylandFrontEnd.py:2331
+#: frontend/AshokLeylandFrontEnd.py:2291
 msgid "Large Image Display"
 msgstr "बड़ी छवि प्रदर्शन"
 
-#: frontend/FrontendI18n.py:234 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/FrontendI18n.py:262 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
 #: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
 msgid "OK"
 msgstr "ठीक"
 
-#: frontend/FrontendI18n.py:234
+#: frontend/FrontendI18n.py:262
 msgid "Not OK"
 msgstr "ठीक नहीं"
 
-#: frontend/FrontendI18n.py:234
+#: frontend/FrontendI18n.py:262
 msgid "Bypassed"
 msgstr "बायपास किया गया"
 
-#: frontend/FrontendI18n.py:234 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+#: frontend/FrontendI18n.py:262 frontend/newwidgets/CosThetaOutcomeContainer.py:41
 msgid "Result Awaited"
 msgstr "परिणाम की प्रतीक्षा"
 
-#: frontend/FrontendI18n.py:234
+#: frontend/FrontendI18n.py:262
 msgid "TEST"
 msgstr "टेस्ट"
 
-#: frontend/FrontendI18n.py:235
+#: frontend/FrontendI18n.py:263
 msgid "PRODUCTION"
 msgstr "प्रोडक्शन"
 
-#: frontend/FrontendI18n.py:235
+#: frontend/FrontendI18n.py:263
 msgid "Operator"
 msgstr "ऑपरेटर"
 
-#: frontend/FrontendI18n.py:235
+#: frontend/FrontendI18n.py:263
 msgid "Supervisor"
 msgstr "सुपरवाइज़र"
 
-#: frontend/FrontendI18n.py:235
+#: frontend/FrontendI18n.py:263
 msgid "Administrator"
 msgstr "एडमिनिस्ट्रेटर"
 
-#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "Yes"
 msgstr "हाँ"
 
-#: frontend/FrontendI18n.py:235 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "No"
 msgstr "नहीं"
 
@@ -1140,11 +1140,11 @@ msgstr ""
 "रोटेशन\n"
 "टॉर्क"
 
-#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+#: frontend/newwidgets/CosThetaResultsContainer.py:216 frontend/newwidgets/CosThetaResultsContainer.py:262
 msgid "Rotation Done"
 msgstr "रोटेशन पूर्ण"
 
-#: frontend/newwidgets/CosThetaResultsContainer.py:210 frontend/newwidgets/CosThetaResultsContainer.py:256
+#: frontend/newwidgets/CosThetaResultsContainer.py:216 frontend/newwidgets/CosThetaResultsContainer.py:262
 msgid "Rotation Not Done"
 msgstr "रोटेशन नहीं हुआ"
 

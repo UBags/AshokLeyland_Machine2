@@ -64,12 +64,17 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   debug switches of the bung checks) are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when
   their module is imported (CHANGES 154; block "TUNING VALUES" of the properties files); the code default equals the
   properties value - `DryRun_Tuning_Keys.py` checks it. Names, keys, states, queue names and labels stay in the code.
+  A missing key, or a value outside its expected type / set / range (tuning and vision keys, and the method choices
+  through `expectOneOf`), is logged once per process (`[Configuration] ...`, `reportConfigurationProblem`) and the
+  default used; a valid value logs nothing (CHANGES 157).
 - `costhetaio/siemens/IOServerProperties.yaml`: Siemens rack / slot / PDU and tag addresses.
 - Frontend languages (CHANGES 156): English, Kannada, Tamil, Hindi on the main screen and its dialogs only; catalogues
   `Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` (Babel; English text = message id); the choice in
   `Internal/frontend_language.txt` (not in git). Mark new frontend texts with `tr` / `trf` / `N_` / `bind`, then run
   `test/i18n/update_frontend_catalogues.py` and translate the new entries; results, button keys, logs and the DB stay
-  English. The Indic translations are drafts awaiting a native speaker's review.
+  English. The Indic translations are drafts awaiting a native speaker's review. Main-screen fonts are fitted per
+  family with every text measured (`fittingPointSize`, QFontMetrics), then `language.<english|kannada|tamil|hindi>.
+  fontsize.adjustment` added (0 / 0 / 0 / -1; CHANGES 157).
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.
@@ -133,11 +138,12 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 8 Picture clean-up lines, invalid QR notice + siren, MainProgram lines in the log, DB retry (CHANGES 110) | Not reported yet |
 | 9 Bung check: rotation dry run on the laptop, failing bungs now OK, `[Bung]` lines, check time (CHANGES 115) | Not reported yet |
 | 10 Cap seating: seated brass / silver OK, tilted / pushed-aside silver NOT OK, seating lines, check time; hub-centre distance lines (CHANGES 128, 129, 143) | Not reported yet |
-| 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Not reported yet |
+| 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
+| 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
-## 8. Open items (as of 2026-11-15)
+## 8. Open items (as of 2026-11-19)
 
 - **One source of truth for the cycle state** (`docs/state_sync.md`): **Plan A built** (CHANGES 108, 2026-11-15) -
   the IOServer publishes every state change (`io2festate.q`, `io:state`), the frontend compares it with its own state
@@ -161,14 +167,19 @@ No per-check times were recorded with the report; when they are, put them in the
   Since CHANGES 152 the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the cap in the
   cap picture itself (`CheckCap.hubHoles`, `vision.cap.seating.hub.source=cap`; holes not found -> NOT seated), offsets
   `offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3 (27 seated silver / 99 seated brass caps, cap centres with stand-in
-  YOLO boxes in the sandbox - confirm on the laptop). The hub check's centre (`ImageProcessor.hubCentre`) and the
+  YOLO boxes in the sandbox - confirm on the laptop). `holes.gate.each.combination=True` (CHANGES 157): the hole checks on
+  every combination, the most evenly spaced passing one taken; False = CHANGES 152's order. The hub check's centre (`ImageProcessor.hubCentre`) and the
   holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
   carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
   limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
 - **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `CheckCap.hubHoles` in the
   bung picture + `vision.bung.seating.hub.offset.<model>` (4.9,-13.7 / 4.2,-16.0); `position.source=fixed` = before. The
-  user's good / bad labels of 2026-11-18 call A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
-  off the hub centre like the bad ones: open question (CHANGES 153). Confirm the hole step on the laptop (YOLO).
+  user's good / bad labels of 2026-11-18 called A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
+  off the hub centre like the bad ones. **Settled (Uddi, 2026-11-19):** on those pictures the hole is not visible or
+  the label was wrong; NOT OK is right. The bung check is to be strict: the bung must sit straight so that it does not
+  fall or unseat between Station 1 (placed) and Station 4 (the 2.5 t hydro-pneumatic press, which can damage the
+  machine on a badly seated bung) - never loosen a bung limit to pass a doubtful picture. Confirm the hole step on the
+  laptop (YOLO).
 
 ## 9. Testing
 

@@ -336,7 +336,8 @@ class CheckNoCapBung:
                         # Always (holes passed or not, seating run or not): the reference oval, and the hole-pattern
                         # centre of the holes found
                         drawSeatingMarks(result_image, seating if seating is not None else
-                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model)
+                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model,
+                                         source_rgb=anImage_rgb)
 
                         if PRINT_RESULT_PAINTING:
                             logBoth('logDebug', _src, f"[CheckNoCapBung] Painted {len(components)} masks on image", MessageType.GENERAL)
@@ -356,7 +357,7 @@ class CheckNoCapBung:
                     logBoth('logError', _src, f"[CheckNoCapBung] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
                 no_pattern = anImage_rgb.copy()
-                drawSeatingMarks(no_pattern, {}, model)          # the reference oval only (no hole pattern)
+                drawSeatingMarks(no_pattern, {}, model, source_rgb=anImage_rgb)   # the reference oval only (no hole pattern)
                 result_bgr = cv2.cvtColor(no_pattern, cv2.COLOR_RGB2BGR)
                 return _maybe_crop(result_bgr), False, None
 

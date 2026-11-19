@@ -7,9 +7,9 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QSizePolicy, QSpacerI
 from numpy import ndarray
 from frontend.newwidgets.CosThetaOutcomeContainer import CosThetaOutcomeContainer
 from Configuration import CosThetaConfigurator
-from frontend.FrontendI18n import tr, N_
+from frontend.FrontendI18n import tr, N_, adjustedPointSize
 from frontend.CosThetaMonitorDimensions import getAppInstance, populateMonitorDimensions
-from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize
+from frontend.frontendutils.CosThetaLabelUtils import largestFittingPointSize, fittingPointSize
 import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaLabelUtils import *"; nothing used from it, imported for its import-time effects
 # from frontend.frontendutils.CosThetaImageUtils import createImage
 from typing import Union, get_args
@@ -132,20 +132,19 @@ class CosThetaResultsContainer(QFrame):
 
     # Call this after self.show(), then QApplication.processEvents(), then self.resultsContainer.calculateAndSetIdealFontForInstructionLabel()
     def calculateAndSetIdealFontForInstructionLabel(self):
-        currentInstructionFont = self.instructionLabel.font()
-        currentFontPointSize = currentInstructionFont.pointSize()
-        currentInstructionFont.setWeight(QFont.Weight.Bold)
-        metrics = QFontMetrics(currentInstructionFont)
-        labelTextRect = metrics.boundingRect(0, 0, 0, 0, Qt.AlignmentFlag.AlignCenter, self.instructionLabel.text())
-        textWidth = labelTextRect.width()
-        textHeight = labelTextRect.height()
-        instructionLabelWidth = self.instructionLabel.width()
-        instructionLabelHeight = self.instructionLabel.height()
-        reductionFactor = min(instructionLabelWidth * 1.0 / textWidth,
-                              instructionLabelHeight * 1.0 / textHeight) * 0.95
-        fontSize = int(reductionFactor * currentFontPointSize)
-        currentInstructionFont.setPointSize(fontSize)
-        self.instructionLabel.setFont(currentInstructionFont)
+        """The instruction's font for the text it shows now (fitInstructionFont fits every instruction)."""
+        self._fitInstruction([self.instructionLabel.text()])
+
+    def _fitInstruction(self, texts) -> int:
+        """The largest bold size at which every one of texts fits 95 % of the instruction label (each measured with
+        QFontMetrics, CHANGES 157), then the language's adjustment."""
+        font = QFont(self.instructionLabel.font())
+        font.setWeight(QFont.Weight.Bold)
+        size = adjustedPointSize(fittingPointSize(self.instructionLabel, texts, font=font, widthShare=0.95,
+                                                  heightShare=0.95))
+        font.setPointSize(size)
+        self.instructionLabel.setFont(font)
+        return size
 
     def outcomeContainers(self) -> list:
         return [self.knuckle_check_container, self.hub_and_bottom_bearing_check_container, self.top_bearing_check_container,
@@ -162,12 +161,19 @@ class CosThetaResultsContainer(QFrame):
         is measured (CHANGES 156): in Kannada, Tamil and Hindi the number of characters does not follow the drawn
         width, so the text with the most characters is not always the widest."""
         tiles = self.outcomeContainers()
-        titleSize = min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles)
-        resultSize = min(largestFittingPointSize(tiles[0].result_label, tr(status))
-                         for status in (tiles[0].default_status, "OK", "Not OK", "Bypassed"))
+        titleSize = adjustedPointSize(min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles))
+        resultSize = adjustedPointSize(min(largestFittingPointSize(tiles[0].result_label, tr(status))
+                                           for status in (tiles[0].default_status, "OK", "Not OK", "Bypassed")))
+        # the hints shown while a tile waits (e.g. "Knuckle\nCheck", up to 4 lines): every one measured inside 90 % of its
+        # picture area, never above the designed EMPTY_IMAGE_FONT size (CHANGES 157)
+        hintFont = CosThetaOutcomeContainer.EMPTY_IMAGE_FONT
+        hintSize = adjustedPointSize(min(fittingPointSize(t.image_label, [tr(t.imageHint)], font=hintFont, widthShare=0.9,
+                                                          heightShare=0.9, maxPointSize=hintFont.pointSize())
+                                         for t in tiles))
         for t in tiles:
             t.setTitlePointSize(titleSize)
             t.setResultPointSize(resultSize)
+            t.setHintPointSize(hintSize)
         return titleSize, resultSize
 
     def setKnuckleCheckData(self, value, result):
@@ -305,13 +311,12 @@ class CosThetaResultsContainer(QFrame):
         self.instructionLabel.setText(tr(getattr(self, "_instructionSource", self.instructionLabel.text())))
 
     def fitInstructionFont(self, instructions) -> None:
-        """The instruction's font size for the longest instruction in the chosen language (it is set for the longest
-        one and kept, so that the size does not change from state to state)."""
-        shown = [tr(i) for i in instructions if i] or [self.instructionLabel.text()]
-        current = self.instructionLabel.text()
-        self.instructionLabel.setText(f"  {max(shown, key=len)}  ")
-        self.calculateAndSetIdealFontForInstructionLabel()
-        self.instructionLabel.setText(current)
+        """One instruction font size for every state: the largest at which every instruction, in the chosen language,
+        fits the label - each one measured with QFontMetrics (CHANGES 157; before, the one with the most characters,
+        which in Kannada, Tamil or Hindi is not always the widest) - then the language's adjustment. Kept from state to
+        state."""
+        shown = [f"  {tr(i)}  " for i in instructions if i] or [self.instructionLabel.text()]
+        self._fitInstruction(shown)
 
     # ****************************************
 

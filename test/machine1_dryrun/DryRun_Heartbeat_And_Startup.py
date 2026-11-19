@@ -213,17 +213,38 @@ M.getStopCommandFromQueue = lambda conn, block=1: ("t", True)
 M.sendStopCommand = lambda conn, aProducer="": calls.append("stop sent")
 M.doBackup = lambda *a, **k: calls.append("backup")
 M.CosThetaConfigurator.getEndScreenTime = classmethod(lambda cls: 0)
+M.databaseServerStoppedSince = lambda conn, since: calls.append("drain asked") is None   # the DB server reports drained
 _sleep = time.sleep
 M.time.sleep = lambda s: _sleep(min(s, 0.05))
 t = threading.Thread(target=M.monitorStop, args=(None, [], time.time()), daemon=True)
 t.start(); t.join(10)
-print("CALLS", calls, "ALIVE", t.is_alive())
+print("CALLS", sorted(set(calls)), "ALIVE", t.is_alive())
+# the wait itself (CHANGES 157): drained after 1 s -> ends at the 2 s minimum; drained at once -> 2 s; never -> the
+# maximum; the process gone -> at the minimum, "not running"
+from utils.ShutdownWait import waitForDatabaseServer
+class Clock:
+    t = 0.0
+    def now(self): return self.t
+    def sleep(self, s): self.t += s
+class Proc:
+    def __init__(self, alive): self.alive = alive
+    def is_alive(self): return self.alive
+def run(drainedAt, alive=True):
+    c = Clock()
+    return waitForDatabaseServer(lambda: c.t >= drainedAt, lambda: Proc(alive), 2.0, 20.0, poll=0.25, clock=c.now,
+                                 sleep=c.sleep)          # 0.25 s steps: exact in binary
+w = [run(1.0), run(0.0), run(5.0), run(99.0), run(99.0, alive=False)]
+print("WAITS", [(o, round(s, 1)) for o, s in w])
 '''
 probe = subprocess.run([sys.executable, "-c", probeCode], cwd=str(ROOT), capture_output=True, text=True, timeout=120)
 line = [l for l in probe.stdout.splitlines() if l.startswith("CALLS")]
 check("H10 stop command in MainProgram's monitorStop thread: processes ended, then the database backed up",
-      bool(line) and "'stop sent'" in line[0] and "'backup'" in line[0] and "ALIVE False" in line[0],
-      line[0] if line else probe.stderr[-400:])
+      bool(line) and "'stop sent'" in line[0] and "'backup'" in line[0] and "'drain asked'" in line[0]
+      and "ALIVE False" in line[0], line[0] if line else probe.stderr[-400:])
+waits = [l for l in probe.stdout.splitlines() if l.startswith("WAITS")]
+check("H10b wait for the DB server's drain: at least 2 s, ends when drained, at most 20 s, early if its process is gone",
+      bool(waits) and waits[0] == "WAITS [('drained', 2.0), ('drained', 2.0), ('drained', 5.0), ('timed out', 20.0), "
+      "('not running', 2.0)]", waits[0] if waits else probe.stderr[-400:])
 
 # ---------------------------------------------------------------- H11 trial picture saving notice at start-up (2026-11-15)
 print("\n=== H11 start-up notice: images ALSO saved in the trial folder ===", flush=True)

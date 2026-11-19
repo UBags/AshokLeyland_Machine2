@@ -170,9 +170,48 @@ EXPECT = {"kn": ("ನಕಲ್ ಪರಿಶೀಲನೆ", "ಫಲಿತಾಂಶ
           "ta": ("நக்கிள் ஆய்வு", "முடிவுக்காகக் காத்திருக்கிறது", "தரவுத்தளம் செயலிழந்தது: அடுத்த சுழற்சி நிறுத்தி வைக்கப்பட்டது", "பயன்முறை", " செயல்கள் "),
           "hi": ("नकल जाँच", "परिणाम की प्रतीक्षा", "डेटाबेस बंद: अगली साइकिल रोकी गई", "मोड", " क्रियाएँ ")}
 menuActions = [a for a in fe.menuBar().actions()]
+from frontend.frontendutils.CosThetaLabelUtils import fittingPointSize, largestFittingPointSize   # noqa: E402
+from PySide6.QtGui import QFont                                    # noqa: E402
+
+
+def fontChecks(code):
+    """L6 (CHANGES 157): every instruction and every connection message fits its widget as drawn (QFontMetrics), and
+    each family's size = the measured fit + the language's adjustment (Hindi -1)."""
+    adjustment = I.fontSizeAdjustment(code)
+    label = fe.resultsContainer.instructionLabel
+    instructions = [f"  {I.tr(t)}  " for t in fe.machineState.getAllInstructions() if t]
+    bold = QFont(label.font()); bold.setWeight(QFont.Weight.Bold)
+    fitted = fittingPointSize(label, instructions, font=bold, widthShare=0.95, heightShare=0.95)
+    metrics = QFontMetrics(label.font())
+    tooWide = [t for t in instructions if metrics.size(0, t).width() > label.width() * 0.95]
+    check(f"L6 {code}: all {len(instructions)} instructions fit the instruction label (each measured); size = fit "
+          f"{fitted} + adjustment {adjustment}", not tooWide and label.font().pointSize() == max(4, fitted + adjustment),
+          f"size {label.font().pointSize()}, too wide {tooWide[:1]}")
+    statusTiles = [fe.cameraServerConnectionStatusContainer, fe.qrCodeServerConnectionStatusContainer,
+                   fe.ioServerConnectionStatusContainer, fe.dbServerConnectionStatusContainer]
+    messages = [(t, I.tr(x)) for t in statusTiles for x in (t._okText, t._notokText)]
+    statusFit = min(largestFittingPointSize(t.label(), x) for t, x in messages)
+    size = statusTiles[0].label().font().pointSize()
+    wide = [x for t, x in messages if QFontMetrics(t.label().font()).horizontalAdvance(x) > t.label().width() - 16]
+    check(f"L6 {code}: all 8 connection messages fit their tiles; size = fit {statusFit} + adjustment {adjustment}",
+          not wide and size == max(4, statusFit + adjustment), f"size {size}, too wide {wide[:1]}")
+    hintTooBig = [t.imageHint for t in tiles if QFontMetrics(t.image_label.font()).size(0, I.tr(t.imageHint)).width()
+                  > t.image_label.width() * 0.9 or QFontMetrics(t.image_label.font()).size(0, I.tr(t.imageHint)).height()
+                  > t.image_label.height() * 0.9]
+    hintSizes = {t.image_label.font().pointSize() for t in tiles}
+    check(f"L6 {code}: every tile hint fits 90 % of its picture area, one size for all ({sorted(hintSizes)})",
+          not hintTooBig and len(hintSizes) == 1, str(hintTooBig[:2]))
+    titleFit = min(largestFittingPointSize(t.title_label, t.title_label.text()) for t in tiles)
+    check(f"L6 {code}: tile titles at fit {titleFit} + adjustment {adjustment}",
+          tiles[0].title_label.font().pointSize() == max(4, titleFit + adjustment),
+          str(tiles[0].title_label.font().pointSize()))
+
+
+fontChecks("en")
 for code in ("kn", "ta", "hi"):
     selector.setCurrentIndex(selector.findData(code))
     pump(1.0)
+    fontChecks(code)
     title, awaited, notice, modeTitle, actionsMenu = EXPECT[code]
     check(f"L4 {code}: tile title and result", tiles[0].title_label.text() == title and
           tiles[0].result_label.text() == awaited, f"{tiles[0].title_label.text()} / {tiles[0].result_label.text()}")
