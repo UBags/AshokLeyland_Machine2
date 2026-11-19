@@ -54,6 +54,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--folder", default=str(HERE / "bung_images"))
 ap.add_argument("--check", choices=("bung", "nocap", "both"), default="bung")
 ap.add_argument("--save", action="store_true")
+ap.add_argument("--holes", choices=("sam", "sam_slow", "morphology"), default="sam")
 ARGS = ap.parse_args()
 
 
@@ -67,6 +68,9 @@ def modelOf(name: str):
 
 
 def main() -> int:
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption(ARGS.holes)  # sam: the hub centre from the real checkHub() on each picture (no hub check in this run)
     import camera.BungSegmenter as BS
     from camera.CheckBung import CheckBung
     from camera.CheckNoCapBung import CheckNoCapBung

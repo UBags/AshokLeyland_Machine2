@@ -12,6 +12,9 @@ Automatic checks (this machine's settings and pictures):
   P4 a nut / washer picture as the cap picture (cap left off): NOT OK, no seating run;
   P5 2 of 3: one cap picture among two without a cap -> NOT OK, no seating run; two cap pictures and one without ->
      OK, the seating run on the first picture that passed.
+The cycle's hub check (CHANGES 169): the real checkHub() on the model's first hub picture sets ImageProcessor.hubCentre,
+as state 5 does in a cycle; the cap's hole finder looks round it. --holes morphology = the dark-blob finder with its own
+offsets (no YOLO weights: the sandbox).
 MobileSAM weights needed (models/MobileSAM/weights/mobile_sam.pt, or --sam); no Redis, YOLO, camera or PLC.
 Machine 1 (seating off, no Machine 1 hub / bearing / nut pictures in the repo): skipped, said so.
 
@@ -55,7 +58,13 @@ def capMaskYolo():
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sam", default=str(ROOT / "models" / "MobileSAM" / "weights" / "mobile_sam.pt"))
+    ap.add_argument("--holes", choices=("sam", "sam_slow", "morphology"), default="sam")
     args = ap.parse_args()
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import applyHolesOption, hubCheckOnPicture
+    applyHolesOption(args.holes)
+    from camera.FindHubHoles import FindHubHoles
+    FindHubHoles.hubCentreFromPicture = None    # as production: the hub centre only from this cycle's hub check
     import cv2
     import torch
     import camera.CameraProcessorServer as cps
@@ -90,13 +99,26 @@ def main() -> int:
     IP = cps.ImageProcessor
     IP.stateFile = None
 
+    hubCentres = {}
+
     def rd(path):
         return cv2.resize(cv2.imread(str(path)), (1280, 720))
 
     def setUp(model_):
         IP.endOfCycle()
         IP.setCurrentComponentName(qrCodeValue=QR[model_])
-        IP.currentPictures[cps.hubAndBottomBearingPictureKeyString] = rd(sorted(data.glob(f"hub_images/{model_}_0*.jpg"))[0])
+        hubPicture = rd(sorted(data.glob(f"hub_images/{model_}_0*.jpg"))[0])
+        IP.currentPictures[cps.hubAndBottomBearingPictureKeyString] = hubPicture
+        # the cycle's hub check (state 5) on its hub picture gives ImageProcessor.hubCentre, as the camera server keeps it
+        # (CHANGES 169: the cap's hole finder looks round it; without it the holes are not looked for)
+        if model_ not in hubCentres:
+            hubCentres[model_] = None if args.holes == "morphology" else hubCheckOnPicture(hubPicture, model_)
+            print(f"{model_}: hub check on hub_images/{model_}_01: "
+                  + (f"centre ({hubCentres[model_]['cx']:.1f}, {hubCentres[model_]['cy']:.1f}) from "
+                     f"{hubCentres[model_].get('count')} {hubCentres[model_].get('kind')}" if hubCentres[model_]
+                     else "no centre" + (" (--holes morphology: not needed)" if args.holes == "morphology" else "")),
+                  flush=True)
+        IP.hubCentre = dict(hubCentres[model_]) if hubCentres[model_] else None
         IP.currentPictures[cps.topBearingPictureKeyString] = rd(sorted(data.glob(f"top_bearing_images/{model_}_bearing_0*.jpg"))[0])
         IP.currentPictures[cps.nutAndPlateWasherPictureKeyString] = rd(sorted(data.glob(f"nut_washer_images/{model_}_nut_0*.jpg"))[0])
 

@@ -5340,3 +5340,23 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   r 147.4) and (2874, r 149.0); the smallest area took the first, its centre ~2 px off the others' (seed d 5.1 vs ~3).
 - Run: verifier both ALL EQUIVALENT; `DryRun_Tuning_Keys` both 231/231; `DryRun_SplitPin_Check_UI --auto --holes
   morphology` both 79/79 (the morphology dry runs set their own offsets). Not run: anything with YOLO (sandbox).
+
+## 171. Dry runs give the new hole finder a hub centre (2026-11-20)
+
+- **Uddi's laptop runs:** `DryRun_Bung_Hub_Holes` 6/6 (23 good bungs SEATED at 2.3 - 6.2 px from the seated position,
+  20 bad NOT SEATED; disputed A05 42.8 px, C14 16.8 px with face 0.944 failing, C16 no pattern), `DryRun_Cap_Hub_Distance`
+  15/15 (H6: holes on all 40 cap / hub pictures, r 147.3 - 152.7), but `DryRun_Cap_Production_Path` 8/12: P1 (all
+  seated caps, both models) and P5 "2 of 3 -> OK" NOT OK.
+- **Cause:** that dry run calls the camera server's `assessPictures` with the cycle's earlier pictures but no hub check
+  ran, so `ImageProcessor.hubCentre` was None and the new finder (§169: none -> not found) gave "holes not found" ->
+  NOT seated. The thin finder (§164) had looked for a centre itself when there was none, so it had passed before. Not a
+  production fault: in a cycle state 5's hub check sets the centre. `DryRun_Cap_Check`, `DryRun_Bung_Check`,
+  `DryRun_Bung_Rotation` and `DryRun_Bung_Frame` had the same gap (not run in this round).
+- **Changed (dry runs only, both folders):** `DryRun_Cap_Production_Path` runs the real `checkHub()` on the model's
+  first hub picture and sets `ImageProcessor.hubCentre` as state 5 does (and turns off the dry-run fallback, so the
+  centre comes only from that hub check, as in production); the other four install `_hub_holes_option` (the real
+  `checkHub()` on each picture) and take `--holes sam|sam_slow|morphology`. `hubCheckOnPicture` reports a failing hub
+  check instead of raising.
+- Run (sandbox): `DryRun_Cap_Production_Path --holes morphology` 12/12 (was 8/12 here); without `--holes` 8/12 here
+  (no YOLO: the hub check cannot run - said so in its output); Machine 1 copy: seating off, skipped. `DryRun_Cap_Check`
+  and `DryRun_Bung_Check` need the YOLO weights even with `--holes morphology` (cap mask, bung holes): laptop.

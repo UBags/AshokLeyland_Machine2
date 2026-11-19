@@ -73,7 +73,11 @@ def main():
                     help="reference ovals not scaled / turned (as before CHANGES 126), for comparison")
     ap.add_argument("--moves", default="", help="e.g. 0,0,0,1.03;15,-10,0,1 (default: the three MOVES)")
     ap.add_argument("--folder", default=str(ROOT / "test" / "machine2_dryrun" / "bung_images_20261113"))
+    ap.add_argument("--holes", choices=("sam", "sam_slow", "morphology"), default="sam")
     args = ap.parse_args()
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption(args.holes)  # sam: the hub centre from the real checkHub() on each (moved) picture
 
     import torch
     _load = torch.load

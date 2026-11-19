@@ -61,8 +61,12 @@ def hubCheckOnPicture(anImage, model):
     from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing as CH
     key = (zlib.crc32(np.ascontiguousarray(anImage[::4, ::4]).tobytes()), anImage.shape, model)
     if key not in _hubCheckCache:
-        _, ok, _ = CH.checkHubAndBottomBearing(anImage.copy(), QR["DOSTPLUS" if model == "DOSTPLUS" else "DOST"])
-        _hubCheckCache[key] = dict(CH.lastHubCentre) if ok and CH.lastHubCentre else None
+        try:
+            _, ok, _ = CH.checkHubAndBottomBearing(anImage.copy(), QR["DOSTPLUS" if model == "DOSTPLUS" else "DOST"])
+            _hubCheckCache[key] = dict(CH.lastHubCentre) if ok and CH.lastHubCentre else None
+        except Exception as e:        # e.g. no YOLO weights (the sandbox): no hub centre, said so
+            print(f"Hub check on the picture failed: {e}", flush=True)
+            _hubCheckCache[key] = None
         while len(_hubCheckCache) > 12:
             _hubCheckCache.pop(next(iter(_hubCheckCache)))
     return _hubCheckCache[key]

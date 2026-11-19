@@ -56,6 +56,9 @@ def pictures(pattern):
 
 
 def main() -> int:
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption()          # sam: the hub centre from the real checkHub() on each picture (no hub check in this run)
     from camera.CheckCap import CheckCap
     import camera.CheckCap as module
     keys = (module.hubAndBottomBearingPictureKeyString, module.topBearingPictureKeyString,

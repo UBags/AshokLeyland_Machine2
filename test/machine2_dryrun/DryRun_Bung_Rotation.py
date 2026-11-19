@@ -55,6 +55,7 @@ ap.add_argument("--step", type=float, default=15.0, help="degrees between angles
 ap.add_argument("--own-only", action="store_true", help="only check each picture as its own model")
 ap.add_argument("--no-yolo", action="store_true", help="no YOLO boxes: the point grid alone finds the holes")
 ap.add_argument("--verbose", action="store_true", help="print the [Bung] line of every gamma")
+ap.add_argument("--holes", choices=("sam", "sam_slow", "morphology"), default="sam")
 ARGS = ap.parse_args()
 
 
@@ -67,6 +68,9 @@ def turned(image: np.ndarray, centre, degrees: float) -> np.ndarray:
 
 
 def main() -> int:
+    sys.path.insert(0, str(HERE))
+    from _hub_holes_option import applyHolesOption
+    applyHolesOption(ARGS.holes)  # sam: the hub centre from the real checkHub() on each (turned) picture
     import camera.BungSegmenter as BS
     from camera.CheckBung import CheckBung
 
