@@ -247,7 +247,9 @@ On the Machine 2 PC, with the new exe:
    ones. `--auto` prints `RESULT: PASS`.
 2. On the machine: a pin with both legs turned round and pressed down -> OK; one leg left straight, half bent or
    standing up -> NOT OK; no washer -> NOT OK. The log line `CheckSplitPinAndWasher: OK|NOT OK in <s> - ...` per
-   picture (three per check) gives `tipRadius`, `cover`, `markerPixels`, `outsidePixels`, `outsideMax`.
+   picture (three per check) gives `expected ... hub from 4 holes ...`, `offsetFromExpected`, `tipRadius`, `cover`,
+   `markerPixels`, `outsidePixels`, `outsideMax`. A good part NOT OK with "the hub's N holes not found" is the thing to
+   report (CHANGES 163: the washer is placed from the hub's holes; `siemens.vision.splitpin.centre.source=fixed` goes back).
 3. Send the lines of a shift (and the pictures of any OK part called NOT OK, or the reverse): the limits come from 3
    OK parts; `vision.splitpin.leg.outside.distance` (8.0) / `.pixels.max` (2) are the ones to look at.
 

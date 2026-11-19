@@ -84,7 +84,7 @@ The trigger in each state is the tag read in that state; the write states write 
 | 16/17 | No bung | CheckNoBung | Handshake. OK → 18 |
 | 18 | READ_TIGHTENING_TORQUE_2_DONE | Station2TorqueValueSet | → 19 |
 | 19 | READ_TIGHTENING_TORQUE_2 | Station2TorqueValue, RotationDuringTighteningDone | To FE; reset after 2.0 s → 20 |
-| 20/21 | Split pin and washer | CheckSplitPinAndWasher (washer + blue legs inside it, CHANGES 162) | Handshake. OK → 22 |
+| 20/21 | Split pin and washer | CheckSplitPinAndWasher (washer placed from the hub's holes, blue legs inside it, CHANGES 162, 163) | Handshake. OK → 22 |
 | 22/23 | Cap | CheckCap | Handshake. OK → 24 |
 | 24/25 | Bung for cap press | CheckBungForCapPress | Handshake. OK → 26 |
 | 26 | READ_CAP_PRESS_DONE | Station4CapPressDone | To FE; reset after 1.5 s → 27 |

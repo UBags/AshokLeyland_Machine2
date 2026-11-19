@@ -5081,3 +5081,31 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   files). `DryRun_All_Checks_UI.py --auto` (Machine 2): split pin OK in the vote; the other checks there need the model
   weights, not in this sandbox. `DryRun_Tuning_Keys` 231/231, `DryRun_Logging_And_Live_Config` 37/37,
   `DryRun_Camera_State_File` 19/19, `DryRun_Vision_Check_Timeout` 22/22 - each on both copies.
+
+## 163. Split pin and washer check: washer looked for round the hub's holes; two pictures relabelled OK (2026-11-19)
+
+- **User:** (1) instead of looking for the washer round a fixed point (644,345), find the hub's holes first, take the
+  hub centre from them, and place the washer by an offset from it; (2) 113431189 and 113432153 are OK (moved to
+  `splitpin_images/OK`: now 21 OK, 58 NOT OK; `KNOWN_DISAGREEMENTS` in the dry run is empty).
+- **Now** (`CheckSplitPinAndWasher.expectedCentre`, `vision.splitpin.centre.source=hubholes`): the hub's holes in the
+  split pin picture by `CheckCap.hubHoles` - the cap (CHANGES 152) and bung (153) checks' method: the model's 4 (DOST) /
+  5 (DOSTPLUS) holes, dark blobs in the band 128 - 168 px round `cap.center` (moved by the knuckle frame), on a circle
+  r 140 - 160, spread <= 3, angle gaps within 15 deg. Expected washer centre = hole circle centre +
+  `vision.splitpin.hub.offset.<dost|dostplus>`; the washer is looked for within 100 px of it (and the picture part
+  worked on is centred there). Holes not found -> NOT OK, "the hub's N holes not found (...)". Model from the QR code
+  (unknown -> DOST, as CheckCap); so a DOST hub under a DOSTPLUS QR code is NOT OK too (5 holes not found).
+  `centre.source=fixed` = CHANGES 162 (centre `vision.splitpin.centre`). Log line adds `expected (x, y), expectedFrom hub
+  from 4 holes (x, y) r .., DOST offset (..)` and `offsetFromExpected` (washer centre found to expected, logged only);
+  the picture adds the hole circle thin blue.
+- **Measured:** the 4 holes found in all 79 pictures (all DOST; radius 149 - 151). Washer centre - hole circle centre:
+  part of 11:27 (+1.5 .. +3.5, -5.8 .. -1.4), 11:34 - 11:36 (+0.8 .. +3.4, +3.6 .. +5.2), 11:46 (-0.1 .. +2.4, +3.6 ..
+  +4.4) - the washer sits a few px differently on each nut. Offset = mean of the 3 parts' means (1.8, 1.6); DOSTPLUS not
+  measured (no pictures), the same value. Washer found 2.1 - 4.8 px from the expected centre on the OK pictures.
+- **Result:** 21/21 OK and 58/58 NOT OK as labelled (with `fixed`: also 79/79). Check time about 35 - 40 ms (the hole
+  search about 30 ms of it). Holes painted over -> NOT OK with the reason; DOSTPLUS model on these DOST pictures -> NOT OK.
+- 3 new keys in the three properties files (`centre.source`, `hub.offset.dost`, `hub.offset.dostplus`). Reference
+  commit 3d39916; both manifests point at it. Dry-run window: header shows the source and offsets, zoom 180 px so the
+  hole circle shows.
+- Run: `DryRun_SplitPin_Check_UI.py --auto` both copies PASS (79 labelled, 79 right); window under Xvfb;
+  `Verify_Vision_Config_Equivalence.py` both ALL EQUIVALENT (383 parameters, 13 files); `DryRun_All_Checks_UI.py --auto`
+  split pin OK as DOST_LHS, NOT OK as DOSTPLUS_LHS (holes); the other checks there need the model weights (not in this sandbox).

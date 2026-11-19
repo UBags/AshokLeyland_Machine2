@@ -15,8 +15,8 @@ pictures, with this machine's settings, one picture at a time with the check's o
      pictures to <folder>/splitpin_check_results/.
 
   --auto [folder]   no window: checks every picture, prints one line each and the counts; exit code 0 when every
-                    picture with an expected verdict matched, except the pictures named in KNOWN_DISAGREEMENTS (same
-                    scene as an OK picture, labelled NOT OK - see CHANGES 162); 1 otherwise.
+                    picture with an expected verdict matched, except the pictures named in KNOWN_DISAGREEMENTS (none
+                    since CHANGES 163); 1 otherwise.
 
 Settings: <vendor>.vision.splitpin.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). Only OpenCV / NumPy - no Redis, PLC, camera or model needed.
@@ -41,12 +41,12 @@ from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher
 
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 VIEW_W, VIEW_H = 1120, 630
-ZOOM_HALF = 160                 # "Zoom on the nut": CENTRE +- this many px
+ZOOM_HALF = 180                 # "Zoom on the nut": CENTRE +- this many px
 QR = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
 # the pictures live in the Machine 2 folder; the Machine 1 copy uses them too
 IMAGES = HERE / "splitpin_images" if (HERE / "splitpin_images").is_dir() else ROOT / "test" / "machine2_dryrun" / "splitpin_images"
-# labelled NOT OK, but the same scene as the OK picture 113433320 taken 1 - 2 s later (difference = camera noise)
-KNOWN_DISAGREEMENTS = {"192.168.250.64_01_20261119113431189.jpg", "192.168.250.64_01_20261119113432153.jpg"}
+# pictures whose expected verdict cannot be met for a known reason (file name -> reason); none since CHANGES 163
+KNOWN_DISAGREEMENTS = {}
 
 _messages = []
 CheckModule.logBoth = lambda level, source, message, *args, **kwargs: _messages.append((level, message))
@@ -103,7 +103,7 @@ def auto(folder: pathlib.Path) -> int:
             right = n - sum(1 for _, e, _ in mismatches + known if e == expected)
             print(f"  expected {expected:6s}: {right} of {n} right")
     for name, e, v in known:
-        print(f"  known disagreement: {name} labelled {e}, checked {v} (same scene as an OK picture)")
+        print(f"  known disagreement: {name} labelled {e}, checked {v} ({KNOWN_DISAGREEMENTS[name]})")
     for name, e, v in mismatches:
         print(f"  MISMATCH: {name} expected {e}, checked {v}")
     print("RESULT:", "PASS" if not mismatches else f"FAIL ({len(mismatches)} mismatch(es))", f"({labelled} labelled)")
@@ -140,7 +140,7 @@ def window():
             self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
             self.stopButton.pack(side="left", padx=4)
             C = CheckSplitPinAndWasher
-            ttk.Label(root, text=(f"centre {tuple(C.CENTRE)}, washer tip radius {C.WASHER_TIP_RADIUS_MIN} - "
+            ttk.Label(root, text=(f"washer centre: {C.CENTRE_SOURCE} (hub holes + offset DOST {tuple(C.HUB_OFFSET_DOST)} / DOSTPLUS {tuple(C.HUB_OFFSET_DOSTPLUS)}; fixed {tuple(C.CENTRE)}), washer tip radius {C.WASHER_TIP_RADIUS_MIN} - "
                                   f"{C.WASHER_TIP_RADIUS_MAX} px, cover >= {C.WASHER_COVER_MIN}, blue >= "
                                   f"{C.MARKER_PIXELS_MIN} px, at most {C.LEG_OUTSIDE_PIXELS_MAX} blue px more than "
                                   f"{C.LEG_OUTSIDE_DISTANCE} px outside the washer")).pack(fill="x", padx=6)

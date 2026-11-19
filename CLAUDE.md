@@ -110,9 +110,10 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   the PLC design: the PC also resets some PLC_PC tags, with set timings. Do not propose changing it (a single-writer
   request / acknowledge "v2" was dropped on 2026-11-15).
 - Torque OK / NOT OK is the PLC's decision; the PC only records the values.
-- Split pin + washer check (CHANGES 162): washer region round the nut, blue-marked legs, NOT OK when more than 2 marker
-  pixels lie more than 8 px outside the washer. Values from 3 OK parts (19 pictures) - strict like the bung check; the
-  NOT OK pictures 113431189 / 113432153 equal the OK frame 113433320 (camera noise) and pass - label to be confirmed.
+- Split pin + washer check (CHANGES 162, 163): the hub's holes in the picture (`CheckCap.hubHoles`) + offset give the
+  expected washer centre (holes not found = NOT OK; `centre.source=fixed` = the fixed centre); washer region round it,
+  blue-marked legs, NOT OK when more than 2 marker pixels lie more than 8 px outside the washer. Values from 3 OK parts
+  (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
 - IOServer reset rule: at start, cycle end and every abort one routine resets every per-cycle tag (not the settings)
   with retries and read-back, then arms `PLC_PC_CheckQRCode`. After a lost PLC connection: the last PLC_PC tag the
   PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
