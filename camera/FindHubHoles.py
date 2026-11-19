@@ -3,33 +3,31 @@ FindHubHoles - the hub's 4 (DOST) / 5 (DOSTPLUS) holes in a picture of the hub w
 washer), for the cap, bung and split pin checks (CHANGES 164). The circle through the holes gives the hub's centre in
 that picture.
 
-Two methods (vision.hubholes.method):
+Three methods (vision.hubholes.method):
 
-  "sam" (findHolesWithSAM) - YOLO + MobileSAM, with checkHub()'s own steps (camera/HubAndBearingSegmenter.py, not
-        changed): the picture's annulus cut out and normalised (preprocess_image), YOLO boxes and grid prompts to
-        MobileSAM, the masks classified, filtered by area ratio and shape, grouped by distance from the centre and by
-        size, then the equispacing filter with the dual 4 / 5 search (mismatch detection) and select_best_group; the
-        gammas in checkHub()'s smart order, first success wins. checkHub() itself may take the holes or the bolts of a
-        hub; here the annulus is thin and centred on the hub centre that checkHub() found in this cycle (its circle
-        through the holes or the bolts - both concentric with the hub; a bolts centre is moved by
-        SAM_SEED_BOLTS_OFFSET_<model>, as the stud tops are seen a few px off): the holes (circle r 147 - 151, holes r 10 /
-        14.5 px) lie inside it, the stud tops (circle r 182 - 196, inner edge 169 / 183 px) outside it but for a sliver
-        too small to pass the mask area filter. The group must also make a circle with a radius in SAM_HOLES_RADIUS
-        (the bolts' circle is 178 px and more), spread <= SAM_SPREAD_MAX, evenly spaced (SAM_GAP_MAX) and its centre
-        within SAM_SEED_DISTANCE_MAX of the seed (the holes are concentric with the hub; four look-alike masks on the bare
-        face can make an evenly spaced square round another centre), else the next
-        gamma is tried; checkHub()'s "other model" verdict on a gamma is noted and the next gamma tried too (in the thin
-        annulus its spacing ranges, set for the whole hub, can call 4 of the 5 DOSTPLUS holes a DOST hub).
-        Without this cycle's hub centre (dry runs, a hub check that gave none) the seed comes from one pass over
-        checkHub()'s own annulus (hub.segment.center, r 116 - 253) - holes or bolts, either gives the centre; only a
-        circle centred within SAM_WIDE_SEED_MAX of hub.segment.center is taken (the part sits within about 12 px of it).
-        The MobileSAM predictor and the segmenter object are one per thread (the split pin check runs its pictures in
-        threads); the YOLO model is shared behind a lock. Results are kept for the last SAM_CACHE_SIZE pictures (the
-        split pin check gets each picture twice).
+  "sam" (findHolesWithSAM, CHANGES 169) - checkHub()'s own steps (camera/HubAndBearingSegmenter.py, not changed) in a
+        wide annulus (WIDE_ANNULUS_INNER - WIDE_ANNULUS_OUTER) round this cycle's hub-check centre
+        (ImageProcessor.hubCentre: checkHub()'s circle through the hub's holes or bolts), so that both the holes
+        (circle r ~148) and the bolts (circle r 178 - 196) are in it: the annulus cut out and normalised
+        (preprocess_image), YOLO boxes and grid prompts to MobileSAM, the masks classified, filtered by area ratio and
+        shape, grouped by distance from the centre and by size, small groups and groups off the centre dropped, the
+        polygon candidates of each group through the equidistant (strict, else relaxed) and equal-angle filters - up to
+        there exactly checkHub()'s steps; then, instead of checkHub()'s single pick, the best set of the model's count
+        of each group, the CANDIDATES_MAX best of them, and of those whose circle radius is in HOLES_CIRCLE_RADIUS and
+        whose total mask area is at most HOLES_AREA_MAX_<model>, the one with the smallest total mask area is the holes.
+        The gammas in checkHub()'s smart order, first success wins. No hub-check centre, or no holes at any gamma ->
+        not found (the holes are most likely covered).
+  "sam_slow" (findHolesWithSAM_Slow, CHANGES 164 - 166) - checkHub()'s steps in a thin annulus round the hub centre
+        that keeps the bolts out, the winning group gated (radius, spread, gaps, centre), each hole refined by a
+        MobileSAM box prompt; without a hub centre one pass over checkHub()'s own annulus first. Kept, not used.
   "morphology" (findHolesWithMorphology) - the dark-blob method of CHANGES 152 / 157, moved here from
         CheckCap.hubHoles unchanged: the darkest percentile of the band round cap.center, an opening, the model's count
-        of blobs most evenly spaced on a circle with radius / spread / angle-gap checks. Kept for comparison and as a
-        switch back; writing on the hub face in the band can be as dark as a hole.
+        of blobs most evenly spaced on a circle with radius / spread / angle-gap checks. Its offsets are the dark-blob
+        ones of CHANGES 152, 153, 163 - not those in the properties since CHANGES 165.
+
+The MobileSAM predictor and the segmenter object are one per thread (the split pin check runs its pictures in threads);
+the YOLO model is shared behind a lock. Results are kept for the last SAM_CACHE_SIZE pictures (the split pin check gets
+each picture twice).
 
 findHoles() runs the configured one. Result: dict(found, cx, cy, radius, spread, gap, count, points, reason, method,
 ...) - "reason" says why the holes were not found, complete (with the gamma / darkest percentile).
@@ -45,7 +43,7 @@ import cv2
 import numpy as np
 
 from utils.RedisUtils import DOST, DOSTPLUS
-from camera.VisionConfig import expectOneOf, vBool, vFloat, vInt, vList, vStr, vTuple
+from camera.VisionConfig import expectOneOf
 
 
 class _LockedYolo:
@@ -61,55 +59,72 @@ class _LockedYolo:
 
 class FindHubHoles:
 
-    METHOD = vStr("vision.hubholes.method", "sam")  # "sam" (YOLO + MobileSAM) or "morphology" (dark blobs)
+    METHOD = "sam"  # "sam" (wide annulus, CHANGES 169), "sam_slow" (thin annulus, 164 - 166) or "morphology" (dark blobs)
     # SAM: the annulus round the seed (this cycle's hub centre) in which the holes lie and the bolts do not
-    SAM_ANNULUS_INNER = vInt("vision.hubholes.sam.annulus.inner", 130)  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
-    SAM_ANNULUS_OUTER_DOST = vInt("vision.hubholes.sam.annulus.outer.dost", 166)  # holes to 161, stud tops from 169
-    SAM_ANNULUS_OUTER_DOSTPLUS = vInt("vision.hubholes.sam.annulus.outer.dostplus", 172)  # holes to 163, stud tops from 183
-    SAM_HOLES_RADIUS = vTuple("vision.hubholes.sam.radius", (140.0, 155.0))  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
-    SAM_SPREAD_MAX = vFloat("vision.hubholes.sam.spread.max", 3.0)  # px, the holes' distances from that circle (sd)
-    SAM_GAP_MAX = vFloat("vision.hubholes.sam.gap.max", 15.0)  # deg, an angle between neighbouring holes off 360 / count
-    SAM_SEED_DISTANCE_MAX = vFloat("vision.hubholes.sam.seed.distance.max", 8.0)  # px, the holes' circle centre from the seed
+    SAM_ANNULUS_INNER = 130  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
+    SAM_ANNULUS_OUTER_DOST = 166  # holes to 161, stud tops from 169
+    SAM_ANNULUS_OUTER_DOSTPLUS = 172  # holes to 163, stud tops from 183
+    SAM_HOLES_RADIUS = (140.0, 155.0)  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
+    SAM_SPREAD_MAX = 3.0  # px, the holes' distances from that circle (sd)
+    SAM_GAP_MAX = 15.0  # deg, an angle between neighbouring holes off 360 / count
+    SAM_SEED_DISTANCE_MAX = 8.0  # px, the holes' circle centre from the seed
     # checkHub()'s centre from the bolts sits off the holes' centre (the stud tops are higher; CHANGES 96, 147): added to
     # a seed from bolts, per model (holes - bolts; DOST from the CHANGES 147 offsets, DOSTPLUS measured on the laptop,
     # DryRun_Hub_Holes_SAM --seed hubcheck, CHANGES 165)
-    SAM_SEED_BOLTS_OFFSET_DOST = vTuple("vision.hubholes.sam.seed.bolts.offset.dost", (-0.7, 4.4))
-    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = vTuple("vision.hubholes.sam.seed.bolts.offset.dostplus", (-0.7, 3.7))
-    SAM_WIDE_SEED_MAX = vFloat("vision.hubholes.sam.wide.seed.max", 15.0)  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
-    SAM_CACHE_SIZE = vInt("vision.hubholes.sam.cache.size", 12)  # pictures whose result is kept
+    SAM_SEED_BOLTS_OFFSET_DOST = (-0.7, 4.4)
+    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = (-0.7, 3.7)
+    SAM_WIDE_SEED_MAX = 15.0  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
+    SAM_CACHE_SIZE = 12  # pictures whose result is kept
     # Each hole of the group found, refined on the picture as taken (CHANGES 166): MobileSAM box prompt of +-half px round
     # it, three masks, the largest with an area in refine.area taken (the hole's whole outline), centred again on it and
     # prompted once more (iterations). Without it the DOST groups came either as the whole outlines or as their darker
     # lower part - centres 2 - 2.5 px apart in y on one still part; refined, the centre holds within 0.1 - 0.2 px sd.
-    SAM_REFINE = vBool("vision.hubholes.sam.refine", True)
-    SAM_REFINE_HALF_DOST = vInt("vision.hubholes.sam.refine.half.dost", 18)  # px; holes r ~10
-    SAM_REFINE_HALF_DOSTPLUS = vInt("vision.hubholes.sam.refine.half.dostplus", 24)  # px; holes r ~14.5
-    SAM_REFINE_AREA_DOST = vTuple("vision.hubholes.sam.refine.area.dost", (60, 1200))  # px
-    SAM_REFINE_AREA_DOSTPLUS = vTuple("vision.hubholes.sam.refine.area.dostplus", (60, 2000))  # px
-    SAM_REFINE_ITERATIONS = vInt("vision.hubholes.sam.refine.iterations", 2)
-    SAM_REFINE_MOVE_MAX = vFloat("vision.hubholes.sam.refine.move.max", 6.0)  # px; more = the group was not the holes
+    SAM_REFINE = True
+    SAM_REFINE_HALF_DOST = 18  # px; holes r ~10
+    SAM_REFINE_HALF_DOSTPLUS = 24  # px; holes r ~14.5
+    SAM_REFINE_AREA_DOST = (60, 1200)  # px
+    SAM_REFINE_AREA_DOSTPLUS = (60, 2000)  # px
+    SAM_REFINE_ITERATIONS = 2
+    SAM_REFINE_MOVE_MAX = 6.0  # px; more = the group was not the holes
+
+    # "sam" since CHANGES 169 (findHolesWithSAM): a wide annulus round this cycle's hub-check centre that holds the holes
+    # (circle r ~148) and the bolts (circle r 178 - 196); checkHub()'s steps up to the candidate sets that pass its
+    # equidistant and equal-angle filters; of the model's count, the best set of each group (holes and bolts are separate
+    # groups), the CANDIDATES_MAX of least distance variance; of those with a circle radius in HOLES_CIRCLE_RADIUS (holes
+    # ~148, bolts 178 and more) and a total mask area <= HOLES_AREA_MAX_<model> (a DOST stud top's mask is larger than a
+    # hole's: holes 2100 - 2700, bolts ~4200 in the sandbox; DOSTPLUS holes and stud tops both 3000 - 3500, so there the
+    # radius decides), the one with the smallest total mask area is the holes.
+    WIDE_ANNULUS_INNER = 116  # px round the hub-check centre (checkHub's own 116 - 253)
+    WIDE_ANNULUS_OUTER = 253
+    CANDIDATES_MAX = 3  # candidate sets kept per gamma (least distance variance first)
+    HOLES_AREA_MAX_DOST = 3400  # px, total mask area of the 4 holes at most
+    HOLES_AREA_MAX_DOSTPLUS = 4500  # px, total mask area of the 5 holes at most
+    HOLES_CIRCLE_RADIUS = (135.0, 165.0)  # px, circle through the holes
 
     # Morphology (CHANGES 152, 157; moved from CheckCap, same keys). The holes (dark, at r ~150) - never the bolts
     # (bright stud tops at r 182 - 196): dark blobs only, searched in the band round cap.center, the circle through them
     # must have a radius in holes.radius, all the holes of the model (DOST 4, DOSTPLUS 5) evenly spaced.
-    SEATING_HUB_HOLES_BAND = vTuple("vision.cap.seating.hub.holes.band", (128, 168))  # px from cap.center
-    SEATING_HUB_HOLES_DARK_PERCENTILES = vList("vision.cap.seating.hub.holes.dark.percentiles", [6.0, 9.0, 12.0])  # darkest % of the band, tried in turn
-    SEATING_HUB_HOLES_AREA = vTuple("vision.cap.seating.hub.holes.area", (150, 2500))  # px, one hole's dark blob
-    SEATING_HUB_HOLES_OPEN = vInt("vision.cap.seating.hub.holes.open", 5)  # px; opening that drops thin dark lines
-    SEATING_HUB_HOLES_BLOBS_KEEP = vInt("vision.cap.seating.hub.holes.blobs.keep", 8)  # largest blobs tried
-    SEATING_HUB_HOLES_RADIUS = vTuple("vision.cap.seating.hub.holes.radius", (140.0, 160.0))  # px, hole circle
-    SEATING_HUB_HOLES_SPREAD_MAX = vFloat("vision.cap.seating.hub.holes.spread.max", 3.0)  # px, holes off the circle (sd)
-    SEATING_HUB_HOLES_GAP_MAX = vFloat("vision.cap.seating.hub.holes.gap.max", 15.0)  # deg, a gap off 360 / count
+    SEATING_HUB_HOLES_BAND = (128, 168)  # px from cap.center
+    SEATING_HUB_HOLES_DARK_PERCENTILES = [6.0, 9.0, 12.0]  # darkest % of the band, tried in turn
+    SEATING_HUB_HOLES_AREA = (150, 2500)  # px, one hole's dark blob
+    SEATING_HUB_HOLES_OPEN = 5  # px; opening that drops thin dark lines
+    SEATING_HUB_HOLES_BLOBS_KEEP = 8  # largest blobs tried
+    SEATING_HUB_HOLES_RADIUS = (140.0, 160.0)  # px, hole circle
+    SEATING_HUB_HOLES_SPREAD_MAX = 3.0  # px, holes off the circle (sd)
+    SEATING_HUB_HOLES_GAP_MAX = 15.0  # deg, a gap off 360 / count
     # the model's hole count (both methods)
-    SEATING_HUB_HOLES_COUNT_DOST = vInt("vision.cap.seating.hub.holes.count.dost", 4)
-    SEATING_HUB_HOLES_COUNT_DOSTPLUS = vInt("vision.cap.seating.hub.holes.count.dostplus", 5)
+    SEATING_HUB_HOLES_COUNT_DOST = 4
+    SEATING_HUB_HOLES_COUNT_DOSTPLUS = 5
     # True: the radius / spread / angle-gap checks are applied to every combination of blobs and the most evenly spaced
     # combination that passes them is taken; False: the most evenly spaced combination first, then checked. CHANGES 157.
-    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = vBool("vision.cap.seating.hub.holes.gate.each.combination", True)
+    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = True
 
     # This cycle's hub centre (dict cx, cy, ... from checkHub(); ImageProcessor.hubCentre) when the caller does not
     # pass one: set by the camera server. samModelProvider / yoloModelProvider replace ModelManager's models (tests).
     hubCentreProvider = None
+    # dry runs only (no hub check in their cycle): callable(picture, model) -> hub centre dict, e.g. the real checkHub()
+    # on that picture. None in production.
+    hubCentreFromPicture = None
     samModelProvider = None
     yoloModelProvider = None
 
@@ -132,8 +147,11 @@ class FindHubHoles:
         """The hub's holes by the configured method (vision.hubholes.method). hubCentre: this cycle's hub centre from
         checkHub() (the SAM method's seed); None = FindHubHoles.hubCentreProvider(), if set. A not-found result's
         reason names the gamma / darkest percentile."""
-        expectOneOf("vision.hubholes.method", FindHubHoles.METHOD, ("sam", "morphology"))
-        if str(FindHubHoles.METHOD).strip().lower() == "morphology":
+        expectOneOf("vision.hubholes.method", FindHubHoles.METHOD, ("sam", "sam_slow", "morphology"))
+        method = str(FindHubHoles.METHOD).strip().lower()
+        if method == "sam_slow":
+            return FindHubHoles.findHolesWithSAM_Slow(anImage, model, hubCentre)
+        if method == "morphology":
             result = FindHubHoles.findHolesWithMorphology(anImage, model)
             result["method"] = "morphology"
             if not result["found"]:
@@ -147,8 +165,9 @@ class FindHubHoles:
         if not result.get("found"):
             return f"the hub's {result.get('count')} holes not found ({result.get('reason')})"
         how = result.get("method", "")
-        if how == "sam":
-            how = f"sam, gamma {result.get('gamma')}, seed {result.get('seedFrom')}"
+        if how in ("sam", "sam_slow"):
+            how = f"{how}, gamma {result.get('gamma')}, " + (f"mask area {result['area']:.0f}, " if "area" in result else "") \
+                  + f"seed {result.get('seedFrom')}"
         return (f"hub from {result['count']} holes ({result['cx']:.1f}, {result['cy']:.1f}) r {result['radius']:.1f}, "
                 f"spread {result['spread']:.1f}, gap {result['gap']:.0f} deg ({how})")
 
@@ -339,15 +358,16 @@ class FindHubHoles:
         return dict(found=False, count=n, gamma=None, reason="; ".join(tries) or "no gamma tried")
 
     @staticmethod
-    def findHolesWithSAM(anImage: np.ndarray, model: Optional[str], hubCentre: Optional[Dict] = None) -> Dict:
-        """The holes by YOLO + MobileSAM in the thin annulus round this cycle's hub centre (see the module text)."""
+    def findHolesWithSAM_Slow(anImage: np.ndarray, model: Optional[str], hubCentre: Optional[Dict] = None) -> Dict:
+        """The holes by YOLO + MobileSAM in the thin annulus round this cycle's hub centre, each hole refined (CHANGES
+        164 - 166; findHolesWithSAM until CHANGES 169; vision.hubholes.method=sam_slow)."""
         model = DOSTPLUS if model == DOSTPLUS else DOST
         n = FindHubHoles.holeCount(model)
         if anImage is None:
             return dict(found=False, count=n, method="sam", reason="no picture")
         seed = FindHubHoles._seed(hubCentre, model)
         small = np.ascontiguousarray(anImage[::4, ::4])
-        key = (zlib.crc32(small.tobytes()), anImage.shape, model,
+        key = ("slow", zlib.crc32(small.tobytes()), anImage.shape, model,
                None if seed is None else (round(seed[0], 1), round(seed[1], 1)))
         with FindHubHoles._cacheLock:
             if key in FindHubHoles._cache:
@@ -377,7 +397,7 @@ class FindHubHoles:
                                              int(H.HUB_SEGMENT_INNER_RADIUS), int(H.HUB_SEGMENT_OUTER_RADIUS), gates=False,
                                              maxOff=float(FindHubHoles.SAM_WIDE_SEED_MAX))
                 if not wide["found"]:
-                    return dict(found=False, count=n, method="sam", seedFrom=None,
+                    return dict(found=False, count=n, method="sam_slow", seedFrom=None,
                                 reason=f"no hub centre from this cycle's hub check, and none in the hub check's annulus "
                                        f"({wide['reason']})")
                 moved = FindHubHoles._seed(dict(cx=wide["cx"], cy=wide["cy"], count=wide["count"],
@@ -389,13 +409,173 @@ class FindHubHoles:
             outer = FindHubHoles.SAM_ANNULUS_OUTER_DOSTPLUS if model == DOSTPLUS else FindHubHoles.SAM_ANNULUS_OUTER_DOST
             result = FindHubHoles._samPass(rgb, model, seed[:2], int(FindHubHoles.SAM_ANNULUS_INNER), int(outer))
         except Exception as e:
-            return dict(found=False, count=n, method="sam", seedFrom=None if seed is None else seed[2],
+            return dict(found=False, count=n, method="sam_slow", seedFrom=None if seed is None else seed[2],
                         reason=f"YOLO + MobileSAM failed: {e}")
-        result.update(method="sam", seed=(round(seed[0], 1), round(seed[1], 1)), seedFrom=seed[2])
+        result.update(method="sam_slow", seed=(round(seed[0], 1), round(seed[1], 1)), seedFrom=seed[2])
         if not result["found"]:
             result["reason"] = (f"annulus {int(FindHubHoles.SAM_ANNULUS_INNER)} - {int(outer)} px round "
                                 f"({seed[0]:.1f}, {seed[1]:.1f}) from {seed[2]}: {result['reason']}")
         return result
+
+    @staticmethod
+    def findHolesWithSAM(anImage: np.ndarray, model: Optional[str], hubCentre: Optional[Dict] = None) -> Dict:
+        """The hub's holes by checkHub()'s steps in a wide annulus round this cycle's hub-check centre (CHANGES 169):
+          1. the centre: hubCentre (ImageProcessor.hubCentre from checkHub(), passed by the cap check), else
+             hubCentreProvider() (the camera server's ImageProcessor.hubCentre), else hubCentreFromPicture (dry runs);
+             none -> not found;
+          2. the annulus WIDE_ANNULUS_INNER - WIDE_ANNULUS_OUTER round it (holes and bolts), per gamma in checkHub()'s
+             smart order: checkHub()'s steps up to the polygon candidates that pass its equidistant (strict, else
+             relaxed) and equal-angle filters (_candidateSets);
+          3. of those with the model's count, the best (least distance variance) of each group, the CANDIDATES_MAX best of
+             them; of those whose circle radius is in HOLES_CIRCLE_RADIUS and whose total mask area is <=
+             HOLES_AREA_MAX_<model>, the one with the smallest total mask area is the holes; none -> the next gamma. No
+             gamma -> not found (the holes are most likely covered).
+        Result as findHoles(), with gamma, area (the holes' total mask area), candidates (area, radius, count, centre of
+        each set looked at), seed, seedFrom."""
+        model = DOSTPLUS if model == DOSTPLUS else DOST
+        n = FindHubHoles.holeCount(model)
+        if anImage is None:
+            return dict(found=False, count=n, method="sam", reason="no picture")
+        centre, centreFrom = FindHubHoles._hubCheckCentre(anImage, model, hubCentre)
+        if centre is None:
+            return dict(found=False, count=n, method="sam", seedFrom=None,
+                        reason="no hub centre from this cycle's hub check")
+        small = np.ascontiguousarray(anImage[::4, ::4])
+        key = ("wide", zlib.crc32(small.tobytes()), anImage.shape, model, (round(centre[0], 1), round(centre[1], 1)))
+        with FindHubHoles._cacheLock:
+            if key in FindHubHoles._cache:
+                FindHubHoles._cache.move_to_end(key)
+                return dict(FindHubHoles._cache[key])
+            keyLock = FindHubHoles._keyLocks.setdefault(key, threading.Lock())
+        with keyLock:                                   # the same picture in two threads: computed once
+            with FindHubHoles._cacheLock:
+                if key in FindHubHoles._cache:
+                    return dict(FindHubHoles._cache[key])
+            try:
+                result = FindHubHoles._holesInWideAnnulus(cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB), model, centre)
+            except Exception as e:
+                result = dict(found=False, count=n, reason=f"YOLO + MobileSAM failed: {e}")
+            result.update(method="sam", seed=(round(centre[0], 1), round(centre[1], 1)), seedFrom=centreFrom)
+            if not result["found"]:
+                result["reason"] = (f"annulus {int(FindHubHoles.WIDE_ANNULUS_INNER)} - {int(FindHubHoles.WIDE_ANNULUS_OUTER)}"
+                                    f" px round ({centre[0]:.1f}, {centre[1]:.1f}) from {centreFrom}: {result['reason']}")
+            with FindHubHoles._cacheLock:
+                FindHubHoles._cache[key] = dict(result)
+                while len(FindHubHoles._cache) > max(1, int(FindHubHoles.SAM_CACHE_SIZE)):
+                    FindHubHoles._cache.popitem(last=False)
+                FindHubHoles._keyLocks.pop(key, None)
+        return dict(result)
+
+    @staticmethod
+    def _hubCheckCentre(anImage: np.ndarray, model: str, hubCentre: Optional[Dict]):
+        """((cx, cy), 'from ...') of this cycle's hub-check centre as it is (holes or bolts), or (None, None)."""
+        tried = []
+        if hubCentre is not None:
+            tried.append((hubCentre, "the hub check (given)"))
+        elif FindHubHoles.hubCentreProvider is not None:
+            try:
+                tried.append((FindHubHoles.hubCentreProvider(), "the hub check (this cycle)"))
+            except Exception:
+                pass
+        if not any(c for c, _ in tried) and FindHubHoles.hubCentreFromPicture is not None:
+            try:
+                tried.append((FindHubHoles.hubCentreFromPicture(anImage, model), "the hub check on this picture"))
+            except Exception:
+                pass
+        for centre, source in tried:
+            try:
+                if centre and np.isfinite(float(centre["cx"])) and np.isfinite(float(centre["cy"])):
+                    return ((float(centre["cx"]), float(centre["cy"])),
+                            f"{source}: {centre.get('count', '?')} {centre.get('kind', '?')}")
+            except (KeyError, TypeError, ValueError):
+                continue
+        return None, None
+
+    @staticmethod
+    def _candidateSets(seg, preprocessed: np.ndarray, n: int):
+        """checkHub()'s steps (HubAndBearingSegmenter.segment_holes, steps 1 - 7, and filter_subgroups_by_equispacing
+        steps 1 - 3) on one preprocessed annulus, without the final pick: (candidates of K = n that pass the equidistant
+        and equal-angle filters, masks, count of other-K candidates that passed)."""
+        import torch
+        import camera.HubAndBearingSegmenter as H
+        rgb = cv2.cvtColor(preprocessed, cv2.COLOR_GRAY2RGB) if preprocessed.ndim == 2 else preprocessed
+        with torch.inference_mode():
+            masks = seg.mask_generator.generate(rgb)
+        if not masks:
+            return [], [], 0
+        for mask_data in masks:
+            mask_data['shape_info'] = seg._classify_mask_shape(mask_data['segmentation'])
+        masks = H.filter_masks_by_area_ratio(masks)
+        if not masks:
+            return [], [], 0
+        masks = H.filter_valid_shapes_only(masks)
+        if not masks:
+            return [], [], 0
+        groups = seg._subgroup_by_size(masks, seg._group_by_distance_from_center(masks))
+        cx = cy = seg.annular_outer_radius
+        groups = H.filter_small_groups(groups, min_size=3)
+        groups = H.filter_subgroups_by_center_envelope(masks, groups, cx, cy)
+        passed = []
+        for group_id, indices in groups.items():
+            if len(indices) < 4:
+                continue
+            candidates = H._generate_all_polygon_candidates(masks, indices, cx, cy, K=4)
+            if len(indices) >= 5:
+                candidates += H._generate_all_polygon_candidates(masks, indices, cx, cy, K=5)
+            for c in candidates:
+                c['group_id'] = group_id
+            equal = H._filter_by_equidistant(candidates, H.EQUISPACING_STRICT_TOLERANCE)
+            if not equal:
+                equal = H._filter_by_equidistant(candidates, H.EQUISPACING_RELAXED_TOLERANCE)
+            passed += H._filter_by_equal_angles(equal, H.HUB_EQUAL_ANGLE_TOLERANCE)
+        ours = [c for c in passed if c['K'] == n]
+        return ours, masks, len(passed) - len(ours)
+
+    @staticmethod
+    def _holesInWideAnnulus(rgb: np.ndarray, model: str, centre) -> Dict:
+        from camera.CheckHubAndBottomBearing import determine_smart_gamma_order
+        n = FindHubHoles.holeCount(model)
+        seg = FindHubHoles._engine()
+        seg.annular_center = (int(round(centre[0])), int(round(centre[1])))
+        seg.annular_inner_radius = int(FindHubHoles.WIDE_ANNULUS_INNER)
+        seg.annular_outer_radius = int(FindHubHoles.WIDE_ANNULUS_OUTER)
+        x0 = max(0, seg.annular_center[0] - seg.annular_outer_radius)
+        y0 = max(0, seg.annular_center[1] - seg.annular_outer_radius)
+        areaMax = float(FindHubHoles.HOLES_AREA_MAX_DOSTPLUS if model == DOSTPLUS else FindHubHoles.HOLES_AREA_MAX_DOST)
+        low, high = (float(v) for v in FindHubHoles.HOLES_CIRCLE_RADIUS)
+        tries, looked = [], []
+        for gamma in determine_smart_gamma_order(rgb):
+            preprocessed, _ = seg.preprocess_image(rgb, gamma=gamma, bg_sx=10, bg_sy=10, cn_sx=10, cn_sy=10,
+                                                   apply_bilateral=True, alter_gamma=True)
+            candidates, masks, others = FindHubHoles._candidateSets(seg, preprocessed, n)
+            if not candidates:
+                tries.append(f"gamma {gamma}: no set of {n}" + (f" ({others} of the other count)" if others else ""))
+                continue
+            bestPerGroup = {}                           # one set per distance / size group (holes and bolts are apart)
+            for c in candidates:
+                if c['group_id'] not in bestPerGroup or c['distance_variance'] < bestPerGroup[c['group_id']]['distance_variance']:
+                    bestPerGroup[c['group_id']] = c
+            sets = []
+            for c in sorted(bestPerGroup.values(), key=lambda c: c['distance_variance'])[:max(1, int(FindHubHoles.CANDIDATES_MAX))]:
+                points = [(float(masks[i]['shape_info']['center'][0]) + x0,
+                           float(masks[i]['shape_info']['center'][1]) + y0) for i in c['indices']]
+                area = float(sum(float(masks[i]['area']) for i in c['indices']))
+                cx, cy, radius, spread, gap = FindHubHoles._circleOf(points)
+                sets.append(dict(area=area, cx=cx, cy=cy, radius=radius, spread=spread, gap=gap, points=points))
+            sets.sort(key=lambda s: s['area'])
+            summary = [dict(area=round(s['area']), radius=round(s['radius'], 1), centre=(round(s['cx'], 1),
+                            round(s['cy'], 1)), count=n) for s in sets]
+            looked.append(dict(gamma=gamma, sets=summary))
+            holes = [s for s in sets if low <= s['radius'] <= high and s['area'] <= areaMax]
+            if not holes:
+                tries.append(f"gamma {gamma}: no set with circle r {low:g} - {high:g} and total mask area <= {areaMax:g}"
+                             + "; sets (area, r): " + ", ".join(f"({s['area']:.0f}, {s['radius']:.1f})" for s in sets))
+                continue
+            best = holes[0]                             # sets are sorted by total mask area: the smallest
+            return dict(found=True, cx=best['cx'], cy=best['cy'], radius=best['radius'], spread=best['spread'],
+                        gap=best['gap'], count=n, points=best['points'], gamma=gamma, area=best['area'],
+                        candidates=looked, kind="holes", reason="")
+        return dict(found=False, count=n, gamma=None, candidates=looked, reason="; ".join(tries) or "no gamma tried")
 
     # ------------------------------------------------------------------ dark blobs (CHANGES 152, 157)
 
