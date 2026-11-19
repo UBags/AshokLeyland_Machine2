@@ -13,7 +13,12 @@ Two methods (vision.hubholes.method):
         hub; here the annulus is thin and centred on the hub centre that checkHub() found in this cycle (its circle
         through the holes or the bolts - both are concentric with the hub): the holes (circle r 147 - 151, holes r 10 /
         14.5 px) lie inside it, the stud tops (circle r 182 - 196, inner edge 169 / 183 px) outside it but for a sliver
-        too small to pass the mask area filter. A circle outside SAM_HOLES_RADIUS (the bolts) is refused as well.
+        too small to pass the mask area filter. The group must also make a circle with a radius in SAM_HOLES_RADIUS
+        (the bolts' circle is 178 px and more), spread <= SAM_SPREAD_MAX, evenly spaced (SAM_GAP_MAX) and its centre
+        within SAM_SEED_DISTANCE_MAX of the seed (the holes are concentric with the hub; four look-alike masks on the bare
+        face can make an evenly spaced square round another centre), else the next
+        gamma is tried; checkHub()'s "other model" verdict on a gamma is noted and the next gamma tried too (in the thin
+        annulus its spacing ranges, set for the whole hub, can call 4 of the 5 DOSTPLUS holes a DOST hub).
         Without this cycle's hub centre (dry runs, a hub check that gave none) the seed comes from one pass over
         checkHub()'s own annulus (hub.segment.center, r 116 - 253) - holes or bolts, either gives the centre.
         The MobileSAM predictor and the segmenter object are one per thread (the split pin check runs its pictures in
@@ -56,10 +61,13 @@ class FindHubHoles:
 
     METHOD = "sam"  # "sam" (YOLO + MobileSAM) or "morphology" (dark blobs)
     # SAM: the annulus round the seed (this cycle's hub centre) in which the holes lie and the bolts do not
-    SAM_ANNULUS_INNER = 125  # px; holes from 137 (DOST) / 133 (DOSTPLUS)
+    SAM_ANNULUS_INNER = 130  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
     SAM_ANNULUS_OUTER_DOST = 166  # holes to 161, stud tops from 169
     SAM_ANNULUS_OUTER_DOSTPLUS = 172  # holes to 163, stud tops from 183
-    SAM_HOLES_RADIUS = (140.0, 160.0)  # px, circle through the holes found
+    SAM_HOLES_RADIUS = (140.0, 165.0)  # px, circle through the holes found (bolts: 178+)
+    SAM_SPREAD_MAX = 3.0  # px, the holes' distances from that circle (sd)
+    SAM_GAP_MAX = 15.0  # deg, an angle between neighbouring holes off 360 / count
+    SAM_SEED_DISTANCE_MAX = 8.0  # px, the holes' circle centre from the seed
     SAM_CACHE_SIZE = 12  # pictures whose result is kept
 
     # Morphology (CHANGES 152, 157; moved from CheckCap, same keys). The holes (dark, at r ~150) - never the bolts
@@ -153,7 +161,7 @@ class FindHubHoles:
         try:
             if centre and np.isfinite(float(centre["cx"])) and np.isfinite(float(centre["cy"])):
                 return (float(centre["cx"]), float(centre["cy"]),
-                        f"this cycle's hub check ({centre.get('count', '?')} {centre.get('kind', '?')})")
+                        f"the hub centre given ({centre.get('count', '?')} {centre.get('kind', '?')})")
         except (KeyError, TypeError, ValueError):
             pass
         return None
@@ -201,9 +209,9 @@ class FindHubHoles:
         return seg
 
     @staticmethod
-    def _samPass(rgb: np.ndarray, model: str, centre, inner: int, outer: int, radiusRange=None) -> Dict:
+    def _samPass(rgb: np.ndarray, model: str, centre, inner: int, outer: int, gates: bool = True) -> Dict:
         """checkHub()'s steps on the annulus inner - outer round centre; the first gamma whose winning group has the
-        model's count (and, with radiusRange, a circle radius inside it) wins."""
+        model's count (and, with gates, a circle with radius, spread and angle gaps within their limits) wins."""
         from camera.CheckHubAndBottomBearing import CheckHubAndBottomBearing, determine_smart_gamma_order
         from camera.HubAndBearingSegmenter import select_best_group
         n = FindHubHoles.holeCount(model)
@@ -222,8 +230,8 @@ class FindHubHoles:
                 continue
             winning = select_best_group(groups)
             if not isMatch:
-                return dict(found=False, count=n, gamma=gamma, mismatch=detected,
-                            reason=f"gamma {gamma}: the {len(winning or [])} holes of a {detected} hub, {model} expected")
+                tries.append(f"gamma {gamma}: a {detected} group of {len(winning or [])}")
+                continue
             if not winning or len(winning) != n:
                 tries.append(f"gamma {gamma}: {len(winning or [])} of {n}")
                 continue
@@ -233,10 +241,19 @@ class FindHubHoles:
                 continue
             points = [(float(c[0]) + x0, float(c[1]) + y0) for _, c in winning if c is not None]
             cx, cy, radius, spread, gap = FindHubHoles._circleOf(points)
-            if radiusRange is not None and not float(radiusRange[0]) <= radius <= float(radiusRange[1]):
-                tries.append(f"gamma {gamma}: circle r {radius:.1f} outside {float(radiusRange[0]):g} - "
-                             f"{float(radiusRange[1]):g}")
-                continue
+            if gates:
+                low, high = float(FindHubHoles.SAM_HOLES_RADIUS[0]), float(FindHubHoles.SAM_HOLES_RADIUS[1])
+                off = float(np.hypot(cx - float(centre[0]), cy - float(centre[1])))
+                bad = [text for failed, text in (
+                    (not low <= radius <= high, f"circle r {radius:.1f} outside {low:g} - {high:g}"),
+                    (off > float(FindHubHoles.SAM_SEED_DISTANCE_MAX),
+                     f"centre {off:.1f} px from the seed > {FindHubHoles.SAM_SEED_DISTANCE_MAX}"),
+                    (spread > float(FindHubHoles.SAM_SPREAD_MAX), f"spread {spread:.1f} > {FindHubHoles.SAM_SPREAD_MAX}"),
+                    (gap > float(FindHubHoles.SAM_GAP_MAX), f"angle gap off by {gap:.0f} > {FindHubHoles.SAM_GAP_MAX} deg"))
+                    if failed]
+                if bad:
+                    tries.append(f"gamma {gamma}: " + ", ".join(bad))
+                    continue
             return dict(found=True, cx=cx, cy=cy, radius=radius, spread=spread, gap=gap, count=n, points=points,
                         gamma=gamma, kind=circle.get("kind"), reason="")
         return dict(found=False, count=n, gamma=None, reason="; ".join(tries) or "no gamma tried")
@@ -277,7 +294,7 @@ class FindHubHoles:
         try:
             if seed is None:
                 wide = FindHubHoles._samPass(rgb, model, (H.HUB_SEGMENT_CENTER_X, H.HUB_SEGMENT_CENTER_Y),
-                                             int(H.HUB_SEGMENT_INNER_RADIUS), int(H.HUB_SEGMENT_OUTER_RADIUS))
+                                             int(H.HUB_SEGMENT_INNER_RADIUS), int(H.HUB_SEGMENT_OUTER_RADIUS), gates=False)
                 if not wide["found"]:
                     return dict(found=False, count=n, method="sam", seedFrom=None,
                                 reason=f"no hub centre from this cycle's hub check, and none in the hub check's annulus "
@@ -285,8 +302,7 @@ class FindHubHoles:
                 seed = (wide["cx"], wide["cy"], f"the hub check's annulus ({wide['count']} {wide.get('kind')}, "
                                                 f"gamma {wide['gamma']})")
             outer = FindHubHoles.SAM_ANNULUS_OUTER_DOSTPLUS if model == DOSTPLUS else FindHubHoles.SAM_ANNULUS_OUTER_DOST
-            result = FindHubHoles._samPass(rgb, model, seed[:2], int(FindHubHoles.SAM_ANNULUS_INNER), int(outer),
-                                           FindHubHoles.SAM_HOLES_RADIUS)
+            result = FindHubHoles._samPass(rgb, model, seed[:2], int(FindHubHoles.SAM_ANNULUS_INNER), int(outer))
         except Exception as e:
             return dict(found=False, count=n, method="sam", seedFrom=None if seed is None else seed[2],
                         reason=f"YOLO + MobileSAM failed: {e}")
