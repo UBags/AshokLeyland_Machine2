@@ -169,7 +169,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 11 Frontend languages: the four languages, restart keeps the choice, DB / log English, native-speaker review of the translations (CHANGES 156) | Dialogs **passed** (Uddi, 2026-11-19: Kannada, Tamil, Hindi shown correctly); the rest not reported yet |
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
-| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run with it pending; plant not yet |
+| 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run of 2026-11-20 (Uddi): 163 pictures, 0.5 - 0.7 s each, every good picture found, the other model never, area cutoffs and offsets set (CHANGES 170); plant not yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
@@ -202,7 +202,11 @@ No per-check times were recorded with the report; when they are, put them in the
   holes / bolts offsets stay for `source=hubcheck`; those offsets were measured against hub pictures of other parts and
   carry their position (CHANGES 152) - re-measure before using that source. Uddi sends the seating lines of a shift. A
   limit on the share of outline points within 2.5 px still needs the cap pictures labelled seated / skewed.
-- **Hub-hole offsets for the SAM finder** (CHANGES 164, 165): set from Uddi's laptop run of 2026-11-19
+- **Hub-hole offsets for the new SAM finder** (CHANGES 170, laptop run of 2026-11-20): cap 0.3,-4.7 / -0.7,-4.5, bung
+  4.6,-16.8 / 4.7,-16.3 (good-labelled pictures, A05 / C14 / C16 left out), split pin 1.3,-3.6 / 1.9,2.1 (DOSTPLUS not
+  measured); area cutoffs 4900 / 6000. Proposed to Uddi, not built: a spread gate (bad bungs A17 / A06 / C15 / C17 gave
+  hole sets with spread 2.9 - 4.5; every good picture <= 1.8) and the pick among several hole-radius sets.
+- **Hub-hole offsets for the thin SAM finder** (CHANGES 164, 165, now `sam_slow`): set from Uddi's laptop run of 2026-11-19
   (`DryRun_Hub_Holes_SAM.py --wrong-model` / `--seed hubcheck`): cap 0.4,-4.8 / -0.7,-4.4, bung 5.2,-17.9 / 4.5,-15.8,
   split pin 0.9,-3.6 / 1.9,2.1, bolts seed -0.7,4.4 / -0.7,3.7. DOST SAM groups came in three circle radii (147 / 149 /
   161, centres up to ~4.5 px apart in y): 161 is not the holes - gated out (`sam.radius` 140 - 155). After 165 DOST still

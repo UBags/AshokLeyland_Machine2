@@ -5315,3 +5315,28 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   morphology`: `DryRun_SplitPin_Check_UI --auto` both PASS 79/79, `DryRun_Bung_Hub_Holes` 6/6, `DryRun_Cap_Hub_Distance`
   15/15; `DryRun_Camera_State_File` 19/19. Not run: anything with the real YOLO (laptop) - the new finder's results,
   speed, area cutoffs and the offsets all come from the laptop run.
+
+## 170. Hub holes: the new finder on the laptop - area cutoffs and offsets set (2026-11-20)
+
+- **Uddi's laptop run** (`DryRun_Hub_Holes_SAM.py --wrong-model`, real YOLO, 163 pictures compared):
+  - time 0.5 - 0.7 s a picture (found at gamma 1 on all but 5); 3 - 4 s when nothing is found (all 6 gammas);
+  - asked for the other model: never found;
+  - total mask area: DOST hole sets 1633 - 3005 (median 2585), bolt sets 6786 - 8029; DOSTPLUS holes 2871 - 3896
+    (3491), bolts 8064 - 10260 - the area separates holes and bolts on both models (the sandbox's stand-in boxes had
+    suggested otherwise for DOSTPLUS, §169); hole circles r 145 - 153.4, bolts 180 - 196;
+  - every good picture found (hub 10, split pin OK and NOT OK frames but one, cap 30 incl. skewed, good bungs 24);
+  - not found: split pin 112450874 (a NOT OK picture), bad bungs A18, B05, A20, B02, B03, B07, C18 - C20 (holes
+    covered: NOT OK is right); A02, B01, B04, B06, C02 (bad): no centre because the dry run's checkHub() on the bung
+    picture did not pass - in production the centre comes from the state-5 hub picture.
+- **Set (siemens, three files):** `holes.area.max` 3400 / 4500 -> **4900 / 6000** (between the ranges); offsets from the
+  printed means (morphology offset + mean(morphology - SAM)): split pin DOST 0.9,-3.6 -> **1.3,-3.6** (78 pictures, sd
+  1.0 / 1.1); cap 0.4,-4.8 -> **0.3,-4.7** (16, sd 0.6 / 0.8) and -0.7,-4.4 -> **-0.7,-4.5** (14, sd 0.2 / 0.3); bung,
+  good-labelled pictures only (the printed bung means included the bad ones, sd 2.1 / 3.0): DOST 5.2,-17.9 -> **4.6,-16.8**
+  (11, sd 0.2 / 0.3), DOSTPLUS 4.5,-15.8 -> **4.7,-16.3** (12; A05, C14, C16 left out - settled as wrongly labelled good,
+  2026-11-19). Split pin DOSTPLUS 1.9,2.1 unchanged (no DOSTPLUS pictures). allenbradley unchanged (code defaults).
+- **Seen, not changed (put to Uddi):** (1) bad bungs A17 (r 145.2, spread 4.5, gap 7), A06, C15, C17 (spread 2.9 - 3.1)
+  gave hole sets although a bung lies over a hole; every good picture of every set had spread <= 1.8 (good bungs <= 0.4).
+  The seating step then measures against a wrong seated position. (2) DOST_skewed_03: two hole-radius sets, (1725,
+  r 147.4) and (2874, r 149.0); the smallest area took the first, its centre ~2 px off the others' (seed d 5.1 vs ~3).
+- Run: verifier both ALL EQUIVALENT; `DryRun_Tuning_Keys` both 231/231; `DryRun_SplitPin_Check_UI --auto --holes
+  morphology` both 79/79 (the morphology dry runs set their own offsets). Not run: anything with YOLO (sandbox).

@@ -295,12 +295,12 @@ groups off the centre dropped, each group's 4- and 5-polygon candidates through 
 and equal-angle filters (`_candidateSets`, HubAndBearingSegmenter's functions on a per-thread object; checkHub() itself
 untouched). (3) Of the candidates with the model's count, the best (least distance variance) of each group, the
 `hubholes.candidates.max` (3) best of them; of those whose circle radius is in `hubholes.holes.circle.radius` 135 - 165
-and whose total mask area is <= `hubholes.holes.area.max.<model>` (3400 / 4500), the one with the smallest total mask
+and whose total mask area is <= `hubholes.holes.area.max.<model>` (Machine 2 4900 / 6000 since §170: laptop holes 1633 - 3005 / 2871 - 3896, bolts 6786 - 8029 / 8064 - 10260), the one with the smallest total mask
 area is the holes; none -> the next gamma; no gamma -> not found (the holes most likely covered) -> the check NOT OK.
 Result: found, cx, cy, radius, spread, gap, count, points, gamma, area, candidates (per gamma each set's total area,
 radius, centre), seed, seedFrom, method, reason. The last `sam.cache.size` (12) results are kept (the split pin check's
-six pictures are three pictures twice). The offsets of the cap, bung and split pin checks were set in §165 for the thin
-finder's centres and are to be measured again for this finder (`DryRun_Hub_Holes_SAM.py` on the laptop).
+six pictures are three pictures twice). Offsets for this finder's centres (§170, laptop run of 2026-11-20): cap 0.3,-4.7 /
+-0.7,-4.5, bung 4.6,-16.8 / 4.7,-16.3 (good-labelled pictures only), split pin 1.3,-3.6 (DOSTPLUS 1.9,2.1 not measured).
 
 **Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bung.outer.disc.center`:
@@ -538,8 +538,8 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 5.2,-17.9 and 4.5,-15.8 (SAM centres, §165; Machine 1: 0,0) | 3 |
-| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.4,-4.8 and -0.7,-4.4 (SAM centres, §165; Machine 1: 0,0) | 3 |
+| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
+| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.3,-4.7 and -0.7,-4.5 (SAM centres, §170; Machine 1: 0,0) | 3 |
 | `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
