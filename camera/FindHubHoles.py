@@ -45,7 +45,7 @@ import cv2
 import numpy as np
 
 from utils.RedisUtils import DOST, DOSTPLUS
-from camera.VisionConfig import expectOneOf, vBool, vFloat, vInt, vList, vStr, vTuple
+from camera.VisionConfig import expectOneOf
 
 
 class _LockedYolo:
@@ -61,40 +61,51 @@ class _LockedYolo:
 
 class FindHubHoles:
 
-    METHOD = vStr("vision.hubholes.method", "sam")  # "sam" (YOLO + MobileSAM) or "morphology" (dark blobs)
+    METHOD = "sam"  # "sam" (YOLO + MobileSAM) or "morphology" (dark blobs)
     # SAM: the annulus round the seed (this cycle's hub centre) in which the holes lie and the bolts do not
-    SAM_ANNULUS_INNER = vInt("vision.hubholes.sam.annulus.inner", 130)  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
-    SAM_ANNULUS_OUTER_DOST = vInt("vision.hubholes.sam.annulus.outer.dost", 166)  # holes to 161, stud tops from 169
-    SAM_ANNULUS_OUTER_DOSTPLUS = vInt("vision.hubholes.sam.annulus.outer.dostplus", 172)  # holes to 163, stud tops from 183
-    SAM_HOLES_RADIUS = vTuple("vision.hubholes.sam.radius", (140.0, 155.0))  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
-    SAM_SPREAD_MAX = vFloat("vision.hubholes.sam.spread.max", 3.0)  # px, the holes' distances from that circle (sd)
-    SAM_GAP_MAX = vFloat("vision.hubholes.sam.gap.max", 15.0)  # deg, an angle between neighbouring holes off 360 / count
-    SAM_SEED_DISTANCE_MAX = vFloat("vision.hubholes.sam.seed.distance.max", 8.0)  # px, the holes' circle centre from the seed
+    SAM_ANNULUS_INNER = 130  # px; holes from 140 (DOST) / 133.5 (DOSTPLUS)
+    SAM_ANNULUS_OUTER_DOST = 166  # holes to 161, stud tops from 169
+    SAM_ANNULUS_OUTER_DOSTPLUS = 172  # holes to 163, stud tops from 183
+    SAM_HOLES_RADIUS = (140.0, 155.0)  # px, circle through the holes found (laptop: 147 - 149; 161 = not the holes)
+    SAM_SPREAD_MAX = 3.0  # px, the holes' distances from that circle (sd)
+    SAM_GAP_MAX = 15.0  # deg, an angle between neighbouring holes off 360 / count
+    SAM_SEED_DISTANCE_MAX = 8.0  # px, the holes' circle centre from the seed
     # checkHub()'s centre from the bolts sits off the holes' centre (the stud tops are higher; CHANGES 96, 147): added to
     # a seed from bolts, per model (holes - bolts; DOST from the CHANGES 147 offsets, DOSTPLUS measured on the laptop,
     # DryRun_Hub_Holes_SAM --seed hubcheck, CHANGES 165)
-    SAM_SEED_BOLTS_OFFSET_DOST = vTuple("vision.hubholes.sam.seed.bolts.offset.dost", (-0.7, 4.4))
-    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = vTuple("vision.hubholes.sam.seed.bolts.offset.dostplus", (-0.7, 3.7))
-    SAM_WIDE_SEED_MAX = vFloat("vision.hubholes.sam.wide.seed.max", 15.0)  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
-    SAM_CACHE_SIZE = vInt("vision.hubholes.sam.cache.size", 12)  # pictures whose result is kept
+    SAM_SEED_BOLTS_OFFSET_DOST = (-0.7, 4.4)
+    SAM_SEED_BOLTS_OFFSET_DOSTPLUS = (-0.7, 3.7)
+    SAM_WIDE_SEED_MAX = 15.0  # px, a seed from the hub check's annulus from hub.segment.center (parts: within 13)
+    SAM_CACHE_SIZE = 12  # pictures whose result is kept
+    # Each hole of the group found, refined on the picture as taken (CHANGES 166): MobileSAM box prompt of +-half px round
+    # it, three masks, the largest with an area in refine.area taken (the hole's whole outline), centred again on it and
+    # prompted once more (iterations). Without it the DOST groups came either as the whole outlines or as their darker
+    # lower part - centres 2 - 2.5 px apart in y on one still part; refined, the centre holds within 0.1 - 0.2 px sd.
+    SAM_REFINE = True
+    SAM_REFINE_HALF_DOST = 18  # px; holes r ~10
+    SAM_REFINE_HALF_DOSTPLUS = 24  # px; holes r ~14.5
+    SAM_REFINE_AREA_DOST = (60, 1200)  # px
+    SAM_REFINE_AREA_DOSTPLUS = (60, 2000)  # px
+    SAM_REFINE_ITERATIONS = 2
+    SAM_REFINE_MOVE_MAX = 6.0  # px; more = the group was not the holes
 
     # Morphology (CHANGES 152, 157; moved from CheckCap, same keys). The holes (dark, at r ~150) - never the bolts
     # (bright stud tops at r 182 - 196): dark blobs only, searched in the band round cap.center, the circle through them
     # must have a radius in holes.radius, all the holes of the model (DOST 4, DOSTPLUS 5) evenly spaced.
-    SEATING_HUB_HOLES_BAND = vTuple("vision.cap.seating.hub.holes.band", (128, 168))  # px from cap.center
-    SEATING_HUB_HOLES_DARK_PERCENTILES = vList("vision.cap.seating.hub.holes.dark.percentiles", [6.0, 9.0, 12.0])  # darkest % of the band, tried in turn
-    SEATING_HUB_HOLES_AREA = vTuple("vision.cap.seating.hub.holes.area", (150, 2500))  # px, one hole's dark blob
-    SEATING_HUB_HOLES_OPEN = vInt("vision.cap.seating.hub.holes.open", 5)  # px; opening that drops thin dark lines
-    SEATING_HUB_HOLES_BLOBS_KEEP = vInt("vision.cap.seating.hub.holes.blobs.keep", 8)  # largest blobs tried
-    SEATING_HUB_HOLES_RADIUS = vTuple("vision.cap.seating.hub.holes.radius", (140.0, 160.0))  # px, hole circle
-    SEATING_HUB_HOLES_SPREAD_MAX = vFloat("vision.cap.seating.hub.holes.spread.max", 3.0)  # px, holes off the circle (sd)
-    SEATING_HUB_HOLES_GAP_MAX = vFloat("vision.cap.seating.hub.holes.gap.max", 15.0)  # deg, a gap off 360 / count
+    SEATING_HUB_HOLES_BAND = (128, 168)  # px from cap.center
+    SEATING_HUB_HOLES_DARK_PERCENTILES = [6.0, 9.0, 12.0]  # darkest % of the band, tried in turn
+    SEATING_HUB_HOLES_AREA = (150, 2500)  # px, one hole's dark blob
+    SEATING_HUB_HOLES_OPEN = 5  # px; opening that drops thin dark lines
+    SEATING_HUB_HOLES_BLOBS_KEEP = 8  # largest blobs tried
+    SEATING_HUB_HOLES_RADIUS = (140.0, 160.0)  # px, hole circle
+    SEATING_HUB_HOLES_SPREAD_MAX = 3.0  # px, holes off the circle (sd)
+    SEATING_HUB_HOLES_GAP_MAX = 15.0  # deg, a gap off 360 / count
     # the model's hole count (both methods)
-    SEATING_HUB_HOLES_COUNT_DOST = vInt("vision.cap.seating.hub.holes.count.dost", 4)
-    SEATING_HUB_HOLES_COUNT_DOSTPLUS = vInt("vision.cap.seating.hub.holes.count.dostplus", 5)
+    SEATING_HUB_HOLES_COUNT_DOST = 4
+    SEATING_HUB_HOLES_COUNT_DOSTPLUS = 5
     # True: the radius / spread / angle-gap checks are applied to every combination of blobs and the most evenly spaced
     # combination that passes them is taken; False: the most evenly spaced combination first, then checked. CHANGES 157.
-    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = vBool("vision.cap.seating.hub.holes.gate.each.combination", True)
+    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = True
 
     # This cycle's hub centre (dict cx, cy, ... from checkHub(); ImageProcessor.hubCentre) when the caller does not
     # pass one: set by the camera server. samModelProvider / yoloModelProvider replace ModelManager's models (tests).
@@ -223,6 +234,55 @@ class FindHubHoles:
         return seg
 
     @staticmethod
+    def _refine(rgb: np.ndarray, points, model: str):
+        """Each hole centre refined on the picture as taken (see SAM_REFINE); None if a hole gives no plausible mask."""
+        import torch
+        seg = FindHubHoles._engine()
+        plus = model == DOSTPLUS
+        half = int(FindHubHoles.SAM_REFINE_HALF_DOSTPLUS if plus else FindHubHoles.SAM_REFINE_HALF_DOST)
+        low, high = (float(v) for v in (FindHubHoles.SAM_REFINE_AREA_DOSTPLUS if plus else FindHubHoles.SAM_REFINE_AREA_DOST))
+        p = np.asarray(points, dtype=np.float64)
+        reach = int(np.hypot(*(p - p.mean(axis=0)).T).max()) + 2 * half + 10
+        h, w = rgb.shape[:2]
+        cx, cy = (int(round(v)) for v in p.mean(axis=0))
+        x0, y0 = max(0, cx - reach), max(0, cy - reach)
+        crop = np.ascontiguousarray(rgb[y0:min(h, cy + reach), x0:min(w, cx + reach)])
+        with torch.inference_mode():
+            seg.sam_predictor.set_image(crop)
+            refined = []
+            for x, y in p:
+                bx, by = x - x0, y - y0
+                for _ in range(max(1, int(FindHubHoles.SAM_REFINE_ITERATIONS))):
+                    masks, _, _ = seg.sam_predictor.predict(box=np.array([bx - half, by - half, bx + half, by + half]),
+                                                            multimask_output=True)
+                    best = None
+                    for mask in masks:
+                        area = float(mask.sum())
+                        if low < area < high and (best is None or area > best[0]):
+                            ys, xs = np.nonzero(mask)
+                            best = (area, float(xs.mean()), float(ys.mean()))
+                    if best is None:
+                        return None
+                    _, bx, by = best
+                refined.append((bx + x0, by + y0))
+        return refined
+
+    @staticmethod
+    def _failedGates(centre, cx: float, cy: float, radius: float, spread: float, gap: float, gates: bool,
+                     maxOff: Optional[float]) -> List[str]:
+        """The gates a hole circle fails: its centre within maxOff (default SAM_SEED_DISTANCE_MAX) of centre and, with
+        gates, its radius, spread and angle gaps within their limits."""
+        limit = float(FindHubHoles.SAM_SEED_DISTANCE_MAX if maxOff is None else maxOff)
+        off = float(np.hypot(cx - float(centre[0]), cy - float(centre[1])))
+        low, high = float(FindHubHoles.SAM_HOLES_RADIUS[0]), float(FindHubHoles.SAM_HOLES_RADIUS[1])
+        return [text for failed, text in (
+            (off > limit, f"centre {off:.1f} px from ({float(centre[0]):.0f}, {float(centre[1]):.0f}) > {limit:g}"),
+            (gates and not low <= radius <= high, f"circle r {radius:.1f} outside {low:g} - {high:g}"),
+            (gates and spread > float(FindHubHoles.SAM_SPREAD_MAX), f"spread {spread:.1f} > {FindHubHoles.SAM_SPREAD_MAX}"),
+            (gates and gap > float(FindHubHoles.SAM_GAP_MAX), f"angle gap off by {gap:.0f} > {FindHubHoles.SAM_GAP_MAX} deg"))
+            if failed]
+
+    @staticmethod
     def _samPass(rgb: np.ndarray, model: str, centre, inner: int, outer: int, gates: bool = True,
                  maxOff: Optional[float] = None) -> Dict:
         """checkHub()'s steps on the annulus inner - outer round centre; the first gamma whose winning group has the
@@ -257,15 +317,20 @@ class FindHubHoles:
                 continue
             points = [(float(c[0]) + x0, float(c[1]) + y0) for _, c in winning if c is not None]
             cx, cy, radius, spread, gap = FindHubHoles._circleOf(points)
-            limit = float(FindHubHoles.SAM_SEED_DISTANCE_MAX if maxOff is None else maxOff)
-            off = float(np.hypot(cx - float(centre[0]), cy - float(centre[1])))
-            low, high = float(FindHubHoles.SAM_HOLES_RADIUS[0]), float(FindHubHoles.SAM_HOLES_RADIUS[1])
-            bad = [text for failed, text in (
-                (off > limit, f"centre {off:.1f} px from ({float(centre[0]):.0f}, {float(centre[1]):.0f}) > {limit:g}"),
-                (gates and not low <= radius <= high, f"circle r {radius:.1f} outside {low:g} - {high:g}"),
-                (gates and spread > float(FindHubHoles.SAM_SPREAD_MAX), f"spread {spread:.1f} > {FindHubHoles.SAM_SPREAD_MAX}"),
-                (gates and gap > float(FindHubHoles.SAM_GAP_MAX), f"angle gap off by {gap:.0f} > {FindHubHoles.SAM_GAP_MAX} deg"))
-                if failed]
+            bad = FindHubHoles._failedGates(centre, cx, cy, radius, spread, gap, gates, maxOff)
+            if not bad and gates and FindHubHoles.SAM_REFINE:   # only a group that passed is refined, then gated again
+                refined = FindHubHoles._refine(rgb, points, model)
+                if refined is None:
+                    bad = ["a hole gave no outline mask when refined"]
+                else:
+                    moved = max(float(np.hypot(a[0] - b[0], a[1] - b[1])) for a, b in zip(points, refined))
+                    if moved > float(FindHubHoles.SAM_REFINE_MOVE_MAX):
+                        bad = [f"a hole moved {moved:.1f} px when refined > {FindHubHoles.SAM_REFINE_MOVE_MAX}"]
+                    else:
+                        points = refined
+                        cx, cy, radius, spread, gap = FindHubHoles._circleOf(points)
+                        bad = [f"refined: {text}" for text in
+                               FindHubHoles._failedGates(centre, cx, cy, radius, spread, gap, gates, maxOff)]
             if bad:
                 tries.append(f"gamma {gamma}: " + ", ".join(bad))
                 continue
