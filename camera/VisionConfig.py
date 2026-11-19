@@ -6,8 +6,10 @@ Every parameter is declared where it is used, with its default equal to the valu
     NUT_DETECTION_RADIUS = vInt("vision.nut.detection.radius", 80)
 
 * Key present and valid  -> the configured value is used.
-* Key missing            -> the default is used (identical behaviour to the hard-coded version).
-* Key present but invalid (wrong type / wrong number of elements) -> the default is used and a warning is printed.
+* Key missing            -> the default is used (identical behaviour to the hard-coded version) and logged.
+* Key present but invalid (wrong type / wrong number of elements) -> the default is used and a warning is logged.
+  (Logged once per process and key, printed and in the log file - CosThetaConfigurator.reportConfigurationProblem,
+  CHANGES 157; a valid value logs nothing. expectOneOf() does the same for a text value outside its choices.)
 
 Keys are written here without the machine prefix ("vision.nut.detection.radius"); the value is read from the
 property for THIS machine: allenbradley.vision.<name> (Machine 1) or siemens.vision.<name> (Machine 2), chosen by
@@ -45,6 +47,14 @@ def _noteCaller() -> None:
         pass
 
 
+def _report(key: str, message: str) -> None:
+    try:
+        from Configuration import CosThetaConfigurator
+        CosThetaConfigurator.reportConfigurationProblem(f"{machinePrefix()}{key}", message)
+    except Exception:
+        print(f"[VisionConfig] WARNING: {message}")
+
+
 def _raw(key: str):
     _noteCaller()
     try:
@@ -52,10 +62,11 @@ def _raw(key: str):
         value = CosThetaConfigurator.getVisionValue(key, default=None)      # <vendor>.<key>
     except Exception:
         return None     # running standalone without Configuration: defaults apply
-    if value is None:
+    value = None if value is None else str(value).strip()
+    if not value:
+        _report(key, f"{machinePrefix()}{key} not found in the properties file; the default is used")
         return None
-    value = str(value).strip()
-    return value if value != "" else None
+    return value
 
 
 def _record(key: str, default: Any, value: Any, source: str) -> Any:
@@ -67,7 +78,16 @@ def _record(key: str, default: Any, value: Any, source: str) -> Any:
 
 
 def _warn(key: str, raw: str, default: Any, reason: str) -> None:
-    print(f"[VisionConfig] WARNING: invalid value {raw!r} for {key} ({reason}); using default {default!r}")
+    _report(key, f"invalid value {raw!r} for {machinePrefix()}{key} ({reason}); using default {default!r}")
+
+
+def expectOneOf(key: str, value: Any, choices: Sequence[str]) -> bool:
+    """True when the text value (stripped, any case) is one of choices; otherwise logged once (CHANGES 157). For the
+    vision keys that choose a method (e.g. vision.cap.seating.hub.source)."""
+    if str(value).strip().lower() in tuple(str(c).lower() for c in choices):
+        return True
+    _report(key, f"{machinePrefix()}{key}={value!r} is not one of {', '.join(map(str, choices))}")
+    return False
 
 
 def _convert_scalar(text: str, like: Any):

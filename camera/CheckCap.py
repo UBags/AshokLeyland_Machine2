@@ -32,12 +32,12 @@ Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.prope
 
 import cv2
 import numpy as np
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 import glob
 import os
 import threading
 # from HandDetector import HandDetector
-from camera.VisionConfig import vInt, vFloat, vTuple, vBool, vStr, vList
+from camera.VisionConfig import vInt, vFloat, vTuple, vBool, vStr, vList, expectOneOf
 
 # Try to import production modules, fall back to mocks for standalone testing
 try:
@@ -173,6 +173,10 @@ class CheckCap:
     SEATING_HUB_HOLES_GAP_MAX = vFloat("vision.cap.seating.hub.holes.gap.max", 15.0)    # deg, a gap off 360 / count
     SEATING_HUB_HOLES_COUNT_DOST = vInt("vision.cap.seating.hub.holes.count.dost", 4)
     SEATING_HUB_HOLES_COUNT_DOSTPLUS = vInt("vision.cap.seating.hub.holes.count.dostplus", 5)
+    # True: the radius / spread / angle-gap checks are applied to every combination of blobs and the most evenly spaced
+    # combination that passes them is taken (a better-spaced set of wrong blobs cannot hide the holes); False: the most
+    # evenly spaced combination is taken first and then checked (CHANGES 152). CHANGES 157.
+    SEATING_HUB_HOLES_GATE_EACH_COMBINATION = True
     # px (x, y) added to the hole circle's centre (source "cap"), per model: the cap face and the holes are at different
     # heights, seen from a slight angle
     SEATING_HUB_DISTANCE_OFFSET_CAP_DOST = vTuple("vision.cap.seating.hub.distance.offset.cap.dost", (0.0, 0.0))
@@ -455,17 +459,41 @@ class CheckCap:
         next percentile is tried when the holes are not all found), the count of the model's holes most evenly spaced on
         a circle; found only with the circle radius in holes.radius, spread and angle gaps within their limits. Then
         once more with the band round the circle found, so that a part sitting off CENTER does not cut holes at the
-        band's edge (their centres would be pulled inward)."""
+        band's edge (their centres would be pulled inward). Not found: the result (and reason) of the most informative
+        try (CHANGES 157) - a circle failing the fewest checks before one failing more, a circle before no circle, more
+        blobs before fewer - not simply the last percentile's."""
         n = int(CheckCap.SEATING_HUB_HOLES_COUNT_DOSTPLUS if model == DOSTPLUS else CheckCap.SEATING_HUB_HOLES_COUNT_DOST)
         grey = cv2.GaussianBlur(cv2.cvtColor(anImage, cv2.COLOR_BGR2GRAY), (5, 5), 0)
-        result = dict(found=False, count=n, reason="no dark blobs")
+        tries = []
         for percentile in CheckCap.SEATING_HUB_HOLES_DARK_PERCENTILES:
             result = CheckCap._holesAround(grey, (float(CheckCap.CENTER[0]), float(CheckCap.CENTER[1])), n,
                                            float(percentile))
             if result["found"]:
                 again = CheckCap._holesAround(grey, (result["cx"], result["cy"]), n, float(percentile))
                 return again if again["found"] else result
-        return result
+            tries.append(result)
+        if not tries:
+            return dict(found=False, count=n, reason="no dark blobs")
+        return max(tries, key=CheckCap._informativeness)
+
+    @staticmethod
+    def _informativeness(result: Dict):
+        """Sort key of a failed hubHoles try (larger = says more about why the holes were not found)."""
+        circle = result.get("radius") is not None
+        return (1 if circle else 0, -int(result.get("failed", 0)) if circle else 0, int(result.get("blobs", 0)))
+
+    @staticmethod
+    def _holesGates(radius: float, spread: float, gap: float) -> List[str]:
+        """The hole circle's checks that fail (empty: it passes)."""
+        lowR, highR = float(CheckCap.SEATING_HUB_HOLES_RADIUS[0]), float(CheckCap.SEATING_HUB_HOLES_RADIUS[1])
+        bad = []
+        if not lowR <= radius <= highR:
+            bad.append(f"circle r {radius:.1f} outside {lowR:g} - {highR:g}")
+        if spread > CheckCap.SEATING_HUB_HOLES_SPREAD_MAX:
+            bad.append(f"spread {spread:.1f} > {CheckCap.SEATING_HUB_HOLES_SPREAD_MAX}")
+        if gap > CheckCap.SEATING_HUB_HOLES_GAP_MAX:
+            bad.append(f"angle gap off by {gap:.0f} > {CheckCap.SEATING_HUB_HOLES_GAP_MAX} deg")
+        return bad
 
     @staticmethod
     def _holesAround(grey: np.ndarray, centre, n: int, percentile: float) -> Dict:
@@ -487,8 +515,11 @@ class CheckCap:
         if len(blobs) < n:
             result["reason"] = f"{len(blobs)} dark blobs, {n} holes needed"
             return result
-        best = None
+        gateEach = bool(CheckCap.SEATING_HUB_HOLES_GATE_EACH_COMBINATION)
+        spreadMax, gapMax = float(CheckCap.SEATING_HUB_HOLES_SPREAD_MAX), float(CheckCap.SEATING_HUB_HOLES_GAP_MAX)
+        best, bestPassing, combinations = None, None, 0
         for points in itertools.combinations([c for _, c in blobs], n):
+            combinations += 1
             p = np.asarray(points, dtype=np.float64)
             sol = np.linalg.lstsq(np.c_[2 * p, np.ones(n)], (p ** 2).sum(1), rcond=None)[0]
             cx, cy = float(sol[0]), float(sol[1])
@@ -498,18 +529,19 @@ class CheckCap:
             angles = np.sort(np.degrees(np.arctan2(q[:, 1], q[:, 0])))
             gap = float(np.abs(np.diff(np.r_[angles, angles[0] + 360.0]) - 360.0 / n).max())
             score = spread + gap / 5.0
+            candidate = (score, points, cx, cy, radius, spread, gap)
             if best is None or score < best[0]:
-                best = (score, points, cx, cy, radius, spread, gap)
-        _, points, cx, cy, radius, spread, gap = best
-        bad = []
-        if not lowR <= radius <= highR:
-            bad.append(f"circle r {radius:.1f} outside {lowR:g} - {highR:g}")
-        if spread > CheckCap.SEATING_HUB_HOLES_SPREAD_MAX:
-            bad.append(f"spread {spread:.1f} > {CheckCap.SEATING_HUB_HOLES_SPREAD_MAX}")
-        if gap > CheckCap.SEATING_HUB_HOLES_GAP_MAX:
-            bad.append(f"angle gap off by {gap:.0f} > {CheckCap.SEATING_HUB_HOLES_GAP_MAX} deg")
+                best = candidate
+            if gateEach and lowR <= radius <= highR and spread <= spreadMax and gap <= gapMax and (
+                    bestPassing is None or score < bestPassing[0]):
+                bestPassing = candidate
+        _, points, cx, cy, radius, spread, gap = bestPassing if bestPassing is not None else best
+        bad = CheckCap._holesGates(radius, spread, gap)
+        reason = "; ".join(bad)
+        if bad and gateEach:
+            reason = f"none of the {combinations} combinations of {len(blobs)} blobs passes; most evenly spaced: {reason}"
         result.update(found=not bad, cx=cx, cy=cy, radius=radius, spread=spread, gap=gap, points=points,
-                      reason="; ".join(bad))
+                      failed=len(bad), reason=reason)
         return result
 
     @staticmethod
@@ -534,6 +566,7 @@ class CheckCap:
                    cap=None, target=None, hub=None)
         if not CheckCap.SEATING_HUB_DISTANCE_CHECK:
             return out
+        expectOneOf("vision.cap.seating.hub.source", CheckCap.SEATING_HUB_SOURCE, ("cap", "hubcheck"))
         if str(CheckCap.SEATING_HUB_SOURCE).strip().lower() == "cap":
             holes = CheckCap.hubHoles(anImage, model)
             out["applied"] = True

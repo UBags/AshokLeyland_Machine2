@@ -3146,29 +3146,92 @@ class CosThetaConfigurator():
         except Exception:
             return default
 
+    # Problems with properties values (CHANGES 157): a key that is missing, or a value outside its expected set / type /
+    # range. Reported once per process for each key and problem (printed and written to the log file); nothing is
+    # logged for a key whose value is present and valid.
+    _configurationProblemsReported: set = set()
+    _reportingConfigurationProblem = threading.local()
+
+    @classmethod
+    def reportConfigurationProblem(cls, key: str, message: str) -> None:
+        tag = (str(key), str(message))
+        if tag in cls._configurationProblemsReported or getattr(cls._reportingConfigurationProblem, "on", False):
+            return
+        cls._configurationProblemsReported.add(tag)
+        cls._reportingConfigurationProblem.on = True
+        try:
+            text = f"[Configuration] {message}"
+            try:
+                print(text, flush=True)
+            except Exception:
+                pass
+            try:
+                from logutils.Logger import Logger
+                from logutils.SlaveLoggers import SlaveFileLogger
+                SlaveFileLogger.getInstance().logTakeNote("Configuration", text, Logger.RISK)
+            except Exception:
+                pass            # the logging modules are still being imported (a tuning value of their own)
+        finally:
+            cls._reportingConfigurationProblem.on = False
+
+    _TRUE_TEXTS = ("true", "1", "yes", "on")
+    _FALSE_TEXTS = ("false", "0", "no", "off")
+
     @classmethod
     def getTuning(cls, key: str, default: Any, minimum: Optional[float] = None) -> Any:
         """A tuning value from the properties file, typed like `default` (bool, int, float or str); `default` when the
-        key is missing or cannot be read, `minimum` as a floor for numbers. The named tuning constants of the code
+        key is missing or its value is not of that type (True / False, a whole number, a number), and `minimum` as a
+        floor for numbers. A missing key, a value of the wrong type and a value below the minimum are logged
+        (reportConfigurationProblem, CHANGES 157); a valid value is not. The named tuning constants of the code
         (timeouts, retry counts and gaps, poll intervals, ports, sizes; CHANGES 154) are read through this, once, when
         their module is imported - a change applies after a restart."""
         try:
             raw = CosThetaConfigurator.getValue(key, default=None)
-            if raw is None or str(raw).strip() == "":
-                value = default
-            elif isinstance(default, bool):
-                value = str(raw).strip().lower() in ("true", "1", "yes", "on")
-            elif isinstance(default, int):
-                value = int(float(str(raw).strip()))
-            elif isinstance(default, float):
-                value = float(str(raw).strip())
-            else:
-                value = str(raw).strip()
         except Exception:
+            raw = None
+        if raw is None or str(raw).strip() == "":
+            cls.reportConfigurationProblem(key, f"{key} not found in the properties file; default {default!r} used")
             value = default
+        else:
+            text = str(raw).strip()
+            value, problem = default, None
+            if isinstance(default, bool):
+                if text.lower() in cls._TRUE_TEXTS:
+                    value = True
+                elif text.lower() in cls._FALSE_TEXTS:
+                    value = False
+                else:
+                    problem = "expected True or False"
+            elif isinstance(default, int):
+                try:
+                    number = float(text)
+                    if number != int(number):
+                        raise ValueError
+                    value = int(number)
+                except (ValueError, OverflowError):
+                    problem = "expected a whole number"
+            elif isinstance(default, float):
+                try:
+                    value = float(text)
+                except ValueError:
+                    problem = "expected a number"
+            else:
+                value = text
+            if problem:
+                cls.reportConfigurationProblem(key, f"{key}={text!r} not valid ({problem}); default {default!r} used")
+                value = default
         if minimum is not None and isinstance(value, (int, float)) and not isinstance(value, bool) and value < minimum:
+            cls.reportConfigurationProblem(key, f"{key}={value!r} below its minimum {minimum!r}; {minimum!r} used")
             value = type(default)(minimum)
         return value
+
+    @classmethod
+    def expectOneOf(cls, key: str, value: Any, choices) -> bool:
+        """True when value (compared stripped, lower case) is one of choices; otherwise logged once (CHANGES 157)."""
+        if str(value).strip().lower() in tuple(str(c).lower() for c in choices):
+            return True
+        cls.reportConfigurationProblem(key, f"{key}={value!r} is not one of {', '.join(map(str, choices))}")
+        return False
 
     @classmethod
     def _boolValue(cls, key: str, default: bool) -> bool:

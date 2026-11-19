@@ -30,7 +30,7 @@ import os
 
 from BaseUtils import get_project_root, getFullyQualifiedName
 from camera.ModelManager import ModelManager
-from camera.VisionConfig import vInt, vFloat, vTuple, vBool, vStr
+from camera.VisionConfig import vInt, vFloat, vTuple, vBool, vStr, expectOneOf
 import threading
 from logutils.SlaveLoggers import logBoth
 from logutils.Logger import MessageType
@@ -1874,6 +1874,7 @@ def seated_position(image_rgb: np.ndarray, model_type: str) -> Dict[str, Any]:
     circle round the bung in the same picture (CheckCap.hubHoles) + seating.hub.offset.<model>; "fixed":
     seating.seated.centre.<model>."""
     dostplus = model_type == "DOSTPLUS"
+    expectOneOf("vision.bung.seating.position.source", SEATING_POSITION_SOURCE, ("hubholes", "fixed"))
     if str(SEATING_POSITION_SOURCE).strip().lower() != "hubholes":
         point = SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else SEATING_SEATED_CENTRE_DOST
         return dict(found=True, point=(float(point[0]), float(point[1])), hub=None, reason="fixed seated position")
