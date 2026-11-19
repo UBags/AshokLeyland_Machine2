@@ -128,8 +128,11 @@ emptyImageStylesheet = "border-style: outset; border-width: 1px; border-radius: 
                          "stop: 0.10 #808080, stop: 0.20 #969696, stop: 0.30 #B5B5B5, stop: 1.0 #CECECE); " \
                          "color: #000080"
 
+# no "min-width: 10em" here (CHANGES 161): em follows the display's 36 pt font, so every number display (a torque, "Done")
+# demanded about 556 px and widened its column at the cost of the other six (225 px instead of 274 at 1920 px); the
+# text, wider than the tile it really had, was cut at both edges
 numberDisplayStylesheet = "border-style: outset; border-width: 1px; border-radius: 2px; " \
-                      "border-color: beige; font: bold; min-width: 10em; padding: 2px; " \
+                      "border-color: beige; font: bold; padding: 2px; " \
                       "background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1, stop: 0 #658085, " \
                          "stop: 0.10 #8CB1D8, stop: 0.20 #9BC5CC, stop: 0.30 #A9D6DE, stop: 1.0 #BEF1FA); " \
                          "color: #000080"

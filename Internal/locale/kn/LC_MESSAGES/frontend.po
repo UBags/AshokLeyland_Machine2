@@ -14,159 +14,159 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: frontend/AshokLeylandFrontEnd.py:381 frontend/AshokLeylandFrontEnd.py:839
+#: frontend/AshokLeylandFrontEnd.py:417 frontend/AshokLeylandFrontEnd.py:907
 #, python-brace-format
 msgid "IN {mode} MODE"
 msgstr "{mode} ಮೋಡ್‌ನಲ್ಲಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:389
+#: frontend/AshokLeylandFrontEnd.py:425
 msgid "Mode"
 msgstr "ಮೋಡ್"
 
-#: frontend/AshokLeylandFrontEnd.py:395 frontend/AshokLeylandFrontEnd.py:840
+#: frontend/AshokLeylandFrontEnd.py:431 frontend/AshokLeylandFrontEnd.py:908
 #, python-brace-format
 msgid "{mode} - Knuckle, Hub, and Disc Assembly"
 msgstr "{mode} - ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:456
+#: frontend/AshokLeylandFrontEnd.py:492
 msgid "Camera connected"
 msgstr "ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:457
+#: frontend/AshokLeylandFrontEnd.py:493
 msgid "Camera not connected"
 msgstr "ಕ್ಯಾಮೆರಾ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:463
+#: frontend/AshokLeylandFrontEnd.py:499
 msgid "I/O Module connected"
 msgstr "I/O ಮಾಡ್ಯೂಲ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:464
+#: frontend/AshokLeylandFrontEnd.py:500
 msgid "I/O Module not connected"
 msgstr "I/O ಮಾಡ್ಯೂಲ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:471
+#: frontend/AshokLeylandFrontEnd.py:507
 msgid "Database connected"
 msgstr "ಡೇಟಾಬೇಸ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:472
+#: frontend/AshokLeylandFrontEnd.py:508
 msgid "Database not connected"
 msgstr "ಡೇಟಾಬೇಸ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:479
+#: frontend/AshokLeylandFrontEnd.py:515
 msgid "QRCode Scanner connected"
 msgstr "QR ಕೋಡ್ ಸ್ಕ್ಯಾನರ್ ಸಂಪರ್ಕಗೊಂಡಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:480
+#: frontend/AshokLeylandFrontEnd.py:516
 msgid "QRCode Scanner not connected"
 msgstr "QR ಕೋಡ್ ಸ್ಕ್ಯಾನರ್ ಸಂಪರ್ಕಗೊಂಡಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:488
+#: frontend/AshokLeylandFrontEnd.py:524
 msgid "CONNECTION STATUS OF DEVICES"
 msgstr "ಸಾಧನಗಳ ಸಂಪರ್ಕ ಸ್ಥಿತಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:532 frontend/AshokLeylandFrontEnd.py:842
+#: frontend/AshokLeylandFrontEnd.py:568 frontend/AshokLeylandFrontEnd.py:910
 msgid "Created by CosTheta Technologies and Ashok Leyland"
 msgstr "ಕಾಸ್‌ಥೀಟಾ ಟೆಕ್ನಾಲಜೀಸ್ ಮತ್ತು ಅಶೋಕ್ ಲೇಲ್ಯಾಂಡ್ ರಚಿಸಿದ್ದು"
 
-#: frontend/AshokLeylandFrontEnd.py:578
+#: frontend/AshokLeylandFrontEnd.py:614
 msgid "DATE / RUNNING DURATION PANEL"
 msgstr "ದಿನಾಂಕ / ಚಾಲನಾ ಅವಧಿ ಫಲಕ"
 
-#: frontend/AshokLeylandFrontEnd.py:640
+#: frontend/AshokLeylandFrontEnd.py:708
 msgid "Change Own Password"
 msgstr "ಸ್ವಂತ ಪಾಸ್‌ವರ್ಡ್ ಬದಲಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:644 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/AshokLeylandFrontEnd.py:712 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
 #: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
 msgid "Exit"
 msgstr "ನಿರ್ಗಮಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:648
+#: frontend/AshokLeylandFrontEnd.py:716
 msgid "Add New User"
 msgstr "ಹೊಸ ಬಳಕೆದಾರರನ್ನು ಸೇರಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:652
+#: frontend/AshokLeylandFrontEnd.py:720
 msgid "Manage Other Users Passwords"
 msgstr "ಇತರ ಬಳಕೆದಾರರ ಪಾಸ್‌ವರ್ಡ್ ನಿರ್ವಹಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:656
+#: frontend/AshokLeylandFrontEnd.py:724
 msgid "Change User Role"
 msgstr "ಬಳಕೆದಾರರ ಪಾತ್ರ ಬದಲಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:660
+#: frontend/AshokLeylandFrontEnd.py:728
 msgid "Activate an Inactive User"
 msgstr "ನಿಷ್ಕ್ರಿಯ ಬಳಕೆದಾರರನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:664 frontend/SimplePopups.py:1145
+#: frontend/AshokLeylandFrontEnd.py:732 frontend/SimplePopups.py:1145
 msgid "Inactivate User"
 msgstr "ಬಳಕೆದಾರರನ್ನು ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:668
+#: frontend/AshokLeylandFrontEnd.py:736
 msgid "Create Production Report By Model Name"
 msgstr "ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:672
+#: frontend/AshokLeylandFrontEnd.py:740
 msgid "Create Production Report By Model Name For a Period"
 msgstr "ಒಂದು ಅವಧಿಗೆ ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:676
+#: frontend/AshokLeylandFrontEnd.py:744
 msgid "Create Production Report By Model Name For Today"
 msgstr "ಇಂದಿನ ಮಾದರಿ ಹೆಸರಿನ ಪ್ರಕಾರ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:680
+#: frontend/AshokLeylandFrontEnd.py:748
 msgid "Create Production Report for a Period for all Models"
 msgstr "ಎಲ್ಲಾ ಮಾದರಿಗಳಿಗೆ ಒಂದು ಅವಧಿಯ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:684
+#: frontend/AshokLeylandFrontEnd.py:752
 msgid "Create Full Production Report for Today for all Models"
 msgstr "ಎಲ್ಲಾ ಮಾದರಿಗಳಿಗೆ ಇಂದಿನ ಪೂರ್ಣ ಉತ್ಪಾದನಾ ವರದಿ ರಚಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:688
+#: frontend/AshokLeylandFrontEnd.py:756
 msgid "About"
 msgstr "ಕುರಿತು"
 
-#: frontend/AshokLeylandFrontEnd.py:692
+#: frontend/AshokLeylandFrontEnd.py:760
 msgid "Help"
 msgstr "ಸಹಾಯ"
 
-#: frontend/AshokLeylandFrontEnd.py:697
+#: frontend/AshokLeylandFrontEnd.py:765
 msgid "(Z)Manual Abort"
 msgstr "(Z)ಕೈಯಾರೆ ರದ್ದುಗೊಳಿಸಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:707
+#: frontend/AshokLeylandFrontEnd.py:775
 msgid "Actions"
 msgstr "ಕ್ರಿಯೆಗಳು"
 
-#: frontend/AshokLeylandFrontEnd.py:714
+#: frontend/AshokLeylandFrontEnd.py:782
 msgid "Administration"
 msgstr "ಆಡಳಿತ"
 
-#: frontend/AshokLeylandFrontEnd.py:720
+#: frontend/AshokLeylandFrontEnd.py:788
 msgid "Activate / Inactivate"
 msgstr "ಸಕ್ರಿಯ / ನಿಷ್ಕ್ರಿಯ"
 
-#: frontend/AshokLeylandFrontEnd.py:725
+#: frontend/AshokLeylandFrontEnd.py:793
 msgid "Report"
 msgstr "ವರದಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:735 frontend/AshokLeylandFrontEnd.py:809
+#: frontend/AshokLeylandFrontEnd.py:803 frontend/AshokLeylandFrontEnd.py:877
 msgid "Information"
 msgstr "ಮಾಹಿತಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:741 frontend/AshokLeylandFrontEnd.py:744 frontend/SimplePopups.py:1942
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:812 frontend/SimplePopups.py:1942
 #: frontend/SimplePopups.py:1947
 msgid "Machine Settings"
 msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Close Application"
 msgstr "ಅಪ್ಲಿಕೇಶನ್ ಮುಚ್ಚಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Are you sure you want to exit the application ?"
 msgstr "ಅಪ್ಲಿಕೇಶನ್‌ನಿಂದ ನಿರ್ಗಮಿಸಲು ಖಚಿತವೇ ?"
 
-#: frontend/AshokLeylandFrontEnd.py:810
+#: frontend/AshokLeylandFrontEnd.py:878
 msgid ""
 "Software Version: v 1.0\n"
 "\n"
@@ -183,11 +183,11 @@ msgstr ""
 "ಈ ಅಪ್ಲಿಕೇಶನ್ ಮುಂಭಾಗದ ಆಕ್ಸಲ್‌ನ ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ದಾಖಲಿಸುತ್ತದೆ: ಪ್ರತಿ ಘಟಕದ ಪ್ರತಿಯೊಂದು ದೃಶ್ಯ "
 "ಪರಿಶೀಲನೆ, ಟಾರ್ಕ್ ಮತ್ತು ಪ್ರೆಸ್, ಅದರ QR ಕೋಡ್ ಸಹಿತ.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:820
+#: frontend/AshokLeylandFrontEnd.py:888
 msgid "Help about using the menu"
 msgstr "ಮೆನು ಬಳಕೆಯ ಕುರಿತು ಸಹಾಯ"
 
-#: frontend/AshokLeylandFrontEnd.py:821
+#: frontend/AshokLeylandFrontEnd.py:889
 msgid ""
 "When any of the menu choices are being used, \n"
 "the remaining menu items will be clickable.\n"
@@ -203,7 +203,7 @@ msgstr ""
 "ಅಥವಾ ರದ್ದಾಗುವವರೆಗೆ, ಬೇರೆ ಯಾವುದೇ ಮೆನು ಐಟಂ ಕ್ಲಿಕ್‌ಗೆ \n"
 "ವ್ಯವಸ್ಥೆ ಪ್ರತಿಕ್ರಿಯಿಸುವುದಿಲ್ಲ.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:1119
+#: frontend/AshokLeylandFrontEnd.py:1188
 #, python-brace-format
 msgid ""
 "Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
@@ -213,7 +213,7 @@ msgstr ""
 "ಇಂದು {today}. ಆರಂಭ: {started}; ಚಾಲನಾ ಸಮಯ: {running}    ; ಉತ್ಪಾದಿತ ಘಟಕಗಳು : ಈ ವಾರ - {week}; ಈ ತಿಂಗಳು - {month}\n"
 "ಬಳಕೆದಾರ: {user}; ಪ್ರಸ್ತುತ ಘಟಕದ ಸಂಸ್ಕರಣಾ ಸಮಯ: {processing}    ; ಇಂದು ಉತ್ಪಾದಿತ ಘಟಕಗಳು - {todayCount}"
 
-#: frontend/AshokLeylandFrontEnd.py:1223
+#: frontend/AshokLeylandFrontEnd.py:1292
 msgid ""
 "Frontend abort (this screen only).\n"
 "Enter the password:"
@@ -221,64 +221,76 @@ msgstr ""
 "ಫ್ರಂಟ್‌ಎಂಡ್ ರದ್ದತಿ (ಈ ಪರದೆ ಮಾತ್ರ).\n"
 "ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
 
-#: frontend/AshokLeylandFrontEnd.py:1228 frontend/FrontendNotices.py:56
+#: frontend/AshokLeylandFrontEnd.py:1297 frontend/FrontendNotices.py:56
 msgid "Wrong password - nothing aborted"
 msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್ - ಏನನ್ನೂ ರದ್ದುಗೊಳಿಸಲಾಗಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:1258 frontend/AshokLeylandFrontEnd.py:1262
+#: frontend/AshokLeylandFrontEnd.py:1330 frontend/AshokLeylandFrontEnd.py:1334
 msgid "QR CODE : "
 msgstr "QR ಕೋಡ್ : "
 
-#: frontend/AshokLeylandFrontEnd.py:1542 frontend/AshokLeylandFrontEnd.py:1566 frontend/FrontendI18n.py:262
+#: frontend/AshokLeylandFrontEnd.py:1616 frontend/AshokLeylandFrontEnd.py:1640 frontend/FrontendI18n.py:266
 msgid "Done"
 msgstr "ಮುಗಿದಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:2291
+#: frontend/AshokLeylandFrontEnd.py:2365
 msgid "Large Image Display"
 msgstr "ದೊಡ್ಡ ಚಿತ್ರ ಪ್ರದರ್ಶನ"
 
-#: frontend/FrontendI18n.py:262 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/AshokLeylandFrontEnd.py:2413
+msgid "Component Successfully Done"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ಮುಗಿದಿದೆ"
+
+#: frontend/AshokLeylandFrontEnd.py:2419
+msgid "Component Not Successfully Done"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ಮುಗಿದಿಲ್ಲ"
+
+#: frontend/AshokLeylandFrontEnd.py:2425
+msgid "Component Processing Aborted"
+msgstr "ಕಾಂಪೊನೆಂಟ್ ಪ್ರಕ್ರಿಯೆ ರದ್ದಾಗಿದೆ"
+
+#: frontend/FrontendI18n.py:266 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
 #: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
 msgid "OK"
 msgstr "ಸರಿ"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Not OK"
 msgstr "ಸರಿ ಇಲ್ಲ"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Bypassed"
 msgstr "ಬೈಪಾಸ್ ಮಾಡಲಾಗಿದೆ"
 
-#: frontend/FrontendI18n.py:262 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+#: frontend/FrontendI18n.py:266 frontend/newwidgets/CosThetaOutcomeContainer.py:42
 msgid "Result Awaited"
 msgstr "ಫಲಿತಾಂಶಕ್ಕೆ ಕಾಯಲಾಗುತ್ತಿದೆ"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "TEST"
 msgstr "ಪರೀಕ್ಷಾ"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "PRODUCTION"
 msgstr "ಉತ್ಪಾದನಾ"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Operator"
 msgstr "ಆಪರೇಟರ್"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Supervisor"
 msgstr "ಸೂಪರ್‌ವೈಸರ್"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Administrator"
 msgstr "ಆಡಳಿತಗಾರ"
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "Yes"
 msgstr "ಹೌದು"
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "No"
 msgstr "ಇಲ್ಲ"
 

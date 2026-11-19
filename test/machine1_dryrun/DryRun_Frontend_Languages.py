@@ -299,6 +299,49 @@ pump(0.5)
 check("L4 torque tile follows a change of language", "रोटेशन पूर्ण" in tiles[4].image_label.text()
       and tiles[0].result_label.text() == "ठीक")
 
+# ---------------------------------------------------------------- L7 (CHANGES 161)
+# the result box's three texts are in the catalogues (they were tr()-ed but not marked, so never extracted)
+for code in ("kn", "ta", "hi"):
+    cat = I.catalogue(code)
+    missing = [t for t in ("Component Successfully Done", "Component Not Successfully Done",
+                           "Component Processing Aborted") if not cat.get(t)]
+    check(f"L7 {code}: the result box texts translated", not missing, str(missing))
+# "Done" (component press, cap press) fits its display in every language; a number keeps the designed 36 pt
+pressTiles = [fe.resultsContainer.component_press_check_container, fe.resultsContainer.cap_press_result_container]
+for code in ("en", "kn", "ta", "hi"):
+    selector.setCurrentIndex(selector.findData(code)); pump(0.6)
+    fe.resultsContainer.setComponentPressData(value="Done", result="OK")
+    fe.resultsContainer.setCapPressResultData(value="Done", result="OK")
+    pump(0.3)
+    wide = []
+    for t in pressTiles:
+        lab = t.image_label
+        if QFontMetrics(lab.font()).horizontalAdvance(lab.text()) > lab.width() * 0.9:
+            wide.append((lab.text(), lab.font().pointSize(), lab.width()))
+    sizes = [t.image_label.font().pointSize() for t in pressTiles]
+    check(f"L7 {code}: 'Done' ({I.tr('Done')}) within 90 % of the component press and cap press displays, "
+          f"{sizes} pt, in the style sheet", not wide and all(f"{s_}pt" in t.image_label.styleSheet()
+                                                               for s_, t in zip(sizes, pressTiles)), str(wide))
+widths = [t.width() for t in tiles[:7]]
+check("L7 with 'Done' and a torque shown, the 7 tiles of a row keep one width (no min-width from the 36 pt display)",
+      max(widths) - min(widths) <= 2, str(widths))
+selector.setCurrentIndex(selector.findData("kn")); pump(0.6)
+fe.resultsContainer.setComponentPressData(value="Done", result="OK"); pump(0.2)
+selector.setCurrentIndex(selector.findData("en")); pump(0.6)
+afterSwitch = pressTiles[0].image_label
+check("L7 'Done' shown in Kannada, then English: refitted on the change of language",
+      afterSwitch.text() == "Done" and QFontMetrics(afterSwitch.font()).horizontalAdvance("Done") <= afterSwitch.width() * 0.9,
+      f"{afterSwitch.text()} {afterSwitch.font().pointSize()} pt")
+longText = "ಮುಗಿದಿದೆ ಮುಗಿದಿದೆ ಮುಗಿದಿದೆ"          # wider than a display at 36 pt here: must be made smaller
+pressTiles[0].setTextAndResult(longText, "OK"); pump(0.2)
+lab = pressTiles[0].image_label
+check("L7 a text wider than the display at 36 pt is made smaller until it fits 90 % of it",
+      lab.font().pointSize() < 36 and QFontMetrics(lab.font()).horizontalAdvance(longText) <= lab.width() * 0.9,
+      f"{lab.font().pointSize()} pt, {QFontMetrics(lab.font()).horizontalAdvance(longText)} of {lab.width()} px")
+tiles[4].setTextAndResult("19.08", "OK"); pump(0.2)
+check("L7 a torque value keeps the designed 36 pt", tiles[4].image_label.font().pointSize() == 36,
+      str(tiles[4].image_label.font().pointSize()))
+
 # ---------------------------------------------------------------- L5 start with the saved language
 I.saveLanguage("hi")
 I.setLanguage("en", save=False)

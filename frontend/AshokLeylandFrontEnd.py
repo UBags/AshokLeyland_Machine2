@@ -2403,24 +2403,26 @@ class LargeImageWindow(QWidget):
         pixMapImage = resize_pixmap(pixmap=pixMapImage, width=self.width-35, height=self.height-35, keepAspectRatio=True)
         self.label.setPixmap(pixMapImage)
 
+    # the result box's texts are marked N_ (CHANGES 161: they were passed through tr() but not marked, so the catalogue
+    # extraction never found them and they stayed English)
     def _resultImage(self, text: str, backgroundColor):
         return createImage(text=tr(text), imageDimensions=(self.width - 35, self.height - 35),
                            fontColor=QColor(15, 15, 15), replaceChar=[' ', ' '], backgroundColor=backgroundColor)
 
     def showSuccess(self):
-        self.setPixmap(self._resultImage("Component Successfully Done", QColor(125, 210, 185)))
+        self.setPixmap(self._resultImage(N_("Component Successfully Done"), QColor(125, 210, 185)))
         self.show()
         self.raise_()
         self.activateWindow()
 
     def showFailure(self):
-        self.setPixmap(self._resultImage("Component Not Successfully Done", QColor(210, 90, 90)))
+        self.setPixmap(self._resultImage(N_("Component Not Successfully Done"), QColor(210, 90, 90)))
         self.show()
         self.raise_()
         self.activateWindow()
 
     def showEmergencyAbort(self):
-        self.setPixmap(self._resultImage("Component Processing Aborted", QColor(210, 90, 90)))
+        self.setPixmap(self._resultImage(N_("Component Processing Aborted"), QColor(210, 90, 90)))
         self.show()
         self.raise_()
         self.activateWindow()

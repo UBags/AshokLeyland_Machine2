@@ -14,159 +14,159 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: frontend/AshokLeylandFrontEnd.py:381 frontend/AshokLeylandFrontEnd.py:839
+#: frontend/AshokLeylandFrontEnd.py:417 frontend/AshokLeylandFrontEnd.py:907
 #, python-brace-format
 msgid "IN {mode} MODE"
 msgstr "{mode} பயன்முறையில்"
 
-#: frontend/AshokLeylandFrontEnd.py:389
+#: frontend/AshokLeylandFrontEnd.py:425
 msgid "Mode"
 msgstr "பயன்முறை"
 
-#: frontend/AshokLeylandFrontEnd.py:395 frontend/AshokLeylandFrontEnd.py:840
+#: frontend/AshokLeylandFrontEnd.py:431 frontend/AshokLeylandFrontEnd.py:908
 #, python-brace-format
 msgid "{mode} - Knuckle, Hub, and Disc Assembly"
 msgstr "{mode} - நக்கிள், ஹப் மற்றும் டிஸ்க் பொருத்துதல்"
 
-#: frontend/AshokLeylandFrontEnd.py:456
+#: frontend/AshokLeylandFrontEnd.py:492
 msgid "Camera connected"
 msgstr "கேமரா இணைக்கப்பட்டது"
 
-#: frontend/AshokLeylandFrontEnd.py:457
+#: frontend/AshokLeylandFrontEnd.py:493
 msgid "Camera not connected"
 msgstr "கேமரா இணைக்கப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:463
+#: frontend/AshokLeylandFrontEnd.py:499
 msgid "I/O Module connected"
 msgstr "I/O மாட்யூல் இணைக்கப்பட்டது"
 
-#: frontend/AshokLeylandFrontEnd.py:464
+#: frontend/AshokLeylandFrontEnd.py:500
 msgid "I/O Module not connected"
 msgstr "I/O மாட்யூல் இணைக்கப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:471
+#: frontend/AshokLeylandFrontEnd.py:507
 msgid "Database connected"
 msgstr "தரவுத்தளம் இணைக்கப்பட்டது"
 
-#: frontend/AshokLeylandFrontEnd.py:472
+#: frontend/AshokLeylandFrontEnd.py:508
 msgid "Database not connected"
 msgstr "தரவுத்தளம் இணைக்கப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:479
+#: frontend/AshokLeylandFrontEnd.py:515
 msgid "QRCode Scanner connected"
 msgstr "QR குறியீடு ஸ்கேனர் இணைக்கப்பட்டது"
 
-#: frontend/AshokLeylandFrontEnd.py:480
+#: frontend/AshokLeylandFrontEnd.py:516
 msgid "QRCode Scanner not connected"
 msgstr "QR குறியீடு ஸ்கேனர் இணைக்கப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:488
+#: frontend/AshokLeylandFrontEnd.py:524
 msgid "CONNECTION STATUS OF DEVICES"
 msgstr "சாதனங்களின் இணைப்பு நிலை"
 
-#: frontend/AshokLeylandFrontEnd.py:532 frontend/AshokLeylandFrontEnd.py:842
+#: frontend/AshokLeylandFrontEnd.py:568 frontend/AshokLeylandFrontEnd.py:910
 msgid "Created by CosTheta Technologies and Ashok Leyland"
 msgstr "காஸ்தீட்டா டெக்னாலஜீஸ் மற்றும் அசோக் லேலண்ட் உருவாக்கியது"
 
-#: frontend/AshokLeylandFrontEnd.py:578
+#: frontend/AshokLeylandFrontEnd.py:614
 msgid "DATE / RUNNING DURATION PANEL"
 msgstr "தேதி / இயங்கும் நேரம் பலகம்"
 
-#: frontend/AshokLeylandFrontEnd.py:640
+#: frontend/AshokLeylandFrontEnd.py:708
 msgid "Change Own Password"
 msgstr "சொந்த கடவுச்சொல்லை மாற்று"
 
-#: frontend/AshokLeylandFrontEnd.py:644 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/AshokLeylandFrontEnd.py:712 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
 #: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
 msgid "Exit"
 msgstr "வெளியேறு"
 
-#: frontend/AshokLeylandFrontEnd.py:648
+#: frontend/AshokLeylandFrontEnd.py:716
 msgid "Add New User"
 msgstr "புதிய பயனரைச் சேர்"
 
-#: frontend/AshokLeylandFrontEnd.py:652
+#: frontend/AshokLeylandFrontEnd.py:720
 msgid "Manage Other Users Passwords"
 msgstr "பிற பயனர்களின் கடவுச்சொற்களை நிர்வகி"
 
-#: frontend/AshokLeylandFrontEnd.py:656
+#: frontend/AshokLeylandFrontEnd.py:724
 msgid "Change User Role"
 msgstr "பயனர் பங்கை மாற்று"
 
-#: frontend/AshokLeylandFrontEnd.py:660
+#: frontend/AshokLeylandFrontEnd.py:728
 msgid "Activate an Inactive User"
 msgstr "செயலற்ற பயனரைச் செயல்படுத்து"
 
-#: frontend/AshokLeylandFrontEnd.py:664 frontend/SimplePopups.py:1145
+#: frontend/AshokLeylandFrontEnd.py:732 frontend/SimplePopups.py:1145
 msgid "Inactivate User"
 msgstr "பயனரைச் செயலிழக்கச் செய்"
 
-#: frontend/AshokLeylandFrontEnd.py:668
+#: frontend/AshokLeylandFrontEnd.py:736
 msgid "Create Production Report By Model Name"
 msgstr "மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
 
-#: frontend/AshokLeylandFrontEnd.py:672
+#: frontend/AshokLeylandFrontEnd.py:740
 msgid "Create Production Report By Model Name For a Period"
 msgstr "ஒரு காலத்திற்கு மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
 
-#: frontend/AshokLeylandFrontEnd.py:676
+#: frontend/AshokLeylandFrontEnd.py:744
 msgid "Create Production Report By Model Name For Today"
 msgstr "இன்றைக்கு மாடல் பெயர்படி உற்பத்தி அறிக்கை உருவாக்கு"
 
-#: frontend/AshokLeylandFrontEnd.py:680
+#: frontend/AshokLeylandFrontEnd.py:748
 msgid "Create Production Report for a Period for all Models"
 msgstr "அனைத்து மாடல்களுக்கும் ஒரு காலத்திற்கான உற்பத்தி அறிக்கை உருவாக்கு"
 
-#: frontend/AshokLeylandFrontEnd.py:684
+#: frontend/AshokLeylandFrontEnd.py:752
 msgid "Create Full Production Report for Today for all Models"
 msgstr "அனைத்து மாடல்களுக்கும் இன்றைய முழு உற்பத்தி அறிக்கை உருவாக்கு"
 
-#: frontend/AshokLeylandFrontEnd.py:688
+#: frontend/AshokLeylandFrontEnd.py:756
 msgid "About"
 msgstr "பற்றி"
 
-#: frontend/AshokLeylandFrontEnd.py:692
+#: frontend/AshokLeylandFrontEnd.py:760
 msgid "Help"
 msgstr "உதவி"
 
-#: frontend/AshokLeylandFrontEnd.py:697
+#: frontend/AshokLeylandFrontEnd.py:765
 msgid "(Z)Manual Abort"
 msgstr "(Z)கைமுறை ரத்து"
 
-#: frontend/AshokLeylandFrontEnd.py:707
+#: frontend/AshokLeylandFrontEnd.py:775
 msgid "Actions"
 msgstr "செயல்கள்"
 
-#: frontend/AshokLeylandFrontEnd.py:714
+#: frontend/AshokLeylandFrontEnd.py:782
 msgid "Administration"
 msgstr "நிர்வாகம்"
 
-#: frontend/AshokLeylandFrontEnd.py:720
+#: frontend/AshokLeylandFrontEnd.py:788
 msgid "Activate / Inactivate"
 msgstr "செயல்படுத்து / செயலிழக்கச் செய்"
 
-#: frontend/AshokLeylandFrontEnd.py:725
+#: frontend/AshokLeylandFrontEnd.py:793
 msgid "Report"
 msgstr "அறிக்கை"
 
-#: frontend/AshokLeylandFrontEnd.py:735 frontend/AshokLeylandFrontEnd.py:809
+#: frontend/AshokLeylandFrontEnd.py:803 frontend/AshokLeylandFrontEnd.py:877
 msgid "Information"
 msgstr "தகவல்"
 
-#: frontend/AshokLeylandFrontEnd.py:741 frontend/AshokLeylandFrontEnd.py:744 frontend/SimplePopups.py:1942
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:812 frontend/SimplePopups.py:1942
 #: frontend/SimplePopups.py:1947
 msgid "Machine Settings"
 msgstr "இயந்திர அமைப்புகள்"
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Close Application"
 msgstr "பயன்பாட்டை மூடு"
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Are you sure you want to exit the application ?"
 msgstr "பயன்பாட்டிலிருந்து வெளியேற உறுதியா ?"
 
-#: frontend/AshokLeylandFrontEnd.py:810
+#: frontend/AshokLeylandFrontEnd.py:878
 msgid ""
 "Software Version: v 1.0\n"
 "\n"
@@ -183,11 +183,11 @@ msgstr ""
 "இந்தப் பயன்பாடு முன் அச்சின் நக்கிள், ஹப் மற்றும் டிஸ்க் பொருத்துதலை ஆய்வு செய்து பதிவு செய்கிறது: ஒவ்வொரு பாகத்தின் "
 "ஒவ்வொரு காட்சி ஆய்வு, டார்க் மற்றும் பிரஸ், அதன் QR குறியீட்டுடன்.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:820
+#: frontend/AshokLeylandFrontEnd.py:888
 msgid "Help about using the menu"
 msgstr "மெனுவைப் பயன்படுத்துவது பற்றிய உதவி"
 
-#: frontend/AshokLeylandFrontEnd.py:821
+#: frontend/AshokLeylandFrontEnd.py:889
 msgid ""
 "When any of the menu choices are being used, \n"
 "the remaining menu items will be clickable.\n"
@@ -203,7 +203,7 @@ msgstr ""
 "அல்லது ரத்து செய்யப்படும் வரை, வேறு எந்த மெனு உருப்படியின் கிளிக்கிற்கும் \n"
 "அமைப்பு பதிலளிக்காது.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:1119
+#: frontend/AshokLeylandFrontEnd.py:1188
 #, python-brace-format
 msgid ""
 "Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
@@ -214,7 +214,7 @@ msgstr ""
 "மாதம் - {month}\n"
 "பயனர்: {user}; தற்போதைய பாகத்தின் செயலாக்க நேரம்: {processing}    ; இன்று உற்பத்தியான பாகங்கள் - {todayCount}"
 
-#: frontend/AshokLeylandFrontEnd.py:1223
+#: frontend/AshokLeylandFrontEnd.py:1292
 msgid ""
 "Frontend abort (this screen only).\n"
 "Enter the password:"
@@ -222,64 +222,76 @@ msgstr ""
 "முன்பக்க ரத்து (இந்தத் திரை மட்டும்).\n"
 "கடவுச்சொல்லை உள்ளிடவும்:"
 
-#: frontend/AshokLeylandFrontEnd.py:1228 frontend/FrontendNotices.py:56
+#: frontend/AshokLeylandFrontEnd.py:1297 frontend/FrontendNotices.py:56
 msgid "Wrong password - nothing aborted"
 msgstr "தவறான கடவுச்சொல் - எதுவும் ரத்து செய்யப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:1258 frontend/AshokLeylandFrontEnd.py:1262
+#: frontend/AshokLeylandFrontEnd.py:1330 frontend/AshokLeylandFrontEnd.py:1334
 msgid "QR CODE : "
 msgstr "QR குறியீடு : "
 
-#: frontend/AshokLeylandFrontEnd.py:1542 frontend/AshokLeylandFrontEnd.py:1566 frontend/FrontendI18n.py:262
+#: frontend/AshokLeylandFrontEnd.py:1616 frontend/AshokLeylandFrontEnd.py:1640 frontend/FrontendI18n.py:266
 msgid "Done"
 msgstr "முடிந்தது"
 
-#: frontend/AshokLeylandFrontEnd.py:2291
+#: frontend/AshokLeylandFrontEnd.py:2365
 msgid "Large Image Display"
 msgstr "பெரிய படக் காட்சி"
 
-#: frontend/FrontendI18n.py:262 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/AshokLeylandFrontEnd.py:2413
+msgid "Component Successfully Done"
+msgstr "காம்போனென்ட் வெற்றிகரமாக முடிந்தது"
+
+#: frontend/AshokLeylandFrontEnd.py:2419
+msgid "Component Not Successfully Done"
+msgstr "காம்போனென்ட் வெற்றிகரமாக முடியவில்லை"
+
+#: frontend/AshokLeylandFrontEnd.py:2425
+msgid "Component Processing Aborted"
+msgstr "காம்போனென்ட் செயலாக்கம் ரத்து செய்யப்பட்டது"
+
+#: frontend/FrontendI18n.py:266 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
 #: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
 msgid "OK"
 msgstr "சரி"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Not OK"
 msgstr "சரி இல்லை"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Bypassed"
 msgstr "தவிர்க்கப்பட்டது"
 
-#: frontend/FrontendI18n.py:262 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+#: frontend/FrontendI18n.py:266 frontend/newwidgets/CosThetaOutcomeContainer.py:42
 msgid "Result Awaited"
 msgstr "முடிவுக்காகக் காத்திருக்கிறது"
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "TEST"
 msgstr "சோதனை"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "PRODUCTION"
 msgstr "உற்பத்தி"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Operator"
 msgstr "ஆப்பரேட்டர்"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Supervisor"
 msgstr "சூப்பர்வைசர்"
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Administrator"
 msgstr "நிர்வாகி"
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "Yes"
 msgstr "ஆம்"
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "No"
 msgstr "இல்லை"
 

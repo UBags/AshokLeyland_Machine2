@@ -14,6 +14,7 @@ from typing import Union
 import frontend.frontendutils.CosThetaLabelUtils  # noqa: F401 - its stylesheets are the CosThetaStylesheets ones (imported above); kept for its import-time effects
 from Configuration import CosThetaConfigurator
 from frontend.FrontendI18n import tr, bind, N_, adjustedPointSize
+from frontend.frontendutils.CosThetaLabelUtils import fittingPointSize, styleSheetWithFont
 from frontend.frontendutils.CosThetaImageUtils import convertNDArrayToPixmap, getPixmapImage, resize_pixmap
 import frontend.frontendutils.CosThetaImageUtils  # noqa: F401 - was "from frontend.frontendutils.CosThetaImageUtils import *"; nothing used from it, imported for its import-time effects
 import Configuration  # noqa: F401 - was "from Configuration import *"; nothing used from it, imported for its import-time effects
@@ -162,7 +163,7 @@ class CosThetaOutcomeContainer(QFrame):
             mainText, secondLine, colour = self._twoLineArgs
             self.setTwoLineTextAndResult(mainText, secondLine, self.currentStatus, colour)
         elif self._displayText is not None:
-            self.image_label.setText(tr(self._displayText))
+            self._showDisplayText(self._displayText)
 
     def setTitlePointSize(self, pointSize: int):
         """Fixed size of the title (black bar); set once after the first render, the same for all 14 tiles."""
@@ -290,11 +291,7 @@ class CosThetaOutcomeContainer(QFrame):
         # image = createImage(text, imageDimensions=(self.image_label.width(), self.image_label.height()),
         #             fontColor=QColor(Qt.GlobalColor.darkBlue), replaceChar=['=', ' '], backgroundColor=backgroundcolor, forceUseOfFontSizeAs=self.forceMiddleLabelFontSizeTo)
         # self.setImage(image)
-        self.image_label.setStyleSheet(numberDisplayStylesheet)
-        self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
-        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
-        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
+        self._showDisplayText(f"{text}")             # a number, or a text such as "Done" (translated, fitted)
         self.update()
 
     def setTextAndResult(self, text: str | float | int, result : str):
@@ -309,13 +306,34 @@ class CosThetaOutcomeContainer(QFrame):
         # image = createImage(text, imageDimensions=(self.image_label.width(), self.image_label.height()),
         #             fontColor=QColor(Qt.GlobalColor.darkBlue), replaceChar=['=', ' '], backgroundColor=backgroundcolor, forceUseOfFontSizeAs=self.forceMiddleLabelFontSizeTo)
         # printPlain("Reached here - 2")
-        self.image_label.setStyleSheet(numberDisplayStylesheet)
-        self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
-        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
-        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
+        self._showDisplayText(f"{text}")             # a number, or a text such as "Done" (translated, fitted)
         self.setResult(result)
         self.update()
+
+    def _displayFont(self, shown: str) -> QFont:
+        """The number display's font for this text (CHANGES 161): NUMBER_DISPLAY_FONT (36 pt), smaller when the text does
+        not fit 90 % of the display - a number always fits; a translated word such as Kannada / Tamil "Done" ran past
+        both edges at 36 pt - and, for a translated text, the language's adjustment."""
+        font = QFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
+        font.setBold(True)
+        if self.image_label.width() <= 0 or self.image_label.height() <= 0:
+            return font                                 # not laid out yet: the designed size
+        designed = CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT.pointSize()
+        size = fittingPointSize(self.image_label, [shown], font=font, widthShare=0.9, heightShare=0.9,
+                                maxPointSize=designed)
+        font.setPointSize(adjustedPointSize(size) if size < designed else size)
+        return font
+
+    def _showDisplayText(self, text: str) -> None:
+        """text (English) in the number display, in the chosen language, at a size that fits (setFont and the style
+        sheet: the sheet carries "font: bold", which takes precedence over setFont - CHANGES 159)."""
+        shown = tr(text)
+        font = self._displayFont(shown)
+        self.image_label.setFont(font)
+        self.image_label.setStyleSheet(styleSheetWithFont(numberDisplayStylesheet, font))
+        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.image_label.setText(shown)
+        self._showingHint, self._twoLineArgs, self._displayText = False, None, text
 
     def setTwoLineTextAndResult(self, mainText: str | float | int, secondLine: str, result: str,
                                 secondLineColor: str = ""):
@@ -369,11 +387,7 @@ class CosThetaOutcomeContainer(QFrame):
         # image = createImage(text, imageDimensions=(self.image_label.width(), self.image_label.height()),
         #             fontColor=QColor(Qt.GlobalColor.darkBlue), replaceChar=['=', ' '], backgroundColor=backgroundcolor, forceUseOfFontSizeAs=self.forceMiddleLabelFontSizeTo)
         # self.setImageAndResult(image, result)
-        self.image_label.setStyleSheet(numberDisplayStylesheet)
-        self.image_label.setFont(CosThetaOutcomeContainer.NUMBER_DISPLAY_FONT)
-        self.image_label.setTextFormat(Qt.TextFormat.PlainText)
-        self.image_label.setText(tr(f"{text}"))         # a number, or a text such as "Done" (translated)
-        self._showingHint, self._twoLineArgs, self._displayText = False, None, f"{text}"
+        self._showDisplayText(f"{text}")             # a number, or a text such as "Done" (translated, fitted)
         self.setResult(result)
         self.update()
 

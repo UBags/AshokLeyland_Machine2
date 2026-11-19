@@ -5006,3 +5006,27 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   reports the three fixes visible.
 - Run (sandbox): `DryRun_Frontend_Languages` 89/89 both copies under Xvfb, and 89/89 without a display (offscreen
   still chosen on Linux); `DryRun_FEServer_Cycles` compiled (the change is the condition only), not run.
+
+## 161. Result box texts translated; "Done" fits its tile; number displays no longer widen their column (2026-11-19)
+
+- **(a) User:** "Component Successfully Done", "Component Not Successfully Done", "Component Processing Aborted" under
+  i18n. They were passed through `tr()` in `LargeImageWindow._resultImage`, but as plain strings at the call sites, so the
+  catalogue extraction never found them and they stayed English. Now marked `N_(...)`; catalogues updated (247 texts),
+  Kannada / Tamil / Hindi drafts added (ಕಾಂಪೊನೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ಮುಗಿದಿದೆ / ... ಮುಗಿದಿಲ್ಲ / ಕಾಂಪೊನೆಂಟ್ ಪ್ರಕ್ರಿಯೆ ರದ್ದಾಗಿದೆ; காம்போனென்ட்
+  வெற்றிகரமாக முடிந்தது / ... முடியவில்லை / காம்போனென்ட் செயலாக்கம் ரத்து செய்யப்பட்டது; कंपोनेंट सफलतापूर्वक पूर्ण / ... पूर्ण नहीं
+  हुआ / कंपोनेंट प्रोसेसिंग रद्द हुई) - for the native speakers' review. Searched the frontend for other shown literals
+  not marked: none on the main screen (the "AL" / "CT" logo fallbacks, the language tooltip and the legacy
+  `frontend/widgets/` are not translated texts).
+- **(b) User:** in Kannada and Tamil the "Done" of Component Press and Cap Press ran past both edges of the tile.
+  **Cause:** the number display's style sheet had `min-width: 10em`; with the display's 36 pt font that is about 556 px,
+  so whenever a number display was shown (a torque, "Done") its label demanded 556 px. The column widened at the cost
+  of the other six (measured at 1920 px: 560 px against 225; equal columns are 273), and the label, wider than the tile
+  shown, was cut at both edges. The display font was also fixed at 36 pt whatever the text.
+  **Now:** `min-width` removed from `numberDisplayStylesheet` (the 7 columns stay 273 px with "Done" and torques shown);
+  `CosThetaOutcomeContainer._showDisplayText` / `_displayFont`: the display's text fitted to 90 % of the display, at
+  most the designed 36 pt (a number keeps 36), the language adjustment applied when it had to be made smaller, set with
+  setFont and in the style sheet; used by `setText`, `setTextAndResult`, `setResultAndText` and on a change of language.
+- Run (Python 3.12, PySide6 6.9.1, Xvfb): `DryRun_Frontend_Languages` 100/100 both copies (new L7: the three result
+  texts translated in kn / ta / hi; "Done" within 90 % of both press displays in all four languages, size in the style
+  sheet; refitted on a change of language; a text too wide at 36 pt made smaller until it fits; a torque keeps 36 pt;
+  the row's 7 tiles one width with "Done" and a torque shown).

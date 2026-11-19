@@ -12,159 +12,159 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: frontend/AshokLeylandFrontEnd.py:381 frontend/AshokLeylandFrontEnd.py:839
+#: frontend/AshokLeylandFrontEnd.py:417 frontend/AshokLeylandFrontEnd.py:907
 #, python-brace-format
 msgid "IN {mode} MODE"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:389
+#: frontend/AshokLeylandFrontEnd.py:425
 msgid "Mode"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:395 frontend/AshokLeylandFrontEnd.py:840
+#: frontend/AshokLeylandFrontEnd.py:431 frontend/AshokLeylandFrontEnd.py:908
 #, python-brace-format
 msgid "{mode} - Knuckle, Hub, and Disc Assembly"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:456
+#: frontend/AshokLeylandFrontEnd.py:492
 msgid "Camera connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:457
+#: frontend/AshokLeylandFrontEnd.py:493
 msgid "Camera not connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:463
+#: frontend/AshokLeylandFrontEnd.py:499
 msgid "I/O Module connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:464
+#: frontend/AshokLeylandFrontEnd.py:500
 msgid "I/O Module not connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:471
+#: frontend/AshokLeylandFrontEnd.py:507
 msgid "Database connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:472
+#: frontend/AshokLeylandFrontEnd.py:508
 msgid "Database not connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:479
+#: frontend/AshokLeylandFrontEnd.py:515
 msgid "QRCode Scanner connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:480
+#: frontend/AshokLeylandFrontEnd.py:516
 msgid "QRCode Scanner not connected"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:488
+#: frontend/AshokLeylandFrontEnd.py:524
 msgid "CONNECTION STATUS OF DEVICES"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:532 frontend/AshokLeylandFrontEnd.py:842
+#: frontend/AshokLeylandFrontEnd.py:568 frontend/AshokLeylandFrontEnd.py:910
 msgid "Created by CosTheta Technologies and Ashok Leyland"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:578
+#: frontend/AshokLeylandFrontEnd.py:614
 msgid "DATE / RUNNING DURATION PANEL"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:640
+#: frontend/AshokLeylandFrontEnd.py:708
 msgid "Change Own Password"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:644 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
+#: frontend/AshokLeylandFrontEnd.py:712 frontend/SimplePopups.py:1418 frontend/SimplePopups.py:1500
 #: frontend/SimplePopups.py:1581 frontend/SimplePopups.py:1650 frontend/SimplePopups.py:1713
 msgid "Exit"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:648
+#: frontend/AshokLeylandFrontEnd.py:716
 msgid "Add New User"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:652
+#: frontend/AshokLeylandFrontEnd.py:720
 msgid "Manage Other Users Passwords"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:656
+#: frontend/AshokLeylandFrontEnd.py:724
 msgid "Change User Role"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:660
+#: frontend/AshokLeylandFrontEnd.py:728
 msgid "Activate an Inactive User"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:664 frontend/SimplePopups.py:1145
+#: frontend/AshokLeylandFrontEnd.py:732 frontend/SimplePopups.py:1145
 msgid "Inactivate User"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:668
+#: frontend/AshokLeylandFrontEnd.py:736
 msgid "Create Production Report By Model Name"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:672
+#: frontend/AshokLeylandFrontEnd.py:740
 msgid "Create Production Report By Model Name For a Period"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:676
+#: frontend/AshokLeylandFrontEnd.py:744
 msgid "Create Production Report By Model Name For Today"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:680
+#: frontend/AshokLeylandFrontEnd.py:748
 msgid "Create Production Report for a Period for all Models"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:684
+#: frontend/AshokLeylandFrontEnd.py:752
 msgid "Create Full Production Report for Today for all Models"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:688
+#: frontend/AshokLeylandFrontEnd.py:756
 msgid "About"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:692
+#: frontend/AshokLeylandFrontEnd.py:760
 msgid "Help"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:697
+#: frontend/AshokLeylandFrontEnd.py:765
 msgid "(Z)Manual Abort"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:707
+#: frontend/AshokLeylandFrontEnd.py:775
 msgid "Actions"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:714
+#: frontend/AshokLeylandFrontEnd.py:782
 msgid "Administration"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:720
+#: frontend/AshokLeylandFrontEnd.py:788
 msgid "Activate / Inactivate"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:725
+#: frontend/AshokLeylandFrontEnd.py:793
 msgid "Report"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:735 frontend/AshokLeylandFrontEnd.py:809
+#: frontend/AshokLeylandFrontEnd.py:803 frontend/AshokLeylandFrontEnd.py:877
 msgid "Information"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:741 frontend/AshokLeylandFrontEnd.py:744 frontend/SimplePopups.py:1942
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:812 frontend/SimplePopups.py:1942
 #: frontend/SimplePopups.py:1947
 msgid "Machine Settings"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Close Application"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:772
+#: frontend/AshokLeylandFrontEnd.py:840
 msgid "Are you sure you want to exit the application ?"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:810
+#: frontend/AshokLeylandFrontEnd.py:878
 msgid ""
 "Software Version: v 1.0\n"
 "\n"
@@ -174,11 +174,11 @@ msgid ""
 "torque and press of each component, with its QR code.\n"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:820
+#: frontend/AshokLeylandFrontEnd.py:888
 msgid "Help about using the menu"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:821
+#: frontend/AshokLeylandFrontEnd.py:889
 msgid ""
 "When any of the menu choices are being used, \n"
 "the remaining menu items will be clickable.\n"
@@ -188,7 +188,7 @@ msgid ""
 "or cancelled.\n"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1119
+#: frontend/AshokLeylandFrontEnd.py:1188
 #, python-brace-format
 msgid ""
 "Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
@@ -196,70 +196,82 @@ msgid ""
 "User: {user}; Current component processing time: {processing}    ; Components produced today - {todayCount}"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1223
+#: frontend/AshokLeylandFrontEnd.py:1292
 msgid ""
 "Frontend abort (this screen only).\n"
 "Enter the password:"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1228 frontend/FrontendNotices.py:56
+#: frontend/AshokLeylandFrontEnd.py:1297 frontend/FrontendNotices.py:56
 msgid "Wrong password - nothing aborted"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1258 frontend/AshokLeylandFrontEnd.py:1262
+#: frontend/AshokLeylandFrontEnd.py:1330 frontend/AshokLeylandFrontEnd.py:1334
 msgid "QR CODE : "
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1542 frontend/AshokLeylandFrontEnd.py:1566 frontend/FrontendI18n.py:262
+#: frontend/AshokLeylandFrontEnd.py:1616 frontend/AshokLeylandFrontEnd.py:1640 frontend/FrontendI18n.py:266
 msgid "Done"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:2291
+#: frontend/AshokLeylandFrontEnd.py:2365
 msgid "Large Image Display"
 msgstr ""
 
-#: frontend/FrontendI18n.py:262 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
+#: frontend/AshokLeylandFrontEnd.py:2413
+msgid "Component Successfully Done"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:2419
+msgid "Component Not Successfully Done"
+msgstr ""
+
+#: frontend/AshokLeylandFrontEnd.py:2425
+msgid "Component Processing Aborted"
+msgstr ""
+
+#: frontend/FrontendI18n.py:266 frontend/SimplePopups.py:93 frontend/SimplePopups.py:159 frontend/SimplePopups.py:265
 #: frontend/SimplePopups.py:332 frontend/SimplePopups.py:407 frontend/SimplePopups.py:514
 msgid "OK"
 msgstr ""
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Not OK"
 msgstr ""
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "Bypassed"
 msgstr ""
 
-#: frontend/FrontendI18n.py:262 frontend/newwidgets/CosThetaOutcomeContainer.py:41
+#: frontend/FrontendI18n.py:266 frontend/newwidgets/CosThetaOutcomeContainer.py:42
 msgid "Result Awaited"
 msgstr ""
 
-#: frontend/FrontendI18n.py:262
+#: frontend/FrontendI18n.py:266
 msgid "TEST"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "PRODUCTION"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Operator"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Supervisor"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263
+#: frontend/FrontendI18n.py:267
 msgid "Administrator"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "Yes"
 msgstr ""
 
-#: frontend/FrontendI18n.py:263 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
 msgid "No"
 msgstr ""
 
