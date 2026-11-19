@@ -113,7 +113,7 @@ SEATING_REFERENCE_OVAL_DOST = (241, 249, 122)
 SEATING_REFERENCE_OVAL_DOSTPLUS = (232, 230, 0)
 SEATING_OUTSIDE_REFERENCE_OVAL_MAX = 0.02
 # Where the seated position comes from (CHANGES 153):
-#   "hubholes" - the circle through the hub's holes round the bung in the bung picture itself (CheckCap.hubHoles, the
+#   "hubholes" - the circle through the hub's holes round the bung in the bung picture itself (FindHubHoles.findHoles, the
 #                cap check's method of CHANGES 152: dark blobs at r 128 - 168, 4 / 5 evenly spaced, circle r 140 - 160)
 #                plus seating.hub.offset.<model>: hub and bung in one picture, so where the part sits on the fixture and
 #                any camera move cancel. The hub's holes not found (a bung lying over them) -> NOT seated.
@@ -1864,7 +1864,7 @@ def hole_pattern_centre(components: List[Tuple[Tuple[float, float], np.ndarray]]
 
 def seated_position(image_rgb: np.ndarray, model_type: str) -> Dict[str, Any]:
     """The model's seated position in this picture: dict(found, point, hub, reason). Source "hubholes": the hub's hole
-    circle round the bung in the same picture (CheckCap.hubHoles) + seating.hub.offset.<model>; "fixed":
+    circle round the bung in the same picture (FindHubHoles.findHoles) + seating.hub.offset.<model>; "fixed":
     seating.seated.centre.<model>."""
     dostplus = model_type == "DOSTPLUS"
     expectOneOf("vision.bung.seating.position.source", SEATING_POSITION_SOURCE, ("hubholes", "fixed"))

@@ -7,7 +7,7 @@ and lying on the washer; a leg that is straight, half bent, standing up or bent 
 edge. So:
 
   0. Where the washer should be (CHANGES 163, CENTRE_SOURCE "hubholes"): the hub's holes round the nut in this picture
-     (CheckCap.hubHoles - the cap and bung checks' method: 4 holes DOST, 5 DOSTPLUS, on a circle of r 140 - 160 px);
+     (FindHubHoles.findHoles - since CHANGES 164 YOLO + MobileSAM round this cycle's hub-check centre: 4 holes DOST, 5 DOSTPLUS);
      the expected washer centre = the hole circle's centre + HUB_OFFSET_DOST / HUB_OFFSET_DOSTPLUS.
      - holes not found                                                     -> NOT OK, the hub's holes not found
      CENTRE_SOURCE "fixed": the expected centre is CENTRE (CHANGES 162).
