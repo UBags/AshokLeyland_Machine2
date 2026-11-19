@@ -60,33 +60,40 @@ def _filled(mask: np.ndarray) -> np.ndarray:
 
 class CheckSplitPinAndWasher():
 
-    CENTRE = (644, 345)                  # nominal centre of the nut in the 1280 x 720 picture
-    SEARCH_RADIUS = 100                  # the washer is looked for within this distance of CENTRE
+    CENTRE = (644, 345)  # nominal centre of the nut in the 1280 x 720 picture
+    SEARCH_RADIUS = 100  # the washer is looked for within this distance of CENTRE
     WASHER_V_MIN = 160
     WASHER_S_MAX = 70
     WASHER_CLOSE_KERNEL = 9
-    WASHER_AREA_MIN = 2500               # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
-    WASHER_TIP_RADIUS_MIN = 44.0         # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
+    WASHER_AREA_MIN = 2500  # pixels of the bright washer region (OK pictures: 3,689 - 4,640)
+    WASHER_TIP_RADIUS_MIN = 44.0  # tip radius of the scalloped edge (OK pictures: 49.2 - 51.4 px)
     WASHER_TIP_RADIUS_MAX = 56.0
-    WASHER_COVER_MIN = 0.9               # share of the circle round which the washer region is seen
+    WASHER_COVER_MIN = 0.9  # share of the circle round which the washer region is seen
     MARKER_HUE_MIN = 100
     MARKER_HUE_MAX = 130
     MARKER_S_MIN = 90
     MARKER_V_MIN = 55
     MARKER_SEARCH_RADIUS = 120
-    MARKER_PIXELS_MIN = 100              # OK pictures: 204 and more
-    LEG_OUTSIDE_DISTANCE = 8.0           # px beyond the washer's own edge
+    MARKER_PIXELS_MIN = 100  # OK pictures: 204 and more
+    LEG_OUTSIDE_DISTANCE = 8.0  # px beyond the washer's own edge
     LEG_OUTSIDE_PIXELS_MAX = 2
 
     @staticmethod
     def measure(anImage: np.ndarray) -> Dict:
-        """Every value of the check on a BGR picture (1280 x 720). 'reason' is '' when OK. Masks under '_masks'."""
+        """Every value of the check on a BGR picture (1280 x 720). 'reason' is '' when OK. Masks under '_masks' (the
+        outside mask in the coordinates of the part looked at, which starts at '_offset')."""
         C = CheckSplitPinAndWasher
         result = {"ok": False, "reason": ""}
-        hsv = cv2.cvtColor(anImage, cv2.COLOR_BGR2HSV)
+        # everything the check looks at lies within SEARCH_RADIUS + MARKER_SEARCH_RADIUS of CENTRE: work on that part
+        reach = int(C.SEARCH_RADIUS + C.MARKER_SEARCH_RADIUS) + 2
+        x0, y0 = max(0, int(C.CENTRE[0]) - reach), max(0, int(C.CENTRE[1]) - reach)
+        part = anImage[y0:int(C.CENTRE[1]) + reach, x0:int(C.CENTRE[0]) + reach]
+        result["_offset"] = (x0, y0)
+        hsv = cv2.cvtColor(part, cv2.COLOR_BGR2HSV)
         H, S, V = (hsv[..., i].astype(np.int16) for i in range(3))
         h, w = H.shape
         yy, xx = np.mgrid[:h, :w]
+        xx, yy = xx + x0, yy + y0                        # full-picture coordinates
         r0 = np.hypot(xx - C.CENTRE[0], yy - C.CENTRE[1])
         bright = ((V >= C.WASHER_V_MIN) & (S <= C.WASHER_S_MAX) & (r0 <= C.SEARCH_RADIUS)).astype(np.uint8)
         k = max(1, int(C.WASHER_CLOSE_KERNEL))
@@ -100,7 +107,7 @@ class CheckSplitPinAndWasher():
         area = int(stats[label, cv2.CC_STAT_AREA])
         result["washerArea"] = area
         contours, _ = cv2.findContours(region.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        outline = max(contours, key=cv2.contourArea)
+        outline = max(contours, key=cv2.contourArea) + np.array([x0, y0], dtype=np.int32)   # full-picture coordinates
         result["_masks"] = {"outline": outline}
         if area < C.WASHER_AREA_MIN:
             result["reason"] = f"washer not found (bright region {area} px < {C.WASHER_AREA_MIN})"
@@ -156,7 +163,8 @@ class CheckSplitPinAndWasher():
         outside = masks.get("outside")
         if outside is not None and not result.get("ok") and outside.any():
             grown = cv2.dilate(outside.astype(np.uint8), np.ones((5, 5), np.uint8))
-            contours, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            contours, _ = cv2.findContours(grown, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE,
+                                           offset=tuple(int(v) for v in result.get("_offset", (0, 0))))
             cv2.drawContours(marked, contours, -1, RED, 2)
         if not masks:
             cv2.rectangle(marked, (2, 2), (marked.shape[1] - 3, marked.shape[0] - 3), RED, 4)
