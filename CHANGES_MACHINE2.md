@@ -5486,6 +5486,6 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run: `DryRun_Qt_Messages` 15/15 on both machines (new; child processes with fd 2 captured: Indic laid out in Courier -
   6 distinct Qt messages in the handler, none on fd 2, each logged once; English - none; without the handler Qt writes
   them to fd 2; qWarning from Python; a fatal message on the console with the stack). `DryRun_Frontend_Languages` 100/100
-  on both (no raw `qt.` line on stderr now; 1,800+ before); `DryRun_Models_Check` 23/23, `DryRun_Tuning_Keys` 247/247 on
+  on both (no raw `qt.` line on stderr now; about 3,500 before); `DryRun_Models_Check` 23/23, `DryRun_Tuning_Keys` 247/247 on
   both; `DryRun_FEServer_To_DBServer_Pipeline` passes; `DryRun_FEServer_Cycles` 166/167 - F1 ("Rotation Not Done" fits
   its tile) fails the same with this change reverted (sandbox fonts), not caused by it. Not run: the exe on Windows.
