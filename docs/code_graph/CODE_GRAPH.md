@@ -2,7 +2,7 @@
 # Code graph — AshokLeyland Machine 2
 
 **Must read before changing code.** Traced from branch `machine2-io-fe-db-cam` at commit `a33aad1` (2026-11-19,
-CHANGES 167). Built from the code itself (AST import walk from the two entry points, and a scan of every
+CHANGES 167; module counts and diagrams 1 and 6 refreshed at CHANGES 175). Built from the code itself (AST import walk from the two entry points, and a scan of every
 `send…` / `read…` call in `utils/RedisUtils.py`), then checked against `docs/HLD.md` §3–5 and `docs/LLD.md`.
 
 Each diagram is below as Mermaid (GitHub renders it) and as an SVG in this folder (`docs/code_graph/*.svg`) for
@@ -22,8 +22,8 @@ zooming. The `.mmd` files are the sources.
 - **Entry points:** `MainProgram.py` (the station; built to `MainProgram.exe`) and `OtherServices.py` (web service, MI
   dashboard, screen share; built to `OtherServices.exe`). Both are started by
   `Start-Hub-And-Disc-application - Production.vbs`.
-- **Live:** 87 of 379 Python modules are reachable from those two (imports at module level and inside functions).
-- **Not reachable (292):** `test/machine2_dryrun` 68, `test/machine1_dryrun` 64, `archive/` 49, other `test/` 42,
+- **Live:** 88 of 389 Python modules are reachable from those two (imports at module level and inside functions).
+- **Not reachable (301, as of CHANGES 175):** `test/machine2_dryrun` 70, `test/machine1_dryrun` 66, `archive/` 46, other `test/` 41,
   leftovers in `frontend/` (old widgets), `costhetaio/` (`IOServer_ModbusTCP.py`, `siemens/test`), `processors/`,
   `utils/`, `video/`, `camera/` (`CameraRecorderServer`, `HandDetector`, `VideoCamera`, `ONVIFCam`, `PhotoCamera`),
   `mail/`, root scripts (`main.py`, `definition.py`, `VerifyIntegrity.py`, `test-*.py`, `verify_installation.py`).
@@ -58,7 +58,7 @@ flowchart TB
     VBS["Start-Hub-And-Disc-application - Production.vbs<br/>(Startup folder, at logon)"]
     BAT["Startup.bat<br/>(desktop, manual)"]
     subgraph MAINEXE["MainProgram.exe = MainProgram.py"]
-      MP["MainProgram<br/>Redis check + flush · picture clean-up · DB setup<br/>pg backup (thread) ∥ chooseMode · login · monitorStop"]
+      MP["MainProgram<br/>model files check (missing → message, exit)<br/>Redis check + flush · picture clean-up · DB setup<br/>pg backup (thread) ∥ chooseMode · login · monitorStop"]
       SUP["utils/ProcessSupervisor<br/>restart dead server, ≤10/h"]
       P1["P1 Logging<br/>logutils.CentralLoggers"]
       P2["P2 Camera server<br/>camera/CameraProcessorServer"]
@@ -366,7 +366,7 @@ Solid arrow = module-level import; dotted = import inside a function (lazy / pro
 ```mermaid
 flowchart LR
   subgraph pkg__root_["(root)"]
-    MainProgram["MainProgram<br/><small>643 lines</small>"]
+    MainProgram["MainProgram<br/><small>710 lines</small>"]
     OtherServices["OtherServices<br/><small>76 lines</small>"]
   end
   subgraph pkg_camera["camera"]
@@ -374,16 +374,16 @@ flowchart LR
     camera_CameraProcessorServer["CameraProcessorServer<br/><small>1725 lines</small>"]
     camera_CameraStateFile["CameraStateFile<br/><small>97 lines</small>"]
     camera_CapMaskFinder["CapMaskFinder<br/><small>289 lines</small>"]
-    camera_CheckBung["CheckBung<br/><small>508 lines</small>"]
+    camera_CheckBung["CheckBung<br/><small>502 lines</small>"]
     camera_CheckCap["CheckCap<br/><small>1034 lines</small>"]
     camera_CheckHubAndBottomBearing["CheckHubAndBottomBearing<br/><small>613 lines</small>"]
     camera_CheckKnuckle["CheckKnuckle<br/><small>1091 lines</small>"]
     camera_CheckNoBung["CheckNoBung<br/><small>202 lines</small>"]
     camera_CheckNoCapBung["CheckNoCapBung<br/><small>487 lines</small>"]
     camera_CheckNutAndPlateWasher["CheckNutAndPlateWasher<br/><small>817 lines</small>"]
-    camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>244 lines</small>"]
+    camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>250 lines</small>"]
     camera_CheckTopBearing["CheckTopBearing<br/><small>2216 lines</small>"]
-    camera_FindHubHoles["FindHubHoles<br/><small>492 lines</small>"]
+    camera_FindHubHoles["FindHubHoles<br/><small>672 lines</small>"]
     camera_HexagonNutDetector["HexagonNutDetector<br/><small>2952 lines</small>"]
     camera_HubAndBearingSegmenter["HubAndBearingSegmenter<br/><small>3734 lines</small>"]
     camera_KnuckleLocator["KnuckleLocator<br/><small>491 lines</small>"]
@@ -453,6 +453,7 @@ flowchart LR
   subgraph pkg_utils["utils"]
     utils_IPUtils["IPUtils<br/><small>109 lines</small>"]
     utils_ImageNormalisationWithMask["ImageNormalisationWithMask<br/><small>2659 lines</small>"]
+    utils_ModelsCheck["ModelsCheck<br/><small>56 lines</small>"]
     utils_PictureRetention["PictureRetention<br/><small>100 lines</small>"]
     utils_ProcessSupervisor["ProcessSupervisor<br/><small>113 lines</small>"]
     utils_ShutdownWait["ShutdownWait<br/><small>47 lines</small>"]
@@ -472,6 +473,7 @@ flowchart LR
   MainProgram -.-> logutils_CentralLoggers
   MainProgram -.-> monitorAllConnections_HeartbeatAndAlarmServer
   MainProgram -.-> persistence_DBServer
+  MainProgram -.-> utils_ModelsCheck
   MainProgram -.-> utils_ProcessSupervisor
   OtherServices --> utils_IPUtils
   OtherServices -.-> endpoints_AshokLeylandWebService

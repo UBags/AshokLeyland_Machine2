@@ -1,6 +1,6 @@
 flowchart LR
   subgraph pkg__root_["(root)"]
-    MainProgram["MainProgram<br/><small>643 lines</small>"]
+    MainProgram["MainProgram<br/><small>710 lines</small>"]
     OtherServices["OtherServices<br/><small>76 lines</small>"]
   end
   subgraph pkg_camera["camera"]
@@ -8,16 +8,16 @@ flowchart LR
     camera_CameraProcessorServer["CameraProcessorServer<br/><small>1725 lines</small>"]
     camera_CameraStateFile["CameraStateFile<br/><small>97 lines</small>"]
     camera_CapMaskFinder["CapMaskFinder<br/><small>289 lines</small>"]
-    camera_CheckBung["CheckBung<br/><small>508 lines</small>"]
+    camera_CheckBung["CheckBung<br/><small>502 lines</small>"]
     camera_CheckCap["CheckCap<br/><small>1034 lines</small>"]
     camera_CheckHubAndBottomBearing["CheckHubAndBottomBearing<br/><small>613 lines</small>"]
     camera_CheckKnuckle["CheckKnuckle<br/><small>1091 lines</small>"]
     camera_CheckNoBung["CheckNoBung<br/><small>202 lines</small>"]
     camera_CheckNoCapBung["CheckNoCapBung<br/><small>487 lines</small>"]
     camera_CheckNutAndPlateWasher["CheckNutAndPlateWasher<br/><small>817 lines</small>"]
-    camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>244 lines</small>"]
+    camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>250 lines</small>"]
     camera_CheckTopBearing["CheckTopBearing<br/><small>2216 lines</small>"]
-    camera_FindHubHoles["FindHubHoles<br/><small>492 lines</small>"]
+    camera_FindHubHoles["FindHubHoles<br/><small>672 lines</small>"]
     camera_HexagonNutDetector["HexagonNutDetector<br/><small>2952 lines</small>"]
     camera_HubAndBearingSegmenter["HubAndBearingSegmenter<br/><small>3734 lines</small>"]
     camera_KnuckleLocator["KnuckleLocator<br/><small>491 lines</small>"]
@@ -87,6 +87,7 @@ flowchart LR
   subgraph pkg_utils["utils"]
     utils_IPUtils["IPUtils<br/><small>109 lines</small>"]
     utils_ImageNormalisationWithMask["ImageNormalisationWithMask<br/><small>2659 lines</small>"]
+    utils_ModelsCheck["ModelsCheck<br/><small>56 lines</small>"]
     utils_PictureRetention["PictureRetention<br/><small>100 lines</small>"]
     utils_ProcessSupervisor["ProcessSupervisor<br/><small>113 lines</small>"]
     utils_ShutdownWait["ShutdownWait<br/><small>47 lines</small>"]
@@ -106,6 +107,7 @@ flowchart LR
   MainProgram -.-> logutils_CentralLoggers
   MainProgram -.-> monitorAllConnections_HeartbeatAndAlarmServer
   MainProgram -.-> persistence_DBServer
+  MainProgram -.-> utils_ModelsCheck
   MainProgram -.-> utils_ProcessSupervisor
   OtherServices --> utils_IPUtils
   OtherServices -.-> endpoints_AshokLeylandWebService

@@ -156,6 +156,31 @@ def startTheFrontendServer(mode : str, username : str, role : str):
 #     from endpoints.AshokLeyland_MI_Light import startMIServer
 #     startMIServer()
 
+def checkModelFilesPresent() -> bool:
+    """True when every file in models.required.files is under the project root and not empty (CHANGES 175).
+    Otherwise the missing files are printed, the operator is shown a message for models.missing.message.sec (5 s;
+    the wait is the full time even if OK is pressed sooner) and False is returned - main() then exits before any
+    server process is started."""
+    from BaseUtils import get_project_root
+    from utils.ModelsCheck import missingModelFiles, missingModelsMessages, requiredModelFiles, MESSAGE_SEC
+    root = str(get_project_root())
+    problems = missingModelFiles(root)
+    if not problems:
+        printBoldGreen(f"Model files present: {len(requiredModelFiles())} of {len(requiredModelFiles())} under {root}/models")
+        return True
+    screenText, consoleText = missingModelsMessages(root, problems)
+    printBoldRed(consoleText)
+    started = time.monotonic()
+    try:
+        showErrorMessage(screenText, auto_close_duration=int(MESSAGE_SEC))
+    except Exception as e:
+        printBoldRed(f"Could not show the missing-models message on the screen: {e}")
+    remaining = MESSAGE_SEC - (time.monotonic() - started)
+    if remaining > 0:       # OK pressed early, or no popup: the message stays in the console for the full time
+        time.sleep(remaining)
+    printBoldRed("MainProgram exits: the model files are missing")
+    return False
+
 def startDatabaseBackupThread() -> threading.Thread:
     """Start the start-up database backup (doBackup: pg_dump, compress, validate) in a thread and return it (CHANGES 174).
     It used to run in the main thread before the mode and login dialogs, which then waited for it. Not a daemon thread:
@@ -387,6 +412,12 @@ def main():
     # global showSplash
     from logutils.LogSettings import setLogProcess
     setLogProcess("mainprogram")
+
+    # The vision model files, before any server process is started (CHANGES 175): without them the camera server
+    # stopped itself at start and the supervisor started it again and again. Missing -> a message on the screen,
+    # then MainProgram exits without starting anything.
+    if not checkModelFilesPresent():
+        sys.exit(1)
 
     printBoldBlue("Clearing up queues. Please wait...")
 

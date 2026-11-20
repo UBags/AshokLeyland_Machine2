@@ -301,6 +301,12 @@ On the Machine 2 PC with the new exe:
    the camera, QR, IO, frontend and heartbeat servers are already up then; only the DB server waits.
 4. Report N (the backup time) and the waited seconds; with the launcher log, they say where the start-up time goes.
 
+## 16. Start-up check of the model files (CHANGES 175)
+1. Normal start: the MainProgram console shows "Model files present: 2 of 2 under <exe folder>/models" first.
+2. On the laptop (no `models` folder inside `MainProgram.dist`) or with `models` renamed on the plant PC: the console lists
+   the missing files, a red message "The models directory is missing or incomplete ..." is on the screen for 5 s, then
+   MainProgram exits; no server process is started (no camera-server restarts). Rename `models` back afterwards.
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -321,3 +327,4 @@ On the Machine 2 PC with the new exe:
 | 13 Split pin and washer: dry-run window; turned legs OK, straight / half-bent / standing leg NOT OK, no washer NOT OK; log lines of a shift (CHANGES 162) | | | | |
 | 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | 2026-11-19 | | Laptop: found on every good picture, other model never; offsets set (CHANGES 165) | Reported by Uddi: `--wrong-model` 161 compared, 7 not found (6 bad bungs, 1 NOT OK split pin); `--seed hubcheck` 10/10. Re-run after 165: every good picture found, the other model never; DOST centres still in two modes -> per-hole refinement (CHANGES 166). CHANGES 166 refinement superseded: Uddi found the thin-annulus finder slow and wrong (2026-11-20) -> new finder (CHANGES 169); laptop run of 2026-11-20 with it (Uddi): 163 pictures, 0.5 - 0.7 s each (3 - 4 s when not found), every good picture found, the other model never; cutoffs and offsets set (CHANGES 170). Plant not yet |
 | 15 Start-up: backup in the background, its time; any wait before the DB server; launcher polling every 2 s (CHANGES 174) | | | | |
+| 16 Model files: present line at start; missing -> message 5 s, exit, nothing started (CHANGES 175) | | | | |

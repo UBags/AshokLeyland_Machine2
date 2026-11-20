@@ -6,7 +6,7 @@ Working notes for Claude (and anyone else) on this repository. Read this first; 
 > **MUST READ before changing any code: [`docs/code_graph/CODE_GRAPH.md`](docs/code_graph/CODE_GRAPH.md).**
 > Graphs of the live code: runtime topology, every Redis stream / key with its writer and reader, the camera server
 > and the dependencies between vision checks, the IOServer threads and PLC layer, the 28-state cycle, and the import
-> graph of the 87 live modules (of 379; the rest are dry runs, archive and old versions). Check which processes and
+> graph of the 88 live modules (of 389; the rest are dry runs, archive and old versions). Check which processes and
 > checks a change touches there first. Keep it in step: when a process, queue, key, thread, check or state changes,
 > update the matching `.mmd` in `docs/code_graph/`, run `python3 docs/code_graph/tools/build_doc.py` (and regenerate
 > `6_modules.mmd` and the SVGs, see its §7).
@@ -146,6 +146,12 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   backup starts; the backup runs in a thread beside the mode and login dialogs; the DB server starts only after it
   (`waitForDatabaseBackup`), and so does every early exit. Do not run `setDatabaseName(createDB=True)` while it runs:
   its `ALTER TABLE ... IF NOT EXISTS` waits for pg_dump's locks and holds up every query queued behind it.
+- Model files (CHANGES 175): `main()`'s first step after `setLogProcess` is `checkModelFilesPresent` (`utils/ModelsCheck.py`):
+  every file in `models.required.files` (tuning block; the two weights files `camera/ModelManager.py` loads, relative to
+  the folder of MainProgram.exe) must exist and not be empty, else the files are printed, a message is on the screen for
+  `models.missing.message.sec` (5) and MainProgram exits before anything is started. A new model file the code loads
+  goes into that key too. `models/` is not in the exe (`runNuitka.bat`): an exe run from `MainProgram.dist` on the laptop
+  needs `models` there (a junction to the repo's `models` folder).
 
 ## 6. Documentation and history
 
@@ -178,6 +184,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
 | 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run of 2026-11-20 (Uddi): 163 pictures, 0.5 - 0.7 s each, every good picture found, the other model never, area cutoffs and offsets set (CHANGES 170); plant not yet |
 | 15 Start-up: the backup beside the mode / login dialogs, its time and any wait before the DB server; the launcher polling every 2 s (CHANGES 174) | Not reported yet |
+| 16 Model files checked at start: missing -> message on the screen for 5 s, MainProgram exits, nothing started (CHANGES 175) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

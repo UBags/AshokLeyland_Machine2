@@ -5428,3 +5428,31 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   §15; READMEs; CLAUDE.md (§5 rule, §7 row).
 - Run: `DryRun_Startup_Backup` 16/16 on both machines; `DryRun_Heartbeat_And_Startup` 29/29 on both. Not run: the
   launcher (Windows only; VBScript syntax checked by eye), the real start-up on the plant PC.
+
+## 175. Start-up check of the model files: missing -> message, MainProgram exits before starting anything (2026-11-20)
+
+- **Asked (Uddi):** the behaviour without `models` was odd - the camera server was restarted again and again. Check the
+  models at the start of MainProgram, before any process is launched; if anything is missing, a message on the screen
+  that the models directory is missing and needed, wait 5 s, close MainProgram without launching anything.
+- **Found:** `models/` is not in the exe (`runNuitka.bat`); `camera/ModelManager.py` loads
+  `<exe folder>/models/MobileSAM/weights/mobile_sam.pt` and `.../MobileSAMv2/weight/ObjectAwareModel.pt`. On the laptop
+  the exe in `MainProgram.dist` had no `models` there, so `CameraProcessorServer.CameraServer` stopped itself
+  (`verifyVisionDependencies` -> `sys.exit(1)`, exit code 1), the process supervisor started it again every ~10 s, and
+  the reason never reached the log: it was handed to the slave logger's daemon thread just before `sys.exit`. The
+  `mobile_sam` code itself is compiled into the exe (the laptop exe printed "MobileSAM loaded" without `models`), so
+  the two weights files are all that is read from `models` at run time.
+- **Changed:** `utils/ModelsCheck.py` (new): `missingModelFiles(root)` - every file of `models.required.files` missing or
+  empty; `missingModelsMessages` - one paragraph for the screen (the error popup re-wraps its text), each full path for
+  the console. `MainProgram.checkModelFilesPresent()`: `main()`'s first step after `setLogProcess`, before clearing
+  Redis and before P1; missing -> printed, `showErrorMessage(..., 5)`, the rest of the 5 s waited if OK is pressed
+  sooner, `sys.exit(1)`; present -> "Model files present: 2 of 2 under <root>/models". The console window is left open
+  (the message stays readable there). New tuning keys in all three properties files: `models.required.files` (the two
+  paths, relative to the exe folder) and `models.missing.message.sec` (5).
+- **Not changed:** the camera server's own `verifyVisionDependencies` exit stays for what MainProgram does not check
+  (a weights file that is there but cannot be loaded, an import that fails) - such a case still restarts in a loop.
+- Docs: LLD §1 step 1; CLAUDE.md (§5 rule, §7 row 16); plant-pc-verification §16; both dry-run READMEs; code graph
+  (runtime node, import graph - 88 live modules of 389).
+- Run: `DryRun_Models_Check` 20/20 on both machines (new: M1 the files = what ModelManager loads, M2 present, M3 missing /
+  empty / no folder, M4 message, popup and 5 s, M5 `main()` exits 1 before Redis is cleared or any process created,
+  check first after `setLogProcess` (AST), M6 this clone); `DryRun_Tuning_Keys` 243/243, `DryRun_Startup_Backup` 16/16,
+  `DryRun_Heartbeat_And_Startup` 29/29 on both. Not run: the popup itself on Windows (stood in; FreeSimpleGUI), the exe.

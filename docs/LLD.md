@@ -13,7 +13,7 @@
 At import, MainProgram connects to Redis (3 attempts, 10 s apart, then exit). It does not flush Redis there: on Windows
 every server process re-imports MainProgram (spawn). `main()` then runs these steps in order:
 
-1. `setLogProcess("mainprogram")`; `clearQueues` (flushes the Redis db, trims the queues), then `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
+1. `setLogProcess("mainprogram")`; **the model files** (`checkModelFilesPresent`, `utils/ModelsCheck.py`, CHANGES §175): every file in `models.required.files` (the two weights files `camera/ModelManager.py` loads, relative to the folder of MainProgram.exe) must exist and not be empty - otherwise the missing files are printed, a message is shown on the screen for `models.missing.message.sec` (5 s, the full time even if OK is pressed sooner) and MainProgram exits (code 1) before clearing Redis or starting any process. Then `clearQueues` (flushes the Redis db, trims the queues), then `checkRedisHealth`. If the check fails, print the reason and `sys.exit(1)`.
 2. Start P1 (the logging server), then the picture clean-up in a background thread (`utils/PictureRetention.py`,
    CHANGES §110): picture files older than `picture.retention.days.trial` (30) under `picture.saving.dir.for.mode.trial`
    and older than `picture.retention.days.main` (60) under `basefolder.for.images` `Test/` and `Production/` are
