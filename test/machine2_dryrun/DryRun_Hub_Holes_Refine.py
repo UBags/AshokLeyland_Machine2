@@ -10,7 +10,8 @@ R2 refine on -> the refined circle; unrefined centre, radius and the move kept f
 R3 the first holes set gives no outline mask -> the next holes set
 R4 a hole moves more than sam.refine.move.max -> rejected (not found here: one set, two gammas)
 R5 the refined circle's radius outside holes.circle.radius -> rejected
-R6 refineFor: "splitpin" yes; "cap", "bung", none no; findHoles passes the check on
+R6 refineFor (switch set to splitpin): "splitpin" yes; "cap", "bung", none no; findHoles passes the check on
+R6b the default since CHANGES 184: refine.checks none - nothing refined
 R7 the result cache keeps refined and unrefined apart (same picture)
 R8 describe() names the refining (refined (moved .. px; unrefined ...))
 
@@ -105,6 +106,8 @@ r = run([(136.5, 600, 1.0, 0.0)], True, lambda p, c: [(CX + (x - CX) * 133.0 / 1
                                              for x, y in p])   # r 136.5 -> 133 (moved 3.5 px)
 check("R5 refined radius outside holes.circle.radius -> rejected", not r["found"] and "refined circle r" in r["reason"],
       r["reason"][:120])
+default = F.REFINE_CHECKS
+F.REFINE_CHECKS = "splitpin"                              # the switch as when on (off by default since CHANGES 184)
 seen = []
 original = F.findHolesWithSAM
 F.findHolesWithSAM = staticmethod(lambda img, model, hub=None, refine=False: seen.append(refine) or dict(found=False))
@@ -114,6 +117,8 @@ F.findHolesWithSAM = original
 check("R6 refineFor: splitpin only; findHoles passes it on",
       [F.refineFor(c) for c in ("splitpin", " SplitPin ", "cap", "bung", None)] == [True, True, False, False, False]
       and seen == [True, False, False, False], seen)
+F.REFINE_CHECKS = default
+check("R6b default (CHANGES 184): no check refined", default.strip() == "none" and not F.refineFor("splitpin"), repr(default))
 F._hubCheckCentre = staticmethod(lambda img, model, hub: ((CX, CY), "stand-in"))
 SCEN.update(sets=lower, refine=shifted(-1.8), calls=0); F._cache.clear(); im[0, 0] = 99
 a = F.findHolesWithSAM(im.copy(), "DOST", None, refine=False)

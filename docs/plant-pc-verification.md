@@ -302,7 +302,7 @@ On the Machine 2 PC with the new exe:
    picture: 4 bolts (r .., spread .., gamma ..)` (or holes); `the hub check (given) ... (this picture: ...)` means pass 1
    found no set there and the cycle's hub check was used. Note the check times (one more pass per picture: about
    0.3 - 0.5 s each on the laptop is expected). `siemens.vision.hubholes.centre.source=hubcheck` goes back.
-9. (CHANGES 183) Split pin only: its holes refined - the split pin log line says `refined (moved .. px; unrefined (..)
+9. (CHANGES 183; switched off in 184, `refine.checks=none` - nothing to verify) Split pin only: its holes refined - the split pin log line says `refined (moved .. px; unrefined (..)
    r ..)`; the DOST circle radius should come in one mode (no r ~148 / ~149 split), the refine adds a few tenths of a
    second on the GPU. Then `DryRun_SplitPin_Check_UI.py --auto` on the laptop prints `SPLITPIN OFFSET <model>` - that
    value goes into `siemens.vision.splitpin.hub.offset.<model>` (DOSTPLUS with `--model DOSTPLUS` on DOSTPLUS pictures).

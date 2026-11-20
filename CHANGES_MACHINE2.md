@@ -5666,3 +5666,18 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `Verify_Vision_Config_Equivalence` ALL EQUIVALENT both; `DryRun_SplitPin_Check_UI --auto --holes morphology` 79/79
   both (morphology is not refined); `DryRun_Tuning_Keys` 251/251. Not run: the refine on YOLO + MobileSAM sets (no YOLO
   weights here) - the laptop's `DryRun_SplitPin_Check_UI --auto` and `Study_Washer_SAM_UI` decide.
+
+## 184. Hub-hole refinement switched off (2026-11-21)
+
+- Uddi's laptop runs with CHANGES 183 (Study_Washer_SAM_UI, 21 OK + 57 NOT OK DOST): washer profile centre - hole
+  circle centre sd OK 0.59 / 0.41 px (unrefined 0.25 / 0.88), NOT OK 0.78 / 0.85 (0.47 / 0.82): the y split shrank, x
+  got worse - no more repeatable overall; `t_holes` median 1.15 - 1.23 s against ~0.92. Decision (Uddi): stay with the
+  unrefined holes - same accuracy, faster, which matters on the shop floor.
+- `camera/FindHubHoles.py`: `vision.hubholes.refine.checks` is a `vStr` now, default and properties `none` (an empty
+  value would count as a missing key and log a `[Configuration]` line); `refineFor` splits it on commas, `none` / empty
+  = no check. The refine code (`_refinedSet`, `_refine`) and `findHoles(..., check=)` stay; the split pin check still
+  names itself, so `refine.checks=splitpin` turns it back on. Reference commit f9ab748, both manifests; verifier ALL
+  EQUIVALENT on both machines.
+- `DryRun_Hub_Holes_Refine`: R6 sets the switch to `splitpin` itself; R6b = the default refines nothing (9 checks).
+- Run (sandbox): `DryRun_Hub_Holes_Refine` 9/9 both; `Verify_Vision_Config_Equivalence` ALL EQUIVALENT both; the
+  siemens properties give `'none'`, `refineFor('splitpin')` False, no `[Configuration]` line.
