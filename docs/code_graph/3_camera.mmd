@@ -20,7 +20,7 @@ flowchart TB
   A -->|"S20 split pin + washer"| SP["CheckSplitPinAndWasher"]
   A -->|"S22 cap"| CP["CheckCap"] --> CMF["CapMaskFinder"]
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
-  SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus) / sam_slow / morphology"]
+  SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus; centre from the picture itself, CHANGES 182) / sam_slow / morphology"]
   BS -.->|"bung seated position"| FH
   FH -.->|"reuses checkHub() steps"| HS
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]

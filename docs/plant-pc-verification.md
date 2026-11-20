@@ -298,6 +298,10 @@ On the Machine 2 PC with the new exe:
    the thing to report, with the picture.
 6. Times: the cap, bung and split pin checks each run YOLO + MobileSAM on the annulus now (up to 6 gammas, first success
    wins); their check times must stay well inside the 12 s timeout.
+8. (CHANGES 182) The centre now comes from the picture being checked: the cap / bung / split pin log lines say `seed this
+   picture: 4 bolts (r .., spread .., gamma ..)` (or holes); `the hub check (given) ... (this picture: ...)` means pass 1
+   found no set there and the cycle's hub check was used. Note the check times (one more pass per picture: about
+   0.3 - 0.5 s each on the laptop is expected). `siemens.vision.hubholes.centre.source=hubcheck` goes back.
 7. To go back: `siemens.vision.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
    cap 0.2,-0.1 / -0.6,-5.3; bung 4.9,-13.7 / 4.2,-16.0; split pin 1.8,1.6).
 

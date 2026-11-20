@@ -5602,3 +5602,32 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run (sandbox): the analysis and drawing on CPU (3 pictures, holes by the dark-blob finder); the window under Xvfb on
   Python 3.12 fed those results (torch and Tk are not in one Python here): 3 pictures shown, list, panel, log, both
   views, summary. Not run: the window with the models (laptop).
+
+## 182. Hub holes: the wide annulus centred from the picture being checked itself (2026-11-21)
+
+- Uddi's laptop study runs of 2026-11-21: 25 of 57 DOST split pin pictures without the hub's holes. Cause: the hub
+  picture chosen (13 Nov, another part) put the hub-check centre at (644.3, 334.5); the holes of those pictures sit
+  round (645.3, 347.3) - 13 px. checkHub()'s steps group masks by distance from the given centre within 15 %: from 13 px
+  off, the 4 holes (r ~149) lie 136 - 162 px away (ratio 1.19) and split into groups of fewer than 4; the bolts (r ~190)
+  stay in one group - every failure listed a bolt set (r ~181) only. A wider annulus would not help (the holes are
+  inside 116 - 253 already). Decision (Uddi): take the centre from the same picture always - a little slower, but a
+  proper result every time; the holes must be got accurately.
+- `camera/FindHubHoles.py`: `vision.hubholes.centre.source` (`picture` on both machines; `hubcheck` = before). Pass 1
+  `_centreFromPicture` / `_centreInWideAnnulus`: checkHub()'s steps (`_candidateSets`, on the per-thread segmenter
+  object - the split pin check runs its pictures in threads, so not the shared checkHub()) in the wide annulus round
+  `hub.segment.center` (where checkHub() looks; moved by the knuckle frame), per gamma until a gamma gives sets; of the
+  model's count the best set of each group; a set passing the holes' rule (circle r 135 - 165, total mask area <=
+  `holes.area.max.<model>`, the smallest area) gives the centre, else the bolts' set (circle r in
+  `vision.hubholes.bolts.circle.radius` 165 - 210, least distance variance) + `sam.seed.bolts.offset.<model>`; kept per
+  picture. Pass 2 = the wide-annulus search of CHANGES 169 round that centre, unchanged. Pass 1 finding no set -> the
+  cycle's hub-check centre (`hubCentre` given / `hubCentreProvider` / dry runs' `hubCentreFromPicture`), the reason in
+  the seed text. Cap, bung and split pin checks alike (all through `findHoles`). Reference commit with the values
+  hard-coded (4f080a0), both manifests pointed at it; verifier ALL EQUIVALENT on both machines.
+- `DryRun_Hub_Holes_Centre_Source` (new, both folders): 8 checks with checkHub()'s candidate sets stood in.
+- Docs: CLAUDE.md §5 (hub holes (a)), LLD (hub holes), plant-pc-verification §14.8, READMEs, `_hub_holes_option` text,
+  code graph (diagram 3).
+- Run (sandbox): `DryRun_Hub_Holes_Centre_Source` 8/8 both; `Verify_Vision_Config_Equivalence` ALL EQUIVALENT both;
+  `DryRun_SplitPin_Check_UI --auto --holes morphology` 79/79 both (morphology does not use the centre). Not run: the
+  YOLO + MobileSAM path (no YOLO weights here; a CPU run with stand-in boxes did not finish in 30 min) - the laptop's
+  `DryRun_SplitPin_Check_UI --auto`, `DryRun_Hub_Holes_SAM --wrong-model`, `DryRun_Cap_Hub_Distance`, `DryRun_Bung_Hub_Holes`
+  decide.

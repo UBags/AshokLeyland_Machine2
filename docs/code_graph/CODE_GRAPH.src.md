@@ -95,8 +95,9 @@ Derived from the call sites (comments ignored):
   - `CheckNutAndPlateWasher` uses the top-bearing ring from `CheckTopBearing` (stored in `ImageProcessor`).
   - `CheckNoCapBung` imports `CheckBung`; both use `BungSegmenter`.
   - `FindHubHoles` (cap, bung, split pin) reuses `checkHub()`'s steps from `HubAndBearingSegmenter` on its own
-    per-thread object — **do not change `checkHub()`** (CLAUDE.md §5). Its `sam` method (CHANGES 169) needs this
-    cycle's hub-check centre (`ImageProcessor.hubCentre`, set by the hub check, read through `hubCentreProvider`).
+    per-thread object — **do not change `checkHub()`** (CLAUDE.md §5). Its `sam` method (CHANGES 169) takes the
+    annulus centre from the picture itself since CHANGES 182 (pass 1: checkHub()'s steps round `hub.segment.center`);
+    this cycle's hub-check centre (`ImageProcessor.hubCentre`, `hubCentreProvider`) is the fallback.
   - Model users (`ModelManager`, lazy YOLO + MobileSAM): hub, nut / no-bung (`HexagonNutDetector`), knuckle locator,
     `FindHubHoles` (sam), cap.
 

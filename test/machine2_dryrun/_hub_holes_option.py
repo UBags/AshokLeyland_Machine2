@@ -12,6 +12,8 @@
 
 --hub-image PATH (CHANGES 177; "Hub picture..." in the windows): the hub picture of the same part (state 5) - the real
 checkHub() on it gives the hub centre, as production's hub check does; without it, checkHub() on each picture itself.
+Since CHANGES 182 (vision.hubholes.centre.source=picture) FindHubHoles takes the centre from the picture being checked
+itself and uses this hub-check centre only when that finds no set (=hubcheck: this centre first, as before).
 """
 import sys
 

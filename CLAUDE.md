@@ -131,8 +131,11 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   blue-marked legs, NOT OK when more than 2 marker pixels lie more than 8 px outside the washer. Values from 3 OK parts
   (21 OK / 58 NOT OK pictures, all as labelled) - strict like the bung check.
 - **Hub holes for the cap, bung and split pin checks** (CHANGES 164, 169; Uddi's design of 2026-11-20 - do not deviate):
-  `camera/FindHubHoles.py`. `findHolesWithSAM` (default, `vision.hubholes.method=sam`): (a) this cycle's hub-check centre
-  (`ImageProcessor.hubCentre`, via `hubCentreProvider`; none -> NOT OK); (b) a wide annulus (116 - 253) round it holding
+  `camera/FindHubHoles.py`. `findHolesWithSAM` (default, `vision.hubholes.method=sam`): (a) the centre - since CHANGES 182 from the picture being
+  checked itself (`vision.hubholes.centre.source=picture`, Uddi 2026-11-21: pass 1 = checkHub()'s steps round
+  `hub.segment.center`, any equally spaced set of the model's count - holes by the rule in (b), else the bolts +
+  `sam.seed.bolts.offset`; the cycle's hub-check centre `ImageProcessor.hubCentre` only when pass 1 finds no set;
+  `hubcheck` = that centre first, as before); none -> NOT OK; (b) a wide annulus (116 - 253) round it holding
   holes and bolts, `checkHub()`'s steps up to the candidate sets passing its equidistant / equal-angle filters, the best
   set of each group, the top 3; the holes = the smallest total mask area among the sets with a hole-circle radius
   (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (c) everything after the
