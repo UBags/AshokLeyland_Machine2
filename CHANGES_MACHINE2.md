@@ -5470,7 +5470,8 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   missing for "Courier", script 18` (11 / 16 / 18); English gives no Qt message at all (measured: the language dry run
   printed 339 / 174 / 172 such lines per font for the Indic languages, none for English). In the exe, Nuitka's console
   attach (`HelpersConsole.c`, `--windows-console-mode=attach`) reopens the C stdout / stderr on CONOUT$; in PyCharm stderr
-  is a pipe. Not proven on Windows here (no Windows in the sandbox): the laptop test below confirms or refutes it.
+  is a pipe. **Confirmed on the plant PC (Uddi, 2026-11-20):** the exe built before this change, started with
+  `QT_LOGGING_RULES=*=false` (Qt emits no message at all), ran without a crash and switched through all four languages.
 - **Changed:** `frontend/QtMessages.py` (new): `installQtMessageHandler()` - every Qt message to Python: each distinct
   (type, category, text) logged once through `logBoth`, repeats counted (`messageCounts()`); critical / fatal also
   written to Python's `sys.stderr` (WriteConsoleW in the exe, not the C runtime), a fatal one with the Python stack (found
