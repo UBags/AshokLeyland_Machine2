@@ -4,7 +4,8 @@ DryRun_Models_Check - MainProgram checks the vision model files before it starts
 M1  the required files (models.required.files): the two weights files ModelManager loads; the properties value equals
     the code default
 M2  all files present and non-empty under a project root: no problems, checkModelFilesPresent True, no popup
-M3  a file missing / a file empty: each reported with its path and why
+M3  a file missing / empty / of the wrong size (models.required.sizes, CHANGES 176): each reported with its path and
+    why; sizes not checked when the key is empty
 M4  checkModelFilesPresent with a file missing: the console lists it, the popup gets the models folder and the
     file names, the wait is models.missing.message.sec in total (also when OK closes the popup at once), False
 M5  main() with the files missing: exits (code 1) before clearing Redis and before any server process is created;
@@ -58,6 +59,12 @@ mm = (ROOT / "camera" / "ModelManager.py").read_text(encoding="utf-8")
 check("M1 ModelManager still loads exactly these paths",
       '"MobileSAM", "weights", "mobile_sam.pt"' in mm and '"MobileSAMv2", "weight", "ObjectAwareModel.pt"' in mm)
 
+check("M1 sizes: mobile_sam.pt 40,728,226 / ObjectAwareModel.pt 140,395,126 bytes (Machine 2 PC)",
+      MC.requiredModelSizes() == [40728226, 140395126] and MC.REQUIRED_SIZES == MC.REQUIRED_SIZES_DEFAULT,
+      MC.REQUIRED_SIZES)
+realSizes = MC.REQUIRED_SIZES
+MC.REQUIRED_SIZES = "10,10"                      # the test files below are 10 bytes
+
 # popups and sleeps recorded, not shown / slept
 popups, sleeps = [], []
 M.showErrorMessage = lambda text, auto_close_duration=3, **k: popups.append((text, auto_close_duration))
@@ -84,6 +91,15 @@ check("M3 an empty file reported", problems == [(SAM, "empty (0 bytes)")], probl
 root = tempfile.mkdtemp(prefix="models_check_none_")
 problems = MC.missingModelFiles(root)
 check("M3 no models folder: both missing", [p for p, _ in problems] == [SAM, YOLO], problems)
+root = makeRoot({SAM: 10, YOLO: 7})
+problems = MC.missingModelFiles(root)
+check("M3 a file of the wrong size reported (truncated copy)",
+      len(problems) == 1 and problems[0][0] == YOLO and "7 bytes, expected 10" in problems[0][1], problems)
+MC.REQUIRED_SIZES = ""
+check("M3 sizes not checked when models.required.sizes is empty", MC.missingModelFiles(root) == [], MC.missingModelFiles(root))
+MC.REQUIRED_SIZES = "10,10"
+root = tempfile.mkdtemp(prefix="models_check_none_")
+problems = MC.missingModelFiles(root)
 
 # ---------------------------------------------------------------- M4
 print("\n=== M4 the message and the wait ===", flush=True)
@@ -129,10 +145,14 @@ check("M5 AST: the check right after setLogProcess, before the first Process(...
 
 # ---------------------------------------------------------------- M6
 print("\n=== M6 this clone ===", flush=True)
+MC.REQUIRED_SIZES = realSizes
 BaseUtils.get_project_root = realRoot
-onDisk = [p for p in MC.requiredModelFiles()
-          if not os.path.isfile(os.path.join(str(realRoot()), *p.split("/")))
-          or os.path.getsize(os.path.join(str(realRoot()), *p.split("/"))) == 0]
+sizes = MC.requiredModelSizes()
+onDisk = []
+for i, p in enumerate(MC.requiredModelFiles()):
+    path = os.path.join(str(realRoot()), *p.split("/"))
+    if not os.path.isfile(path) or os.path.getsize(path) == 0 or (sizes and os.path.getsize(path) != sizes[i]):
+        onDisk.append(p)
 found = [p for p, _ in MC.missingModelFiles(str(realRoot()))]
 check("M6 matches the disk", found == onDisk, (found, onDisk))
 print(f"      (this clone: {'all present' if not found else 'missing ' + ', '.join(found)})", flush=True)

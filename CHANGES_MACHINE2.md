@@ -5456,3 +5456,36 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   empty / no folder, M4 message, popup and 5 s, M5 `main()` exits 1 before Redis is cleared or any process created,
   check first after `setLogProcess` (AST), M6 this clone); `DryRun_Tuning_Keys` 243/243, `DryRun_Startup_Backup` 16/16,
   `DryRun_Heartbeat_And_Startup` 29/29 on both. Not run: the popup itself on Windows (stood in; FreeSimpleGUI), the exe.
+
+## 176. Frontend crash in Kannada / Hindi in the exe: Qt's messages to the log, not the C stderr; model file sizes (2026-11-20)
+
+- **Seen (Uddi, plant PC and laptop exe):** with `kn` (and `hi`, chosen on the main screen) the frontend ended at once,
+  restarted by the supervisor every ~10 s; `en` fine; PyCharm fine in every language. Event Viewer: `ucrtbase.dll`,
+  exception 0xc0000409, fault offset 0x11858 (same each time); `logs\faults\frontend-<pid>.log` empty (0 bytes).
+- **Diagnosis:** 0xc0000409 in ucrtbase is the C runtime's fast fail - `abort()` or an invalid parameter. `abort()`
+  raises SIGABRT first, which `faulthandler` (on in every server, LogSettings) would have dumped: the empty files rule it
+  out, leaving a C-runtime call that the runtime rejected. The one C-runtime writer in the frontend that runs only with an
+  Indic language is Qt itself: without a message handler Qt writes its messages to the C stderr, and laying out Kannada /
+  Tamil / Devanagari in a font without those scripts (the tiles use Courier) gives `qt.text.font.db: OpenType support
+  missing for "Courier", script 18` (11 / 16 / 18); English gives no Qt message at all (measured: the language dry run
+  printed 339 / 174 / 172 such lines per font for the Indic languages, none for English). In the exe, Nuitka's console
+  attach (`HelpersConsole.c`, `--windows-console-mode=attach`) reopens the C stdout / stderr on CONOUT$; in PyCharm stderr
+  is a pipe. Not proven on Windows here (no Windows in the sandbox): the laptop test below confirms or refutes it.
+- **Changed:** `frontend/QtMessages.py` (new): `installQtMessageHandler()` - every Qt message to Python: each distinct
+  (type, category, text) logged once through `logBoth`, repeats counted (`messageCounts()`); critical / fatal also
+  written to Python's `sys.stderr` (WriteConsoleW in the exe, not the C runtime), a fatal one with the Python stack (found
+  on the way: with only the logger, a fatal "no Qt platform plugin" message was not on the screen when the logging server
+  was not up). `CosThetaMonitorDimensions.getAppInstance()` installs it before the QApplication exists.
+- **Model files (CHANGES 175, from Uddi's listing of the Machine 2 PC):** `models.required.sizes=40728226,140395126`
+  (tuning block, all three properties files): a required file of another size (incomplete copy) is reported like a
+  missing one; empty key = sizes not checked. The listing also shows ~2.8 GB nothing reads: `models\MobileSAM\MobileSAM\`
+  (a second copy of the clone), `MobileSAMv2\weight\sam_vit_h.pt` (2.5 GB), `l2.pt`, `MobileSAMv2\weight\mobile_sam.pt`,
+  `yolo_models\yolov8m.pt` (only the unused `camera/HandDetector.py`) - left in place.
+- Docs: LLD §1 step 1, §5.1; CLAUDE.md (§4 note, §5 rule, §7 row); plant-pc-verification §11.7; READMEs; code graph
+  (89 live modules of 392).
+- Run: `DryRun_Qt_Messages` 15/15 on both machines (new; child processes with fd 2 captured: Indic laid out in Courier -
+  6 distinct Qt messages in the handler, none on fd 2, each logged once; English - none; without the handler Qt writes
+  them to fd 2; qWarning from Python; a fatal message on the console with the stack). `DryRun_Frontend_Languages` 100/100
+  on both (no raw `qt.` line on stderr now; 1,800+ before); `DryRun_Models_Check` 23/23, `DryRun_Tuning_Keys` 247/247 on
+  both; `DryRun_FEServer_To_DBServer_Pipeline` passes; `DryRun_FEServer_Cycles` 166/167 - F1 ("Rotation Not Done" fits
+  its tile) fails the same with this change reverted (sandbox fonts), not caused by it. Not run: the exe on Windows.

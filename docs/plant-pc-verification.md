@@ -229,6 +229,10 @@ On the Machine 2 PC, with the new exe:
    creator ...` at start and one at each change of language: send these lines if a size looks wrong (a "(drawn n)"
    means Qt draws another size than the one set).
    Reported by Uddi on 2026-11-19: the dialogs show Kannada, Tamil and Hindi correctly.
+7. (CHANGES 176) Start in Kannada (and change to Hindi and Tamil on the main screen): the frontend stays up - before
+   176 the exe's frontend ended at once (exit code 3221226505, `ucrtbase.dll` 0xc0000409 in the Event Viewer, the
+   supervisor restarting it every 10 s). The log has a few `Qt warning (qt.text.font.db): OpenType support missing for
+   ...` lines, each once: harmless (Qt then draws the text in Nirmala UI). Any `Qt critical` / `Qt fatal` line: send it.
 
 ## 12. Exit: the DB server drains, MainProgram waits for it (CHANGES 157)
 
@@ -328,3 +332,4 @@ On the Machine 2 PC with the new exe:
 | 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | 2026-11-19 | | Laptop: found on every good picture, other model never; offsets set (CHANGES 165) | Reported by Uddi: `--wrong-model` 161 compared, 7 not found (6 bad bungs, 1 NOT OK split pin); `--seed hubcheck` 10/10. Re-run after 165: every good picture found, the other model never; DOST centres still in two modes -> per-hole refinement (CHANGES 166). CHANGES 166 refinement superseded: Uddi found the thin-annulus finder slow and wrong (2026-11-20) -> new finder (CHANGES 169); laptop run of 2026-11-20 with it (Uddi): 163 pictures, 0.5 - 0.7 s each (3 - 4 s when not found), every good picture found, the other model never; cutoffs and offsets set (CHANGES 170). Plant not yet |
 | 15 Start-up: backup in the background, its time; any wait before the DB server; launcher polling every 2 s (CHANGES 174) | | | | |
 | 16 Model files: present line at start; missing -> message 5 s, exit, nothing started (CHANGES 175) | | | | |
+| 11.7 Frontend in Kannada / Hindi / Tamil in the exe: stays up; `Qt warning` lines once each (CHANGES 176) | | | | |

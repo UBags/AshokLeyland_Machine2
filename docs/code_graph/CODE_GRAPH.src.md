@@ -1,7 +1,7 @@
 # Code graph — AshokLeyland Machine 2
 
 **Must read before changing code.** Traced from branch `machine2-io-fe-db-cam` at commit `a33aad1` (2026-11-19,
-CHANGES 167; module counts and diagrams 1 and 6 refreshed at CHANGES 175). Built from the code itself (AST import walk from the two entry points, and a scan of every
+CHANGES 167; module counts and diagrams 1 and 6 refreshed at CHANGES 175 / 176). Built from the code itself (AST import walk from the two entry points, and a scan of every
 `send…` / `read…` call in `utils/RedisUtils.py`), then checked against `docs/HLD.md` §3–5 and `docs/LLD.md`.
 
 Each diagram is below as Mermaid (GitHub renders it) and as an SVG in this folder (`docs/code_graph/*.svg`) for
@@ -21,8 +21,8 @@ zooming. The `.mmd` files are the sources.
 - **Entry points:** `MainProgram.py` (the station; built to `MainProgram.exe`) and `OtherServices.py` (web service, MI
   dashboard, screen share; built to `OtherServices.exe`). Both are started by
   `Start-Hub-And-Disc-application - Production.vbs`.
-- **Live:** 88 of 389 Python modules are reachable from those two (imports at module level and inside functions).
-- **Not reachable (301, as of CHANGES 175):** `test/machine2_dryrun` 70, `test/machine1_dryrun` 66, `archive/` 46, other `test/` 41,
+- **Live:** 89 of 392 Python modules are reachable from those two (imports at module level and inside functions).
+- **Not reachable (303, as of CHANGES 176):** `test/machine2_dryrun` 71, `test/machine1_dryrun` 67, `archive/` 46, other `test/` 41,
   leftovers in `frontend/` (old widgets), `costhetaio/` (`IOServer_ModbusTCP.py`, `siemens/test`), `processors/`,
   `utils/`, `video/`, `camera/` (`CameraRecorderServer`, `HandDetector`, `VideoCamera`, `ONVIFCam`, `PhotoCamera`),
   `mail/`, root scripts (`main.py`, `definition.py`, `VerifyIntegrity.py`, `test-*.py`, `verify_installation.py`).

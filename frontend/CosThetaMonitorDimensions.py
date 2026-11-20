@@ -408,6 +408,9 @@ def getMonitorHeight():
 
 def getAppInstance():
     global app
+    # Qt's own messages to the log, never to the C stderr (CHANGES 176): installed before the QApplication exists
+    from frontend.QtMessages import installQtMessageHandler
+    installQtMessageHandler()
     if app is None:
         if not QApplication.instance():
             # print("App instance created")

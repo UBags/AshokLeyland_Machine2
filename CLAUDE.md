@@ -6,7 +6,7 @@ Working notes for Claude (and anyone else) on this repository. Read this first; 
 > **MUST READ before changing any code: [`docs/code_graph/CODE_GRAPH.md`](docs/code_graph/CODE_GRAPH.md).**
 > Graphs of the live code: runtime topology, every Redis stream / key with its writer and reader, the camera server
 > and the dependencies between vision checks, the IOServer threads and PLC layer, the 28-state cycle, and the import
-> graph of the 88 live modules (of 389; the rest are dry runs, archive and old versions). Check which processes and
+> graph of the 89 live modules (of 392; the rest are dry runs, archive and old versions). Check which processes and
 > checks a change touches there first. Keep it in step: when a process, queue, key, thread, check or state changes,
 > update the matching `.mmd` in `docs/code_graph/`, run `python3 docs/code_graph/tools/build_doc.py` (and regenerate
 > `6_modules.mmd` and the SVGs, see its §7).
@@ -88,6 +88,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   fonts of the QR code, mode, creator and date lines are also written into the label's style sheet (`applyFont` /
   `styleSheetWithFont`: the sheets carry `font: bold`, which takes precedence over setFont); a "Frontend fonts (...)"
   line logs each family's size at start and at every change of language (CHANGES 159).
+  Qt's own messages go through `frontend/QtMessages.py` (installed by `getAppInstance`, CHANGES 176): never let Qt
+  write to the C stderr - in the Nuitka exe its Indic-font warnings there ended the frontend (0xC0000409 in
+  ucrtbase.dll; English never warns, PyCharm never crashed). A new PySide6 process must install the handler too.
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.
@@ -148,7 +151,8 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   its `ALTER TABLE ... IF NOT EXISTS` waits for pg_dump's locks and holds up every query queued behind it.
 - Model files (CHANGES 175): `main()`'s first step after `setLogProcess` is `checkModelFilesPresent` (`utils/ModelsCheck.py`):
   every file in `models.required.files` (tuning block; the two weights files `camera/ModelManager.py` loads, relative to
-  the folder of MainProgram.exe) must exist and not be empty, else the files are printed, a message is on the screen for
+  the folder of MainProgram.exe) must exist, not be empty and have its size in `models.required.sizes` (CHANGES 176;
+  40,728,226 / 140,395,126 bytes on the Machine 2 PC), else the files are printed, a message is on the screen for
   `models.missing.message.sec` (5) and MainProgram exits before anything is started. A new model file the code loads
   goes into that key too. `models/` is not in the exe (`runNuitka.bat`): an exe run from `MainProgram.dist` on the laptop
   needs `models` there (a junction to the repo's `models` folder).
@@ -185,6 +189,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run of 2026-11-20 (Uddi): 163 pictures, 0.5 - 0.7 s each, every good picture found, the other model never, area cutoffs and offsets set (CHANGES 170); plant not yet |
 | 15 Start-up: the backup beside the mode / login dialogs, its time and any wait before the DB server; the launcher polling every 2 s (CHANGES 174) | Not reported yet |
 | 16 Model files checked at start: missing -> message on the screen for 5 s, MainProgram exits, nothing started (CHANGES 175) | Not reported yet |
+| 11.7 Frontend in Kannada / Hindi in the exe stays up (Qt messages to the log, CHANGES 176) | Not reported yet - crash reproduced on the plant PC and the laptop exe on 2026-11-20 before the fix |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

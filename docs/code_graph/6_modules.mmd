@@ -51,10 +51,11 @@ flowchart LR
   end
   subgraph pkg_frontend["frontend"]
     frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2453 lines</small>"]
-    frontend_CosThetaMonitorDimensions["CosThetaMonitorDimensions<br/><small>425 lines</small>"]
+    frontend_CosThetaMonitorDimensions["CosThetaMonitorDimensions<br/><small>428 lines</small>"]
     frontend_CosThetaStylesheets["CosThetaStylesheets<br/><small>138 lines</small>"]
     frontend_FrontendI18n["FrontendI18n<br/><small>288 lines</small>"]
     frontend_FrontendNotices["FrontendNotices<br/><small>73 lines</small>"]
+    frontend_QtMessages["QtMessages<br/><small>106 lines</small>"]
     frontend_SimplePopups["SimplePopups<br/><small>2025 lines</small>"]
   end
   subgraph pkg_frontend_frontendutils["frontend.frontendutils"]
@@ -188,6 +189,7 @@ flowchart LR
   frontend_AshokLeylandFrontEnd --> frontend_widgets_CosThetaSeparators
   frontend_AshokLeylandFrontEnd --> persistence_Persistence
   frontend_AshokLeylandFrontEnd --> utils_StateSync
+  frontend_CosThetaMonitorDimensions -.-> frontend_QtMessages
   frontend_FrontendNotices --> frontend_FrontendI18n
   frontend_SimplePopups --> frontend_FrontendI18n
   frontend_SimplePopups --> persistence_Persistence

@@ -11,7 +11,7 @@ shows a message and exits without starting anything.
 
 The files: models.required.files (tuning block of the properties file), paths relative to the project root
 (the folder of MainProgram.exe, or of MainProgram.py when run from the source). A file counts as present when it
-exists and is not empty. Only the weights files are read at run time (camera/ModelManager.py); the mobile_sam
+exists, is not empty and has its size in models.required.sizes (CHANGES 176). Only the weights files are read at run time (camera/ModelManager.py); the mobile_sam
 code itself is compiled into the exe.
 """
 import os
@@ -22,6 +22,10 @@ from Configuration import CosThetaConfigurator
 REQUIRED_FILES_DEFAULT = ("models/MobileSAM/weights/mobile_sam.pt,"
                           "models/MobileSAM/MobileSAMv2/weight/ObjectAwareModel.pt")
 REQUIRED_FILES = CosThetaConfigurator.getTuning("models.required.files", REQUIRED_FILES_DEFAULT)
+# exact sizes in bytes, in the order of models.required.files (CHANGES 176; from the Machine 2 PC, 2026-11-20); empty
+# = sizes not checked. A truncated or different copy is caught; a hash is not computed (180 MB at every start).
+REQUIRED_SIZES_DEFAULT = "40728226,140395126"
+REQUIRED_SIZES = CosThetaConfigurator.getTuning("models.required.sizes", REQUIRED_SIZES_DEFAULT)
 MESSAGE_SEC = CosThetaConfigurator.getTuning("models.missing.message.sec", 5, minimum=1)
 
 
@@ -30,15 +34,29 @@ def requiredModelFiles() -> List[str]:
     return [f.strip().replace("\\", "/") for f in str(REQUIRED_FILES).split(",") if f.strip()]
 
 
+def requiredModelSizes() -> List[int]:
+    """The expected size of each required file (same order); [] when models.required.sizes is empty or unreadable."""
+    try:
+        return [int(s.strip()) for s in str(REQUIRED_SIZES).split(",") if s.strip()]
+    except ValueError:
+        return []
+
+
 def missingModelFiles(root: str) -> List[Tuple[str, str]]:
-    """(relative path, why) of every required file that is missing or empty under root; [] when all are there."""
+    """(relative path, why) of every required file that is missing, empty or not of its expected size under root;
+    [] when all are there."""
     problems = []
-    for relative in requiredModelFiles():
+    files, sizes = requiredModelFiles(), requiredModelSizes()
+    for i, relative in enumerate(files):
         path = os.path.join(root, *relative.split("/"))
         if not os.path.isfile(path):
             problems.append((relative, "missing"))
-        elif os.path.getsize(path) == 0:
+            continue
+        size = os.path.getsize(path)
+        if size == 0:
             problems.append((relative, "empty (0 bytes)"))
+        elif len(sizes) == len(files) and size != sizes[i]:
+            problems.append((relative, f"{size:,} bytes, expected {sizes[i]:,} (incomplete or a different file)"))
     return problems
 
 
