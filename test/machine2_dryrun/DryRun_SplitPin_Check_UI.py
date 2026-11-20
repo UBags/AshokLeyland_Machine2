@@ -144,8 +144,11 @@ def skipSwitch(items) -> list:
 
 
 def auto(folder: pathlib.Path) -> int:
-    items = picturesIn(folder)
+    items = picturesIn(folder) if folder.is_dir() else []
     print(f"Model: {currentModel()} (--model)", flush=True)
+    if not items:                             # nothing checked is not a pass
+        print(f"No pictures in {folder} (nor in its OK\\ / NOT_OK\\ sub-folders)\nRESULT: FAIL (no pictures)", flush=True)
+        return 1
     counts, mismatches, known = {}, [], []
     for path, expected in items:
         verdict, _, elapsed, reason, values = runCheck(path)

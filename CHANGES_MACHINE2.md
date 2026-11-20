@@ -5539,3 +5539,13 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `DryRun_Frontend_Languages` 100/100, `Verify_Vision_Config_Equivalence` ALL EQUIVALENT on both (it first reported 10
   baselines missing - the sandbox clone was shallow; unshallowed). Hub-picture control smoke-tested under Xvfb. Not run:
   the cap / bung windows (torch and Tk not in one Python here), the SAM path with the YOLO weights, Windows, a real camera.
+
+## 178. Split pin dry run: an unreadable --hub-image stops it; no pictures is not a PASS (2026-11-20)
+
+- Uddi's laptop run with an empty `C:\Temp\splitpin_dostplus` and no `Hub.png` there printed "Hub picture could not be
+  read - hub centre from each checked picture itself" and then "0 pictures: RESULT: PASS". Both hid the mistake.
+- `_hub_holes_option.installHubPictureOption`: a `--hub-image` given on the command line that cannot be read stops the
+  run (exit 1, "could not be read - stopped"); in the windows a bad choice is still reported and the window goes on.
+  `DryRun_SplitPin_Check_UI --auto`: no pictures in the folder (nor in `OK\` / `NOT_OK\`), or no such folder ->
+  "RESULT: FAIL (no pictures)", exit 1. Both dry-run folders.
+- Run: empty folder -> FAIL, exit 1; missing hub picture -> stopped, exit 1; `--auto --holes morphology` 79/79 PASS.

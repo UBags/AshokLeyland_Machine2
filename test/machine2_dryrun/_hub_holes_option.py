@@ -142,6 +142,8 @@ def installHubPictureOption():
     path = hubImageFromArgs()
     if path:
         print(setHubPicture(path), flush=True)
+        if HUB_PICTURE["image"] is None:      # a hub picture asked for on the command line must be used, not skipped
+            sys.exit(f"--hub-image {path}: the picture could not be read - stopped (check the path)")
 
 
 def addHubPictureControl(bar, root, report=print):
