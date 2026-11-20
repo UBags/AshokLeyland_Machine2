@@ -5587,3 +5587,18 @@ in English, at the start and never change it; 40 characters instead of 30, so th
     (DOST OK 0.34 - 0.47 / NOT OK 0.19 - 0.49; best joint cut 74 / 79 DOST, 48 / 72 DOSTPLUS), brass legs pass as washer
     colour; a point on the eye gives the eye loop only (the shank is under the nut); single-point prompts on the legs half
     mostly return the whole disc. The YOLO-box step is untested here (no weights; its code path run with a stand-in).
+
+## 181. Study_Washer_SAM_UI: the washer study in a window, every profile and centre drawn (2026-11-21)
+
+- Uddi: a window over the study - choose a folder, run every picture with a configurable gap (3 s), the profiles and
+  centres drawn so he can see what happens and give feedback; extensive terminal logging kept.
+- `test/machine*_dryrun/Study_Washer_SAM_UI.py` (new): Folder / Model / Hub picture / Seconds between pictures (0 - 20,
+  3 at start) / View (washer zoom, hub holes wide) / Save marked pictures / Start / Stop; the analysis runs in a worker
+  thread, the window shows each picture, its values, the log and a list; the summary at the end. Outlines and markers
+  only on the pictures, the legend beside them (CLAUDE.md §5).
+- `Study_Washer_SAM.py`: `analyse` returns its geometry at every step (holes, estimated centre, nut, washer outline and
+  centre) so a picture is drawn as far as it got; `drawFull` draws on the whole picture (zoom or wide, hub holes and
+  their circle included); `picturesIn`, `setUp`, `processPicture` shared by the batch run and the window.
+- Run (sandbox): the analysis and drawing on CPU (3 pictures, holes by the dark-blob finder); the window under Xvfb on
+  Python 3.12 fed those results (torch and Tk are not in one Python here): 3 pictures shown, list, panel, log, both
+  views, summary. Not run: the window with the models (laptop).

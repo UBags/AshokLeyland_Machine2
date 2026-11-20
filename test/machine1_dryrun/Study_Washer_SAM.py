@@ -156,6 +156,9 @@ def analyse(im, model, pred, holesResult, offset):
     x0, y0 = int(round(ex)) - CROP_HALF, int(round(ey)) - CROP_HALF
     crop = np.ascontiguousarray(cv2.cvtColor(im[y0:y0 + 2 * CROP_HALF, x0:x0 + 2 * CROP_HALF], cv2.COLOR_BGR2RGB))
     c = np.array([ex - x0, ey - y0])
+    # geometry for the pictures (full-picture coordinates where noted), returned whatever step fails
+    base = dict(x0=x0, y0=y0, hx=hx, hy=hy, hr=holesResult.get("radius"), hpts=holesResult.get("points"), ex=ex, ey=ey,
+                cc=c, nut=None, prof=None)
     hsv = cv2.cvtColor(im[y0:y0 + 2 * CROP_HALF, x0:x0 + 2 * CROP_HALF], cv2.COLOR_BGR2HSV).astype(int)
     Hh, Ss, Vv = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     yy, xx = np.mgrid[:2 * CROP_HALF, :2 * CROP_HALF]
@@ -200,11 +203,13 @@ def analyse(im, model, pred, holesResult, offset):
                 + ("  <- picked" if n is nut else ""))
         out["t_nut"] = time.perf_counter() - t1
         if nut:
+            base["nut"] = (nut["cx"], nut["cy"], nut["r"]); base["nutMask"] = nut["mask"]
             out.update(nut_cx=nut["cx"], nut_cy=nut["cy"], nut_r=nut["r"], nut_sd=nut["sd"], nut_dx=nut["cx"] - hx, nut_dy=nut["cy"] - hy)
             cc = np.array([nut["cx"] - x0, nut["cy"] - y0]); Rn_used = nut["r"]
         else:
             cc = c; Rn_used = Rn
         out["centre_used"] = "nut" if nut else "holes+offset"
+        base["cc"] = cc
 
         # ---- the washer: several prompt sets
         t2 = time.perf_counter()
@@ -249,7 +254,7 @@ def analyse(im, model, pred, holesResult, offset):
     out["n_prompt_sets"] = len(sets)
     if wash is None:
         out["fail"] = "no washer mask with leak < 0.05"
-        return out, None
+        return out, dict(base)
     out.update(wash_set=wash["name"], wash_m=wash["i"], wash_area=wash["area"], wash_iou=wash["iou"], wash_score=wash["score"],
                wash_shape="disc" if wash["nutCov"] >= 0.5 else "ring")
     M = wash["mask"]
@@ -260,7 +265,7 @@ def analyse(im, model, pred, holesResult, offset):
     fo, wo, co = robustFit(rout, [1, 2, 12, 24])
     if fo is None:
         out["fail"] = "profile fit failed (too few angles)"
-        return out, None
+        return out, dict(base, M=M)
     a12 = math.hypot(co["a12"], co["b12"]); a6 = None
     # 6-fold (hex nut) check on the raw outline
     rr = rout.copy(); m6 = np.isfinite(rr)
@@ -271,6 +276,7 @@ def analyse(im, model, pred, holesResult, offset):
                prof_dx=co["a1"], prof_dy=co["b1"],                                  # washer centre - centre used
                prof_cx=cc[0] + co["a1"] + x0, prof_cy=cc[1] + co["b1"] + y0)
     out["prof_vs_holes_dx"] = out["prof_cx"] - hx; out["prof_vs_holes_dy"] = out["prof_cy"] - hy
+    base["prof"] = (out["prof_cx"], out["prof_cy"])
 
     # ---- eye, legs half, coverage, standing out
     angle = (np.degrees(np.arctan2(yy - cc[1], xx - cc[0])) % 360)
@@ -283,7 +289,7 @@ def analyse(im, model, pred, holesResult, offset):
     comps = sorted([(st[k, cv2.CC_STAT_AREA], k) for k in range(1, n)], reverse=True)
     if not comps:
         out["fail"] = "no eye found (no bright object just outside the washer outline)"
-        return out, dict(M=M, fo=fo, cc=cc, x0=x0, y0=y0)
+        return out, dict(base, M=M, fo=fo)
     k = comps[0][1]; ys, xs = np.nonzero(lab == k)
     eye = math.degrees(math.atan2(ys.mean() - cc[1], xs.mean() - cc[0])) % 360
     out.update(eye_angle=eye, eye_area=int(comps[0][0]), eye2_area=int(comps[1][0]) if len(comps) > 1 else 0)
@@ -442,7 +448,7 @@ def analyse(im, model, pred, holesResult, offset):
     rgb = crop.astype(float); s = rgb.sum(axis=2) + 1
     blueShare = (rgb[..., 2] / s >= 0.55) & (rgb[..., 2] >= 20)
     out["blue_legs_px"] = int((blueShare & legsHalf).sum())
-    return out, dict(M=M, fo=fo, cc=cc, x0=x0, y0=y0, eye=eye, Rn=Rn_used, occ=occ & legsHalf, stand=standMask,
+    return out, dict(base, M=M, fo=fo, eye=eye, Rn=Rn_used, occ=occ & legsHalf, stand=standMask,
                      pin=pin["mask"] if pin is not None else None, legs=legsUnion | ylegs)
 
 
@@ -473,6 +479,120 @@ def drawPicture(im, g):
     return cv2.resize(c, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
 
 
+def drawFull(im, g, half=175, scale=2):
+    """The picture round the washer with everything drawn - outlines and markers only, no text (CLAUDE.md):
+      blue        the hub's holes (small circles), their circle (thin) and its centre (cross)
+      grey        the estimated centre = hole circle centre + the split pin offset (small cross)
+      orange      the nut circle (MobileSAM) and its centre (cross) = the spindle centre
+      light blue  the washer mask from MobileSAM (contour)
+      green       the fitted washer outline (12 scallops) and its centre (cross)
+      purple      the nut-edge circle used as the inner edge of the washer ring
+      yellow      the eye direction (line) and the two edges of the legs half (thin lines); leg masks (contours)
+      red         pixels of the legs half that are not bright washer (contours)
+      magenta     legs standing out past the outline (contours)
+      white       the split pin mask from the eye prompt (contour)"""
+    out = im.copy()
+    x0, y0 = g["x0"], g["y0"]
+    ip = lambda x, y: (int(round(x)), int(round(y)))
+
+    def cross(x, y, col, size=6, th=1):
+        cv2.line(out, ip(x - size, y), ip(x + size, y), col, th); cv2.line(out, ip(x, y - size), ip(x, y + size), col, th)
+
+    def contours(mask, col):
+        if mask is None:
+            return
+        cs, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        cs = [cnt + np.array([[x0, y0]]) for cnt in cs]
+        cv2.drawContours(out, cs, -1, col, 1)
+
+    if g.get("hpts") is not None:
+        for px, py in g["hpts"]:
+            cv2.circle(out, ip(px, py), 9, (255, 0, 0), 1)
+    if g.get("hr"):
+        cv2.circle(out, ip(g["hx"], g["hy"]), int(round(g["hr"])), (255, 0, 0), 1)
+    cross(g["hx"], g["hy"], (255, 0, 0), 8, 2)
+    cross(g["ex"], g["ey"], (160, 160, 160), 4, 1)
+    contours(g.get("M"), (255, 200, 120))
+    cc = g["cc"]; cx, cy = cc[0] + x0, cc[1] + y0
+    if g.get("nut"):
+        nx, ny, nr = g["nut"]
+        cv2.circle(out, ip(nx, ny), int(round(nr)), (0, 165, 255), 1); cross(nx, ny, (0, 165, 255), 6, 2)
+    if g.get("fo") is not None:
+        fo = g["fo"]
+        pts = np.column_stack([cx + fo * np.cos(T), cy + fo * np.sin(T)]).round().astype(np.int32)
+        cv2.polylines(out, [pts], True, (0, 255, 0), 1)
+    if g.get("prof"):
+        cross(g["prof"][0], g["prof"][1], (0, 255, 0), 6, 2)
+    if g.get("Rn"):
+        cv2.circle(out, ip(cx, cy), int(round(g["Rn"])), (200, 0, 200), 1)
+    if g.get("eye") is not None:
+        th = math.radians(g["eye"])
+        cv2.line(out, ip(cx, cy), ip(cx + 80 * math.cos(th), cy + 80 * math.sin(th)), (0, 255, 255), 2)
+        for a in (g["eye"] + 90, g["eye"] - 90):
+            t_ = math.radians(a)
+            cv2.line(out, ip(cx, cy), ip(cx + 70 * math.cos(t_), cy + 70 * math.sin(t_)), (0, 200, 200), 1)
+        contours(g.get("legs"), (0, 255, 255))
+        contours(g.get("pin"), (255, 255, 255))
+        contours(g.get("occ"), (0, 0, 255))
+        contours(g.get("stand"), (255, 0, 255))
+    X0, Y0 = int(round(cx)) - half, int(round(cy)) - half
+    view = out[max(Y0, 0):Y0 + 2 * half, max(X0, 0):X0 + 2 * half]
+    return cv2.resize(view, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
+
+
+# ---------------------------------------------------------------------------------------------------- shared
+def picturesIn(folder):
+    """[(path, label)] from OK\\ / NOT_OK\\ if there are any, else the folder itself (no label)."""
+    folder = pathlib.Path(folder); items = []
+    for sub, lab in (("OK", "OK"), ("NOT_OK", "NOT OK")):
+        if (folder / sub).is_dir():
+            items += [(p, lab) for p in sorted((folder / sub).iterdir()) if p.suffix.lower() in EXT]
+    if not items:
+        items = [(p, "") for p in sorted(folder.iterdir()) if p.suffix.lower() in EXT]
+    return items
+
+
+def setUp():
+    """Hole finder (--holes), MobileSAM predictor; returns (pred, FindHubHoles, split pin class, method, source)."""
+    from _hub_holes_option import applyHolesOption
+    method = applyHolesOption()
+    from camera.FindHubHoles import FindHubHoles
+    from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher as SP
+    import camera.CheckSplitPinAndWasher as SPM
+    SPM.logBoth = lambda *a, **k: None
+    pred, src = samPredictor()
+    log(f"MODELS MobileSAM from {src}; holes method {method}")
+    log(f"START R_WASHER {R_WASHER} R_NUT {R_NUT} offsets DOST {tuple(SP.HUB_OFFSET_DOST)} DOSTPLUS {tuple(SP.HUB_OFFSET_DOSTPLUS)}")
+    return pred, FindHubHoles, SP, method, src
+
+
+def processPicture(path, label, model, pred, FindHubHoles, SP):
+    """One picture: holes, then analyse(); (row, geometry or None, the picture as checked or None). Logs everything."""
+    im = cv2.imread(str(path))
+    if im is None:
+        log(f"PICTURE {pathlib.Path(path).name} unreadable")
+        return dict(model=model, label=label, name=pathlib.Path(path).name, fail="unreadable"), None, None
+    im = cv2.resize(im, (1280, 720))
+    name = pathlib.Path(path).name
+    offset = tuple(SP.HUB_OFFSET_DOSTPLUS if model == "DOSTPLUS" else SP.HUB_OFFSET_DOST)
+    t0 = time.perf_counter()
+    with contextlib.redirect_stdout(io.StringIO()):
+        holes = FindHubHoles.findHoles(im, model)
+    th = time.perf_counter() - t0
+    log(f"PICTURE {model} {label or '-':6s} {name}")
+    log(f"   HOLES {FindHubHoles.describe(holes)}  ({th:.2f} s)")
+    if not holes.get("found"):
+        log("   RESULT holes not found")
+        return dict(model=model, label=label, name=name, fail="holes not found", t_holes=th), None, im
+    t1 = time.perf_counter()
+    r, g = analyse(im, model, pred, holes, offset)
+    r.update(model=model, label=label, name=name, holes_cx=holes["cx"], holes_cy=holes["cy"], holes_r=holes["radius"],
+             t_holes=th, t_rest=time.perf_counter() - t1)
+    log("   RESULT " + ", ".join(f"{k} {v:.3f}" if isinstance(v, float) else f"{k} {v}" for k, v in r.items()
+                             if k not in ("model", "label", "name")))
+    return r, g, im
+
+
 # ---------------------------------------------------------------------------------------------------- main
 def main():
     sets = OrderedDict()
@@ -485,52 +605,23 @@ def main():
     outDir = pathlib.Path(arg("--out", str(HERE / "washer_study_results")))
     outDir.mkdir(parents=True, exist_ok=True)
 
-    from _hub_holes_option import applyHolesOption, setHubPicture
-    method = applyHolesOption()
-    from camera.FindHubHoles import FindHubHoles
-    from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher as SP
-    import camera.CheckSplitPinAndWasher as SPM
-    SPM.logBoth = lambda *a, **k: None
-    pred, src = samPredictor()
-    log(f"MODELS MobileSAM from {src}; holes method {method}; sets {dict((k, str(v)) for k, v in sets.items())}; hubs {hubs}; pictures to {outDir}")
-    log(f"START R_WASHER {R_WASHER} R_NUT {R_NUT} offsets DOST {tuple(SP.HUB_OFFSET_DOST)} DOSTPLUS {tuple(SP.HUB_OFFSET_DOSTPLUS)}")
+    from _hub_holes_option import setHubPicture
+    pred, FindHubHoles, SP, method, src = setUp()
+    log(f"SETS {dict((k, str(v)) for k, v in sets.items())}; hubs {hubs}; pictures to {outDir}")
 
     rows = []
     for model, folder in sets.items():
         log(setHubPicture(hubs.get(model)) + f" (model {model})")
-        items = []
-        for sub, lab in (("OK", "OK"), ("NOT_OK", "NOT OK")):
-            if (folder / sub).is_dir():
-                items += [(p, lab) for p in sorted((folder / sub).iterdir()) if p.suffix.lower() in EXT]
-        if not items:
-            items = [(p, "") for p in sorted(folder.iterdir()) if p.suffix.lower() in EXT]
+        items = picturesIn(folder)
         if limit:
             items = items[:limit] if not any(l for _, l in items) else \
                 [x for x in items if x[1] == "OK"][:limit] + [x for x in items if x[1] == "NOT OK"][:limit]
         log(f"SET {model}: {len(items)} pictures from {folder}")
-        offset = tuple(SP.HUB_OFFSET_DOSTPLUS if model == "DOSTPLUS" else SP.HUB_OFFSET_DOST)
         for p, lab in items:
-            im = cv2.imread(str(p))
-            if im is None:
-                log(f"PICTURE {p.name} unreadable"); continue
-            im = cv2.resize(im, (1280, 720))
-            t0 = time.perf_counter()
-            with contextlib.redirect_stdout(io.StringIO()):
-                holes = FindHubHoles.findHoles(im, model)
-            th = time.perf_counter() - t0
-            log(f"PICTURE {model} {lab or '-':6s} {p.name}")
-            log(f"   HOLES {FindHubHoles.describe(holes)}  ({th:.2f} s)")
-            if not holes.get("found"):
-                rows.append(dict(model=model, label=lab, name=p.name, fail="holes not found")); log("   RESULT holes not found"); continue
-            t1 = time.perf_counter()
-            r, g = analyse(im, model, pred, holes, offset)
-            r.update(model=model, label=lab, name=p.name, holes_cx=holes["cx"], holes_cy=holes["cy"], holes_r=holes["radius"],
-                     t_holes=th, t_rest=time.perf_counter() - t1)
+            r, g, im = processPicture(p, lab, model, pred, FindHubHoles, SP)
             rows.append(r)
-            keys = [k for k in r if k not in ("model", "label", "name")]
-            log("   RESULT " + ", ".join(f"{k} {v:.3f}" if isinstance(v, float) else f"{k} {v}" for k, v in r.items() if k in keys))
             if g is not None:
-                cv2.imwrite(str(outDir / f"{model}_{lab.replace(' ', '_') or 'nolabel'}_{p.stem}.png"), drawPicture(im, g))
+                cv2.imwrite(str(outDir / f"{model}_{lab.replace(' ', '_') or 'nolabel'}_{p.stem}.png"), drawFull(im, g))
     summary(rows)
 
 
