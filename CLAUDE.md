@@ -138,7 +138,10 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `hubcheck` = that centre first, as before); none -> NOT OK; (b) a wide annulus (116 - 253) round it holding
   holes and bolts, `checkHub()`'s steps up to the candidate sets passing its equidistant / equal-angle filters, the best
   set of each group, the top 3; the holes = the smallest total mask area among the sets with a hole-circle radius
-  (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (c) everything after the
+  (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (b2) for the checks in `vision.hubholes.refine.checks` (`splitpin` only, CHANGES
+  183; callers pass `check=`): each hole of that set re-segmented by a box prompt (the `sam.refine.*` values of 166), the
+  circle fitted again and gated - the two outline modes (r ~149 / ~148, centre ~1.8 px apart in y) gone; cap and bung
+  unrefined (their offsets were measured so); (c) everything after the
   holes exactly as at `8a57f85` (CHANGES 163), in the same order. Bung: the hub's holes only when the bung's own pattern
   passed - not for the marks of a NOT OK picture (CHANGES 173). `findHolesWithSAM_Slow` (`sam_slow`) = the CHANGES
   164 - 166 thin-annulus finder, kept; `findHolesWithMorphology` = the old dark-blob finder (moved from

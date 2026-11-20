@@ -577,7 +577,7 @@ def processPicture(path, label, model, pred, FindHubHoles, SP):
     offset = tuple(SP.HUB_OFFSET_DOSTPLUS if model == "DOSTPLUS" else SP.HUB_OFFSET_DOST)
     t0 = time.perf_counter()
     with contextlib.redirect_stdout(io.StringIO()):
-        holes = FindHubHoles.findHoles(im, model)
+        holes = FindHubHoles.findHoles(im, model, check="splitpin")   # refined as the split pin check (CHANGES 183)
     th = time.perf_counter() - t0
     log(f"PICTURE {model} {label or '-':6s} {name}")
     log(f"   HOLES {FindHubHoles.describe(holes)}  ({th:.2f} s)")

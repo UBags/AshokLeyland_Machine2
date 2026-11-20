@@ -134,10 +134,10 @@ def installHubPictureOption():
         return
     original = FindHubHoles.findHoles
 
-    def findHolesWithHubPicture(anImage, model, hubCentre=None):
+    def findHolesWithHubPicture(anImage, model, hubCentre=None, check=None):
         if hubCentre is None:
             hubCentre = hubCentreFromHubPicture(model)
-        return original(anImage, model, hubCentre)
+        return original(anImage, model, hubCentre, check=check)
 
     findHolesWithHubPicture._hubPictureWrapper = True
     FindHubHoles.findHoles = staticmethod(findHolesWithHubPicture)
@@ -190,8 +190,8 @@ class HubHolesRecorder:
         self._results = []
         original = FindHubHoles.findHoles
 
-        def recording(anImage, model, hubCentre=None):
-            result = original(anImage, model, hubCentre)
+        def recording(anImage, model, hubCentre=None, check=None):
+            result = original(anImage, model, hubCentre, check=check)
             with self._lock:
                 self._results.append(dict(result))
             return result

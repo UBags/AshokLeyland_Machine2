@@ -11,7 +11,9 @@ pictures, with this machine's settings, one picture at a time with the check's o
      red NOT OK) and, when a leg ends outside the washer, the outline of that blue (red). Verdict, expected verdict,
      check time, reason and every value go to the list at the bottom and to the terminal. "Zoom on the nut" (on at
      start) shows the region round vision.splitpin.centre enlarged; off, the whole picture.
-  4. At the end: OK / NOT OK counts and, with expected verdicts, how many matched. "Save marked pictures" writes the
+  4. At the end: OK / NOT OK counts and, with expected verdicts, how many matched; and (CHANGES 183) per model the
+     mean of washer centre - hub hole circle centre over the pictures checked OK with the hub's holes found, i.e. the
+     value for vision.splitpin.hub.offset.<model> (SPLITPIN OFFSET line). "Save marked pictures" writes the
      pictures to <folder>/splitpin_check_results/.
 
   --auto [folder]   no window: checks every picture, prints one line each and the counts; exit code 0 when every
@@ -89,6 +91,27 @@ def picturesIn(folder: pathlib.Path):
     return found
 
 
+OFFSETS = []  # (model, dx, dy, refined): washer centre - hub hole circle centre of the pictures checked OK (CHANGES 183)
+
+
+def offsetLines() -> list:
+    """SPLITPIN OFFSET lines: per model the mean / sd of washer centre - hub hole circle centre (pictures checked OK)."""
+    import numpy as np
+    out = []
+    for model in ("DOST", "DOSTPLUS"):
+        rows = [r for r in OFFSETS if r[0] == model]
+        if not rows:
+            continue
+        a = np.array([(r[1], r[2]) for r in rows])
+        refined = sum(1 for r in rows if r[3])
+        now = CheckSplitPinAndWasher.HUB_OFFSET_DOSTPLUS if model == "DOSTPLUS" else CheckSplitPinAndWasher.HUB_OFFSET_DOST
+        out.append(f"SPLITPIN OFFSET {model}: washer centre - hub hole circle centre = ({a[:, 0].mean():.2f}, "
+                   f"{a[:, 1].mean():.2f}) sd ({a[:, 0].std():.2f}, {a[:, 1].std():.2f}), n {len(rows)} ({refined} "
+                   f"refined holes); in the properties now ({float(now[0]):g}, {float(now[1]):g}) -> "
+                   f"vision.splitpin.hub.offset.{model.lower()}={a[:, 0].mean():.1f},{a[:, 1].mean():.1f}")
+    return out
+
+
 _recorder = None  # HubHolesRecorder, installed in __main__: the hub's holes ringed on the picture, HUBHOLES line
 
 
@@ -112,6 +135,10 @@ def runCheck(path: pathlib.Path):
     _, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, currentQR())
     assert bool(ok) == bool(result["ok"]), "checkSplitPinAndWasher and measure disagree"
     values = CheckSplitPinAndWasher.summary(result)
+    found = (result.get("_masks") or {}).get("holes") or {}
+    if result["ok"] and found.get("found") and result.get("centre"):
+        OFFSETS.append((currentModel(), float(result["centre"][0]) - float(found["cx"]),
+                        float(result["centre"][1]) - float(found["cy"]), bool(found.get("refined"))))
     if holes:
         values += f"\n      HUBHOLES {_recorder.text(holes)}"
     return ("OK" if result["ok"] else "NOT OK"), marked, elapsed, result["reason"], values
@@ -174,6 +201,8 @@ def auto(folder: pathlib.Path) -> int:
         print(f"  known disagreement: {name} labelled {e}, checked {v} ({KNOWN_DISAGREEMENTS[name]})")
     for name, e, v in mismatches:
         print(f"  MISMATCH: {name} expected {e}, checked {v}")
+    for text in offsetLines():
+        print(text)
     mismatches += skipSwitch(items)
     print("RESULT:", "PASS" if not mismatches else f"FAIL ({len(mismatches)} mismatch(es))", f"({labelled} labelled)")
     return 0 if not mismatches else 1
@@ -255,6 +284,7 @@ def window():
             if not self.items:
                 self.status.set("Choose a folder or a picture first."); return
             self.index, self.results, self.running = 0, [], True
+            OFFSETS.clear()
             self.listbox.delete(0, "end")
             self.startButton.configure(state="disabled"); self.stopButton.configure(state="normal")
             self.step()

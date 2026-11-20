@@ -207,7 +207,7 @@ flowchart TB
   A -->|"S20 split pin + washer"| SP["CheckSplitPinAndWasher"]
   A -->|"S22 cap"| CP["CheckCap"] --> CMF["CapMaskFinder"]
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
-  SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus; centre from the picture itself, CHANGES 182) / sam_slow / morphology"]
+  SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus; centre from the picture itself, CHANGES 182; holes refined for the split pin, 183) / sam_slow / morphology"]
   BS -.->|"bung seated position"| FH
   FH -.->|"reuses checkHub() steps"| HS
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
@@ -230,7 +230,8 @@ SVG: [`3_camera.svg`](3_camera.svg)
   - `FindHubHoles` (cap, bung, split pin) reuses `checkHub()`'s steps from `HubAndBearingSegmenter` on its own
     per-thread object — **do not change `checkHub()`** (CLAUDE.md §5). Its `sam` method (CHANGES 169) takes the
     annulus centre from the picture itself since CHANGES 182 (pass 1: checkHub()'s steps round `hub.segment.center`);
-    this cycle's hub-check centre (`ImageProcessor.hubCentre`, `hubCentreProvider`) is the fallback.
+    this cycle's hub-check centre (`ImageProcessor.hubCentre`, `hubCentreProvider`) is the fallback. For the split pin
+    check (`check="splitpin"`, `vision.hubholes.refine.checks`) the holes are refined by a box prompt per hole (CHANGES 183).
   - Model users (`ModelManager`, lazy YOLO + MobileSAM): hub, nut / no-bung (`HexagonNutDetector`), knuckle locator,
     `FindHubHoles` (sam), cap.
 

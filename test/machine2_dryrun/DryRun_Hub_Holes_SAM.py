@@ -142,7 +142,8 @@ def main() -> int:
                 failures.append(f"{path.name}: the hub check did not pass / gave no centre")
         F._cache.clear()
         t0 = time.perf_counter()
-        sam = find(image, model, seed)
+        sam = (find(image, model, seed, refine=F.refineFor(kind)) if args.method == "sam"   # CHANGES 183: refined
+               else find(image, model, seed))                                        # where the check is
         secs = time.perf_counter() - t0
         line = f"{kind:8s} {path.name[-28:]:28s} {model:8s} "
         if sam["found"]:

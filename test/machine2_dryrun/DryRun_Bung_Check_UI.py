@@ -166,10 +166,10 @@ class BungCheckWindow:
             from camera.FindHubHoles import FindHubHoles
             originalFind = FindHubHoles.findHoles
 
-            def timedFind(anImage, model, hubCentre=None):
+            def timedFind(anImage, model, hubCentre=None, check=None):
                 t = time.perf_counter()
                 try:
-                    return originalFind(anImage, model, hubCentre)
+                    return originalFind(anImage, model, hubCentre, check=check)
                 finally:
                     add("hub holes (seating)" if self.inSeating else "hub holes (marks only)", time.perf_counter() - t)
 

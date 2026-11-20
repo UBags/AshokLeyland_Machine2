@@ -5631,3 +5631,38 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   YOLO + MobileSAM path (no YOLO weights here; a CPU run with stand-in boxes did not finish in 30 min) - the laptop's
   `DryRun_SplitPin_Check_UI --auto`, `DryRun_Hub_Holes_SAM --wrong-model`, `DryRun_Cap_Hub_Distance`, `DryRun_Bung_Hub_Holes`
   decide.
+
+## 183. Hub holes refined for the split pin check: one outline per hole (2026-11-21)
+
+- Uddi's laptop runs of 2026-11-21 (Study_Washer_SAM_UI, 57 NOT OK + 21 OK DOST split pin pictures): the holes found in
+  all 78 since CHANGES 182, but in two outlines - the whole hole (circle r ~149, spread <= 0.5) or its darker lower part
+  (r 147.5 - 148.3, spread 0.7 - 1.5; 8 + 6 pictures). The washer did not move, the hole centre did: washer centre -
+  hole circle centre dy -0.8 to -2.1 in the first mode, -2.8 to -3.5 in the second (sd 0.88 in y against 0.25 in x).
+  The same two modes as the thin finder of CHANGES 165, which 166 cured by refining each hole.
+- Decision (Uddi): refine each hole by a box prompt before the circle fit; re-measure the offset for the split pin only.
+- `camera/FindHubHoles.py`: `findHoles(..., check=None)`; `vision.hubholes.refine.checks` (`splitpin` on both
+  machines) names the checks whose holes are refined (`refineFor`). For those, `_holesInWideAnnulus` refines the chosen
+  holes set (`_refinedSet`: `_refine` of CHANGES 166 with its `sam.refine.*` values - per hole a MobileSAM box prompt,
+  the largest mask in `refine.area`, centred again and prompted once more - then the circle fitted again and gated:
+  radius in `holes.circle.radius`, `sam.spread.max`, `sam.gap.max`). No outline mask, or a hole moved more than
+  `sam.refine.move.max` (6 px), rejects that set: the next holes set, else the next gamma. The result keeps `refined`,
+  `refineMoved`, `unrefined` (centre, radius, spread); `describe()` writes them into the log line; the cache key holds
+  the refine flag. Cap and bung pass no check and stay unrefined: their offsets were measured on unrefined centres.
+- `camera/CheckSplitPinAndWasher.py`: `findHoles(..., check="splitpin")`. Reference commit 760b7da (both files, values
+  hard-coded), both manifests pointed at it; verifier ALL EQUIVALENT on both machines.
+- Dry runs: `DryRun_Hub_Holes_Refine` (new, both folders, 8 checks, sets and box prompt stood in);
+  `DryRun_SplitPin_Check_UI` prints `SPLITPIN OFFSET <model>` at the end (mean washer centre - hole circle centre over
+  the pictures checked OK; the value for `vision.splitpin.hub.offset.<model>`), window and `--auto`;
+  `Study_Washer_SAM` asks for the split pin's refined holes; `DryRun_Hub_Holes_SAM` refines the splitpin set's holes;
+  the `findHoles` wrappers of `_hub_holes_option` and `DryRun_Bung_Check_UI` pass `check` on.
+- The offset itself is not changed here (`siemens.vision.splitpin.hub.offset.dost` 1.3,-3.6, dostplus 1.9,2.1): it
+  must come from the refined centres on the laptop (YOLO weights) - the SPLITPIN OFFSET line.
+- Measured (sandbox, real MobileSAM, no YOLO): `_refine` on the 79 split pin pictures of the repo, started from the
+  dark-blob hole centres (stand-in for the YOLO + SAM ones): a mask for every hole of all 79; refined circle r 147.3 -
+  148.9 (sd 0.27), spread <= 1.1 (dark blobs: r 148.5 - 151.4, spread up to 1.6). The dark-blob centres sit higher, so
+  they moved up to 7.9 px - more than the 6 px gate; from the SAM centres (whose two modes are ~2 px apart) the move is
+  expected to stay well under it. 1.6 - 5.7 s per set on the CPU (4 holes, 2 prompts each); on the GPU a few tenths.
+- Run (sandbox): `DryRun_Hub_Holes_Refine` 8/8 both; `DryRun_Hub_Holes_Centre_Source` 8/8 both;
+  `Verify_Vision_Config_Equivalence` ALL EQUIVALENT both; `DryRun_SplitPin_Check_UI --auto --holes morphology` 79/79
+  both (morphology is not refined); `DryRun_Tuning_Keys` 251/251. Not run: the refine on YOLO + MobileSAM sets (no YOLO
+  weights here) - the laptop's `DryRun_SplitPin_Check_UI --auto` and `Study_Washer_SAM_UI` decide.
