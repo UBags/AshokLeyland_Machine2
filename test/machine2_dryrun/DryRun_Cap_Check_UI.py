@@ -27,7 +27,7 @@ when the window opens; no Redis, PLC or camera needed (the check's log messages 
      centre a blue cross; the "HUBHOLES" line gives centre, radius, spread, gap, method, gamma and seed (or why not
      found). --holes morphology = the dark-blob finder with its own offsets (where the YOLO weights are missing).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Check_UI.py   [--sam <mobile_sam.pt>] [--holes morphology]
+Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Check_UI.py   [--sam <mobile_sam.pt>] [--holes morphology] [--hub-image <hub picture>]
 (--sam: load MobileSAM from that file instead of through ModelManager, which also needs the YOLO weights)
 """
 import os
@@ -168,6 +168,8 @@ class CapCheckWindow:
         ttk.Button(bar2, text="Earlier pictures...", command=self.chooseEarlier).pack(side="left")
         self.earlierText = tk.StringVar(master=root, value=f"hub / top bearing / nut pictures: {HERE.name} dry-run folders")
         ttk.Label(bar2, textvariable=self.earlierText).pack(side="left", padx=6)
+        from _hub_holes_option import addHubPictureControl
+        addHubPictureControl(bar2, root, report=lambda line: self.status.set(line))
         seat = (f"seating ON (brass cap to bore <= {CheckCap.SEATING_BRASS_OFFSET_MAX}, silver face on one circle >= "
                 f"{CheckCap.SEATING_SILVER_FACE_FIT_MIN}, hub centre uncovered <= {CheckCap.SEATING_HUB_VISIBLE_MAX}, "
                 f"silver outline to centre <= "

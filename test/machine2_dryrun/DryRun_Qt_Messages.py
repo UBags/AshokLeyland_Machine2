@@ -8,14 +8,19 @@ would be seen:
   Q1  getAppInstance() installs the handler before the QApplication exists
   Q2  Kannada, Tamil and Hindi laid out in Courier (as the tiles): Qt's messages arrive in the handler, NOT on fd 2;
       each distinct message logged once through logBoth, the repeats only counted
-  Q3  English laid out in Courier: no Qt message at all (why English never crashed)
+  Q3  English laid out in Courier: no Qt font message (why English never crashed)
   Q4  without the handler (the old behaviour) the same Indic layout writes Qt's warnings to fd 2 - the write that
-      crashed in the exe (shown here on Linux, where it does not crash)
+      crashed in the exe (shown here, where python itself does not crash)
   Q5  a qWarning sent from Python: logged once with its category, repeats counted; the handler never raises
   Q6  a fatal Qt message (no such platform plugin): Qt still aborts, and the message is on the console (Python's
       sys.stderr), with the Python stack - not lost with the logging server not running
 
-No Redis, database, PLC or window needed (Qt offscreen). Run from the project root:
+Qt platform: the native one where there is a display (Windows, macOS, Linux with DISPLAY) - Qt's offscreen platform
+has no system fonts on Windows ("QFontDatabase: Cannot find font directory") and so none of the Indic font messages;
+offscreen only on Linux without a display (the sandbox). No window is shown. Q2 compares the Qt messages written to
+fd 2 without the handler (Q4's run) with those the handler gets; Q3 looks at Qt's font messages (qt.text.font.db) only.
+
+No Redis, database, PLC or window needed. Run from the project root:
     python test/machine2_dryrun/DryRun_Qt_Messages.py
 """
 import json, os, pathlib, subprocess, sys
@@ -64,14 +69,31 @@ print("RESULT " + json.dumps({"installed": QM._installed, "logged": logged,
 '''
 
 
-def runChild(mode, platform="offscreen"):
-    env = dict(os.environ, QT_QPA_PLATFORM=platform, COSTHETA_PLC_VENDOR=VENDOR)
+def defaultPlatform():
+    """None (Qt's native platform) where there is a display; offscreen on Linux without one."""
+    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        return "offscreen"
+    return None
+
+
+def runChild(mode, platform="default"):
+    platform = defaultPlatform() if platform == "default" else platform
+    env = dict(os.environ, COSTHETA_PLC_VENDOR=VENDOR)
     env.pop("QT_LOGGING_RULES", None)
+    env.pop("QT_QPA_PLATFORM", None)
+    if platform:
+        env["QT_QPA_PLATFORM"] = platform
     p = subprocess.run([sys.executable, "-c", f"ROOT={str(ROOT)!r}\n" + CHILD, mode], cwd=ROOT, env=env,
                        capture_output=True, text=True, timeout=300)
     out = next((l[7:] for l in p.stdout.splitlines() if l.startswith("RESULT ")), None)
     return (json.loads(out) if out else None), p.stderr, p.returncode
 
+
+print(f"Qt platform: {defaultPlatform() or 'native'}", flush=True)
+print("\n=== Q4 without the handler (old behaviour) ===", flush=True)
+res4, err4, code4 = runChild("nohandler")
+fd2Font = sorted({l.strip() for l in err4.splitlines() if l.startswith("qt.text.font.db")})
+check("Q4 Qt writes its Indic font warnings to the C stderr itself", len(fd2Font) > 0, err4[-300:])
 
 print("\n=== Q1 / Q2 Indic text with the handler ===", flush=True)
 res, err, code = runChild("indic")
@@ -82,6 +104,10 @@ qtOnFd2 = [l for l in err.splitlines() if l.startswith("qt.")]
 check("Q2 nothing written by Qt to the C stderr", not qtOnFd2, qtOnFd2[:3])
 fontMsgs = [c for c in res["counts"] if c[0][1] == "qt.text.font.db"]
 check("Q2 Qt's font messages arrived in the handler", len(fontMsgs) > 0, res["counts"][:3])
+inHandler = {f"{c[0][1]}: {c[0][2]}".strip() for c in fontMsgs}
+missing = [m for m in fd2Font if m not in inHandler]
+check("Q2 every font message Qt wrote to fd 2 without the handler arrives in the handler instead", not missing,
+      missing[:3])
 loggedFont = [l for l in res["logged"] if "(qt.text.font.db)" in l[2]]
 check("Q2 each distinct message logged once", len(loggedFont) == len(fontMsgs), (len(loggedFont), len(fontMsgs)))
 check("Q2 repeats counted, not logged", sum(c[1] for c in fontMsgs) >= len(fontMsgs), fontMsgs[:2])
@@ -90,13 +116,12 @@ print(f"      ({len(fontMsgs)} distinct Qt messages, {sum(c[1] for c in fontMsgs
 
 print("\n=== Q3 English text ===", flush=True)
 res, err, code = runChild("english")
-check("Q3 no Qt message at all in English", res is not None and res["counts"] == [] and
-      not [l for l in err.splitlines() if l.startswith("qt.")], (res, err[-300:]))
-
-print("\n=== Q4 without the handler (old behaviour) ===", flush=True)
-res, err, code = runChild("nohandler")
-qtOnFd2 = [l for l in err.splitlines() if l.startswith("qt.text.font.db")]
-check("Q4 Qt writes its Indic font warnings to the C stderr itself", len(qtOnFd2) > 0, err[-300:])
+englishFont = [c for c in (res or {"counts": []})["counts"] if c[0][1] == "qt.text.font.db"]
+check("Q3 no Qt font message in English", res is not None and not englishFont and
+      not [l for l in err.splitlines() if l.startswith("qt.")], (englishFont[:2], err[-300:]))
+others = [c for c in (res or {"counts": []})["counts"] if c[0][1] != "qt.text.font.db"]
+if others:
+    print(f"      (other Qt messages, in the handler: {[c[0][1] + ': ' + c[0][2] for c in others][:3]})", flush=True)
 
 print("\n=== Q5 qWarning from Python ===", flush=True)
 res, err, code = runChild("qwarning")

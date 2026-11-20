@@ -37,7 +37,8 @@ flowchart TB
   P2 -- spawn --> P2W
   P1 & P2 & P3 & P4 & P5 & P6 & P7 <--> REDIS
   P4 <-->|PLCDataIO| PLC
-  P2 --> CAM
+  P2 -->|RTSP stream, ISAPI keepalive| CAM
+  P6 -.->|"ISAPI reboot (Machine Settings)"| CAM
   P3 --> QRS
   P7 --> WAV
   P5 --> PG

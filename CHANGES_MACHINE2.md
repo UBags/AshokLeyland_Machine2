@@ -5490,3 +5490,52 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   on both (no raw `qt.` line on stderr now; about 3,500 before); `DryRun_Models_Check` 23/23, `DryRun_Tuning_Keys` 247/247 on
   both; `DryRun_FEServer_To_DBServer_Pipeline` passes; `DryRun_FEServer_Cycles` 166/167 - F1 ("Rotation Not Done" fits
   its tile) fails the same with this change reverted (sandbox fonts), not caused by it. Not run: the exe on Windows.
+
+## 177. Camera reboot from Machine Settings; hub picture and model in the cap / bung / split pin windows; Qt messages dry run on Windows (2026-11-20)
+
+- **Camera reboot (Uddi, 2026-11-20).** Hikvision cameras reboot on the ISAPI call `PUT /ISAPI/System/reboot` with HTTP
+  digest authentication - the same authentication as the camera server's keepalive (`RTSPCam`, `GET
+  /ISAPI/System/deviceInfo`). `utils/CameraReboot.py` (new): `rebootCamera()` sends it to `vision.camera.ip` / `.port`
+  with `vision.camera.uid` / `.pwd`, waits `camera.reboot.timeout.sec` (10 s, tuning block, all three properties
+  files); accepted = HTTP 200 and statusCode 1 (or none); 401 / other codes / no answer reported, never raises, logged.
+  Machine Settings (`frontend/SimplePopups.py`): a Reboot Camera button under Save / Reset / Cancel - after the
+  dialog's own password; `rebootCameraFromMachineSettings`: only when the frontend says no component is in the cycle
+  (`cycleIdle` = state READ_QR_CODE, passed by `AshokLeylandFrontEnd`; unknown or raising = not allowed - a vision check
+  during the 1 - 2 min restart would be NOT OK), then `machine.settings.password` once more with the camera's IP and
+  "Entering the password is the final confirmation to reboot the camera" (no Yes / No, as Save), the state checked
+  again, then the call; the outcome shown and logged ("Camera reboot asked by <user> from Machine Settings: ...").
+  The camera server is not told: its reconnect thread takes the stream back. Seven new texts, kn / ta / hi drafts
+  (native-speaker review pending, as the others). Code graph: the frontend -> camera ISAPI edge (the only one).
+- **Split pin pictures of 2026-11-20 (Uddi: "failed", with a hub picture).** 9 uploads = 5 distinct pictures (four sent
+  twice), all DOSTPLUS (5 bolts / 5 holes). Cause of the failure: `DryRun_SplitPin_Check_UI` checked every picture as DOST
+  (fixed DOST QR code; `measure(image)` defaults to DOST) - all five "the hub's 4 holes not found". Production takes the
+  model from the QR code: not affected. Now `--model DOST|DOSTPLUS` / Model in the window. As DOSTPLUS (sandbox,
+  `--holes morphology`; no YOLO weights here): 5 holes found in all five, centre (644, 351), within 1 px of the hub
+  picture's (645.3, 351.1) - the hub picture is usable as their hub centre. Verdicts: 508d02c5, 5e1e2765, 3d64a6c4 show
+  the plain hex nut (no castle nut, pin or washer) -> NOT OK "washer not found", right. 59fbc4cc: straight pin lying
+  across the washer, legs not turned -> NOT OK ("washer outline not round", tip radius 59.2 > 56), right by the strict
+  rule. be498f5c: pin in, legs turned down along the washer, blue marking visible lower left -> NOT OK "split pin legs
+  not found (8 blue px < 100)". Not tuned: the paint is dark navy here (median S 68, V 52 in the strip; the DOST OK
+  pictures have 204 - 364 marker px), and in this lighting the dark hub interior itself is in the hue range - the
+  unmarked straight pin (59fbc4cc) has more raw "blue" px (218 at S >= 90, V >= 55) than be498f5c (124), so lowering the
+  colour limits would pass unmarked pins. The DOSTPLUS offset (1.9,2.1) and the limits were never measured on DOSTPLUS
+  OK parts: needs labelled DOSTPLUS pictures (plant-pc-verification §13.4).
+- **Hub picture in the cap / bung / split pin windows** (`_hub_holes_option.py`, both dry-run folders): `--hub-image
+  <picture>`, or "Hub picture..." / "No hub picture" in each window. The real `checkHub()` runs once per model on that
+  picture; its centre is passed to `FindHubHoles.findHoles` as the hub check's ("from the hub check (given)"), as
+  production passes `ImageProcessor.hubCentre`; the hub check failing on it = no centre = holes not found = NOT OK, as in
+  production (`HUBPICTURE` line says which). Without a hub picture: `checkHub()` on each checked picture (CHANGES 171).
+  `findHoles` is wrapped once in `applyHolesOption`; production code unchanged.
+- **`DryRun_Qt_Messages` on Windows** (laptop: 12/15, Q2 / Q3 / Q4): the children ran with `QT_QPA_PLATFORM=offscreen`,
+  which on Windows has no system fonts ("QFontDatabase: Cannot find font directory") - no Indic font messages, and that
+  warning counted against Q3. Now Qt's native platform where there is a display (offscreen only on Linux without one);
+  Q3 counts only `qt.text.font.db` messages; Q2 also checks that every font message Q4 saw on fd 2 without the handler
+  arrives in the handler. 16 checks.
+- Docs: LLD §5 (frontend passwords / camera reboot), CLAUDE.md (§4, §7 row 17, module count), plant-pc-verification §13.4,
+  §17 and results row, both READMEs, code graph (90 live modules of 395).
+- Run (sandbox): `DryRun_Camera_Reboot` 26/26 on both (new; stand-in camera with real digest auth); `DryRun_Qt_Messages`
+  16/16 on both offscreen and 16/16 on xcb under Xvfb (native branch); `DryRun_SplitPin_Check_UI --auto --holes
+  morphology` 79/79 labelled (21 OK / 58 NOT OK, unchanged); `DryRun_Tuning_Keys` 251/251, `DryRun_Models_Check` 23/23,
+  `DryRun_Frontend_Languages` 100/100, `Verify_Vision_Config_Equivalence` ALL EQUIVALENT on both (it first reported 10
+  baselines missing - the sandbox clone was shallow; unshallowed). Hub-picture control smoke-tested under Xvfb. Not run:
+  the cap / bung windows (torch and Tk not in one Python here), the SAM path with the YOLO weights, Windows, a real camera.

@@ -808,7 +808,8 @@ class AshokLeylandFrontEnd(QMainWindow):
         # PLC in state 2 (stored in machine_settings; used when cycle.settings.source=database)
         machine_settings_act = bind(QAction('Machine Settings', self), 'Machine Settings', fmt=' {} ')
         machine_settings_act.setShortcut(' Ctrl+Alt+U ')
-        machine_settings_act.triggered.connect(lambda: self._runDialog(updateMachineSettingsDialog, currentUser=self.username, currentRole=self.role))
+        machine_settings_act.triggered.connect(lambda: self._runDialog(updateMachineSettingsDialog, currentUser=self.username, currentRole=self.role,
+                                                                              cycleIdle=lambda: self.getCurrentState() == MachineState.READ_QR_CODE))
         machine_settings_menu = bind(menu_bar.addMenu('Machine Settings'), 'Machine Settings', 'setTitle', fmt=' {} ')
         machine_settings_menu.addAction(machine_settings_act)
         if not canChangeMachineSettings(self.role):

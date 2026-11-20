@@ -9,6 +9,9 @@
   morphology     the dark-blob finder of CHANGES 152 - 163 (FindHubHoles.findHolesWithMorphology) with the offsets that
                  were measured with it (below), so that a run without the YOLO weights (the sandbox) checks the rest of
                  the check as before. The offsets now in the properties belong to the SAM centres.
+
+--hub-image PATH (CHANGES 177; "Hub picture..." in the windows): the hub picture of the same part (state 5) - the real
+checkHub() on it gives the hub centre, as production's hub check does; without it, checkHub() on each picture itself.
 """
 import sys
 
@@ -44,7 +47,9 @@ def applyHolesOption(method: str | None = None) -> str:
     else:
         FindHubHoles.hubCentreFromPicture = staticmethod(hubCheckOnPicture)
         print(f"Hub holes: YOLO + MobileSAM (FindHubHoles.{'findHolesWithSAM_Slow' if method == 'sam_slow' else 'findHolesWithSAM'}"
-              "), as in production; the hub centre from the real checkHub() on each picture", flush=True)
+              "), as in production; the hub centre from the real checkHub() on the hub picture (--hub-image / "
+              "'Hub picture...'), else on each picture", flush=True)
+    installHubPictureOption()
     return method
 
 
@@ -70,6 +75,103 @@ def hubCheckOnPicture(anImage, model):
         while len(_hubCheckCache) > 12:
             _hubCheckCache.pop(next(iter(_hubCheckCache)))
     return _hubCheckCache[key]
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# A hub picture as the hub centre (CHANGES 177): production takes the centre from this cycle's hub check (state 5) on
+# the hub picture; a dry run has no cycle. With a hub picture chosen (--hub-image PATH, or "Hub picture..." in the
+# windows) the real checkHub() runs once on it per model and its centre is passed to FindHubHoles.findHoles as the
+# hub check's centre ("from the hub check (given)" in the HUBHOLES lines); the hub check failing on it means no centre
+# -> holes not found -> the check NOT OK, as in production. Without a hub picture: checkHub() on each checked picture
+# itself, as before (CHANGES 171). Only the SAM methods use the centre; morphology ignores it.
+HUB_PICTURE = {"path": None, "image": None}
+_hubPictureCentres = {}
+_NO_CENTRE = {"cx": float("nan"), "cy": float("nan"), "count": 0, "kind": "none - the hub check failed on the hub picture"}
+
+
+def hubImageFromArgs(argv=None):
+    argv = sys.argv if argv is None else argv
+    return argv[argv.index("--hub-image") + 1] if "--hub-image" in argv and argv.index("--hub-image") + 1 < len(argv) else None
+
+
+def setHubPicture(path) -> str:
+    """Use this picture's hub check as the hub centre (None: back to the picture itself). Returns a line to show."""
+    import cv2
+    _hubPictureCentres.clear()
+    if not path:
+        HUB_PICTURE.update(path=None, image=None)
+        return "Hub centre: the hub check on each checked picture itself"
+    image = cv2.imread(str(path))
+    if image is None:
+        HUB_PICTURE.update(path=None, image=None)
+        return f"Hub picture could not be read: {path} - hub centre from each checked picture itself"
+    HUB_PICTURE.update(path=str(path), image=image)
+    return f"Hub centre: the hub check on {path}"
+
+
+def hubCentreFromHubPicture(model):
+    """The hub check's centre on the chosen hub picture for this model (cached), _NO_CENTRE when it failed, None when
+    no hub picture is chosen."""
+    if HUB_PICTURE["image"] is None:
+        return None
+    key = "DOSTPLUS" if model == "DOSTPLUS" else "DOST"
+    if key not in _hubPictureCentres:
+        centre = hubCheckOnPicture(HUB_PICTURE["image"], key)
+        _hubPictureCentres[key] = dict(centre) if centre else dict(_NO_CENTRE)
+        c = _hubPictureCentres[key]
+        print(f"HUBPICTURE {key}: " + (f"centre ({c['cx']:.1f}, {c['cy']:.1f}) from {c.get('count', '?')} "
+                                       f"{c.get('kind', '?')} on {HUB_PICTURE['path']}" if centre else
+                                       f"the hub check did not pass on {HUB_PICTURE['path']} - no hub centre"), flush=True)
+    return _hubPictureCentres[key]
+
+
+def installHubPictureOption():
+    """Wrap FindHubHoles.findHoles (once): with a hub picture chosen, its hub check's centre is given to the finder."""
+    from camera.FindHubHoles import FindHubHoles
+    if getattr(FindHubHoles.findHoles, "_hubPictureWrapper", False):
+        return
+    original = FindHubHoles.findHoles
+
+    def findHolesWithHubPicture(anImage, model, hubCentre=None):
+        if hubCentre is None:
+            hubCentre = hubCentreFromHubPicture(model)
+        return original(anImage, model, hubCentre)
+
+    findHolesWithHubPicture._hubPictureWrapper = True
+    FindHubHoles.findHoles = staticmethod(findHolesWithHubPicture)
+    path = hubImageFromArgs()
+    if path:
+        print(setHubPicture(path), flush=True)
+
+
+def addHubPictureControl(bar, root, report=print):
+    """'Hub picture...' and 'No hub picture' buttons and a label, packed into a window's button bar."""
+    import tkinter as tk
+    from tkinter import filedialog, ttk
+    shown = tk.StringVar(master=root, value=("hub: " + pathlibName(HUB_PICTURE["path"])) if HUB_PICTURE["path"]
+                         else "hub: each picture itself")
+
+    def choose():
+        f = filedialog.askopenfilename(title="Hub picture of the same part (state 5)", parent=root,
+                                       filetypes=[("Pictures", "*.png *.jpg *.jpeg *.bmp")])
+        if f:
+            line = setHubPicture(f)
+            shown.set("hub: " + pathlibName(HUB_PICTURE["path"]) if HUB_PICTURE["path"] else "hub: each picture itself")
+            report(line)
+
+    def clear():
+        report(setHubPicture(None))
+        shown.set("hub: each picture itself")
+
+    ttk.Button(bar, text="Hub picture...", command=choose).pack(side="left", padx=(8, 2))
+    ttk.Button(bar, text="No hub picture", command=clear).pack(side="left", padx=2)
+    ttk.Label(bar, textvariable=shown, width=26).pack(side="left", padx=4)
+    return shown
+
+
+def pathlibName(path) -> str:
+    import pathlib
+    return pathlib.Path(path).name if path else ""
 
 
 class HubHolesRecorder:

@@ -6,7 +6,7 @@ Working notes for Claude (and anyone else) on this repository. Read this first; 
 > **MUST READ before changing any code: [`docs/code_graph/CODE_GRAPH.md`](docs/code_graph/CODE_GRAPH.md).**
 > Graphs of the live code: runtime topology, every Redis stream / key with its writer and reader, the camera server
 > and the dependencies between vision checks, the IOServer threads and PLC layer, the 28-state cycle, and the import
-> graph of the 89 live modules (of 392; the rest are dry runs, archive and old versions). Check which processes and
+> graph of the 90 live modules (of 395; the rest are dry runs, archive and old versions). Check which processes and
 > checks a change touches there first. Keep it in step: when a process, queue, key, thread, check or state changes,
 > update the matching `.mmd` in `docs/code_graph/`, run `python3 docs/code_graph/tools/build_doc.py` (and regenerate
 > `6_modules.mmd` and the SVGs, see its §7).
@@ -92,6 +92,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   write to the C stderr - in the Nuitka exe its Indic-font warnings there ended the frontend (0xC0000409 in
   ucrtbase.dll; English never warns, PyCharm never crashed). A new PySide6 process must install the handler too.
 - `cycle.settings.source=database` on both machines: state-2 settings come from `machine_settings` (per model).
+- Camera reboot (CHANGES 177): Machine Settings -> Reboot Camera (only at READ_QR_CODE; `machine.settings.password` again
+  as the final confirmation) -> `utils/CameraReboot.py`, ISAPI `PUT /ISAPI/System/reboot`, digest auth with the camera
+  uid / pwd. The only frontend-to-camera call; the camera server just reconnects.
 - Plaintext credentials (camera, PostgreSQL, default users, passwords `admin123`) are accepted in this private repo.
   Do not flag them or propose moving them.
 
@@ -189,6 +192,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run of 2026-11-20 (Uddi): 163 pictures, 0.5 - 0.7 s each, every good picture found, the other model never, area cutoffs and offsets set (CHANGES 170); plant not yet |
 | 15 Start-up: the backup beside the mode / login dialogs, its time and any wait before the DB server; the launcher polling every 2 s (CHANGES 174) | Not reported yet |
 | 16 Model files checked at start: missing -> message on the screen for 5 s, MainProgram exits, nothing started (CHANGES 175) | Not reported yet |
+| 17 Camera reboot from Machine Settings: accepted, picture back, reconnect; refused when wrong password / during a cycle (CHANGES 177) | Not reported yet |
 | 11.7 Frontend in Kannada / Hindi in the exe stays up (Qt messages to the log, CHANGES 176) | Cause **confirmed** (Uddi, 2026-11-20): the old exe with `QT_LOGGING_RULES=*=false` on the plant PC - no crash, all four languages. New exe (with the handler) not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.

@@ -1857,6 +1857,65 @@ def confirmMachineSettingsChange(model: str, settings: dict, current: dict) -> b
     return True
 
 
+# Camera reboot (CHANGES 177): the Reboot Camera button of Machine Settings (after its open password). Only between
+# components (the frontend at READ_QR_CODE - a vision check while the camera restarts would be NOT OK); the machine
+# settings password once more, worded as the final confirmation (no Yes / No); then PUT /ISAPI/System/reboot
+# (utils/CameraReboot.py). The camera server reconnects to the stream by itself when the camera is back.
+
+def cameraRebootBlockedReason(cycleIdle) -> str:
+    """'' when the camera may be rebooted now, else the reason (shown to the user). cycleIdle: a callable telling
+    whether no component is in the cycle; None (not given) = not known -> not allowed."""
+    try:
+        idle = bool(cycleIdle()) if cycleIdle is not None else False
+    except Exception:
+        idle = False
+    return "" if idle else N_("A component is in the cycle: reboot the camera only between components (while the QR code is awaited)")
+
+
+def confirmCameraReboot() -> bool:
+    """The machine settings password, worded as the final confirmation to reboot the camera. False if cancelled or
+    wrong (said so)."""
+    ip = CosThetaConfigurator.getInstance().getCameraIP()
+    entered = getJustPassword(trf("Reboot the camera ({ip}).\n\nThe camera restarts; its picture is back after about one to two "
+                                  "minutes.\n\nEntering the password is the final confirmation to reboot the camera.\n"
+                                  "Enter the machine settings password:", ip=ip))
+    if entered is None or entered == "":
+        return False
+    if entered != machineSettingsPassword():
+        showErrorMessage("Wrong password: the camera was not rebooted")
+        return False
+    return True
+
+
+def rebootCameraFromMachineSettings(cycleIdle, currentUser: str = "") -> bool:
+    """The Reboot Camera button: allowed now? -> final confirmation by password -> the ISAPI reboot call; the outcome
+    shown and logged. True when the camera accepted the reboot."""
+    reason = cameraRebootBlockedReason(cycleIdle)
+    if reason:
+        showErrorMessage(reason)
+        return False
+    if not confirmCameraReboot():
+        return False
+    reason = cameraRebootBlockedReason(cycleIdle)        # a component may have arrived while the password was typed
+    if reason:
+        showErrorMessage(reason)
+        return False
+    from utils.CameraReboot import rebootCamera
+    ok, line = rebootCamera()
+    try:
+        from logutils.SlaveLoggers import logBoth
+        from logutils.Logger import Logger
+        logBoth('logTakeAction', "frontend.SimplePopups", f"Camera reboot asked by {currentUser or '-'} from Machine Settings: {line}",
+                Logger.SUCCESS if ok else Logger.PROBLEM)
+    except Exception:
+        pass
+    if ok:
+        showMessage("The camera is rebooting. Its picture is back after about one to two minutes.", auto_close_duration=5)
+    else:
+        showErrorMessage(trf("The camera could not be rebooted: {reason}", reason=line))
+    return ok
+
+
 def canChangeMachineSettings(role: str) -> bool:
     return (role or "").strip().lower() in MACHINE_SETTINGS_ROLES
 
@@ -1890,11 +1949,12 @@ def parseMachineSettingsInputs(values: dict):
     return settings, errors
 
 
-def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool = True):
+def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool = True, cycleIdle=None):
     """Machine Settings dialog (Administrator and Supervisor only). First line: the model (the models of
     qrcode.partmapping.N); the settings in force for that model are shown, and shown again when another model is
     chosen. Save stores a new row for the chosen model in machine_settings with updated_by = currentUser. Returns True
-    if new settings were saved."""
+    if new settings were saved. Reboot Camera (CHANGES 177): see rebootCameraFromMachineSettings; cycleIdle = a
+    callable, True when no component is in the cycle (None: the button is shown disabled)."""
     global aWindowIsInProgress
     if aWindowIsInProgress:
         return False
@@ -1943,13 +2003,19 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                    [sg.Text(infoText(), font=12, size=(70, 1), k="info")],
                    [sg.HorizontalSeparator()]] + rows +
                   [[sg.Text(tr("New settings apply from the next component of the chosen model."), font=12)],
-                   [sg.Button(tr("Save"), key="Save"), sg.Button(tr("Reset"), key="Reset"), sg.Button(tr("Cancel"), key="Cancel")]])
+                   [sg.Button(tr("Save"), key="Save"), sg.Button(tr("Reset"), key="Reset"), sg.Button(tr("Cancel"), key="Cancel")],
+                   [sg.HorizontalSeparator()],
+                   [sg.Button(tr("Reboot Camera"), key="RebootCamera", disabled=cycleIdle is None),
+                    sg.Text(tr("Only between components; the password is asked again as the final confirmation."), font=12)]])
         window = sg.Window(tr("Machine Settings"), layout, modal=modal, keep_on_top=True, finalize=True,
                            disable_minimize=True, grab_anywhere=False)
         while True:
             event, values = window.read()
             if event in (sg.WIN_CLOSED, "Cancel"):
                 break
+            if event == "RebootCamera":
+                rebootCameraFromMachineSettings(cycleIdle, currentUser)
+                continue
             if event in ("model_name", "Reset"):
                 if event == "model_name":
                     model = values["model_name"]

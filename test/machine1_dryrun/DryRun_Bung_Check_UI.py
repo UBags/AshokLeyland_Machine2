@@ -31,7 +31,7 @@ round the same centre. One "[Bung] ..." log line per gamma.
   hole circle's centre a blue cross; the terminal line "HUBHOLES" gives centre, radius, spread, gap, method, gamma and
   seed (or why not found). --holes morphology = the dark-blob finder with its own offsets (no YOLO weights).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py   [--holes morphology]
+Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py   [--holes morphology] [--hub-image <hub picture>]
 """
 import os
 import pathlib
@@ -95,6 +95,8 @@ class BungCheckWindow:
         ttk.Label(bar, text="Check").pack(side="left")
         self.check = tk.StringVar(value=CHECKS[0])
         ttk.Combobox(bar, textvariable=self.check, values=CHECKS, state="readonly", width=26).pack(side="left", padx=4)
+        from _hub_holes_option import addHubPictureControl
+        addHubPictureControl(bar, root, report=lambda line: self.status.set(line))
         self.save = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Save marked pictures", variable=self.save).pack(side="left", padx=10)
         self.startButton = ttk.Button(bar, text="Start", command=self.start, state="disabled")

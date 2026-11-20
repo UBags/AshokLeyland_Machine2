@@ -260,6 +260,10 @@ delivered exe has False unless the plant wants the check off.
    report (CHANGES 163: the washer is placed from the hub's holes; `siemens.vision.splitpin.centre.source=fixed` goes back).
 3. Send the lines of a shift (and the pictures of any OK part called NOT OK, or the reverse): the limits come from 3
    OK parts; `vision.splitpin.leg.outside.distance` (8.0) / `.pixels.max` (2) are the ones to look at.
+4. DOSTPLUS (CHANGES 177): the limits and the offset 1.9,2.1 come from DOST parts only. Run the window with
+   `--model DOSTPLUS --hub-image <the same part's hub picture>` (or Model / "Hub picture..." in the window) on DOSTPLUS
+   pictures sorted into `OK\` / `NOT_OK\`; the marker count (`markerPixels`) of the OK ones is the value to send - the
+   one DOSTPLUS pin picture of 2026-11-20 had 8 blue px (DOST OK pictures: 204 and more).
 
 ## 14. Hub holes by YOLO + MobileSAM in the cap, bung and split pin checks (CHANGES 164, 168)
 
@@ -311,6 +315,17 @@ On the Machine 2 PC with the new exe:
    the missing files, a red message "The models directory is missing or incomplete ..." is on the screen for 5 s, then
    MainProgram exits; no server process is started (no camera-server restarts). Rename `models` back afterwards.
 
+## 17. Camera reboot from Machine Settings (CHANGES 177)
+1. Between components (QR code awaited): Machine Settings -> password -> Reboot Camera -> the password again (the
+   prompt names the camera's IP and says entering it is the final confirmation). "The camera is rebooting ..." shown;
+   the frontend log has "Camera reboot asked by <user> from Machine Settings: Camera reboot: accepted by ...".
+2. The camera tile shows the camera down and then back; the camera server log shows its reconnect; note the minutes until
+   the picture is back. The next component's vision checks pass.
+3. Wrong password -> "Wrong password: the camera was not rebooted", nothing sent. During a cycle -> the button says
+   "A component is in the cycle ..." and nothing is asked or sent.
+4. Should the camera refuse (HTTP 401 / 403): the reason is shown; check `siemens.vision.camera.uid` / `.pwd` and that
+   the camera user may reboot (Hikvision: Configuration -> User Management, the admin user can).
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -332,4 +347,5 @@ On the Machine 2 PC with the new exe:
 | 14 Hub holes by YOLO + MobileSAM: laptop dry run PASS and its offsets put in the properties; repeatability; seating / split pin lines with (sam); check times (CHANGES 164) | 2026-11-19 | | Laptop: found on every good picture, other model never; offsets set (CHANGES 165) | Reported by Uddi: `--wrong-model` 161 compared, 7 not found (6 bad bungs, 1 NOT OK split pin); `--seed hubcheck` 10/10. Re-run after 165: every good picture found, the other model never; DOST centres still in two modes -> per-hole refinement (CHANGES 166). CHANGES 166 refinement superseded: Uddi found the thin-annulus finder slow and wrong (2026-11-20) -> new finder (CHANGES 169); laptop run of 2026-11-20 with it (Uddi): 163 pictures, 0.5 - 0.7 s each (3 - 4 s when not found), every good picture found, the other model never; cutoffs and offsets set (CHANGES 170). Plant not yet |
 | 15 Start-up: backup in the background, its time; any wait before the DB server; launcher polling every 2 s (CHANGES 174) | | | | |
 | 16 Model files: present line at start; missing -> message 5 s, exit, nothing started (CHANGES 175) | | | | |
+| 17 Camera reboot from Machine Settings: accepted line, minutes until the picture is back, reconnect, next cycle OK; wrong password / during a cycle nothing sent (CHANGES 177) | | | | |
 | 11.7 Frontend in Kannada / Hindi / Tamil in the exe: stays up; `Qt warning` lines once each (CHANGES 176) | 2026-11-20 | before 176 | Cause confirmed | Reported by Uddi: the old exe started with `QT_LOGGING_RULES=*=false` did not crash and switched through all four languages. The new exe (handler) still to be run |

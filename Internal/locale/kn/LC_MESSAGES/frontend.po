@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 00:00+0530\n"
+"POT-Creation-Date: 2026-11-19 00:00+0553\n"
 "PO-Revision-Date: 2026-11-19 00:00+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: kn\n"
@@ -14,7 +14,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: frontend/AshokLeylandFrontEnd.py:417 frontend/AshokLeylandFrontEnd.py:907
+#: frontend/AshokLeylandFrontEnd.py:417 frontend/AshokLeylandFrontEnd.py:908
 #, python-brace-format
 msgid "IN {mode} MODE"
 msgstr "{mode} ಮೋಡ್‌ನಲ್ಲಿ"
@@ -23,7 +23,7 @@ msgstr "{mode} ಮೋಡ್‌ನಲ್ಲಿ"
 msgid "Mode"
 msgstr "ಮೋಡ್"
 
-#: frontend/AshokLeylandFrontEnd.py:431 frontend/AshokLeylandFrontEnd.py:908
+#: frontend/AshokLeylandFrontEnd.py:431 frontend/AshokLeylandFrontEnd.py:909
 #, python-brace-format
 msgid "{mode} - Knuckle, Hub, and Disc Assembly"
 msgstr "{mode} - ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆ"
@@ -64,7 +64,7 @@ msgstr "QR ಕೋಡ್ ಸ್ಕ್ಯಾನರ್ ಸಂಪರ್ಕಗೊಂ�
 msgid "CONNECTION STATUS OF DEVICES"
 msgstr "ಸಾಧನಗಳ ಸಂಪರ್ಕ ಸ್ಥಿತಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:568 frontend/AshokLeylandFrontEnd.py:910
+#: frontend/AshokLeylandFrontEnd.py:568 frontend/AshokLeylandFrontEnd.py:911
 msgid "Created by CosTheta Technologies and Ashok Leyland"
 msgstr "ಕಾಸ್‌ಥೀಟಾ ಟೆಕ್ನಾಲಜೀಸ್ ಮತ್ತು ಅಶೋಕ್ ಲೇಲ್ಯಾಂಡ್ ರಚಿಸಿದ್ದು"
 
@@ -149,24 +149,24 @@ msgstr "ಸಕ್ರಿಯ / ನಿಷ್ಕ್ರಿಯ"
 msgid "Report"
 msgstr "ವರದಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:803 frontend/AshokLeylandFrontEnd.py:877
+#: frontend/AshokLeylandFrontEnd.py:803 frontend/AshokLeylandFrontEnd.py:878
 msgid "Information"
 msgstr "ಮಾಹಿತಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:812 frontend/SimplePopups.py:1942
-#: frontend/SimplePopups.py:1947
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:813 frontend/SimplePopups.py:2002
+#: frontend/SimplePopups.py:2010
 msgid "Machine Settings"
 msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
 
-#: frontend/AshokLeylandFrontEnd.py:840
+#: frontend/AshokLeylandFrontEnd.py:841
 msgid "Close Application"
 msgstr "ಅಪ್ಲಿಕೇಶನ್ ಮುಚ್ಚಿ"
 
-#: frontend/AshokLeylandFrontEnd.py:840
+#: frontend/AshokLeylandFrontEnd.py:841
 msgid "Are you sure you want to exit the application ?"
 msgstr "ಅಪ್ಲಿಕೇಶನ್‌ನಿಂದ ನಿರ್ಗಮಿಸಲು ಖಚಿತವೇ ?"
 
-#: frontend/AshokLeylandFrontEnd.py:878
+#: frontend/AshokLeylandFrontEnd.py:879
 msgid ""
 "Software Version: v 1.0\n"
 "\n"
@@ -183,11 +183,11 @@ msgstr ""
 "ಈ ಅಪ್ಲಿಕೇಶನ್ ಮುಂಭಾಗದ ಆಕ್ಸಲ್‌ನ ನಕಲ್, ಹಬ್ ಮತ್ತು ಡಿಸ್ಕ್ ಜೋಡಣೆಯನ್ನು ಪರಿಶೀಲಿಸಿ ದಾಖಲಿಸುತ್ತದೆ: ಪ್ರತಿ ಘಟಕದ ಪ್ರತಿಯೊಂದು ದೃಶ್ಯ "
 "ಪರಿಶೀಲನೆ, ಟಾರ್ಕ್ ಮತ್ತು ಪ್ರೆಸ್, ಅದರ QR ಕೋಡ್ ಸಹಿತ.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:888
+#: frontend/AshokLeylandFrontEnd.py:889
 msgid "Help about using the menu"
 msgstr "ಮೆನು ಬಳಕೆಯ ಕುರಿತು ಸಹಾಯ"
 
-#: frontend/AshokLeylandFrontEnd.py:889
+#: frontend/AshokLeylandFrontEnd.py:890
 msgid ""
 "When any of the menu choices are being used, \n"
 "the remaining menu items will be clickable.\n"
@@ -203,7 +203,7 @@ msgstr ""
 "ಅಥವಾ ರದ್ದಾಗುವವರೆಗೆ, ಬೇರೆ ಯಾವುದೇ ಮೆನು ಐಟಂ ಕ್ಲಿಕ್‌ಗೆ \n"
 "ವ್ಯವಸ್ಥೆ ಪ್ರತಿಕ್ರಿಯಿಸುವುದಿಲ್ಲ.\n"
 
-#: frontend/AshokLeylandFrontEnd.py:1188
+#: frontend/AshokLeylandFrontEnd.py:1189
 #, python-brace-format
 msgid ""
 "Today is {today}. Started: {started}; Running time: {running}    ; Components produced : This week - {week}; This "
@@ -213,7 +213,7 @@ msgstr ""
 "ಇಂದು {today}. ಆರಂಭ: {started}; ಚಾಲನಾ ಸಮಯ: {running}    ; ಉತ್ಪಾದಿತ ಘಟಕಗಳು : ಈ ವಾರ - {week}; ಈ ತಿಂಗಳು - {month}\n"
 "ಬಳಕೆದಾರ: {user}; ಪ್ರಸ್ತುತ ಘಟಕದ ಸಂಸ್ಕರಣಾ ಸಮಯ: {processing}    ; ಇಂದು ಉತ್ಪಾದಿತ ಘಟಕಗಳು - {todayCount}"
 
-#: frontend/AshokLeylandFrontEnd.py:1292
+#: frontend/AshokLeylandFrontEnd.py:1293
 msgid ""
 "Frontend abort (this screen only).\n"
 "Enter the password:"
@@ -221,31 +221,31 @@ msgstr ""
 "ಫ್ರಂಟ್‌ಎಂಡ್ ರದ್ದತಿ (ಈ ಪರದೆ ಮಾತ್ರ).\n"
 "ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
 
-#: frontend/AshokLeylandFrontEnd.py:1297 frontend/FrontendNotices.py:56
+#: frontend/AshokLeylandFrontEnd.py:1298 frontend/FrontendNotices.py:56
 msgid "Wrong password - nothing aborted"
 msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್ - ಏನನ್ನೂ ರದ್ದುಗೊಳಿಸಲಾಗಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:1330 frontend/AshokLeylandFrontEnd.py:1334
+#: frontend/AshokLeylandFrontEnd.py:1331
 msgid "QR CODE : "
 msgstr "QR ಕೋಡ್ : "
 
-#: frontend/AshokLeylandFrontEnd.py:1616 frontend/AshokLeylandFrontEnd.py:1640 frontend/FrontendI18n.py:266
+#: frontend/AshokLeylandFrontEnd.py:1617 frontend/AshokLeylandFrontEnd.py:1641 frontend/FrontendI18n.py:266
 msgid "Done"
 msgstr "ಮುಗಿದಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:2365
+#: frontend/AshokLeylandFrontEnd.py:2366
 msgid "Large Image Display"
 msgstr "ದೊಡ್ಡ ಚಿತ್ರ ಪ್ರದರ್ಶನ"
 
-#: frontend/AshokLeylandFrontEnd.py:2413
+#: frontend/AshokLeylandFrontEnd.py:2414
 msgid "Component Successfully Done"
 msgstr "ಕಾಂಪೊನೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ಮುಗಿದಿದೆ"
 
-#: frontend/AshokLeylandFrontEnd.py:2419
+#: frontend/AshokLeylandFrontEnd.py:2420
 msgid "Component Not Successfully Done"
 msgstr "ಕಾಂಪೊನೆಂಟ್ ಯಶಸ್ವಿಯಾಗಿ ಮುಗಿದಿಲ್ಲ"
 
-#: frontend/AshokLeylandFrontEnd.py:2425
+#: frontend/AshokLeylandFrontEnd.py:2426
 msgid "Component Processing Aborted"
 msgstr "ಕಾಂಪೊನೆಂಟ್ ಪ್ರಕ್ರಿಯೆ ರದ್ದಾಗಿದೆ"
 
@@ -286,11 +286,11 @@ msgstr "ಸೂಪರ್‌ವೈಸರ್"
 msgid "Administrator"
 msgstr "ಆಡಳಿತಗಾರ"
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
 msgid "Yes"
 msgstr "ಹೌದು"
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1819 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
 msgid "No"
 msgstr "ಇಲ್ಲ"
 
@@ -453,7 +453,7 @@ msgstr "Redis ಡೇಟಾ ಸಂಗ್ರಹಿಸುತ್ತಿಲ್ಲ: PC 
 #: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
 #: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
 #: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
-#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:1946
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:2006
 msgid "Cancel"
 msgstr "ರದ್ದುಮಾಡಿ"
 
@@ -911,56 +911,98 @@ msgstr ""
 msgid "Wrong bypass password: machine settings not changed"
 msgstr "ತಪ್ಪು ಬೈಪಾಸ್ ಪಾಸ್‌ವರ್ಡ್: ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಬದಲಾಗಿಲ್ಲ"
 
-#: frontend/SimplePopups.py:1881
+#: frontend/SimplePopups.py:1872
+msgid "A component is in the cycle: reboot the camera only between components (while the QR code is awaited)"
+msgstr "ಒಂದು ಘಟಕ ಚಕ್ರದಲ್ಲಿದೆ: ಘಟಕಗಳ ನಡುವೆ ಮಾತ್ರ (QR ಕೋಡ್‌ಗಾಗಿ ಕಾಯುತ್ತಿರುವಾಗ) ಕ್ಯಾಮೆರಾವನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ"
+
+#: frontend/SimplePopups.py:1879
+#, python-brace-format
+msgid ""
+"Reboot the camera ({ip}).\n"
+"\n"
+"The camera restarts; its picture is back after about one to two minutes.\n"
+"\n"
+"Entering the password is the final confirmation to reboot the camera.\n"
+"Enter the machine settings password:"
+msgstr ""
+"ಕ್ಯಾಮೆರಾವನ್ನು ಮರುಪ್ರಾರಂಭಿಸಿ ({ip}).\n"
+"\n"
+"ಕ್ಯಾಮೆರಾ ಮರುಪ್ರಾರಂಭವಾಗುತ್ತದೆ; ಸುಮಾರು ಒಂದರಿಂದ ಎರಡು ನಿಮಿಷಗಳಲ್ಲಿ ಅದರ ಚಿತ್ರ ಮರಳುತ್ತದೆ.\n"
+"\n"
+"ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸುವುದು ಕ್ಯಾಮೆರಾವನ್ನು ಮರುಪ್ರಾರಂಭಿಸುವ ಅಂತಿಮ ದೃಢೀಕರಣವಾಗಿದೆ.\n"
+"ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳ ಪಾಸ್‌ವರ್ಡ್ ನಮೂದಿಸಿ:"
+
+#: frontend/SimplePopups.py:1885
+msgid "Wrong password: the camera was not rebooted"
+msgstr "ತಪ್ಪು ಪಾಸ್‌ವರ್ಡ್: ಕ್ಯಾಮೆರಾವನ್ನು ಮರುಪ್ರಾರಂಭಿಸಲಾಗಿಲ್ಲ"
+
+#: frontend/SimplePopups.py:1913
+msgid "The camera is rebooting. Its picture is back after about one to two minutes."
+msgstr "ಕ್ಯಾಮೆರಾ ಮರುಪ್ರಾರಂಭವಾಗುತ್ತಿದೆ. ಸುಮಾರು ಒಂದರಿಂದ ಎರಡು ನಿಮಿಷಗಳಲ್ಲಿ ಅದರ ಚಿತ್ರ ಮರಳುತ್ತದೆ."
+
+#: frontend/SimplePopups.py:1915
+#, python-brace-format
+msgid "The camera could not be rebooted: {reason}"
+msgstr "ಕ್ಯಾಮೆರಾವನ್ನು ಮರುಪ್ರಾರಂಭಿಸಲಾಗಲಿಲ್ಲ: {reason}"
+
+#: frontend/SimplePopups.py:1940
 #, python-brace-format
 msgid "{name}: at most 2 decimals"
 msgstr "{name}: ಗರಿಷ್ಠ 2 ದಶಮಾಂಶಗಳು"
 
-#: frontend/SimplePopups.py:1885
+#: frontend/SimplePopups.py:1944
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid whole number"
 msgstr "{name}: '{text}' ಮಾನ್ಯ ಪೂರ್ಣ ಸಂಖ್ಯೆಯಲ್ಲ"
 
-#: frontend/SimplePopups.py:1885
+#: frontend/SimplePopups.py:1944
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid number"
 msgstr "{name}: '{text}' ಮಾನ್ಯ ಸಂಖ್ಯೆಯಲ್ಲ"
 
-#: frontend/SimplePopups.py:1902
+#: frontend/SimplePopups.py:1962
 msgid "Only an Administrator or a Supervisor can change the machine settings"
 msgstr "ಆಡಳಿತಗಾರ ಅಥವಾ ಸೂಪರ್‌ವೈಸರ್ ಮಾತ್ರ ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಬದಲಿಸಬಹುದು"
 
-#: frontend/SimplePopups.py:1912
+#: frontend/SimplePopups.py:1972
 msgid "No models found in qrcode.partmapping.N of the properties file"
 msgstr "ಪ್ರಾಪರ್ಟೀಸ್ ಫೈಲ್‌ನ qrcode.partmapping.N ನಲ್ಲಿ ಯಾವುದೇ ಮಾದರಿ ಇಲ್ಲ"
 
-#: frontend/SimplePopups.py:1923
+#: frontend/SimplePopups.py:1983
 #, python-brace-format
 msgid "In force for {model} since {since} (set by {user})"
 msgstr "{model} ಗೆ {since} ರಿಂದ ಜಾರಿಯಲ್ಲಿದೆ ({user} ಹೊಂದಿಸಿದ್ದು)"
 
-#: frontend/SimplePopups.py:1925
+#: frontend/SimplePopups.py:1985
 #, python-brace-format
 msgid "Default settings for {model}"
 msgstr "{model} ಗೆ ಡೀಫಾಲ್ಟ್ ಸೆಟ್ಟಿಂಗ್‌ಗಳು"
 
-#: frontend/SimplePopups.py:1928
+#: frontend/SimplePopups.py:1988
 msgid "Model"
 msgstr "ಮಾದರಿ"
 
-#: frontend/SimplePopups.py:1945
+#: frontend/SimplePopups.py:2005
 msgid "New settings apply from the next component of the chosen model."
 msgstr "ಹೊಸ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಆಯ್ದ ಮಾದರಿಯ ಮುಂದಿನ ಘಟಕದಿಂದ ಅನ್ವಯವಾಗುತ್ತವೆ."
 
-#: frontend/SimplePopups.py:1946
+#: frontend/SimplePopups.py:2006
 msgid "Save"
 msgstr "ಉಳಿಸಿ"
 
-#: frontend/SimplePopups.py:1946
+#: frontend/SimplePopups.py:2006
 msgid "Reset"
 msgstr "ಮರುಹೊಂದಿಸಿ"
 
-#: frontend/SimplePopups.py:1974
+#: frontend/SimplePopups.py:2008
+msgid "Reboot Camera"
+msgstr "ಕ್ಯಾಮೆರಾ ಮರುಪ್ರಾರಂಭಿಸಿ"
+
+#: frontend/SimplePopups.py:2009
+msgid "Only between components; the password is asked again as the final confirmation."
+msgstr "ಘಟಕಗಳ ನಡುವೆ ಮಾತ್ರ; ಅಂತಿಮ ದೃಢೀಕರಣವಾಗಿ ಪಾಸ್‌ವರ್ಡ್ ಮತ್ತೆ ಕೇಳಲಾಗುತ್ತದೆ."
+
+#: frontend/SimplePopups.py:2040
 #, python-brace-format
 msgid ""
 "Machine settings for {model} saved.\n"
@@ -969,11 +1011,11 @@ msgstr ""
 "{model} ಗೆ ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು ಉಳಿಸಲಾಗಿದೆ.\n"
 "ಅವು ಮುಂದಿನ {model} ಘಟಕದಿಂದ ಅನ್ವಯವಾಗುತ್ತವೆ."
 
-#: frontend/SimplePopups.py:1976
+#: frontend/SimplePopups.py:2042
 msgid "Could not save the machine settings"
 msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ಉಳಿಸಲಾಗಲಿಲ್ಲ"
 
-#: frontend/SimplePopups.py:1979
+#: frontend/SimplePopups.py:2045
 #, python-brace-format
 msgid "Machine settings: {error}"
 msgstr "ಯಂತ್ರ ಸೆಟ್ಟಿಂಗ್‌ಗಳು: {error}"

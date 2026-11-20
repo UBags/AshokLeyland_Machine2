@@ -22,7 +22,7 @@ zooming. The `.mmd` files are the sources.
 - **Entry points:** `MainProgram.py` (the station; built to `MainProgram.exe`) and `OtherServices.py` (web service, MI
   dashboard, screen share; built to `OtherServices.exe`). Both are started by
   `Start-Hub-And-Disc-application - Production.vbs`.
-- **Live:** 89 of 392 Python modules are reachable from those two (imports at module level and inside functions).
+- **Live:** 90 of 395 Python modules are reachable from those two (imports at module level and inside functions).
 - **Not reachable (303, as of CHANGES 176):** `test/machine2_dryrun` 71, `test/machine1_dryrun` 67, `archive/` 46, other `test/` 41,
   leftovers in `frontend/` (old widgets), `costhetaio/` (`IOServer_ModbusTCP.py`, `siemens/test`), `processors/`,
   `utils/`, `video/`, `camera/` (`CameraRecorderServer`, `HandDetector`, `VideoCamera`, `ONVIFCam`, `PhotoCamera`),
@@ -92,7 +92,8 @@ flowchart TB
   P2 -- spawn --> P2W
   P1 & P2 & P3 & P4 & P5 & P6 & P7 <--> REDIS
   P4 <-->|PLCDataIO| PLC
-  P2 --> CAM
+  P2 -->|RTSP stream, ISAPI keepalive| CAM
+  P6 -.->|"ISAPI reboot (Machine Settings)"| CAM
   P3 --> QRS
   P7 --> WAV
   P5 --> PG
@@ -110,7 +111,10 @@ SVG: [`1_runtime.svg`](1_runtime.svg)
 - MainProgram start order: logging → (backup, mode, login) → camera, QR, IO, frontend, heartbeat, DB; then
   `ProcessSupervisor` watches them (every 2 s; at most 10 restarts per server per hour; nothing restarted once a stop
   command is on the stop queue). A restarted camera server reloads `Temp/camera_server_state.pkl`.
-- Only the IOServer talks to the PLC; only the camera server to the camera; only the QR server to the scanner.
+- Only the IOServer talks to the PLC; only the camera server reads the camera (RTSP stream, ISAPI keepalive) - the
+  one exception is the frontend's camera reboot from Machine Settings (`utils/CameraReboot.py`, ISAPI
+  `PUT /System/reboot`, only between components; the camera server then reconnects by itself; CHANGES 177); only the QR
+  server talks to the scanner.
 - The DB is touched by several processes (diagram), but **cycle records are written only by the DB server**, from
   `fe2db.q`.
 
@@ -416,13 +420,13 @@ flowchart LR
     endpoints_ShowScreen["ShowScreen<br/><small>156 lines</small>"]
   end
   subgraph pkg_frontend["frontend"]
-    frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2453 lines</small>"]
+    frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2454 lines</small>"]
     frontend_CosThetaMonitorDimensions["CosThetaMonitorDimensions<br/><small>428 lines</small>"]
     frontend_CosThetaStylesheets["CosThetaStylesheets<br/><small>138 lines</small>"]
     frontend_FrontendI18n["FrontendI18n<br/><small>288 lines</small>"]
     frontend_FrontendNotices["FrontendNotices<br/><small>73 lines</small>"]
     frontend_QtMessages["QtMessages<br/><small>106 lines</small>"]
-    frontend_SimplePopups["SimplePopups<br/><small>2025 lines</small>"]
+    frontend_SimplePopups["SimplePopups<br/><small>2091 lines</small>"]
   end
   subgraph pkg_frontend_frontendutils["frontend.frontendutils"]
     frontend_frontendutils_CosThetaImageUtils["CosThetaImageUtils<br/><small>496 lines</small>"]
@@ -452,9 +456,10 @@ flowchart LR
     persistence_PostgresBackupUtility["PostgresBackupUtility<br/><small>1351 lines</small>"]
   end
   subgraph pkg_utils["utils"]
+    utils_CameraReboot["CameraReboot<br/><small>70 lines</small>"]
     utils_IPUtils["IPUtils<br/><small>109 lines</small>"]
     utils_ImageNormalisationWithMask["ImageNormalisationWithMask<br/><small>2659 lines</small>"]
-    utils_ModelsCheck["ModelsCheck<br/><small>56 lines</small>"]
+    utils_ModelsCheck["ModelsCheck<br/><small>74 lines</small>"]
     utils_PictureRetention["PictureRetention<br/><small>100 lines</small>"]
     utils_ProcessSupervisor["ProcessSupervisor<br/><small>113 lines</small>"]
     utils_ShutdownWait["ShutdownWait<br/><small>47 lines</small>"]
@@ -559,6 +564,7 @@ flowchart LR
   frontend_FrontendNotices --> frontend_FrontendI18n
   frontend_SimplePopups --> frontend_FrontendI18n
   frontend_SimplePopups --> persistence_Persistence
+  frontend_SimplePopups -.-> utils_CameraReboot
   frontend_frontendutils_CosThetaImageUtils --> frontend_CosThetaMonitorDimensions
   frontend_frontendutils_CosThetaLabelUtils --> frontend_CosThetaStylesheets
   frontend_frontendutils_CosThetaLabelUtils --> frontend_frontendutils_CosThetaImageUtils

@@ -24,7 +24,8 @@ CHANGES 164: the models (models/MobileSAM with the YOLO weights) as in productio
 finder with its own offsets (no models needed). No Redis, PLC or camera needed. Without this cycle's hub check, the
 hole finder first runs over the hub check's own annulus (slower than in production).
 
-Run from the project root:   python test/machine2_dryrun/DryRun_SplitPin_Check_UI.py   [--auto [folder]] [--holes morphology]
+Run from the project root:   python test/machine2_dryrun/DryRun_SplitPin_Check_UI.py   [--auto [folder]] [--model DOST|DOSTPLUS] [--holes morphology]
+                                                                    [--hub-image <hub picture>]
 """
 import os
 import pathlib
@@ -45,7 +46,22 @@ from camera.CheckSplitPinAndWasher import CheckSplitPinAndWasher
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 VIEW_W, VIEW_H = 1120, 630
 ZOOM_HALF = 180                 # "Zoom on the nut": CENTRE +- this many px
-QR = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
+QRS = {"DOST": "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$",
+       "DOSTPLUS": "8201206$400112VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"}
+# --model DOST|DOSTPLUS (CHANGES 177; "Model" in the window): production takes the model from the QR code; the hole
+# count (4 / 5) and the offset depend on it, so a DOSTPLUS picture checked as DOST looks for 4 holes and fails
+MODEL = {"value": (sys.argv[sys.argv.index("--model") + 1].upper()
+                   if "--model" in sys.argv and sys.argv.index("--model") + 1 < len(sys.argv) else "DOST")}
+if MODEL["value"] not in QRS:
+    sys.exit(f"--model must be DOST or DOSTPLUS, not {MODEL['value']}")
+
+
+def currentModel() -> str:
+    return MODEL["value"]
+
+
+def currentQR() -> str:
+    return QRS[currentModel()]
 # the pictures live in the Machine 2 folder; the Machine 1 copy uses them too
 IMAGES = HERE / "splitpin_images" if (HERE / "splitpin_images").is_dir() else ROOT / "test" / "machine2_dryrun" / "splitpin_images"
 # pictures whose expected verdict cannot be met for a known reason (file name -> reason); none since CHANGES 163
@@ -78,7 +94,7 @@ def runCheck(path: pathlib.Path):
     if _recorder is not None:
         _recorder.clear()
     started = time.perf_counter()
-    result = CheckSplitPinAndWasher.measure(image)
+    result = CheckSplitPinAndWasher.measure(image, currentModel())
     marked = CheckSplitPinAndWasher.markedPicture(image, result)
     elapsed = time.perf_counter() - started
     holes = _recorder.take() if _recorder is not None else []
@@ -86,7 +102,7 @@ def runCheck(path: pathlib.Path):
         marked = _recorder.draw(marked, holes)
     # the production entry point too (its log line), on the same picture
     _messages.clear()
-    _, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, QR)
+    _, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, currentQR())
     assert bool(ok) == bool(result["ok"]), "checkSplitPinAndWasher and measure disagree"
     values = CheckSplitPinAndWasher.summary(result)
     if holes:
@@ -115,8 +131,8 @@ def skipSwitch(items) -> list:
         for value in (True, False):
             C.getTuning = classmethod(lambda cls, key, default, minimum=None, _v=value: _v
                                       if key == "skip.splitpin.and.washer.check" else real(key, default, minimum))
-            picture, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, QR)
-            expected = True if value else bool(CheckSplitPinAndWasher.measure(image)["ok"])
+            picture, ok = CheckSplitPinAndWasher.checkSplitPinAndWasher(image.copy(), {}, currentQR())
+            expected = True if value else bool(CheckSplitPinAndWasher.measure(image, currentModel())["ok"])
             same = picture is not None and (not value or (picture.shape == image.shape and (picture == image).all()))
             print(f"  skip.splitpin.and.washer.check={value}: {bad[0].name} -> {'OK' if ok else 'NOT OK'}"
                   + (" (picture as taken)" if value and same else ""), flush=True)
@@ -129,6 +145,7 @@ def skipSwitch(items) -> list:
 
 def auto(folder: pathlib.Path) -> int:
     items = picturesIn(folder)
+    print(f"Model: {currentModel()} (--model)", flush=True)
     counts, mismatches, known = {}, [], []
     for path, expected in items:
         verdict, _, elapsed, reason, values = runCheck(path)
@@ -166,6 +183,12 @@ def window():
             bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=4)
             ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left")
             ttk.Button(bar, text="Picture...", command=self.choosePicture).pack(side="left", padx=4)
+            ttk.Label(bar, text="Model").pack(side="left", padx=(8, 2))
+            self.model = tk.StringVar(master=root, value=currentModel())
+            ttk.Combobox(bar, textvariable=self.model, values=tuple(QRS), state="readonly", width=10).pack(side="left")
+            self.model.trace_add("write", lambda *_: MODEL.update(value=self.model.get()))
+            from _hub_holes_option import addHubPictureControl
+            addHubPictureControl(bar, root, report=lambda line: self.status.set(line))
             self.source = tk.StringVar(master=root, value="")
             ttk.Label(bar, textvariable=self.source, width=44).pack(side="left", padx=6)
             ttk.Label(bar, text="Seconds between pictures").pack(side="left", padx=(12, 2))

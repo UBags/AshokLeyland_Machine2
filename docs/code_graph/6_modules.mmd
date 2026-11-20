@@ -50,13 +50,13 @@ flowchart LR
     endpoints_ShowScreen["ShowScreen<br/><small>156 lines</small>"]
   end
   subgraph pkg_frontend["frontend"]
-    frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2453 lines</small>"]
+    frontend_AshokLeylandFrontEnd["AshokLeylandFrontEnd<br/><small>2454 lines</small>"]
     frontend_CosThetaMonitorDimensions["CosThetaMonitorDimensions<br/><small>428 lines</small>"]
     frontend_CosThetaStylesheets["CosThetaStylesheets<br/><small>138 lines</small>"]
     frontend_FrontendI18n["FrontendI18n<br/><small>288 lines</small>"]
     frontend_FrontendNotices["FrontendNotices<br/><small>73 lines</small>"]
     frontend_QtMessages["QtMessages<br/><small>106 lines</small>"]
-    frontend_SimplePopups["SimplePopups<br/><small>2025 lines</small>"]
+    frontend_SimplePopups["SimplePopups<br/><small>2091 lines</small>"]
   end
   subgraph pkg_frontend_frontendutils["frontend.frontendutils"]
     frontend_frontendutils_CosThetaImageUtils["CosThetaImageUtils<br/><small>496 lines</small>"]
@@ -86,9 +86,10 @@ flowchart LR
     persistence_PostgresBackupUtility["PostgresBackupUtility<br/><small>1351 lines</small>"]
   end
   subgraph pkg_utils["utils"]
+    utils_CameraReboot["CameraReboot<br/><small>70 lines</small>"]
     utils_IPUtils["IPUtils<br/><small>109 lines</small>"]
     utils_ImageNormalisationWithMask["ImageNormalisationWithMask<br/><small>2659 lines</small>"]
-    utils_ModelsCheck["ModelsCheck<br/><small>56 lines</small>"]
+    utils_ModelsCheck["ModelsCheck<br/><small>74 lines</small>"]
     utils_PictureRetention["PictureRetention<br/><small>100 lines</small>"]
     utils_ProcessSupervisor["ProcessSupervisor<br/><small>113 lines</small>"]
     utils_ShutdownWait["ShutdownWait<br/><small>47 lines</small>"]
@@ -193,6 +194,7 @@ flowchart LR
   frontend_FrontendNotices --> frontend_FrontendI18n
   frontend_SimplePopups --> frontend_FrontendI18n
   frontend_SimplePopups --> persistence_Persistence
+  frontend_SimplePopups -.-> utils_CameraReboot
   frontend_frontendutils_CosThetaImageUtils --> frontend_CosThetaMonitorDimensions
   frontend_frontendutils_CosThetaLabelUtils --> frontend_CosThetaStylesheets
   frontend_frontendutils_CosThetaLabelUtils --> frontend_frontendutils_CosThetaImageUtils
