@@ -5549,3 +5549,16 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `DryRun_SplitPin_Check_UI --auto`: no pictures in the folder (nor in `OK\` / `NOT_OK\`), or no such folder ->
   "RESULT: FAIL (no pictures)", exit 1. Both dry-run folders.
 - Run: empty folder -> FAIL, exit 1; missing hub picture -> stopped, exit 1; `--auto --holes morphology` 79/79 PASS.
+
+## 179. Split pin dry run: the hub picture is not checked as a split pin picture; DOSTPLUS laptop run (2026-11-20)
+
+- Uddi's laptop run of 2026-11-20 (`--model DOSTPLUS --hub-image ...\Hub.png --auto`, YOLO + MobileSAM): the hub check
+  passed on the hub picture (centre 645.2, 349.9 from 5 holes); every split pin picture's own 5 holes found at about
+  (644.5, 349.1) r 149.0, spread 0.3 - within 1 px of the hub picture's; ~0.5 s per picture. Verdicts as in CHANGES 177
+  (hex nut only -> washer not found; straight pin across the washer -> outline not round; 18-00-19-5 -> 8 blue px).
+  `Hub.png`, lying in the same folder, was checked too ("washer not found"): `picturesIn` now leaves out the
+  `--hub-image` file. Both dry-run folders.
+- DOSTPLUS washer offset: washer centre - hole-circle centre = (-0.4, -2.2) and (+1.4, -2.6) on the two pictures with
+  a washer, against `vision.splitpin.hub.offset.dostplus` 1.9,2.1 (derived, never measured; DOST 1.3,-3.6). Not changed:
+  two pictures, none labelled OK; the offset only places the 100 px search (offsetFromExpected is logged, not judged).
+- Run: the 5 DOSTPLUS pictures with Hub.png in their folder -> 5 checked, Hub.png left out; `--auto` 79/79 PASS.

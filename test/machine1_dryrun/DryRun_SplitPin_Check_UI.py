@@ -79,6 +79,13 @@ def picturesIn(folder: pathlib.Path):
             found += [(p, expected) for p in sorted((folder / sub).iterdir()) if p.suffix.lower() in EXTENSIONS]
     if not found:
         found = [(p, "") for p in sorted(folder.iterdir()) if p.suffix.lower() in EXTENSIONS]
+    try:                                          # the hub picture (--hub-image) is not a split pin picture (CHANGES 179)
+        from _hub_holes_option import HUB_PICTURE
+        if HUB_PICTURE["path"]:
+            hub = pathlib.Path(HUB_PICTURE["path"]).resolve()
+            found = [(p, e) for p, e in found if p.resolve() != hub]
+    except ImportError:
+        pass
     return found
 
 
