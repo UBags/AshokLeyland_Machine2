@@ -5396,3 +5396,35 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run: verifier both ALL EQUIVALENT (408 parameters); `DryRun_Tuning_Keys` both 235/235; `DryRun_SplitPin_Check_UI
   --auto --holes morphology` both PASS 79/79 + switch; `DryRun_Bung_Hub_Holes --holes morphology` 6/6. Not run: the
   bung window / bung checks with YOLO (laptop).
+
+## 174. Start-up: the database backup beside the login; the launcher tries Redis every 2 s (2026-11-20)
+- **Why:** the plant PC is slow to start (Uddi). `startup_diag.txt` of 2026-11-20: firmware 11.9 s, Windows 35 - 84 s
+  (to the desktop 21 - 46 s); the launcher waited 0 s for Redis on 8 of 10 logons (3, 11, 17 s on the others). After
+  the launcher, MainProgram ran `doBackup()` (pg_dump + compress + validate of the production database) in the main
+  thread before the mode and login dialogs, which waited for it - a time that grows with the database.
+- **Backup in a thread** (`MainProgram.startDatabaseBackupThread`, non-daemon): starts before the camera / PLC ping and
+  runs while the operator chooses the mode and logs in; "Database backup at start-up done / NOT done in N s".
+  `waitForDatabaseBackup(thread, before)` waits for it (and logs "Waited N s ...") before the DB server starts and
+  before each early exit (no mode, login cancelled, 5 failed logins), so no half-written backup is left.
+- **Found on the way - why the order had to change:** `setDatabaseName(createDB=True)` runs `ALTER TABLE ... ADD COLUMN
+  IF NOT EXISTS` (a no-op, but it still takes the table's exclusive lock), which waits for pg_dump's ACCESS SHARE
+  locks; a read does not (measured on PostgreSQL: the ALTER waited the full 5 s of a held lock, a SELECT 0.03 s).
+  Left where it was (after the mode dialog) it would have frozen the start-up after the mode choice until the backup
+  ended; the DB server runs the same call at its start, and a waiting ALTER also holds up every later query on the
+  table. So: both databases are now set up **before** the backup starts (the same two calls, before the mode dialog
+  instead of after it); after the mode only `setDatabaseName(mode, createDB=False)` selects the name; the DB server
+  (P5, started last) waits for the backup. The camera, QR, IO, frontend and heartbeat servers start without waiting.
+- **What the start-up backup now holds:** the database after the start-up schema step (normally a no-op; a new build's
+  column changes would be in it). The data are the same as before; the previous run's shutdown backup is from before
+  that step.
+- **Launcher** (`Start-Hub-And-Disc-application - Production.vbs`): Redis / PostgreSQL tried every 2 s (`POLL_MS`; 3 s
+  before). Each try also starts a hidden PowerShell (~0.3 - 1 s), so MainProgram starts on average ~0.5 s sooner when
+  Redis is late - small, as asked; the launcher log showed Redis late on 3 of 10 logons only. The file must be copied
+  into `shell:startup` by hand (not part of the exe).
+- **Dry run:** `DryRun_Startup_Backup.py` (both folders, 16 checks): B1 returns at once, non-daemon; B2 the wait; B3 an
+  exception in `doBackup`; B4 the order in `main()` (AST); B5 the PostgreSQL locks above; B6 the real `doBackup` in the
+  thread writes a file.
+- Docs: LLD start-up steps 3, 4, 6; code graph (runtime node, start order); plant-pc-setup (§76); plant-pc-verification
+  §15; READMEs; CLAUDE.md (§5 rule, §7 row).
+- Run: `DryRun_Startup_Backup` 16/16 on both machines; `DryRun_Heartbeat_And_Startup` 29/29 on both. Not run: the
+  launcher (Windows only; VBScript syntax checked by eye), the real start-up on the plant PC.

@@ -156,6 +156,36 @@ def startTheFrontendServer(mode : str, username : str, role : str):
 #     from endpoints.AshokLeyland_MI_Light import startMIServer
 #     startMIServer()
 
+def startDatabaseBackupThread() -> threading.Thread:
+    """Start the start-up database backup (doBackup: pg_dump, compress, validate) in a thread and return it (CHANGES 174).
+    It used to run in the main thread before the mode and login dialogs, which then waited for it. Not a daemon thread:
+    an exit before the servers start still waits for it (waitForDatabaseBackup), so no half-written backup is left."""
+    def runBackup():
+        started = time.monotonic()
+        try:
+            done = doBackup()
+            printBoldBlue(f"Database backup at start-up {'done' if done else 'NOT done'} in {time.monotonic() - started:.1f} s")
+        except Exception as e:
+            printBoldRed(f"Could not backup database due to {e} (after {time.monotonic() - started:.1f} s)")
+
+    printBoldBlue("Backing up database in the background...")
+    backupThread = threading.Thread(name="Start-up Database Backup", target=runBackup, daemon=False)
+    backupThread.start()
+    return backupThread
+
+
+def waitForDatabaseBackup(backupThread: typing.Optional[threading.Thread], before: str) -> float:
+    """Wait until the start-up backup thread has finished; returns the seconds waited (0 if it had already finished)."""
+    if (backupThread is None) or (not backupThread.is_alive()):
+        return 0.0
+    printBoldBlue(f"Waiting for the database backup to finish before {before}...")
+    started = time.monotonic()
+    backupThread.join()
+    waited = time.monotonic() - started
+    printBoldBlue(f"Waited {waited:.1f} s for the database backup before {before}")
+    return waited
+
+
 def checkIPs():
     cameraIP = CosThetaConfigurator.getInstance().getCameraIP()
     plcIP = CosThetaConfigurator.getInstance().getPlcIP()
@@ -397,11 +427,18 @@ def main():
 
     showApplicationStartingScreen("Starting Hub and Disc Processing Application", auto_close_duration=1)
 
-    printBoldBlue("Backing up database...")
-    try:
-        doBackup()
-    except Exception as e:
-        printBoldRed(f"Could not backup database due to {e}")
+    # Databases, schema and tables first (CHANGES 174): setDatabaseName runs ALTER TABLE ... IF NOT EXISTS, which waits
+    # for pg_dump's table locks - so it must run before the backup starts. Both databases, as before; the mode only
+    # chooses the database name afterwards.
+    printBoldBlue("Ensuring databases and file folders are created and available for saving data...")
+    setDatabaseName(mode="Production")
+    makeFoldersForImages(mode_data_subfolder=getDataSubFolder())
+    setDatabaseName(mode="Test")
+    makeFoldersForImages(mode_data_subfolder=getDataSubFolder())
+
+    # The start-up backup runs in a thread while the operator chooses the mode and logs in (CHANGES 174); the login
+    # only reads, which pg_dump does not block. The DB server is started after the backup has finished.
+    startupBackup = startDatabaseBackupThread()
 
     printBoldBlue("Checking connection to the Camera and IO module. Please wait...")
     checkIPs()
@@ -414,6 +451,7 @@ def main():
 
     if not submitted:
         showErrorMessage("Shutting down system, as no mode was selected")
+        waitForDatabaseBackup(startupBackup, "exiting")
         try:
             stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
             os.system("taskkill /f /im cmd.exe")
@@ -421,17 +459,9 @@ def main():
             noteSuppressed()
         sys.exit(0)
 
-    printBoldBlue("Ensuring databases and file folders are created and available for saving data...")
-    # Depending on mode, first do Test and then Production; else, vice-versa. Ensures that database name is properly populated for getting
-    # the correct login ids populated in the login() dropdown
-    if (currentMode.upper() == "TEST") or (currentMode.upper().startswith("TEST")):
-        setDatabaseName(mode="Production")
-        makeFoldersForImages(mode_data_subfolder=getDataSubFolder())
-    else:
-        setDatabaseName(mode="Test")
-        makeFoldersForImages(mode_data_subfolder=getDataSubFolder())
-
-    setDatabaseName(mode=currentMode)
+    # Both databases were created before the backup started; this only selects the mode's database (and so the
+    # login ids in the login() dropdown) and its picture folders.
+    setDatabaseName(mode=currentMode, createDB=False)
     makeFoldersForImages(mode_data_subfolder=getDataSubFolder())
 
     printBoldBlue("Initiating login...")
@@ -448,6 +478,7 @@ def main():
             printBoldRed(f"Consecutive {loginTries} unsuccessful login attempts")
             if submitted:
                 showErrorMessage("Login cancelled. Exiting the program.")
+                waitForDatabaseBackup(startupBackup, "exiting")
                 stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
                 try:
                     os.system("taskkill /f /im cmd.exe")
@@ -457,6 +488,7 @@ def main():
 
     if not successfullyLoggedIn:
         showErrorMessage("5 unsuccessful login tries. Exiting the program")
+        waitForDatabaseBackup(startupBackup, "exiting")
         stopProcesses(currentProcessPIDs, endingSplashScreenBeingShown=False)
         try:
             os.system("taskkill /f /im cmd.exe")
@@ -542,6 +574,10 @@ def main():
         printBoldBlue(f"Heartbeat Monitoring process is {P7.pid}")
     except Exception:
         printBoldRed("Could not start the HeartbeatServer")
+
+    # The DB server runs setDatabaseName (ALTER TABLE ... IF NOT EXISTS) at its start, which would wait for the backup's
+    # locks and hold up every query queued behind it: start it only after the backup (CHANGES 174)
+    waitForDatabaseBackup(startupBackup, "starting the DB server")
 
     try:
         P5 = Process(target=startTheDBServer, args=(currentMode, currentUser,))

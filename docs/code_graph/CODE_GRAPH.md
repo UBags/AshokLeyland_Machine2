@@ -58,7 +58,7 @@ flowchart TB
     VBS["Start-Hub-And-Disc-application - Production.vbs<br/>(Startup folder, at logon)"]
     BAT["Startup.bat<br/>(desktop, manual)"]
     subgraph MAINEXE["MainProgram.exe = MainProgram.py"]
-      MP["MainProgram<br/>Redis check + flush · picture clean-up · pg backup<br/>chooseMode · login · monitorStop"]
+      MP["MainProgram<br/>Redis check + flush · picture clean-up · DB setup<br/>pg backup (thread) ∥ chooseMode · login · monitorStop"]
       SUP["utils/ProcessSupervisor<br/>restart dead server, ≤10/h"]
       P1["P1 Logging<br/>logutils.CentralLoggers"]
       P2["P2 Camera server<br/>camera/CameraProcessorServer"]

@@ -3,8 +3,8 @@
 ' Put this file in the Startup folder (Win+R, shell:startup). It runs at every logon of this user.
 ' 1. If MainProgram.exe is already running, it does nothing.
 ' 2. Otherwise it waits until Redis (port 6379) and PostgreSQL (port 5432) accept connections,
-'    up to WAIT_SECONDS for each. After boot, Redis in WSL can take longer than MainProgram's
-'    own 3 x 10 s retries.
+'    up to WAIT_SECONDS for each, trying every POLL_MS (2 s; 3 s before CHANGES 174). After boot,
+'    Redis in WSL can take longer than MainProgram's own 3 x 10 s retries.
 ' 3. Then it starts MainProgram.exe in a minimised console. The console stays open after
 '    MainProgram exits (cmd /k).
 ' 4. It starts OtherServices.exe as well, but only if it is built and not already running.
@@ -19,6 +19,7 @@ Const OTHER_EXE     = "OtherServices.exe"
 Const REDIS_PORT    = 6379
 Const POSTGRES_PORT = 5432
 Const WAIT_SECONDS  = 240
+Const POLL_MS       = 2000   ' gap between two tries; each try also takes ~0.3 - 1 s (a hidden PowerShell)
 Const TITLE         = "Hub and Disc application"
 
 Dim shell, fso, wmi, logPath, mainPath, otherDir, otherPath
@@ -67,7 +68,7 @@ Function WaitForPort(name, port)
             Exit Function
         End If
         If DateDiff("s", start, Now) >= WAIT_SECONDS Then Exit Do
-        WScript.Sleep 3000
+        WScript.Sleep POLL_MS
     Loop
     WriteLog "ERROR: " & name & " is not reachable on port " & port & " after " & WAIT_SECONDS & " s."
     WaitForPort = False

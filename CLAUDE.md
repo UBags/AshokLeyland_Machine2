@@ -142,6 +142,10 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
   reset. Both PLCs reset all values on restart.
 - The vision check always runs in the worker process (no thread fallback since CHANGES 105).
+- MainProgram start-up (CHANGES 174): both databases are set up (`setDatabaseName`, createDB) **before** the start-up
+  backup starts; the backup runs in a thread beside the mode and login dialogs; the DB server starts only after it
+  (`waitForDatabaseBackup`), and so does every early exit. Do not run `setDatabaseName(createDB=True)` while it runs:
+  its `ALTER TABLE ... IF NOT EXISTS` waits for pg_dump's locks and holds up every query queued behind it.
 
 ## 6. Documentation and history
 
@@ -173,6 +177,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 12 Exit: the DB server's drain line, a record in FailedRecords with PostgreSQL down, no `[Configuration]` lines (CHANGES 157) | Not reported yet |
 | 13 Split pin and washer: dry-run window, turned / straight / standing legs, no washer, log lines of a shift (CHANGES 162) | Not reported yet |
 | 14 Hub holes by YOLO + MobileSAM: laptop `DryRun_Hub_Holes_SAM.py --wrong-model` PASS, its offsets into the properties before the build, repeatability, (sam) in the log lines, check times (CHANGES 164) | Laptop runs of 2026-11-19 (Uddi): every good picture found, the other model never; offsets set (CHANGES 165); re-run after 165: all found, DOST still two modes; Uddi 2026-11-20: thin-annulus finder slow and wrong -> new finder (CHANGES 169); laptop run of 2026-11-20 (Uddi): 163 pictures, 0.5 - 0.7 s each, every good picture found, the other model never, area cutoffs and offsets set (CHANGES 170); plant not yet |
+| 15 Start-up: the backup beside the mode / login dialogs, its time and any wait before the DB server; the launcher polling every 2 s (CHANGES 174) | Not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 

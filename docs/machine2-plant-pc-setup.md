@@ -29,7 +29,7 @@ Continues `claude/machine2-changes-log.md` (sections 1-73). Branch `machine2-fro
 
 ## 76. Start at logon (repo root `Startup.bat`, `Start-Hub-And-Disc-application - Production.vbs`, commit 395bae1)
 - **The `.vbs` goes in `shell:startup`** (runs at logon, not at boot; MainProgram is a desktop app):
-  - it waits up to 240 s each for Redis (6379) and PostgreSQL (5432) to accept connections;
+  - it waits up to 240 s each for Redis (6379) and PostgreSQL (5432) to accept connections, trying every 2 s (`POLL_MS`; 3 s before CHANGES 174) - each try also starts a hidden PowerShell (~0.3 - 1 s);
   - then it starts `cmd.exe /k MainProgram.exe` minimised, so the console with the logs stays visible;
   - it uses a WMI process check (no console flash), so the program is started only if it isn't already running;
   - OtherServices is started only if it is built;
