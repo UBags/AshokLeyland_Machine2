@@ -5562,3 +5562,28 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   a washer, against `vision.splitpin.hub.offset.dostplus` 1.9,2.1 (derived, never measured; DOST 1.3,-3.6). Not changed:
   two pictures, none labelled OK; the offset only places the 100 px search (offsetFromExpected is logged, not judged).
 - Run: the 5 DOSTPLUS pictures with Hub.png in their folder -> 5 checked, Hub.png left out; `--auto` 79/79 PASS.
+
+## 180. Study: the split pin washer and legs by MobileSAM (+ YOLO boxes) and a fitted washer profile (2026-11-21)
+
+- Uddi's design of 2026-11-21: after the hub's holes, find the spindle centre relative to them per model, get the washer
+  by MobileSAM prompts, fit a mathematical profile, then the eye, the half opposite it, its leg-free area and the share
+  the legs cover; a cut-off from labelled pictures. Labels of the 78 DOSTPLUS plant pictures of 2026-11-20: up to and
+  including `17-28-12-134071-5` NOT OK, after it OK; unpainted but correctly turned legs are OK.
+- `test/machine*_dryrun/Study_Washer_SAM.py` (new, study): per picture the holes; the castle nut (3 prompt sets, RANSAC
+  circle on each candidate) and the washer (5 prompt sets), every candidate printed and one picked; the outline fitted to
+  the washer mask (circle + 12 scallops + perspective, robust); eye; legs half; coverage (not bright washer, and not in
+  the mask); legs standing out; the split pin from the eye (4 prompt sets); the legs from a point grid over the legs half
+  and from YOLO boxes (production's prompting; every box, its mask and kind printed); summaries, the spindle / washer
+  centre against the hole circle per model, best cut-offs (colour coverage, point-grid legs, YOLO legs) with the
+  pictures each gets wrong; pictures with outlines only. Runs on the laptop (GPU, YOLO weights); the log is for tuning.
+- Sandbox run (CPU, holes by the dark-blob finder, no YOLO; 79 DOST + 78 DOSTPLUS pictures):
+  - washer: MobileSAM returns washer + nut as one disc (IoU 0.85 - 0.92 with the expected disc); the outline fitted to it
+    r 46.1 - 47.9 DOST / 45.8 - 47.1 DOSTPLUS (sd ~0.35), 12-scallop amplitude ~1 px; the hex nut r 42, 12-fold 0.32,
+    6-fold 2.4 - the washer is told from the hex nut by its profile;
+  - washer centre - hole circle centre: DOST (2.6, 3.3) sd (1.2, 1.1), DOSTPLUS (1.3, -1.7) sd (0.2, 0.5) (dark-blob
+    hole centres; one DOSTPLUS part);
+  - nut by MobileSAM: circle residual 0.7 px but radius 24.5 - 34 and centre sd ~2 px - partial masks, not reliable yet;
+  - legs: the washer disc includes what lies on it (not-in-mask coverage 0.00 - 0.06); colour coverage does not separate
+    (DOST OK 0.34 - 0.47 / NOT OK 0.19 - 0.49; best joint cut 74 / 79 DOST, 48 / 72 DOSTPLUS), brass legs pass as washer
+    colour; a point on the eye gives the eye loop only (the shank is under the nut); single-point prompts on the legs half
+    mostly return the whole disc. The YOLO-box step is untested here (no weights; its code path run with a stand-in).
