@@ -319,3 +319,7 @@ def drawn(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndarray:
     sep = np.full((hh, 4, 3), 90, np.uint8)
     top = np.hstack([tiles[0], sep, tiles[1]]); bottom = np.hstack([tiles[2], sep, tiles[3]])
     return np.vstack([top, np.full((4, top.shape[1], 3), 90, np.uint8), bottom])
+
+
+# the blue-marker / not-washer-colour method under its own name (CHANGES 192: the red marking is in _legs_red)
+measureBlue = measure

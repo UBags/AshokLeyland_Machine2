@@ -5778,3 +5778,29 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Uddi, 2026-11-21 14:09: the Otsu adjustment starts at 0 (`OTSU_ADJUST`), the first closing at 4 (`CLOSE_KERNEL`); the
   second closing's kernel from a dropdown ("then", 3 / 4, 4 at start; `CLOSE_KERNEL_2`, `--close-kernel-2`); either
   change redraws the picture shown. Issued without a run here, at his request (both files parse).
+
+## 192. Study_Red_Legs_UI: the split pin legs by their red marking (2026-11-21)
+
+- Uddi, 2026-11-21 15:02: go for the red marking (67 new DOST pictures, legs painted maroon: 31 OK / 36 NOT OK); keep
+  the blue method in its own method; (a) the washer mask as before, (b) the legs by their red, (c) the washer mask
+  binarised - legs black, the rest white, (d) the black share on the legs half and the black length across the whole
+  washer; a window and `--auto`.
+- `_legs_length.measureBlue` = the blue / not-washer-colour method (unchanged). `_legs_red.py` (new): `redPaint` (hue
+  <= 15 or >= 155 of 180, S >= 35, V >= 30, opened 2 x 2 - the paint sits at hue 155 - 180 with S 30 - 170 in these
+  JPEGs; the seal and washer have S < 35 above V 30), `measureRed` (ring from `_legs_length.ring`, legs side = the 180
+  deg with most red on the ring and up to 45 px past the outline, else opposite the pin head; black = red in the ring;
+  black share on the legs half and whole; black length = degrees of the flat ring with >= 25 % red, whole and legs
+  half; reach = furthest red px past the outline on the legs side, in pieces touching the outline), `drawnRed` (2 x 2:
+  washer mask; legs black / washer white; red found, magenta past the outline; result with values).
+- `Study_Red_Legs_UI.py` (new): window (folder, model, hub picture, seconds, "Red S >=" 20 - 70 / "V >=" 15 - 60
+  dropdowns that redraw the picture, save) and `--auto`; OK / NOT_OK or "Not OK" sub-folders; holes not found -> the
+  washer step from `vision.splitpin.centre` (HOLES line), so the legs can still be studied; summary with the cuts on
+  each value and on pairs.
+- Sandbox run (`--holes morphology`: the dark-blob finder found no holes on these new pictures, so every picture went
+  through the fixed centre - on the laptop the YOLO + MobileSAM holes give the centre): washer present 66 / 67 (the NOT
+  OK 124757553: outline r 50.6). Best pair: black share legs half >= 0.037 and reach <= 18.9 px -> 1 OK called NOT OK,
+  1 NOT OK called OK (66 pictures with a washer). Reach alone <= 16.8: 1 + 10 (the 7 NOT OK without red pass on reach,
+  fail on share). The share / length alone do not separate (12 - 13 OK called NOT OK: on the 12:56 parts the ring
+  from the fixed centre does not lie under the legs). Margins thin (reach: OK up to 18.9, a NOT OK at 18.1); fitted
+  on these pictures.
+- Window built under Xvfb (3.12), the red dropdown redraw run; `--auto` on the 67 pictures (3.11, MobileSAM).
