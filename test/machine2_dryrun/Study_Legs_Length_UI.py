@@ -1,0 +1,314 @@
+"""
+Study_Legs_Length_UI - the split pin legs as a length over the washer (Uddi, 2026-11-21; _legs_length.py): choose a
+folder (OK\\ / NOT_OK\\ sub-folders give the label; else the pictures in it), the model, an optional hub picture, the
+seconds between pictures (dropdown, 3 at start); Start runs every picture in turn and shows the washer enlarged:
+  light green  the washer mask from MobileSAM (filled)
+  red          the pin head (eye), where found; the legs' lines (skeleton of their imprint over the washer)
+  text         the length of each leg and the total (px), "washer: NOT found" when there is none
+Per picture the values go to the panel on the right, every log line to the log panel and the terminal, one line to
+the list at the bottom (click it to see that picture again). When the folder is done or stopped: the summary (washer
+present / not, the totals per label, the cut-off on the total that best splits OK from NOT OK, and with the
+outside length as well). Optional: save the pictures to <folder>\\legs_length_results.
+
+  --auto <folder> [--model DOST|DOSTPLUS]   no window: every picture, the lines and the summary on the terminal
+  --legs-colour none|blue|both              the legs by not-washer colour (default none), the blue marker, or both
+  --holes sam|morphology, --sam <mobile_sam.pt>, --yolo-conf  as Study_Washer_SAM
+
+Run from the project root (laptop: GPU and the YOLO weights):
+    python test/machine2_dryrun/Study_Legs_Length_UI.py [--auto <folder>] [--model DOSTPLUS] [--legs-colour none]
+"""
+import pathlib, queue, sys, threading, time, traceback
+
+HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import Study_Washer_SAM as S          # sets the paths, the vendor and cv2 / numpy
+import cv2
+import numpy as np
+import _legs_length as L
+
+COLOUR = S.arg("--legs-colour", "none")
+if COLOUR not in ("none", "blue", "both"):
+    sys.exit(f"--legs-colour must be none, blue or both, not {COLOUR}")
+
+
+def processOne(p, lab, model, models):
+    """(row, picture to show or None, seconds) - the study's washer step, then the legs' length."""
+    pred, FindHubHoles, SP, method, src = models
+    t0 = time.perf_counter()
+    r, g, im = S.processPicture(p, lab, model, pred, FindHubHoles, SP)
+    if g is not None and im is not None:
+        x0, y0 = g["x0"], g["y0"]
+        g["crop"] = im[y0:y0 + 2 * S.CROP_HALF, x0:x0 + 2 * S.CROP_HALF].copy()
+    t1 = time.perf_counter()
+    res = L.measure(g, r, model, COLOUR)
+    r.update(washer_present=res["washerPresent"], washer_reason=res["washerReason"], legs_side=res["side"],
+             legs=[round(x, 1) for x in res["legs"]], legs_total=round(res["total"], 1),
+             inner_edge=None if res["innerEdge"] is None else round(res["innerEdge"], 1),
+             outside_len=round(res["outside"], 1), outside_blue_len=round(res["outsideBlue"], 1),
+             t_legs_length=round(time.perf_counter() - t1, 3))
+    S.log(f"   LEGS washer present {res['washerPresent']} ({res['washerReason']}); side: {res['side']}"
+          + (f" axis {res['axis']:.0f} deg" if res["axis"] is not None else "")
+          + f"; legs {' + '.join(f'{x:.0f}' for x in res['legs']) or 'none'} = total {res['total']:.0f} px"
+          + f"; past the outline {res['outside']:.0f} px (blue {res['outsideBlue']:.0f}); colour {COLOUR}; "
+            f"{r['t_legs_length']:.2f} s")
+    if g is not None and g.get("crop") is not None:
+        view = L.drawn(g, res)
+    elif im is not None:
+        view = cv2.resize(im[270:420, 570:720], None, fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
+    else:
+        view = None
+    return r, view, time.perf_counter() - t0
+
+
+def summary(rows, model):
+    S.log(f"\n================ LEGS LENGTH SUMMARY ({len(rows)} pictures, model {model}, colour {COLOUR}) ================")
+    labels = sorted({r.get("label") or "-" for r in rows})
+    for lab in labels:
+        rs = [r for r in rows if (r.get("label") or "-") == lab]
+        present = [r for r in rs if r.get("washer_present")]
+        S.log(f"{lab:7s} {len(rs)} pictures: washer present {len(present)}, not present {len(rs) - len(present)}"
+              + "".join(f"\n      no washer: {r['name']} ({r.get('washer_reason')})" for r in rs if not r.get("washer_present")))
+        tot = sorted(r["legs_total"] for r in present)
+        outs = sorted(r["outside_len"] for r in present)
+        if tot:
+            S.log(f"        legs total   {tot[0]:.0f} .. {tot[-1]:.0f} (median {np.median(tot):.0f}): " + " ".join(f"{x:.0f}" for x in tot))
+            S.log(f"        past outline {outs[0]:.0f} .. {outs[-1]:.0f} (median {np.median(outs):.0f}): " + " ".join(f"{x:.0f}" for x in outs))
+    ok = [r for r in rows if r.get("label") == "OK" and r.get("washer_present")]
+    bad = [r for r in rows if r.get("label") == "NOT OK" and r.get("washer_present")]
+    if ok and bad:
+        def errors(f):
+            return sum(1 for r in ok if not f(r)), sum(1 for r in bad if f(r))
+        best = min(((errors(lambda r, c=c: r["legs_total"] >= c), c) for c in range(0, 301)), key=lambda x: (sum(x[0]), x[1]))
+        S.log(f"CUT on the total alone: OK when total >= {best[1]} px -> {best[0][0]} of {len(ok)} OK called NOT OK, "
+              f"{best[0][1]} of {len(bad)} NOT OK called OK")
+        both = min(((errors(lambda r, c=c, o=o: r["legs_total"] >= c and r["outside_len"] <= o), c, o)
+                    for c in range(0, 301, 2) for o in range(0, 61)), key=lambda x: (sum(x[0]), x[1], -x[2]))
+        S.log(f"CUT with the outside length too: OK when total >= {both[1]} and past the outline <= {both[2]} px -> "
+              f"{both[0][0]} OK called NOT OK, {both[0][1]} NOT OK called OK")
+    else:
+        S.log("(no OK / NOT OK labels in this folder: no cut-off - put the pictures in OK\\ and NOT_OK\\ sub-folders)")
+    times = [r.get("t_rest", 0) + r.get("t_holes", 0) for r in rows if r.get("t_rest") is not None]
+    if times:
+        S.log(f"time per picture {min(times):.2f} .. {max(times):.2f} s (median {np.median(times):.2f})")
+
+
+def auto(folder, model):
+    from _hub_holes_option import setHubPicture
+    models = S.setUp()
+    S.log(setHubPicture(None) + f" (model {model})")
+    items = S.picturesIn(folder)
+    S.log(f"SET {model}: {len(items)} pictures from {folder}; legs colour {COLOUR}")
+    rows = []
+    for p, lab in items:
+        r, _, _ = processOne(p, lab, model, models)
+        rows.append(r)
+    summary(rows, model)
+
+
+def main():
+    import tkinter as tk
+    from tkinter import filedialog, ttk
+
+    events = queue.Queue()
+    termLog = S.log
+
+    def uiLog(*a):                                   # every line to the terminal and to the log panel
+        termLog(*a)
+        events.put(("log", " ".join(str(x) for x in a)))
+
+    S.log = uiLog
+    PANEL = [("label", "label"), ("washer_present", "washer present"), ("washer_reason", "washer"),
+             ("prof_r", "washer outline r"), ("prof_a6", "6-fold (hex) amplitude"), ("legs_side", "legs side"),
+             ("eye_angle", "eye angle"), ("inner_edge", "washer inner edge r"), ("legs", "legs (px)"),
+             ("legs_total", "legs total (px)"), ("outside_len", "past the outline (px)"),
+             ("outside_blue_len", "past the outline, blue (px)"), ("fail", "study step failed"),
+             ("t_holes", "time holes s"), ("t_rest", "time washer etc. s"), ("t_legs_length", "time legs s")]
+
+    class Window:
+        def __init__(self, root):
+            self.root = root
+            self.worker = None; self.stopFlag = threading.Event(); self.shown = threading.Event()
+            self.models = None; self.rows = []; self.views = {}; self.photo = None
+            root.title(f"Split pin legs as a length over the washer - study ({S.os.environ['COSTHETA_PLC_VENDOR']} settings, colour {COLOUR})")
+            bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=4)
+            ttk.Button(bar, text="Folder...", command=self.chooseFolder).pack(side="left")
+            self.folder = tk.StringVar(master=root, value="")
+            ttk.Label(bar, textvariable=self.folder, width=48).pack(side="left", padx=6)
+            ttk.Label(bar, text="Model").pack(side="left", padx=(8, 2))
+            self.model = tk.StringVar(master=root, value=S.arg("--model", "DOST").upper())
+            ttk.Combobox(bar, textvariable=self.model, values=("DOST", "DOSTPLUS"), state="readonly", width=10).pack(side="left")
+            ttk.Button(bar, text="Hub picture...", command=self.chooseHub).pack(side="left", padx=(10, 2))
+            ttk.Button(bar, text="No hub picture", command=lambda: self.hub.set("")).pack(side="left")
+            self.hub = tk.StringVar(master=root, value="")
+            ttk.Label(bar, textvariable=self.hub, width=22).pack(side="left", padx=4)
+            ttk.Label(bar, text="Seconds between pictures").pack(side="left", padx=(10, 2))
+            self.seconds = tk.StringVar(master=root, value="3")
+            ttk.Combobox(bar, textvariable=self.seconds, values=["0", "0.5", "1", "2", "3", "4", "5", "6", "8", "10", "15", "20"],
+                         state="readonly", width=4).pack(side="left")
+            self.save = tk.BooleanVar(master=root, value=False)
+            ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)
+            self.startButton = ttk.Button(bar, text="Start", command=self.start); self.startButton.pack(side="left")
+            self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled"); self.stopButton.pack(side="left", padx=4)
+
+            mid = ttk.Frame(root); mid.pack(fill="both", expand=True, padx=6)
+            left = ttk.Frame(mid); left.pack(side="left", fill="y")
+            self.canvas = tk.Label(left, background="black", width=720, height=720); self.canvas.pack()
+            leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
+            for col, text in (("#90ee90", "washer mask (MobileSAM)"), ("#ff0000", "pin head; legs' lines (skeleton)")):
+                f = ttk.Frame(leg); f.pack(side="left", padx=6)
+                tk.Label(f, text="  ", background=col).pack(side="left")
+                ttk.Label(f, text=" " + text).pack(side="left")
+            right = ttk.Frame(mid); right.pack(side="left", fill="both", expand=True, padx=(6, 0))
+            ttk.Label(right, text="This picture").pack(anchor="w")
+            self.panel = tk.Text(right, height=18, width=64, font=("Consolas", 10)); self.panel.pack(fill="x")
+            ttk.Label(right, text="Log").pack(anchor="w", pady=(4, 0))
+            lf = ttk.Frame(right); lf.pack(fill="both", expand=True)
+            self.logBox = tk.Text(lf, height=14, width=64, font=("Consolas", 9), wrap="none")
+            ys = ttk.Scrollbar(lf, command=self.logBox.yview); xs = ttk.Scrollbar(lf, orient="horizontal", command=self.logBox.xview)
+            self.logBox.configure(yscrollcommand=ys.set, xscrollcommand=xs.set)
+            xs.pack(side="bottom", fill="x"); ys.pack(side="right", fill="y"); self.logBox.pack(side="left", fill="both", expand=True)
+
+            self.status = tk.StringVar(master=root, value="Choose a folder and the model, then Start.")
+            ttk.Label(root, textvariable=self.status).pack(fill="x", padx=6)
+            bf = ttk.Frame(root); bf.pack(fill="both", padx=6, pady=4)
+            self.listbox = tk.Listbox(bf, height=8, font=("Consolas", 10))
+            sb = ttk.Scrollbar(bf, command=self.listbox.yview); self.listbox.configure(yscrollcommand=sb.set)
+            sb.pack(side="right", fill="y"); self.listbox.pack(side="left", fill="both", expand=True)
+            self.listbox.bind("<<ListboxSelect>>", self.showSelected)
+            root.protocol("WM_DELETE_WINDOW", self.close)
+            default = HERE / "splitpin_images"
+            if default.is_dir():
+                self.folder.set(str(default))
+            self.poll()
+
+        def chooseFolder(self):
+            f = filedialog.askdirectory(title="Folder with split pin pictures (OK / NOT_OK sub-folders give the label)", parent=self.root)
+            if f:
+                self.folder.set(f)
+
+        def chooseHub(self):
+            f = filedialog.askopenfilename(title="Hub picture of the same part (state 5)", parent=self.root,
+                                           filetypes=[("Pictures", "*.png *.jpg *.jpeg *.bmp")])
+            if f:
+                self.hub.set(f)
+
+        def start(self):
+            folder = self.folder.get()
+            if not folder or not pathlib.Path(folder).is_dir():
+                self.status.set("Choose a folder first."); return
+            items = S.picturesIn(folder)
+            hub = pathlib.Path(self.hub.get()).resolve() if self.hub.get() else None
+            items = [(p, l) for p, l in items if hub is None or p.resolve() != hub]
+            if not items:
+                self.status.set(f"No pictures in {folder}."); return
+            self.rows = []; self.views = {}; self.listbox.delete(0, "end")
+            self.stopFlag.clear(); self.startButton.configure(state="disabled"); self.stopButton.configure(state="normal")
+            self.status.set(f"{len(items)} pictures; loading the models (first time) ...")
+            self.worker = threading.Thread(target=self.run, args=(items, self.model.get(), self.hub.get() or None,
+                                                                  pathlib.Path(folder)), daemon=True)
+            self.worker.start()
+
+        def stop(self):
+            self.stopFlag.set(); self.shown.set()
+            self.status.set("Stopping after the current picture ...")
+
+        def close(self):
+            self.stopFlag.set(); self.shown.set()
+            self.root.after(200, self.root.destroy)
+
+        def run(self, items, model, hub, folder):
+            try:
+                if self.models is None:
+                    self.models = S.setUp()
+                from _hub_holes_option import setHubPicture
+                S.log(setHubPicture(hub) + f" (model {model})")
+                S.log(f"SET {model}: {len(items)} pictures from {folder}; legs colour {COLOUR}")
+                outDir = folder / "legs_length_results"
+                for n, (p, lab) in enumerate(items, 1):
+                    if self.stopFlag.is_set():
+                        break
+                    r, view, secs = processOne(p, lab, model, self.models)
+                    if view is not None and bool(self.save.get()):
+                        outDir.mkdir(parents=True, exist_ok=True)
+                        cv2.imwrite(str(outDir / f"{model}_{lab.replace(' ', '_') or 'nolabel'}_{p.stem}.png"), view)
+                    self.shown.clear()
+                    events.put(("picture", n, len(items), p, r, view, secs))
+                    self.shown.wait()
+                    try:
+                        gap = float(self.seconds.get())
+                    except ValueError:
+                        gap = 3.0
+                    end = time.monotonic() + gap
+                    while time.monotonic() < end and not self.stopFlag.is_set():
+                        time.sleep(0.05)
+                summary(list(self.rows), model)
+            except Exception:
+                S.log("ERROR in the study run:\n" + traceback.format_exc())
+            events.put(("done",))
+
+        def poll(self):
+            try:
+                while True:
+                    ev = events.get_nowait()
+                    if ev[0] == "log":
+                        self.logBox.insert("end", ev[1] + "\n"); self.logBox.see("end")
+                    elif ev[0] == "picture":
+                        self.showPicture(*ev[1:])
+                        self.shown.set()
+                    elif ev[0] == "done":
+                        self.startButton.configure(state="normal"); self.stopButton.configure(state="disabled")
+                        self.status.set(f"Done: {len(self.rows)} pictures - the summary is in the log panel and on the terminal")
+            except queue.Empty:
+                pass
+            self.root.after(100, self.poll)
+
+        def showPicture(self, n, total, p, r, view, secs):
+            self.rows.append(r)
+            if view is not None:
+                self.views[len(self.rows) - 1] = cv2.imencode(".png", view)[1]
+                self.display(view)
+            self.fillPanel(p, r)
+            line = (f"{p.name:44s} {r.get('label') or '-':6s} washer {'yes' if r.get('washer_present') else 'NO '} "
+                    f"legs {' + '.join(f'{x:.0f}' for x in r.get('legs', [])) or '-'} = {r.get('legs_total', 0):.0f} px  "
+                    f"past outline {r.get('outside_len', 0):.0f}  {secs:.1f} s"
+                    + (f"  ({r['legs_side']})" if r.get("legs_side") and "no eye" in r["legs_side"] else ""))
+            self.listbox.insert("end", line); self.listbox.see("end")
+            self.status.set(f"Picture {n} of {total}: {p.name} ({r.get('label') or 'no label'}) - {secs:.1f} s")
+
+        def display(self, view):
+            from PIL import Image, ImageTk
+            h, w = view.shape[:2]
+            k = min(720 / w, 720 / h)
+            img = cv2.resize(view, (int(w * k), int(h * k)), interpolation=cv2.INTER_NEAREST)
+            self.photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
+            self.canvas.configure(image=self.photo, width=720, height=720)
+
+        def fillPanel(self, p, r):
+            self.panel.delete("1.0", "end")
+            self.panel.insert("end", f"{p.name}\n")
+            for k, name in PANEL:
+                if k in r and r[k] is not None:
+                    v = r[k]
+                    self.panel.insert("end", f"{name:30s} {v:.3f}\n" if isinstance(v, float) else f"{name:30s} {v}\n")
+
+        def showSelected(self, _):
+            sel = self.listbox.curselection()
+            if not sel:
+                return
+            i = sel[0]
+            if i in self.views:
+                self.display(cv2.imdecode(self.views[i], cv2.IMREAD_COLOR))
+            if i < len(self.rows):
+                self.fillPanel(pathlib.Path(self.rows[i].get("name", "?")), self.rows[i])
+
+    root = tk.Tk()
+    Window(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    folderArg = S.arg("--auto")
+    if folderArg:
+        auto(pathlib.Path(folderArg), S.arg("--model", "DOST").upper())
+    else:
+        main()

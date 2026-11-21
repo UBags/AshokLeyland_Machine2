@@ -5681,3 +5681,28 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - `DryRun_Hub_Holes_Refine`: R6 sets the switch to `splitpin` itself; R6b = the default refines nothing (9 checks).
 - Run (sandbox): `DryRun_Hub_Holes_Refine` 9/9 both; `Verify_Vision_Config_Equivalence` ALL EQUIVALENT both; the
   siemens properties give `'none'`, `refineFor('splitpin')` False, no `[Configuration]` line.
+
+## 185. Study_Legs_Length_UI: the split pin legs as a length over the washer (2026-11-21)
+
+- Uddi's design of 2026-11-21: (b) the washer's profile, washer present True / False; (c) the pin head, the legs on the
+  opposite half (no head found: find that half directly); (d) the legs' imprint over the washer mask; (e) holes filled,
+  skeleton, the length of each leg; (f) the total against a cut-off; (g) without the blue marker if possible.
+- `test/machine*_dryrun/_legs_length.py` (new): on Study_Washer_SAM's washer step - washer present = fitted outline r in
+  44 - 50 px; pin head = the largest bright unpainted blob just outside the outline, else the half with the most
+  non-washer pixels on it; the imprint = not washer-coloured pixels inside the completed outline and beyond the
+  washer's inner edge (median first washer radius round the nut - the dark ring where washer meets nut was traced as a
+  leg on every picture before this), on the legs half, pieces touching the spindle edge kept; holes filled, Zhang-Suen
+  thinning (numpy, no new library), length = straight steps + sqrt 2 diagonal steps per line. Also the length of what
+  sticks out past the outline on the legs half (information). `--legs-colour none|blue|both`.
+- `test/machine*_dryrun/Study_Legs_Length_UI.py` (new): window as Study_Washer_SAM_UI (folder, model, hub picture,
+  seconds, save; panel, log, list) and `--auto`. The picture: the washer mask filled light green, the pin head and the
+  legs' lines red, the length of each leg and the total written on it - text on the picture asked for by Uddi for this
+  study window (CLAUDE.md keeps it off production and check windows).
+- Sandbox runs (MobileSAM, `--holes morphology`, colour none):
+  DOST (21 OK / 58 NOT OK, all washers found): total OK 78 - 185, NOT OK 4 - 194; best cut on the total alone (>= 84)
+  1 OK called NOT OK and 18 NOT OK called OK; with the length past the outline (<= 11) 5 and 2.
+  DOSTPLUS (66 OK / 12 NOT OK as labelled 2026-11-21): the 6 hex nut pictures washer NOT present (r 42.1 - 42.8), all 66
+  OK present; total OK 32 - 184, straight pin 53 - 94 - the total does not separate; past the outline OK 0 on every
+  picture, straight pin 18 - 26 - that separates all 78.
+  Time 1.7 - 9.5 s per picture on the CPU (the washer step; the legs' length ~0.1 - 0.3 s).
+- Window built and closed under Xvfb (Python 3.12, no models); the measuring path run on 3.11 with the models.
