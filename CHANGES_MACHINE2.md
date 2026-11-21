@@ -5727,3 +5727,20 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   DOST (21 OK / 58 NOT OK): dark share, legs half, OK 0.32 - 0.47, NOT OK 0.15 - 0.45 -> best cut 0.354: 3 OK called
   NOT OK, 4 NOT OK called OK; dark length, legs half, OK 0.53 - 0.86, NOT OK 0.13 - 0.82 -> best 0.600: 2 and 12; both
   (share >= 0.345, length >= 0.594): 4 and 3. Whole-ring values separate less (DOST share 8 + 3, length 15 + 0).
+
+## 187. Study_Legs_Length_UI: 2 x 2 grid, Otsu adjustment dropdown, legs from the binarised ring (2026-11-21)
+
+- Uddi, 2026-11-21 12:01: show (1) the final washer mask alone, light green; (2) the Otsu-binarised washer mask,
+  everything else black; (3) the legs' skeleton as seen in that binarised picture; (4) the picture with the green mask
+  and the red legs. A dropdown -25 .. +50 (step 5) added to the computed Otsu value.
+- `_legs_length.drawn()` returns the 2 x 2 grid (each tile the washer enlarged 3x, captions and values on the tiles);
+  `OTSU_ADJUST` (-10, as before) replaces `OTSU_LOWER_BY`, `ring(..., otsuAdjust)` / `measure(..., otsuAdjust)`.
+  The legs' imprint is now the dark pixels of the binarised ring on the legs half, pieces starting within 4 px of the
+  ring's inner edge (no ring: as before); colour blue / both add the blue marker inside the ring.
+- `Study_Legs_Length_UI.py`: "Otsu +" dropdown (and `--otsu-adjust`); a change applies from the next picture and redraws
+  the picture shown (or selected) at once from its kept geometry (`redraw`, REDRAW log line); canvas 900 x 900.
+- Sandbox runs at -10 (MobileSAM, `--holes morphology`): dark share / length unchanged from CHANGES 186 (DOSTPLUS legs
+  half both 72 / 72; DOST share 3 + 4, both 4 + 3). The legs' total from the binarised ring separates less than the
+  colour imprint of 185 on DOST (best cut >= 166: 12 OK called NOT OK, 5 NOT OK called OK; with past the outline <= 11:
+  5 + 4); DOSTPLUS: total >= 38 calls 4 of 6 straight-pin pictures OK.
+- Window built under Xvfb (3.12); the dropdown redraw run on a cached picture at -25 and +50; `--auto` both sets.

@@ -28,6 +28,7 @@ import numpy as np
 import _legs_length as L
 
 COLOUR = S.arg("--legs-colour", "none")
+OTSU = {"adjust": int(S.arg("--otsu-adjust", str(L.OTSU_ADJUST)))}   # the window's dropdown sets it (-25 .. +50)
 if COLOUR not in ("none", "blue", "both"):
     sys.exit(f"--legs-colour must be none, blue or both, not {COLOUR}")
 
@@ -41,7 +42,7 @@ def processOne(p, lab, model, models):
         x0, y0 = g["x0"], g["y0"]
         g["crop"] = im[y0:y0 + 2 * S.CROP_HALF, x0:x0 + 2 * S.CROP_HALF].copy()
     t1 = time.perf_counter()
-    res = L.measure(g, r, model, COLOUR)
+    res = L.measure(g, r, model, COLOUR, OTSU["adjust"])
     r.update(washer_present=res["washerPresent"], washer_reason=res["washerReason"], legs_side=res["side"],
              legs=[round(x, 1) for x in res["legs"]], legs_total=round(res["total"], 1),
              inner_edge=None if res["innerEdge"] is None else round(res["innerEdge"], 1),
@@ -54,7 +55,7 @@ def processOne(p, lab, model, models):
                  dark_share=round(R["darkShare"], 3), dark_share_legs=round(R.get("darkShareLegs", float("nan")), 3),
                  dark_length=round(R["darkLength"], 3), dark_length_legs=round(R.get("darkLengthLegs", float("nan")), 3))
         S.log(f"   RING centroid ({R['centroid'][0] + g['x0']:.1f}, {R['centroid'][1] + g['y0']:.1f}) outline tips r {R['rTips']:.1f} "
-              f"valleys r {R['rValleys']:.1f} -> inner estimate {R['rEstimate']:.1f}; Otsu {R['otsu']:.0f} - {L.OTSU_LOWER_BY} = "
+              f"valleys r {R['rValleys']:.1f} -> inner estimate {R['rEstimate']:.1f}; Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = "
               f"{R['threshold']:.0f}; inner edge r {R['rInner']:.1f} (light share jump {R['jump']:.2f}); dark share "
               f"{R['darkShare']:.3f} (legs half {R.get('darkShareLegs', float('nan')):.3f}); dark length {R['darkLength']:.3f} "
               f"(legs half {R.get('darkLengthLegs', float('nan')):.3f})")
@@ -71,7 +72,21 @@ def processOne(p, lab, model, models):
         view = cv2.resize(im[270:420, 570:720], None, fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
     else:
         view = None
+    r["_g"] = g                                                 # kept for redrawing at another Otsu adjustment
     return r, view, time.perf_counter() - t0
+
+
+def redraw(r, model):
+    """The legs measured again on the kept geometry at the current Otsu adjustment; (row values, picture)."""
+    g = r.get("_g")
+    if g is None or g.get("crop") is None:
+        return None
+    res = L.measure(g, r, model, COLOUR, OTSU["adjust"])
+    R = res.get("ring") or {}
+    S.log(f"   REDRAW {r.get('name')} at Otsu {OTSU['adjust']:+d}: legs {' + '.join(f'{x:.0f}' for x in res['legs']) or 'none'} = "
+          f"{res['total']:.0f} px" + (f"; dark share legs half {R.get('darkShareLegs', float('nan')):.3f}, dark length legs half "
+                                      f"{R.get('darkLengthLegs', float('nan')):.3f}" if R.get("found") else ""))
+    return L.drawn(g, res)
 
 
 def summary(rows, model):
@@ -200,6 +215,10 @@ def main():
             self.seconds = tk.StringVar(master=root, value="3")
             ttk.Combobox(bar, textvariable=self.seconds, values=["0", "0.5", "1", "2", "3", "4", "5", "6", "8", "10", "15", "20"],
                          state="readonly", width=4).pack(side="left")
+            ttk.Label(bar, text="Otsu +").pack(side="left", padx=(10, 2))
+            self.otsu = tk.StringVar(master=root, value=str(OTSU["adjust"]))
+            oc = ttk.Combobox(bar, textvariable=self.otsu, values=[str(v) for v in range(-25, 51, 5)], state="readonly", width=4)
+            oc.pack(side="left"); oc.bind("<<ComboboxSelected>>", self.otsuChanged)
             self.save = tk.BooleanVar(master=root, value=False)
             ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)
             self.startButton = ttk.Button(bar, text="Start", command=self.start); self.startButton.pack(side="left")
@@ -207,7 +226,7 @@ def main():
 
             mid = ttk.Frame(root); mid.pack(fill="both", expand=True, padx=6)
             left = ttk.Frame(mid); left.pack(side="left", fill="y")
-            self.canvas = tk.Label(left, background="black", width=720, height=720); self.canvas.pack()
+            self.canvas = tk.Label(left, background="black", width=900, height=900); self.canvas.pack()
             leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
             for col, text in (("#90ee90", "washer ring (outline to inner edge)"), ("#ff0000", "pin head; legs' lines (skeleton)")):
                 f = ttk.Frame(leg); f.pack(side="left", padx=6)
@@ -333,10 +352,10 @@ def main():
         def display(self, view):
             from PIL import Image, ImageTk
             h, w = view.shape[:2]
-            k = min(720 / w, 720 / h)
+            k = min(900 / w, 900 / h)
             img = cv2.resize(view, (int(w * k), int(h * k)), interpolation=cv2.INTER_NEAREST)
             self.photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
-            self.canvas.configure(image=self.photo, width=720, height=720)
+            self.canvas.configure(image=self.photo, width=900, height=900)
 
         def fillPanel(self, p, r):
             self.panel.delete("1.0", "end")
@@ -345,6 +364,21 @@ def main():
                 if k in r and r[k] is not None:
                     v = r[k]
                     self.panel.insert("end", f"{name:30s} {v:.3f}\n" if isinstance(v, float) else f"{name:30s} {v}\n")
+
+        def otsuChanged(self, _):
+            """A new Otsu adjustment: used from the next picture on; the picture shown is measured again with it."""
+            try:
+                OTSU["adjust"] = int(self.otsu.get())
+            except ValueError:
+                return
+            S.log(f"Otsu adjustment now {OTSU['adjust']:+d} (from the next picture on; the picture shown is redrawn)")
+            sel = self.listbox.curselection()
+            i = sel[0] if sel else (len(self.rows) - 1)
+            if 0 <= i < len(self.rows) and (self.worker is None or not self.worker.is_alive() or sel):
+                view = redraw(self.rows[i], self.rows[i].get("model", self.model.get()))
+                if view is not None:
+                    self.views[i] = cv2.imencode(".png", view)[1]
+                    self.display(view)
 
         def showSelected(self, _):
             sel = self.listbox.curselection()

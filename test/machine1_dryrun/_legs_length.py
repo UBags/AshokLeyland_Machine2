@@ -27,13 +27,13 @@ NUT_R = {"DOST": 28.0, "DOSTPLUS": 30.0}
 # limits (valleys); Otsu on the inside of the outline, lowered; the inner edge searched round the estimate
 RING_WIDTH_FROM_TIPS = 19.0         # px
 RING_WIDTH_FROM_VALLEYS = 11.0      # px
-OTSU_LOWER_BY = 10                  # grey levels below Otsu's threshold still count as light
+OTSU_ADJUST = -10                   # added to Otsu's threshold (the window's dropdown, -25 .. +50; CHANGES 187)
 INNER_SEARCH = 4.0                  # px either side of the estimated inner edge
 INNER_STEP = 0.5                    # px between the circles tried
 DARK_COLUMN_SHARE = 0.25            # a degree of the flat ring counts as dark when this share of its pixels is dark
 
 
-def ring(g: dict, axis=None) -> dict:
+def ring(g: dict, axis=None, otsuAdjust=None) -> dict:
     """(a) - (g): the washer ring between its fitted outline and its inner edge, the dark share in it and the dark
     length along it. dict(found, reason, centroid, rTips, rValleys, rEstimate, rInner, otsu, threshold, jumps,
     ringMask, light, darkShare, darkShareLegs, darkLength, darkLengthLegs, polar)."""
@@ -60,10 +60,11 @@ def ring(g: dict, axis=None) -> dict:
     rr = np.hypot(pts[:, 0] - cx, pts[:, 1] - cy)
     rTips, rValleys = float(np.percentile(rr, 98)), float(np.percentile(rr, 2))
     rEst = ((rTips - RING_WIDTH_FROM_TIPS) + (rValleys - RING_WIDTH_FROM_VALLEYS)) / 2
-    # (d) Otsu inside the outline, lowered by OTSU_LOWER_BY
+    # (d) Otsu inside the outline, + the adjustment (OTSU_ADJUST, the window's dropdown)
     grey = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     otsu, _ = cv2.threshold(grey[outerMask].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    thr = float(otsu) - OTSU_LOWER_BY
+    adjust = OTSU_ADJUST if otsuAdjust is None else otsuAdjust
+    thr = float(otsu) + float(adjust)
     light = (grey > thr) & outerMask
     # (d') circles round the estimate: the light share on each; the inner edge = the circle whose share jumps most
     # above the mean of the two next smaller circles
@@ -79,7 +80,8 @@ def ring(g: dict, axis=None) -> dict:
     # (e) the ring: inside the outline, outside the inner edge
     ringMask = outerMask & (d >= rInner)
     out.update(found=True, centroid=(cx, cy), rTips=rTips, rValleys=rValleys, rEstimate=rEst, rInner=rInner,
-               jump=jump, otsu=float(otsu), threshold=thr, ringMask=ringMask, light=light)
+               jump=jump, otsu=float(otsu), adjust=float(adjust), threshold=thr, ringMask=ringMask, light=light,
+               dark=ringMask & ~light)
     # (f) the dark share in the ring (and on the legs half)
     dark = ringMask & ~light
     ang = np.degrees(np.arctan2(yy - cy, xx - cx)) % 360
@@ -134,7 +136,7 @@ def lineLength(S: np.ndarray) -> float:
     return float(straight + math.sqrt(2) * diagonal)
 
 
-def measure(g: dict, row: dict, model: str, colour: str = "none") -> dict:
+def measure(g: dict, row: dict, model: str, colour: str = "none", otsuAdjust=None) -> dict:
     """Everything of steps (b) - (f) on one picture's geometry g (Study_Washer_SAM.analyse, crop coordinates) and its
     values row. colour: "none" (default), "blue" or "both". Returns dict(washerPresent, washerR, washerReason, side,
     axis, eyeMask, legs (lengths, longest first), total, legsSkeleton, legsFill, innerEdge, outside, outsideBlue)."""
@@ -192,11 +194,21 @@ def measure(g: dict, row: dict, model: str, colour: str = "none") -> dict:
         out.update(side="most covered half (no eye found)", axis=(int(np.argmax(window)) + 90) % 360)
     rel = np.abs(((ang - out["axis"]) + 180) % 360 - 180)
     legsHalf = rel <= 90
-    # (d) the imprint over the washer, pieces that start at the spindle
-    ev = {"none": ~washer, "blue": blue, "both": ~washer | blue}[colour]
-    m = cv2.morphologyEx((ev & over & legsHalf).astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
+    # (d) the imprint over the washer: since CHANGES 187 the dark pixels of the Otsu-binarised ring (colour "none"; the
+    # blue marker with "blue" / "both"), on the legs half, pieces that start at the ring's inner edge (the spindle)
+    R = ring(g, out["axis"], otsuAdjust)
+    out["ring"] = R
+    if R.get("found"):
+        ringD = np.hypot(xx - R["centroid"][0], yy - R["centroid"][1])
+        inRing = R["ringMask"]
+        evRing = {"none": R["dark"], "blue": blue & inRing, "both": R["dark"] | (blue & inRing)}[colour]
+        spindle = ringD <= R["rInner"] + 4
+        out["innerEdge"] = R["rInner"]
+    else:                                                       # no ring: as before (not washer-coloured, over)
+        evRing = {"none": ~washer, "blue": blue, "both": ~washer | blue}[colour] & over
+        spindle = d <= Rin + 5
+    m = cv2.morphologyEx((evRing & legsHalf).astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
     n, lab, _, _ = cv2.connectedComponentsWithStats(m, 8)
-    spindle = d <= Rin + 5
     keep = np.zeros_like(m)
     for k in range(1, n):
         comp = lab == k
@@ -211,7 +223,6 @@ def measure(g: dict, row: dict, model: str, colour: str = "none") -> dict:
     legs = sorted((lineLength(lab2 == k) for k in range(1, n2)), reverse=True)
     out.update(legs=[x for x in legs if x >= 3.0], legsSkeleton=skel.astype(bool), legsFill=fill.astype(bool))
     out["total"] = float(sum(out["legs"]))
-    out["ring"] = ring(g, out["axis"])
     # information: what sticks out past the outline on the legs half (bright, or blue), as a length
     for key, evo in (("outside", V >= 75), ("outsideBlue", blue)):
         o = cv2.morphologyEx((evo & (d > FO + 2) & (d <= FO + 25) & legsHalf).astype(np.uint8), cv2.MORPH_OPEN,
@@ -226,37 +237,70 @@ def measure(g: dict, row: dict, model: str, colour: str = "none") -> dict:
     return out
 
 
-def drawn(g: dict, res: dict, scale: int = 5, half: int = 75) -> np.ndarray:
-    """The crop enlarged: the washer mask filled light green, the pin head red, the legs' lines red, and as text the
-    length of each leg and the total (asked for on the picture, Uddi 2026-11-21)."""
-    crop = g["crop"].copy()
-    R = res.get("ring") or {}
-    if R.get("found"):                                          # the ring between the outline and the inner edge
-        M = R["ringMask"]
-        crop[M] = (0.55 * crop[M] + 0.45 * np.array([144, 238, 144])).astype(np.uint8)   # light green (BGR)
-    elif g.get("M") is not None:
-        M = g["M"].astype(bool)
-        crop[M] = (0.55 * crop[M] + 0.45 * np.array([144, 238, 144])).astype(np.uint8)   # light green (BGR)
-    if res.get("eyeMask") is not None:
-        crop[res["eyeMask"]] = (0, 0, 255)
-    cx, cy = (int(round(v)) for v in g["cc"])                   # the washer and a margin round it
+def _zoom(img, g, scale, half):
+    cx, cy = (int(round(v)) for v in g["cc"])
     x0, y0 = max(0, cx - half), max(0, cy - half)
-    crop = crop[y0:cy + half, x0:cx + half]
-    big = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
-    if res.get("legsSkeleton") is not None:
-        ys, xs = np.nonzero(res["legsSkeleton"][y0:cy + half, x0:cx + half])
-        for y, x in zip(ys, xs):
-            cv2.rectangle(big, (x * scale, y * scale), (x * scale + scale - 1, y * scale + scale - 1), (0, 0, 255), -1)
-    lines = [f"leg {i + 1}: {L:.0f} px" for i, L in enumerate(res.get("legs", []))]
-    lines.append(f"total: {res.get('total', 0.0):.0f} px")
+    return cv2.resize(img[y0:cy + half, x0:cx + half], None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST), x0, y0
+
+
+def _skeletonOn(big, skel, x0, y0, half, g, scale, colour):
+    cx, cy = (int(round(v)) for v in g["cc"])
+    ys, xs = np.nonzero(skel[y0:cy + half, x0:cx + half])
+    for y, x in zip(ys, xs):
+        cv2.rectangle(big, (x * scale, y * scale), (x * scale + scale - 1, y * scale + scale - 1), colour, -1)
+
+
+def _text(big, lines, size=0.6):
+    y = 22
+    for t in lines:
+        cv2.putText(big, t, (6, y), cv2.FONT_HERSHEY_SIMPLEX, size, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(big, t, (6, y), cv2.FONT_HERSHEY_SIMPLEX, size, (255, 255, 255), 1, cv2.LINE_AA)
+        y += 22
+
+
+def drawn(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndarray:
+    """2 x 2 grid (Uddi, 2026-11-21 12:01), each the washer enlarged:
+      (1) the washer mask alone, light green on black;
+      (2) the Otsu-binarised washer mask - light white, dark black, everything outside the ring black;
+      (3) the legs' lines (skeleton, red) on that binarised picture;
+      (4) the picture with the washer mask light green, the pin head and the legs' lines red, the lengths and the
+          dark share / length written on it."""
+    crop = g["crop"]
+    h, w = crop.shape[:2]
+    R = res.get("ring") or {}
+    green = np.array([144, 238, 144], np.uint8)
+    M = R["ringMask"] if R.get("found") else (g["M"].astype(bool) if g.get("M") is not None else np.zeros((h, w), bool))
+    p1 = np.zeros_like(crop); p1[M] = green
+    p2 = np.zeros_like(crop)
     if R.get("found"):
-        lines.append(f"dark share: {R['darkShare']:.2f} (legs half {R.get('darkShareLegs', 0):.2f})")
-        lines.append(f"dark length: {R['darkLength']:.2f} (legs half {R.get('darkLengthLegs', 0):.2f})")
+        p2[R["light"] & M] = (255, 255, 255)
+    p3 = p2.copy()
+    p4 = crop.copy(); p4[M] = (0.55 * p4[M] + 0.45 * green).astype(np.uint8)
+    if res.get("eyeMask") is not None:
+        p4[res["eyeMask"]] = (0, 0, 255)
+    tiles = []
+    for p in (p1, p2, p3, p4):
+        big, x0, y0 = _zoom(p, g, scale, half)
+        tiles.append(big)
+    if res.get("legsSkeleton") is not None:
+        for t in (2, 3):
+            _skeletonOn(tiles[t], res["legsSkeleton"], x0, y0, half, g, scale, (0, 0, 255))
+    _text(tiles[0], ["(1) washer mask"] + ([f"inner edge r {R['rInner']:.1f}, outline tips r {R['rTips']:.1f}"]
+                                          if R.get("found") else ["ring not found: MobileSAM mask"])
+                     + ([] if res.get("washerPresent") else ["washer: NOT found"]))
+    _text(tiles[1], ["(2) Otsu inside the mask"] + ([f"Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = {R['threshold']:.0f}"]
+                                                    if R.get("found") else []))
+    _text(tiles[2], ["(3) legs' lines"] + [f"leg {i + 1}: {L:.0f} px" for i, L in enumerate(res.get("legs", []))]
+                     + [f"total: {res.get('total', 0.0):.0f} px"])
+    lines = ["(4) result"] + [f"total legs: {res.get('total', 0.0):.0f} px"]
+    if R.get("found"):
+        lines += [f"dark share: {R['darkShare']:.2f} (legs half {R.get('darkShareLegs', 0):.2f})",
+                  f"dark length: {R['darkLength']:.2f} (legs half {R.get('darkLengthLegs', 0):.2f})"]
     if not res.get("washerPresent"):
         lines.append("washer: NOT found")
-    y = 28
-    for t in lines:
-        cv2.putText(big, t, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(big, t, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-        y += 30
-    return big
+    _text(tiles[3], lines)
+    hh = max(t.shape[0] for t in tiles); ww = max(t.shape[1] for t in tiles)
+    tiles = [cv2.copyMakeBorder(t, 0, hh - t.shape[0], 0, ww - t.shape[1], cv2.BORDER_CONSTANT, value=(40, 40, 40)) for t in tiles]
+    sep = np.full((hh, 4, 3), 90, np.uint8)
+    top = np.hstack([tiles[0], sep, tiles[1]]); bottom = np.hstack([tiles[2], sep, tiles[3]])
+    return np.vstack([top, np.full((4, top.shape[1], 3), 90, np.uint8), bottom])
