@@ -51,6 +51,7 @@ R_NUT = {"DOST": 28.0, "DOSTPLUS": 30.0}
 STEPS = {
     "nut": True,            # 3 MobileSAM prompts for the nut (the spindle centre); off: the centre = holes + offset
     "legs_study": True,     # eye, coverage, pin prompts, leg grid, YOLO boxes, blue share - the 180 study's leg steps
+    "no_colour": False,     # the washer prompts' bright points by grey >= 130 instead of V >= 130 and S <= 110 (CHANGES 200)
 }
 
 
@@ -221,7 +222,10 @@ def analyse(im, model, pred, holesResult, offset):
         t2 = time.perf_counter()
         d = np.hypot(xx - cc[0], yy - cc[1])
         ring = (d >= Rn_used + 1) & (d <= Rw)
-        bright = (Vv >= 130) & (Ss <= 110)
+        if STEPS.get("no_colour"):                              # grey only (CHANGES 200): no hue / saturation
+            bright = cv2.cvtColor(im[y0:y0 + 2 * CROP_HALF, x0:x0 + 2 * CROP_HALF], cv2.COLOR_BGR2GRAY) >= 130
+        else:
+            bright = (Vv >= 130) & (Ss <= 110)
         ang8 = np.deg2rad(np.arange(0, 360, 45) + 22.5); ang12 = np.deg2rad(np.arange(0, 360, 30) + 15)
         ringPts = lambda angs, r: [cc + r * np.array([math.cos(a), math.sin(a)]) for a in angs]
         brightPts = [p for p in ringPts(np.deg2rad(np.arange(0, 360, 15)), rmid)

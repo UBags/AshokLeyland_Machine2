@@ -152,7 +152,7 @@ def drawnFiltered(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndar
     if res.get("blackShareLegs") is not None:
         lines += [f"black share, legs half: {res['blackShareLegs']:.3f}",
                   f"black length, whole: {res['blackLength']:.3f}",
-                  f"reach past outline (red): {res.get('reach', 0):.0f} px"]
+                  f"reach past outline ({res.get('reachKind', 'red')}): {res.get('reach', 0):.0f} px"]
     L._text(tiles[3], lines)
     hh = max(t.shape[0] for t in tiles); ww = max(t.shape[1] for t in tiles)
     tiles = [cv2.copyMakeBorder(t, 0, hh - t.shape[0], 0, ww - t.shape[1], cv2.BORDER_CONSTANT, value=(40, 40, 40)) for t in tiles]

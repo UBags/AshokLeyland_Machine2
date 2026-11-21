@@ -5888,3 +5888,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Uddi, 2026-11-22 00:41: the guided / bilateral filter runs once on the whole washer mask, using only the grey values
   inside it - not per half. Otsu + adjustment stays per half. `_legs_filtered.measureFiltered` changed accordingly
   (the mask-weighted guided filter / the masked bilateral with the ring as the mask). Issued without a run (parses).
+
+## 200. Study_NoColour_Legs_UI: the filtered pipeline with no colour (2026-11-22)
+
+- Uddi, 2026-11-22 00:46: in the filtered pipeline (196 - 199), do red / blue play a part? Read through: yes, three
+  places - `_legs_filtered.measureFiltered` started from `_legs_red.measureRed`, which (1) took the legs side from the
+  half with the most red, (2) found the pin head as a bright blob that is *not paint* (blue hue or red), and (3)
+  measured the reach past the outline on red pixels; also the washer prompts' bright points used saturation (V >= 130
+  and S <= 110). The black share / length themselves came from the grey filter, Otsu and morphology only.
+- `_legs_nocolour.py` (new): grey only - washer ring and washer present as before; filter once on the whole mask; legs
+  side opposite the pin head (largest blob of grey >= 110 just past the outline), else the darkest half of the filtered
+  ring; Otsu + adjustment per half; open x2, close x2; black share legs half, black length; reach by grey (pieces of
+  grey >= 75 past the outline touching it - bright legs only). `Study_Washer_SAM.STEPS["no_colour"]`: the washer prompts'
+  bright points by grey >= 130.
+- `Study_NoColour_Legs_UI.py` (new): a copy of `Study_Red_Legs_UI` with the red controls removed, pipeline guided
+  (default) / bilateral. The red window is unchanged.
+- Run here: `measureNoColour` on two cached DOST pictures (guided and bilateral), the window built under Xvfb.
