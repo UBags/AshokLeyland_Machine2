@@ -237,7 +237,11 @@ def main():
 
             mid = ttk.Frame(root); mid.pack(fill="both", expand=True, padx=6)
             left = ttk.Frame(mid); left.pack(side="left", fill="y")
-            self.canvas = tk.Label(left, background="black", width=900, height=900); self.canvas.pack()
+            # the picture area: a black 900 x 900 picture from the start - a Label without a picture counts width and height
+            # in characters, which made the window several screens wide and pushed Start off the screen (CHANGES 194)
+            from PIL import Image, ImageTk
+            self.photo = ImageTk.PhotoImage(Image.new("RGB", (900, 900)))
+            self.canvas = tk.Label(left, background="black", image=self.photo); self.canvas.pack()
             leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
             for col, text in (("#90ee90", "washer ring (outline to inner edge)"), ("#ff0000", "pin head; legs' lines (skeleton)")):
                 f = ttk.Frame(leg); f.pack(side="left", padx=6)
@@ -366,7 +370,7 @@ def main():
             k = min(900 / w, 900 / h)
             img = cv2.resize(view, (int(w * k), int(h * k)), interpolation=cv2.INTER_NEAREST)
             self.photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
-            self.canvas.configure(image=self.photo, width=900, height=900)
+            self.canvas.configure(image=self.photo)
 
         def fillPanel(self, p, r):
             self.panel.delete("1.0", "end")

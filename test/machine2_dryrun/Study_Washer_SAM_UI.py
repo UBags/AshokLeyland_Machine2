@@ -103,7 +103,9 @@ def main():
 
             mid = ttk.Frame(root); mid.pack(fill="both", expand=True, padx=6)
             left = ttk.Frame(mid); left.pack(side="left", fill="y")
-            self.canvas = tk.Label(left, background="black", width=700, height=700); self.canvas.pack()
+            from PIL import Image, ImageTk                 # a picture from the start (a Label without one counts characters; CHANGES 194)
+            self.photo = ImageTk.PhotoImage(Image.new("RGB", (700, 700)))
+            self.canvas = tk.Label(left, background="black", image=self.photo); self.canvas.pack()
             leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
             for i, (name, col, text) in enumerate(LEGEND):
                 f = ttk.Frame(leg); f.grid(row=i // 2, column=i % 2, sticky="w", padx=4)
@@ -254,7 +256,7 @@ def main():
             k = min(700 / w, 700 / h)
             img = cv2.resize(view, (int(w * k), int(h * k)), interpolation=cv2.INTER_NEAREST)
             self.photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
-            self.canvas.configure(image=self.photo, width=700, height=700)
+            self.canvas.configure(image=self.photo)
 
         def fillPanel(self, p, r):
             self.panel.delete("1.0", "end")

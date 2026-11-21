@@ -194,7 +194,13 @@ def main():
             self.seconds = tk.StringVar(master=root, value="3")
             ttk.Combobox(bar, textvariable=self.seconds, values=["0", "0.5", "1", "2", "3", "4", "5", "6", "8", "10", "15", "20"],
                          state="readonly", width=4).pack(side="left")
-            ttk.Label(bar, text="Red by").pack(side="left", padx=(10, 2))
+            self.save = tk.BooleanVar(master=root, value=False)
+            ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)
+            self.startButton = ttk.Button(bar, text="Start", command=self.start); self.startButton.pack(side="left")
+            self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled"); self.stopButton.pack(side="left", padx=4)
+
+            bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=(0, 4))   # second row: the red limits
+            ttk.Label(bar, text="Red by").pack(side="left", padx=(0, 2))
             self.method = tk.StringVar(master=root, value=LR.RED_METHOD)
             mc = ttk.Combobox(bar, textvariable=self.method, values=("rgb", "hsv"), state="readonly", width=4)
             mc.pack(side="left"); mc.bind("<<ComboboxSelected>>", self.redChanged)
@@ -214,14 +220,13 @@ def main():
             self.vMin = tk.StringVar(master=root, value=str(LR.RED_V_MIN))
             vc = ttk.Combobox(bar, textvariable=self.vMin, values=[str(v) for v in range(15, 61, 5)], state="readonly", width=3)
             vc.pack(side="left"); vc.bind("<<ComboboxSelected>>", self.redChanged)
-            self.save = tk.BooleanVar(master=root, value=False)
-            ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)
-            self.startButton = ttk.Button(bar, text="Start", command=self.start); self.startButton.pack(side="left")
-            self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled"); self.stopButton.pack(side="left", padx=4)
-
             mid = ttk.Frame(root); mid.pack(fill="both", expand=True, padx=6)
             left = ttk.Frame(mid); left.pack(side="left", fill="y")
-            self.canvas = tk.Label(left, background="black", width=900, height=900); self.canvas.pack()
+            # the picture area: a black 900 x 900 picture from the start - a Label without a picture counts width and height
+            # in characters, which made the window several screens wide and pushed Start off the screen (CHANGES 194)
+            from PIL import Image, ImageTk
+            self.photo = ImageTk.PhotoImage(Image.new("RGB", (900, 900)))
+            self.canvas = tk.Label(left, background="black", image=self.photo); self.canvas.pack()
             leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
             for col, text in (("#90ee90", "washer ring (outline to inner edge)"), ("#ff0000", "red paint (legs)"), ("#ff00ff", "red past the outline"), ("#ffc800", "pin head")):
                 f = ttk.Frame(leg); f.pack(side="left", padx=6)
@@ -351,7 +356,7 @@ def main():
             k = min(900 / w, 900 / h)
             img = cv2.resize(view, (int(w * k), int(h * k)), interpolation=cv2.INTER_NEAREST)
             self.photo = ImageTk.PhotoImage(Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB)))
-            self.canvas.configure(image=self.photo, width=900, height=900)
+            self.canvas.configure(image=self.photo)
 
         def fillPanel(self, p, r):
             self.panel.delete("1.0", "end")

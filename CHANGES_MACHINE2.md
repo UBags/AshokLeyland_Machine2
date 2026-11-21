@@ -5820,3 +5820,14 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   R - B > 5: best pair black share legs half >= 0.049 and reach <= 16.2 px: 0 OK called NOT OK, 1 NOT OK called OK
   (112450399 again). Margins thin: OK reach up to 16, NOT OK from 18 (the low-reach NOT OK caught by share 0.042 -
   0.044 against the cut 0.049).
+
+## 194. Study windows: Start button off the screen (2026-11-21)
+
+- Uddi, 2026-11-21 16:26: no Start button in Study_Red_Legs_UI. Cause: the picture area was a Tk Label created with
+  width / height but no picture - Tk then counts them in characters, so the window was several screens wide (8640 px
+  under Xvfb) and the button bar's Start / Stop lay far off to the right. Fix: the Label gets a black picture of that
+  size at once (Study_Red_Legs_UI, Study_Legs_Length_UI, Study_Washer_SAM_UI); in Study_Red_Legs_UI the red limits move
+  to a second row, Save / Start / Stop stay on the first. Under Xvfb: windows 1703 / 1988 px wide, Start at x 1505 /
+  1790.
+- Labels: 112450399 is OK (Uddi): with it, the 192 HSV rule (share >= 0.037, reach <= 18.9) gets 66 of 67 right - the
+  one left, OK 125618252, has the paint pressed off by the pliers (to be repainted by the operator).
