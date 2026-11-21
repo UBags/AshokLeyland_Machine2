@@ -16,6 +16,7 @@ each and on pairs.
                                             half of the washer, openings --open-1 / --open-2 (4, 4), Otsu, closings
                                             --close-1 / --close-2 (4, 4) - the window's "Pipeline" / open / close dropdowns
   --sigma-color N (100), --sigma-space N (20)   both filters (guided: radius = round(1.5 sigmaSpace), eps = sigmaColor^2)
+  --otsu-adjust N (0)                       added to each half's Otsu value (bilateral / guided)
   --refine-inner                            the window's "Further refine inner boundary of washer"
   --red-method rgb|hsv (rgb)                rgb (CHANGES 193): grey > --grey-white (148) = washer, else R > G, R > B,
                                             R - B > --rb (20) = red; hsv (CHANGES 192): the hue / S / V limits
@@ -48,6 +49,7 @@ LF.SIGMA_COLOR = int(S.arg("--sigma-color", str(int(LF.SIGMA_COLOR))))
 LF.SIGMA_SPACE = int(S.arg("--sigma-space", str(int(LF.SIGMA_SPACE))))
 import _legs_length as LL
 LL.REFINE_INNER = "--refine-inner" in sys.argv
+LF.OTSU_ADJUST = int(S.arg("--otsu-adjust", str(LF.OTSU_ADJUST)))
 LF.OPEN_1 = int(S.arg("--open-1", str(LF.OPEN_1))); LF.OPEN_2 = int(S.arg("--open-2", str(LF.OPEN_2)))
 LF.CLOSE_1 = int(S.arg("--close-1", str(LF.CLOSE_1))); LF.CLOSE_2 = int(S.arg("--close-2", str(LF.CLOSE_2)))
 
@@ -148,7 +150,7 @@ KEYS = ("black_share_legs", "black_length", "black_length_legs", "black_share", 
 
 
 def summary(rows, model):
-    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, pipeline {PIPE['name']} (sigmaColor {LF.SIGMA_COLOR}, sigmaSpace {LF.SIGMA_SPACE}, refine inner {LL.REFINE_INNER}, open {LF.OPEN_1}+{LF.OPEN_2}, close {LF.CLOSE_1}+{LF.CLOSE_2}), red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
+    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, pipeline {PIPE['name']} (sigmaColor {LF.SIGMA_COLOR}, sigmaSpace {LF.SIGMA_SPACE}, refine inner {LL.REFINE_INNER}, Otsu {LF.OTSU_ADJUST:+d} per half, open {LF.OPEN_1}+{LF.OPEN_2}, close {LF.CLOSE_1}+{LF.CLOSE_2}), red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
     for lab in sorted({r.get("label") or "-" for r in rows}):
         rs = [r for r in rows if (r.get("label") or "-") == lab]
         present = [r for r in rs if r.get("washer_present")]
@@ -237,6 +239,10 @@ def main():
             self.pipe = tk.StringVar(master=root, value=PIPE["name"])
             pc = ttk.Combobox(bar, textvariable=self.pipe, values=("red", "bilateral", "guided"), state="readonly", width=9)
             pc.pack(side="left"); pc.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="Otsu +").pack(side="left", padx=(6, 2))
+            self.oa = tk.StringVar(master=root, value=str(LF.OTSU_ADJUST))
+            oac = ttk.Combobox(bar, textvariable=self.oa, values=[str(v) for v in range(-50, 51, 5)], state="readonly", width=4)
+            oac.pack(side="left"); oac.bind("<<ComboboxSelected>>", self.redChanged)
             self.morph = {}
             for key, label, value in (("o1", "open", LF.OPEN_1), ("o2", "+", LF.OPEN_2), ("c1", "close", LF.CLOSE_1), ("c2", "+", LF.CLOSE_2)):
                 ttk.Label(bar, text=label).pack(side="left", padx=(6 if label != "+" else 2, 2))
@@ -426,7 +432,7 @@ def main():
                 LR.RED_S_MIN = int(self.sMin.get()); LR.RED_V_MIN = int(self.vMin.get())
                 LR.RED_METHOD = self.method.get(); LR.GREY_WHITE = int(self.greyW.get()); LR.RGB_R_MINUS_B = int(self.rb.get())
                 PIPE["name"] = self.pipe.get()
-                LF.SIGMA_COLOR = int(self.sc.get()); LF.SIGMA_SPACE = int(self.ss.get())
+                LF.SIGMA_COLOR = int(self.sc.get()); LF.SIGMA_SPACE = int(self.ss.get()); LF.OTSU_ADJUST = int(self.oa.get())
                 LL.REFINE_INNER = bool(self.refine.get())
                 LF.OPEN_1, LF.OPEN_2 = int(self.morph["o1"].get()), int(self.morph["o2"].get())
                 LF.CLOSE_1, LF.CLOSE_2 = int(self.morph["c1"].get()), int(self.morph["c2"].get())

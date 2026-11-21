@@ -5872,3 +5872,13 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   `rInnerJump`, `refineLog` (r, Otsu, changes, longest light run share), `refined`.
 - `Study_Red_Legs_UI`: sigmaColor / sigmaSpace entries (Return or leaving the box applies them and redraws), the check
   box, an INNER log line per picture; `--sigma-color`, `--sigma-space`, `--refine-inner`.
+
+## 198. Study_Red_Legs_UI: the filtered pipeline in Uddi's order (2026-11-22)
+
+- Uddi, 2026-11-22 00:33: washer mask -> grey -> guided filter -> Otsu with an adjustment, separately on the legs half
+  and the pin head half -> open twice -> close twice -> area and length. 196 / 197 opened the grey picture before Otsu,
+  ran one Otsu over the whole ring and had no adjustment.
+- `_legs_filtered.measureFiltered`: the filter per half (as before), then Otsu + `OTSU_ADJUST` per half, then the two
+  openings and the two closings on the binary picture, inside the ring. Tile (2) shows the filtered grey, tile (3)
+  the two Otsu values, the adjustment and the kernels. `Study_Red_Legs_UI`: "Otsu +" dropdown (-50 .. +50, 0) and
+  `--otsu-adjust`. Issued without a run here (the files parse).

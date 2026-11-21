@@ -10,9 +10,9 @@ _legs_filtered - the split pin legs on the washer by an edge-preserving filter, 
                    the half's mask so nothing outside it is used. cv2.ximgproc.guidedFilter is the same filter but is
                    in opencv-contrib only, not in the opencv-python 4.11 the project uses (requirements.txt) - so it is
                    written out here with cv2.boxFilter (radius GUIDED_RADIUS, eps GUIDED_EPS on the 0 - 255 scale);
-  3. two openings with circular kernels (OPEN_1, OPEN_2; 4, 4), restricted to the ring;
-  4. Otsu on the ring's pixels: light = washer (white), dark = legs (black);
-  5. two closings with circular kernels (CLOSE_1, CLOSE_2; 4, 4) of the light picture, inside the ring;
+  3. Otsu + OTSU_ADJUST on each half separately (legs half, pin head half): light = washer (white), dark = legs (black);
+  4. two openings of that binary picture with circular kernels (OPEN_1, OPEN_2; 4, 4);
+  5. two closings with circular kernels (CLOSE_1, CLOSE_2; 4, 4), inside the ring (CHANGES 198: this order);
   6. the values from that picture as in the red method: black share on the legs half, black length across the whole
      ring (and on the legs half). The reach past the outline stays the red one (the filter works inside the ring only).
 """
@@ -28,6 +28,7 @@ SIGMA_SPACE = 20.0
 # radius = round(1.5 x sigmaSpace) (the window cv2.bilateralFilter uses with d = -1), eps = sigmaColor^2
 GUIDED_RADIUS = None                # None: from SIGMA_SPACE
 GUIDED_EPS = None                   # None: from SIGMA_COLOR
+OTSU_ADJUST = 0                     # added to each half's Otsu value (the window's "Otsu +" dropdown; CHANGES 198)
 OPEN_1, OPEN_2 = 4, 4               # px, circular kernels of the two openings
 CLOSE_1, CLOSE_2 = 4, 4             # px, circular kernels of the two closings after Otsu
 COLUMN_SHARE = 0.25                 # a degree of the flat ring counts as black when this share of its pixels is black
@@ -90,20 +91,28 @@ def measureFiltered(g: dict, row: dict, model: str, method: str = "bilateral") -
         if half.any():
             done = guidedInMask(grey, half) if method == "guided" else bilateralInMask(grey, half)
             f[half] = done[half]
-    # 3. two openings, inside the ring (outside set to the ring's mean so it does not leak in)
-    fill = f.copy()
-    fill[~ring] = int(np.mean(f[ring]))
-    op = cv2.morphologyEx(fill, cv2.MORPH_OPEN, _disc(OPEN_1))
+    # 3. Otsu + OTSU_ADJUST on each half separately (CHANGES 198): light = washer, dark = legs
+    light = np.zeros((h, w), bool)
+    otsus = []
+    for half in (legsHalf, headHalf):
+        if half.sum() < 10:
+            otsus.append(None)
+            continue
+        t_, _ = cv2.threshold(f[half].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        otsus.append(float(t_))
+        light |= (f > float(t_) + float(OTSU_ADJUST)) & half
+    t = otsus[0] if otsus[0] is not None else (otsus[1] or 0.0)
+    # 4. two openings of the binary picture (circular kernels), inside the ring
+    op = cv2.morphologyEx(light.astype(np.uint8), cv2.MORPH_OPEN, _disc(OPEN_1))
     op = cv2.morphologyEx(op, cv2.MORPH_OPEN, _disc(OPEN_2))
-    # 4. Otsu on the ring's pixels
-    t, _ = cv2.threshold(op[ring].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    light = (op > t) & ring
-    # 5. two closings of the light picture, inside the ring
-    light = cv2.morphologyEx(light.astype(np.uint8), cv2.MORPH_CLOSE, _disc(CLOSE_1))
+    # 5. two closings (circular kernels), inside the ring
+    light = cv2.morphologyEx(op, cv2.MORPH_CLOSE, _disc(CLOSE_1))
     light = cv2.morphologyEx(light, cv2.MORPH_CLOSE, _disc(CLOSE_2)).astype(bool) & ring
+    op = f                                                  # tile (2) shows the filtered grey
     black = ring & ~light
     # 6. the values
-    res.update(black=black, grey=grey, filtered=f, opened=op, binaryLight=light, filterOtsu=float(t), filterMethod=method)
+    res.update(black=black, grey=grey, filtered=f, opened=op, binaryLight=light, filterOtsu=float(t), filterOtsus=otsus,
+               filterMethod=method)
     res["blackShareLegs"] = float((black & legsHalf).sum() / max(int(legsHalf.sum()), 1))
     res["blackShare"] = float(black.sum() / max(int(ring.sum()), 1))
     start = (res["axis"] + 180) % 360
@@ -140,8 +149,10 @@ def drawnFiltered(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndar
     tiles = [L._zoom(p, g, scale, half)[0] for p in (p1, p2, p3, p4)]
     L._text(tiles[0], ["(1) washer mask"] + ([f"inner r {R['rInner']:.1f}" + (f" (refined from {R['rInnerJump']:.1f})" if R.get("refined") else "")]
                                           if R.get("found") else []) + ([] if res.get("washerPresent") else ["washer: NOT found"]))
-    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} sC {SIGMA_COLOR:g} sS {SIGMA_SPACE:g}, opened {OPEN_1} + {OPEN_2}"])
-    L._text(tiles[2], [f"(3) Otsu {res.get('filterOtsu', 0):.0f}, closed {CLOSE_1} + {CLOSE_2}"])
+    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} per half, sC {SIGMA_COLOR:g} sS {SIGMA_SPACE:g}"])
+    os_ = res.get("filterOtsus") or [None, None]
+    L._text(tiles[2], ["(3) Otsu per half " + " / ".join("-" if v is None else f"{v:.0f}" for v in os_) + f" {OTSU_ADJUST:+d}",
+                       f"open {OPEN_1} + {OPEN_2}, close {CLOSE_1} + {CLOSE_2}"])
     lines = ["(4) result"]
     if res.get("blackShareLegs") is not None:
         lines += [f"black share, legs half: {res['blackShareLegs']:.3f}",
