@@ -5882,3 +5882,9 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   openings and the two closings on the binary picture, inside the ring. Tile (2) shows the filtered grey, tile (3)
   the two Otsu values, the adjustment and the kernels. `Study_Red_Legs_UI`: "Otsu +" dropdown (-50 .. +50, 0) and
   `--otsu-adjust`. Issued without a run here (the files parse).
+
+## 199. Study_Red_Legs_UI: the filter on the whole washer mask (2026-11-22)
+
+- Uddi, 2026-11-22 00:41: the guided / bilateral filter runs once on the whole washer mask, using only the grey values
+  inside it - not per half. Otsu + adjustment stays per half. `_legs_filtered.measureFiltered` changed accordingly
+  (the mask-weighted guided filter / the masked bilateral with the ring as the mask). Issued without a run (parses).

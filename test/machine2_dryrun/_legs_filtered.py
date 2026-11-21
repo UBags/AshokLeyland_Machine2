@@ -2,8 +2,7 @@
 _legs_filtered - the split pin legs on the washer by an edge-preserving filter, Otsu and morphology (Uddi, 2026-11-21
 18:26; CHANGES 196), for Study_Red_Legs_UI (pipeline "bilateral" or "guided"):
   1. the washer mask (ring) and the legs side as _legs_red.measureRed finds them;
-  2. the picture to grey; the two halves of the ring (pin head half, legs half) filtered independently, each only with
-     values inside its own half:
+  2. the picture to grey; the filter once on the whole washer mask, using only the grey values inside it (CHANGES 199):
        bilateral - utils.ImageNormalisationWithMask.bilateral_filter_masked (the outside filled with the inside mean,
                    cv2.bilateralFilter, the result kept inside the mask), d = -1, sigmaColor 50, sigmaSpace 15;
        guided    - a guided filter (He, Sun, Tang) with the grey picture as its own guide, the box means weighted by
@@ -85,12 +84,8 @@ def measureFiltered(g: dict, row: dict, model: str, method: str = "bilateral") -
     rel = np.abs(((ang - res["axis"]) + 180) % 360 - 180)
     legsHalf = ring & (rel <= 90)
     headHalf = ring & (rel > 90)
-    # 2. each half filtered with its own values only
-    f = grey.copy()
-    for half in (legsHalf, headHalf):
-        if half.any():
-            done = guidedInMask(grey, half) if method == "guided" else bilateralInMask(grey, half)
-            f[half] = done[half]
+    # 2. the filter once on the whole washer mask, using only the grey values inside it (CHANGES 199)
+    f = guidedInMask(grey, ring) if method == "guided" else bilateralInMask(grey, ring)
     # 3. Otsu + OTSU_ADJUST on each half separately (CHANGES 198): light = washer, dark = legs
     light = np.zeros((h, w), bool)
     otsus = []
@@ -149,7 +144,7 @@ def drawnFiltered(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndar
     tiles = [L._zoom(p, g, scale, half)[0] for p in (p1, p2, p3, p4)]
     L._text(tiles[0], ["(1) washer mask"] + ([f"inner r {R['rInner']:.1f}" + (f" (refined from {R['rInnerJump']:.1f})" if R.get("refined") else "")]
                                           if R.get("found") else []) + ([] if res.get("washerPresent") else ["washer: NOT found"]))
-    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} per half, sC {SIGMA_COLOR:g} sS {SIGMA_SPACE:g}"])
+    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} on the mask, sC {SIGMA_COLOR:g} sS {SIGMA_SPACE:g}"])
     os_ = res.get("filterOtsus") or [None, None]
     L._text(tiles[2], ["(3) Otsu per half " + " / ".join("-" if v is None else f"{v:.0f}" for v in os_) + f" {OTSU_ADJUST:+d}",
                        f"open {OPEN_1} + {OPEN_2}, close {CLOSE_1} + {CLOSE_2}"])
