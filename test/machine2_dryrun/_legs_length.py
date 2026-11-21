@@ -23,6 +23,83 @@ NB = 360
 WASHER_R_RANGE = (44.0, 50.0)       # px, fitted outline radius of a washer (the hex nut: 42.1 - 42.8)
 EYE_MIN_AREA = 15                   # px, smallest eye blob taken
 NUT_R = {"DOST": 28.0, "DOSTPLUS": 30.0}
+# the washer ring (Uddi, 2026-11-21 11:06): width from the outline's outermost limits (tips) and from its innermost
+# limits (valleys); Otsu on the inside of the outline, lowered; the inner edge searched round the estimate
+RING_WIDTH_FROM_TIPS = 19.0         # px
+RING_WIDTH_FROM_VALLEYS = 11.0      # px
+OTSU_LOWER_BY = 10                  # grey levels below Otsu's threshold still count as light
+INNER_SEARCH = 4.0                  # px either side of the estimated inner edge
+INNER_STEP = 0.5                    # px between the circles tried
+DARK_COLUMN_SHARE = 0.25            # a degree of the flat ring counts as dark when this share of its pixels is dark
+
+
+def ring(g: dict, axis=None) -> dict:
+    """(a) - (g): the washer ring between its fitted outline and its inner edge, the dark share in it and the dark
+    length along it. dict(found, reason, centroid, rTips, rValleys, rEstimate, rInner, otsu, threshold, jumps,
+    ringMask, light, darkShare, darkShareLegs, darkLength, darkLengthLegs, polar)."""
+    out = dict(found=False, reason="", ringMask=None)
+    crop = g["crop"]; fo = g["fo"]
+    cx0, cy0 = (float(v) for v in g["cc"])
+    h, w = crop.shape[:2]
+    # (b) the outline as a polygon round the centre used, its centroid
+    t = np.deg2rad(np.arange(NB) + 0.5)
+    good = np.isfinite(fo)
+    if good.sum() < 90:
+        out["reason"] = "outline too short"
+        return out
+    pts = np.column_stack([cx0 + fo[good] * np.cos(t[good]), cy0 + fo[good] * np.sin(t[good])]).astype(np.float32)
+    mo = cv2.moments(pts)
+    if mo["m00"] == 0:
+        out["reason"] = "outline has no area"
+        return out
+    cx, cy = mo["m10"] / mo["m00"], mo["m01"] / mo["m00"]
+    outerMask = np.zeros((h, w), np.uint8)
+    cv2.fillPoly(outerMask, [np.round(pts).astype(np.int32)], 1)
+    outerMask = outerMask.astype(bool)
+    # (c) the outline's limits round the centroid; inner edge estimate = the mean of the two widths
+    rr = np.hypot(pts[:, 0] - cx, pts[:, 1] - cy)
+    rTips, rValleys = float(np.percentile(rr, 98)), float(np.percentile(rr, 2))
+    rEst = ((rTips - RING_WIDTH_FROM_TIPS) + (rValleys - RING_WIDTH_FROM_VALLEYS)) / 2
+    # (d) Otsu inside the outline, lowered by OTSU_LOWER_BY
+    grey = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    otsu, _ = cv2.threshold(grey[outerMask].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    thr = float(otsu) - OTSU_LOWER_BY
+    light = (grey > thr) & outerMask
+    # (d') circles round the estimate: the light share on each; the inner edge = the circle whose share jumps most
+    # above the mean of the two next smaller circles
+    yy, xx = np.mgrid[:h, :w]
+    d = np.hypot(xx - cx, yy - cy)
+    radii = np.arange(rEst - INNER_SEARCH - 2 * INNER_STEP, rEst + INNER_SEARCH + INNER_STEP / 2, INNER_STEP)
+    share = []
+    for r in radii:
+        on = (np.abs(d - r) <= INNER_STEP / 2 + 0.25) & outerMask
+        share.append(float(light[on].mean()) if on.any() else 0.0)
+    jumps = [(share[i] - (share[i - 1] + share[i - 2]) / 2, float(radii[i])) for i in range(2, len(radii))]
+    jump, rInner = max(jumps)
+    # (e) the ring: inside the outline, outside the inner edge
+    ringMask = outerMask & (d >= rInner)
+    out.update(found=True, centroid=(cx, cy), rTips=rTips, rValleys=rValleys, rEstimate=rEst, rInner=rInner,
+               jump=jump, otsu=float(otsu), threshold=thr, ringMask=ringMask, light=light)
+    # (f) the dark share in the ring (and on the legs half)
+    dark = ringMask & ~light
+    ang = np.degrees(np.arctan2(yy - cy, xx - cx)) % 360
+    out["darkShare"] = float(dark.sum() / max(int(ringMask.sum()), 1))
+    if axis is not None:
+        rel = np.abs(((ang - axis) + 180) % 360 - 180)
+        half = ringMask & (rel <= 90)
+        out["darkShareLegs"] = float((dark & half).sum() / max(int(half.sum()), 1))
+    # (g) the ring laid flat (one column per degree, from the legs axis if known): a degree is dark when at least
+    # DARK_COLUMN_SHARE of its ring pixels are dark; the dark length = dark degrees / 360 (legs half: / 180)
+    start = 0.0 if axis is None else (axis + 180) % 360
+    col = ((ang - start) % 360).astype(int)
+    nRing = np.bincount(col[ringMask], minlength=360).astype(float)
+    nDark = np.bincount(col[dark], minlength=360).astype(float)
+    darkCol = (nRing > 0) & (nDark >= DARK_COLUMN_SHARE * np.maximum(nRing, 1))
+    out["darkLength"] = float(darkCol.sum() / 360.0)
+    out["polar"] = darkCol
+    if axis is not None:
+        out["darkLengthLegs"] = float(darkCol[90:270].sum() / 180.0)      # columns 90 - 270 = the legs half
+    return out
 
 
 def thin(img: np.ndarray) -> np.ndarray:
@@ -134,6 +211,7 @@ def measure(g: dict, row: dict, model: str, colour: str = "none") -> dict:
     legs = sorted((lineLength(lab2 == k) for k in range(1, n2)), reverse=True)
     out.update(legs=[x for x in legs if x >= 3.0], legsSkeleton=skel.astype(bool), legsFill=fill.astype(bool))
     out["total"] = float(sum(out["legs"]))
+    out["ring"] = ring(g, out["axis"])
     # information: what sticks out past the outline on the legs half (bright, or blue), as a length
     for key, evo in (("outside", V >= 75), ("outsideBlue", blue)):
         o = cv2.morphologyEx((evo & (d > FO + 2) & (d <= FO + 25) & legsHalf).astype(np.uint8), cv2.MORPH_OPEN,
@@ -152,7 +230,11 @@ def drawn(g: dict, res: dict, scale: int = 5, half: int = 75) -> np.ndarray:
     """The crop enlarged: the washer mask filled light green, the pin head red, the legs' lines red, and as text the
     length of each leg and the total (asked for on the picture, Uddi 2026-11-21)."""
     crop = g["crop"].copy()
-    if g.get("M") is not None:
+    R = res.get("ring") or {}
+    if R.get("found"):                                          # the ring between the outline and the inner edge
+        M = R["ringMask"]
+        crop[M] = (0.55 * crop[M] + 0.45 * np.array([144, 238, 144])).astype(np.uint8)   # light green (BGR)
+    elif g.get("M") is not None:
         M = g["M"].astype(bool)
         crop[M] = (0.55 * crop[M] + 0.45 * np.array([144, 238, 144])).astype(np.uint8)   # light green (BGR)
     if res.get("eyeMask") is not None:
@@ -167,6 +249,9 @@ def drawn(g: dict, res: dict, scale: int = 5, half: int = 75) -> np.ndarray:
             cv2.rectangle(big, (x * scale, y * scale), (x * scale + scale - 1, y * scale + scale - 1), (0, 0, 255), -1)
     lines = [f"leg {i + 1}: {L:.0f} px" for i, L in enumerate(res.get("legs", []))]
     lines.append(f"total: {res.get('total', 0.0):.0f} px")
+    if R.get("found"):
+        lines.append(f"dark share: {R['darkShare']:.2f} (legs half {R.get('darkShareLegs', 0):.2f})")
+        lines.append(f"dark length: {R['darkLength']:.2f} (legs half {R.get('darkLengthLegs', 0):.2f})")
     if not res.get("washerPresent"):
         lines.append("washer: NOT found")
     y = 28

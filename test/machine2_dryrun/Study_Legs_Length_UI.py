@@ -2,7 +2,8 @@
 Study_Legs_Length_UI - the split pin legs as a length over the washer (Uddi, 2026-11-21; _legs_length.py): choose a
 folder (OK\\ / NOT_OK\\ sub-folders give the label; else the pictures in it), the model, an optional hub picture, the
 seconds between pictures (dropdown, 3 at start); Start runs every picture in turn and shows the washer enlarged:
-  light green  the washer mask from MobileSAM (filled)
+  light green  the washer ring (filled): between the fitted outline and the inner edge found by the light-share jump
+               (CHANGES 186; MobileSAM's mask when the ring is not found)
   red          the pin head (eye), where found; the legs' lines (skeleton of their imprint over the washer)
   text         the length of each leg and the total (px), "washer: NOT found" when there is none
 Per picture the values go to the panel on the right, every log line to the log panel and the terminal, one line to
@@ -46,6 +47,19 @@ def processOne(p, lab, model, models):
              inner_edge=None if res["innerEdge"] is None else round(res["innerEdge"], 1),
              outside_len=round(res["outside"], 1), outside_blue_len=round(res["outsideBlue"], 1),
              t_legs_length=round(time.perf_counter() - t1, 3))
+    R = res.get("ring") or {}
+    if R.get("found"):
+        r.update(ring_inner_r=round(R["rInner"], 1), ring_estimate_r=round(R["rEstimate"], 1), ring_tips_r=round(R["rTips"], 1),
+                 ring_valleys_r=round(R["rValleys"], 1), ring_jump=round(R["jump"], 3), otsu=R["otsu"],
+                 dark_share=round(R["darkShare"], 3), dark_share_legs=round(R.get("darkShareLegs", float("nan")), 3),
+                 dark_length=round(R["darkLength"], 3), dark_length_legs=round(R.get("darkLengthLegs", float("nan")), 3))
+        S.log(f"   RING centroid ({R['centroid'][0] + g['x0']:.1f}, {R['centroid'][1] + g['y0']:.1f}) outline tips r {R['rTips']:.1f} "
+              f"valleys r {R['rValleys']:.1f} -> inner estimate {R['rEstimate']:.1f}; Otsu {R['otsu']:.0f} - {L.OTSU_LOWER_BY} = "
+              f"{R['threshold']:.0f}; inner edge r {R['rInner']:.1f} (light share jump {R['jump']:.2f}); dark share "
+              f"{R['darkShare']:.3f} (legs half {R.get('darkShareLegs', float('nan')):.3f}); dark length {R['darkLength']:.3f} "
+              f"(legs half {R.get('darkLengthLegs', float('nan')):.3f})")
+    elif g is not None:
+        S.log(f"   RING not found ({R.get('reason', 'no outline')})")
     S.log(f"   LEGS washer present {res['washerPresent']} ({res['washerReason']}); side: {res['side']}"
           + (f" axis {res['axis']:.0f} deg" if res["axis"] is not None else "")
           + f"; legs {' + '.join(f'{x:.0f}' for x in res['legs']) or 'none'} = total {res['total']:.0f} px"
@@ -85,11 +99,48 @@ def summary(rows, model):
                     for c in range(0, 301, 2) for o in range(0, 61)), key=lambda x: (sum(x[0]), x[1], -x[2]))
         S.log(f"CUT with the outside length too: OK when total >= {both[1]} and past the outline <= {both[2]} px -> "
               f"{both[0][0]} OK called NOT OK, {both[0][1]} NOT OK called OK")
+        for key in ("dark_share", "dark_share_legs", "dark_length", "dark_length_legs"):
+            S.log(f"        {key:17s} OK " + " ".join(f"{r[key]:.2f}" for r in sorted(ok, key=lambda r: r.get(key, 0)) if key in r)
+                  + "\n" + " " * 26 + "NOT OK " + " ".join(f"{r[key]:.2f}" for r in sorted(bad, key=lambda r: r.get(key, 0)) if key in r))
+            S.log("        " + cutLine(ok, bad, key))
+        S.log("        " + bothLine(ok, bad, "dark_share_legs", "dark_length_legs"))
+        S.log("        " + bothLine(ok, bad, "dark_share", "dark_length"))
     else:
         S.log("(no OK / NOT OK labels in this folder: no cut-off - put the pictures in OK\\ and NOT_OK\\ sub-folders)")
     times = [r.get("t_rest", 0) + r.get("t_holes", 0) for r in rows if r.get("t_rest") is not None]
     if times:
         S.log(f"time per picture {min(times):.2f} .. {max(times):.2f} s (median {np.median(times):.2f})")
+
+
+def cutLine(ok, bad, key):
+    """The best single cut on key, either direction: 'OK when key >= c' or 'OK when key <= c'."""
+    vals = sorted({round(r[key], 3) for r in ok + bad if key in r and r[key] == r[key]})
+    best = None
+    for c in vals:
+        for sign, word in ((1, ">="), (-1, "<=")):
+            e1 = sum(1 for r in ok if not (sign * (r.get(key, 0) - c) >= 0))
+            e2 = sum(1 for r in bad if sign * (r.get(key, 0) - c) >= 0)
+            if best is None or e1 + e2 < best[0]:
+                best = (e1 + e2, e1, e2, word, c)
+    return (f"CUT {key}: OK when {key} {best[3]} {best[4]:.3f} -> {best[1]} of {len(ok)} OK called NOT OK, {best[2]} of "
+            f"{len(bad)} NOT OK called OK") if best else f"CUT {key}: no values"
+
+
+def bothLine(ok, bad, a, b):
+    """The best pair of cuts on a and b together (each either direction)."""
+    va = sorted({round(r[a], 3) for r in ok + bad if a in r and r[a] == r[a]})
+    vb = sorted({round(r[b], 3) for r in ok + bad if b in r and r[b] == r[b]})
+    best = None
+    for ca in va:
+        for cb in vb:
+            for sa in (1, -1):
+                for sb in (1, -1):
+                    f = lambda r: sa * (r.get(a, 0) - ca) >= 0 and sb * (r.get(b, 0) - cb) >= 0
+                    e1 = sum(1 for r in ok if not f(r)); e2 = sum(1 for r in bad if f(r))
+                    if best is None or e1 + e2 < best[0]:
+                        best = (e1 + e2, e1, e2, ca, cb, ">=" if sa > 0 else "<=", ">=" if sb > 0 else "<=")
+    return (f"CUT {a} and {b}: OK when {a} {best[5]} {best[3]:.3f} and {b} {best[6]} {best[4]:.3f} -> {best[1]} OK called "
+            f"NOT OK, {best[2]} NOT OK called OK") if best else "CUT both: no values"
 
 
 def auto(folder, model):
@@ -121,7 +172,11 @@ def main():
              ("prof_r", "washer outline r"), ("prof_a6", "6-fold (hex) amplitude"), ("legs_side", "legs side"),
              ("eye_angle", "eye angle"), ("inner_edge", "washer inner edge r"), ("legs", "legs (px)"),
              ("legs_total", "legs total (px)"), ("outside_len", "past the outline (px)"),
-             ("outside_blue_len", "past the outline, blue (px)"), ("fail", "study step failed"),
+             ("outside_blue_len", "past the outline, blue (px)"), ("ring_tips_r", "outline tips r"),
+             ("ring_valleys_r", "outline valleys r"), ("ring_estimate_r", "inner edge estimate r"),
+             ("ring_inner_r", "inner edge r (jump)"), ("ring_jump", "light share jump"), ("otsu", "Otsu threshold"),
+             ("dark_share", "dark share (ring)"), ("dark_share_legs", "dark share (legs half)"),
+             ("dark_length", "dark length (ring)"), ("dark_length_legs", "dark length (legs half)"), ("fail", "study step failed"),
              ("t_holes", "time holes s"), ("t_rest", "time washer etc. s"), ("t_legs_length", "time legs s")]
 
     class Window:
@@ -154,7 +209,7 @@ def main():
             left = ttk.Frame(mid); left.pack(side="left", fill="y")
             self.canvas = tk.Label(left, background="black", width=720, height=720); self.canvas.pack()
             leg = ttk.Frame(left); leg.pack(fill="x", pady=2)
-            for col, text in (("#90ee90", "washer mask (MobileSAM)"), ("#ff0000", "pin head; legs' lines (skeleton)")):
+            for col, text in (("#90ee90", "washer ring (outline to inner edge)"), ("#ff0000", "pin head; legs' lines (skeleton)")):
                 f = ttk.Frame(leg); f.pack(side="left", padx=6)
                 tk.Label(f, text="  ", background=col).pack(side="left")
                 ttk.Label(f, text=" " + text).pack(side="left")

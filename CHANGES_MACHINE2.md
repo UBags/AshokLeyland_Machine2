@@ -5706,3 +5706,24 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   picture, straight pin 18 - 26 - that separates all 78.
   Time 1.7 - 9.5 s per picture on the CPU (the washer step; the legs' length ~0.1 - 0.3 s).
 - Window built and closed under Xvfb (Python 3.12, no models); the measuring path run on 3.11 with the models.
+
+## 186. Study_Legs_Length_UI: the washer ring, its dark share and dark length (2026-11-21)
+
+- Uddi, 2026-11-21 11:06: the washer is a ring round the spindle, not the filled outline. (b) centroid of the outer
+  profile; (c) inner edge estimated from the width from the outline's outermost limits (19 px) and from its innermost
+  limits (11 px), averaged; (d) Otsu inside the outline, lowered by 10; the inner edge = the circle within 3 - 4 px of the
+  estimate whose share of light pixels jumps most over the two next smaller circles; (e) the ring filled light green;
+  (f) dark share in the ring; (g) the ring laid flat, the dark length; (h) both together.
+- `_legs_length.ring()`: centroid by the moments of the outline polygon; tips / valleys = 98th / 2nd percentile of
+  the outline's radius round the centroid; circles every 0.5 px from estimate - 5 to + 4; jump = share - mean of the
+  two smaller circles. Dark share = not-light pixels / ring pixels, for the whole ring and the legs half (opposite the
+  pin head). Dark length = degrees (one column per degree from the side opposite the legs axis) with >= 25 % of their
+  ring pixels dark, / 360 (legs half: / 180). The picture shows the ring instead of MobileSAM's disc, and the two
+  values. Summary: best single cut on each value (either direction) and the best pair.
+- Sandbox runs (MobileSAM, `--holes morphology`, the 79 DOST and 78 DOSTPLUS pictures; ring found on all 157):
+  DOSTPLUS (66 OK / 6 straight pin; the 6 hex nut out by washer present): dark share, legs half, OK 0.32 - 0.45,
+  straight pin 0.22 - 0.29 -> cut 0.317 separates all; dark length, legs half, OK 0.62 - 0.81, straight pin 0.39 - 0.55
+  -> cut 0.617 separates all (the DOSTPLUS pictures come in identical pairs: 33 OK parts' worth, 3 straight-pin).
+  DOST (21 OK / 58 NOT OK): dark share, legs half, OK 0.32 - 0.47, NOT OK 0.15 - 0.45 -> best cut 0.354: 3 OK called
+  NOT OK, 4 NOT OK called OK; dark length, legs half, OK 0.53 - 0.86, NOT OK 0.13 - 0.82 -> best 0.600: 2 and 12; both
+  (share >= 0.345, length >= 0.594): 4 and 3. Whole-ring values separate less (DOST share 8 + 3, length 15 + 0).
