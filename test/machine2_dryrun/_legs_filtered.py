@@ -22,10 +22,12 @@ import numpy as np
 import _legs_red as LR
 
 BILATERAL_D = -1
-BILATERAL_SIGMA_COLOR = 50.0
-BILATERAL_SIGMA_SPACE = 15.0
-GUIDED_RADIUS = 4                   # px
-GUIDED_EPS = 650.0                  # (0.1 x 255)^2 - eps 0.01 on a 0 - 1 scale
+SIGMA_COLOR = 100.0                 # the window's text boxes (CHANGES 197); both filters use them
+SIGMA_SPACE = 20.0
+# the guided filter has two parameters, a radius and eps (the variance below which it smooths); from the bilateral's:
+# radius = round(1.5 x sigmaSpace) (the window cv2.bilateralFilter uses with d = -1), eps = sigmaColor^2
+GUIDED_RADIUS = None                # None: from SIGMA_SPACE
+GUIDED_EPS = None                   # None: from SIGMA_COLOR
 OPEN_1, OPEN_2 = 4, 4               # px, circular kernels of the two openings
 CLOSE_1, CLOSE_2 = 4, 4             # px, circular kernels of the two closings after Otsu
 COLUMN_SHARE = 0.25                 # a degree of the flat ring counts as black when this share of its pixels is black
@@ -38,13 +40,13 @@ def _disc(k: int):
 def bilateralInMask(grey: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """The project's bilateral_filter_masked on one half of the ring."""
     from utils.ImageNormalisationWithMask import bilateral_filter_masked
-    return bilateral_filter_masked(grey, mask, d=BILATERAL_D, sigmaColor=BILATERAL_SIGMA_COLOR, sigmaSpace=BILATERAL_SIGMA_SPACE)
+    return bilateral_filter_masked(grey, mask, d=BILATERAL_D, sigmaColor=float(SIGMA_COLOR), sigmaSpace=float(SIGMA_SPACE))
 
 
 def guidedInMask(grey: np.ndarray, mask: np.ndarray, radius: int = None, eps: float = None) -> np.ndarray:
     """Guided filter, the grey picture its own guide, only the pixels of mask used (mask-weighted box means)."""
-    r = int(GUIDED_RADIUS if radius is None else radius)
-    e = float(GUIDED_EPS if eps is None else eps)
+    r = int(radius if radius is not None else (GUIDED_RADIUS if GUIDED_RADIUS is not None else round(1.5 * float(SIGMA_SPACE))))
+    e = float(eps if eps is not None else (GUIDED_EPS if GUIDED_EPS is not None else float(SIGMA_COLOR) ** 2))
     I = grey.astype(np.float64)
     m = mask.astype(np.float64)
     k = (2 * r + 1, 2 * r + 1)
@@ -136,8 +138,9 @@ def drawnFiltered(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndar
     if res.get("black") is not None:
         p4[res["black"]] = (0, 0, 255)
     tiles = [L._zoom(p, g, scale, half)[0] for p in (p1, p2, p3, p4)]
-    L._text(tiles[0], ["(1) washer mask"] + ([] if res.get("washerPresent") else ["washer: NOT found"]))
-    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} per half, opened {OPEN_1} + {OPEN_2}"])
+    L._text(tiles[0], ["(1) washer mask"] + ([f"inner r {R['rInner']:.1f}" + (f" (refined from {R['rInnerJump']:.1f})" if R.get("refined") else "")]
+                                          if R.get("found") else []) + ([] if res.get("washerPresent") else ["washer: NOT found"]))
+    L._text(tiles[1], [f"(2) {res.get('filterMethod', '?')} sC {SIGMA_COLOR:g} sS {SIGMA_SPACE:g}, opened {OPEN_1} + {OPEN_2}"])
     L._text(tiles[2], [f"(3) Otsu {res.get('filterOtsu', 0):.0f}, closed {CLOSE_1} + {CLOSE_2}"])
     lines = ["(4) result"]
     if res.get("blackShareLegs") is not None:

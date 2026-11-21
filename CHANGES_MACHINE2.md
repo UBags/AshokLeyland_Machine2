@@ -5857,3 +5857,18 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   filtered and opened ring, binary, result).
 - `Study_Red_Legs_UI.py`: "Pipeline" dropdown red / bilateral / guided and open / close kernel dropdowns (3 - 6); every
   change redraws the picture shown; `--pipeline`, `--open-1`, `--open-2`, `--close-1`, `--close-2`.
+
+## 197. Study_Red_Legs_UI: sigmaColor / sigmaSpace boxes, guided filter from them, further refinement of the inner edge (2026-11-21)
+
+- Uddi, 2026-11-21 18:42: (a) the filters with sigmaColor 100 / sigmaSpace 20 from integer text boxes; (b) the washer's
+  inner edge refined: on the circle of the inner edge the grey values split dark / light by Otsu, the changes counted;
+  the radius grows by 1 px until a circle has a long run of light; that is the new inner edge; a check box "Further
+  refine inner boundary of washer". Issued without a run here, at his request (the files parse).
+- `_legs_filtered`: `SIGMA_COLOR` 100, `SIGMA_SPACE` 20 for both filters. The guided filter's own parameters are a
+  radius and eps; from the bilateral's: radius = round(1.5 x sigmaSpace) (the window cv2.bilateralFilter takes with
+  d = -1) = 30, eps = sigmaColor^2 = 10000 (`GUIDED_RADIUS` / `GUIDED_EPS` override).
+- `_legs_length.ring`: `REFINE_INNER` (off), `REFINE_INNER_STEPS` 12 px, `REFINE_LIGHT_RUN` 0.25 of the circle,
+  `REFINE_SAMPLES` 720; stops when a circle lies mostly past the outline; keeps the first edge when no circle qualifies;
+  `rInnerJump`, `refineLog` (r, Otsu, changes, longest light run share), `refined`.
+- `Study_Red_Legs_UI`: sigmaColor / sigmaSpace entries (Return or leaving the box applies them and redraws), the check
+  box, an INNER log line per picture; `--sigma-color`, `--sigma-space`, `--refine-inner`.

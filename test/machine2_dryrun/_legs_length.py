@@ -31,7 +31,14 @@ OTSU_ADJUST = 0                     # added to Otsu's threshold (the window's dr
 CLOSE_KERNEL = 4                    # px, circular closing of the binarised (light) picture after Otsu (dropdown 3 / 5 / 7 / 9; CHANGES 188)
 INNER_SEARCH = 4.0                  # px either side of the estimated inner edge
 INNER_STEP = 0.5                    # px between the circles tried
-DARK_COLUMN_SHARE = 0.25            # a degree of the flat ring counts as dark when this share of its pixels is dark
+DARK_COLUMN_SHARE = 0.25
+# further refinement of the inner edge (Uddi, 2026-11-21 18:42; CHANGES 197): from the inner edge found, the grey values
+# on the circle are split into dark / light by Otsu (on those values), the dark-light changes counted; the radius grows
+# by 1 px until a circle has a long unbroken run of light (the washer itself, past the dark notches next to the nut)
+REFINE_INNER = False                # the window's "Further refine inner boundary of washer" check box
+REFINE_INNER_STEPS = 12             # px, how far out it looks at most
+REFINE_LIGHT_RUN = 0.25             # share of the circle the longest light run must reach
+REFINE_SAMPLES = 720                # points on each circle            # a degree of the flat ring counts as dark when this share of its pixels is dark
 
 
 CLOSE_KERNEL_2 = 4                  # px, the second circular closing (dropdown 3 / 4; CHANGES 191)
@@ -91,8 +98,46 @@ def ring(g: dict, axis=None, otsuAdjust=None, closeKernel=None, closeKernel2=Non
         share.append(float(light[on].mean()) if on.any() else 0.0)
     jumps = [(share[i] - (share[i - 1] + share[i - 2]) / 2, float(radii[i])) for i in range(2, len(radii))]
     jump, rInner = max(jumps)
+    # (e') further refinement of the inner edge (REFINE_INNER)
+    refineLog = []
+    rFirst = rInner
+    if REFINE_INNER:
+        tt = np.linspace(0, 2 * np.pi, REFINE_SAMPLES, endpoint=False)
+        chosen = None
+        for step in range(0, REFINE_INNER_STEPS + 1):
+            rr_ = rInner + step
+            xs_ = np.clip(np.round(cx + rr_ * np.cos(tt)).astype(int), 0, w - 1)
+            ys_ = np.clip(np.round(cy + rr_ * np.sin(tt)).astype(int), 0, h - 1)
+            vals = grey[ys_, xs_].astype(np.uint8)
+            onOutline = outerMask[ys_, xs_]
+            if onOutline.mean() < 0.5:                          # past the outline: stop
+                break
+            t_, _ = cv2.threshold(vals.reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            lit = vals > t_
+            changes = int(np.count_nonzero(lit != np.roll(lit, 1)))
+            # the longest circular run of light
+            if lit.all():
+                run = len(lit)
+            elif not lit.any():
+                run = 0
+            else:
+                k0 = int(np.argmin(lit))                        # start just after a dark sample
+                seq = np.roll(lit, -k0)
+                best = cur = 0
+                for v in seq:
+                    cur = cur + 1 if v else 0
+                    best = max(best, cur)
+                run = best
+            share = run / float(len(lit))
+            refineLog.append((round(float(rr_), 1), int(t_), changes, round(share, 3)))
+            if share >= REFINE_LIGHT_RUN:
+                chosen = rr_
+                break
+        if chosen is not None:
+            rInner = float(chosen)
     # (e) the ring: inside the outline, outside the inner edge
     ringMask = outerMask & (d >= rInner)
+    out.update(rInnerJump=rFirst, refineLog=refineLog, refined=REFINE_INNER and rInner != rFirst)
     out.update(found=True, centroid=(cx, cy), rTips=rTips, rValleys=rValleys, rEstimate=rEst, rInner=rInner,
                jump=jump, otsu=float(otsu), adjust=float(adjust), threshold=thr, close=k, close2=k2, ringMask=ringMask, light=light,
                dark=ringMask & ~light)

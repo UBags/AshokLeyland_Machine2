@@ -15,6 +15,8 @@ each and on pairs.
   --pipeline red|bilateral|guided (red)     red: the red marking; bilateral / guided (CHANGES 196): grey, the filter per
                                             half of the washer, openings --open-1 / --open-2 (4, 4), Otsu, closings
                                             --close-1 / --close-2 (4, 4) - the window's "Pipeline" / open / close dropdowns
+  --sigma-color N (100), --sigma-space N (20)   both filters (guided: radius = round(1.5 sigmaSpace), eps = sigmaColor^2)
+  --refine-inner                            the window's "Further refine inner boundary of washer"
   --red-method rgb|hsv (rgb)                rgb (CHANGES 193): grey > --grey-white (148) = washer, else R > G, R > B,
                                             R - B > --rb (20) = red; hsv (CHANGES 192): the hue / S / V limits
   --red-s-min N (35), --red-v-min N (30)    the hsv limits (the window's dropdowns)
@@ -42,6 +44,10 @@ LR.RED_METHOD = S.arg("--red-method", LR.RED_METHOD)
 # the pipeline for the legs on the washer (CHANGES 196): "red" (the red marking, 192 / 193), or "bilateral" / "guided"
 # (grey, the edge-preserving filter per half of the washer, two openings, Otsu, two closings - _legs_filtered)
 PIPE = {"name": S.arg("--pipeline", "red")}
+LF.SIGMA_COLOR = int(S.arg("--sigma-color", str(int(LF.SIGMA_COLOR))))
+LF.SIGMA_SPACE = int(S.arg("--sigma-space", str(int(LF.SIGMA_SPACE))))
+import _legs_length as LL
+LL.REFINE_INNER = "--refine-inner" in sys.argv
 LF.OPEN_1 = int(S.arg("--open-1", str(LF.OPEN_1))); LF.OPEN_2 = int(S.arg("--open-2", str(LF.OPEN_2)))
 LF.CLOSE_1 = int(S.arg("--close-1", str(LF.CLOSE_1))); LF.CLOSE_2 = int(S.arg("--close-2", str(LF.CLOSE_2)))
 
@@ -107,6 +113,10 @@ def processOne(p, lab, model, models):
             r[k_out] = round(res[k_in], 3)
     if R.get("found"):
         r.update(ring_inner_r=round(R["rInner"], 1), ring_tips_r=round(R["rTips"], 1))
+        if R.get("refineLog"):
+            S.log(f"   INNER edge {R['rInnerJump']:.1f} -> {R['rInner']:.1f}" + (" (refined)" if R.get("refined") else " (no circle with a long light run - kept)")
+                  + "; per circle (r, Otsu, light/dark changes, longest light run share): "
+                  + ", ".join(f"({a}, {b}, {c}, {d_})" for a, b, c, d_ in R["refineLog"]))
     S.log(f"   RED washer present {res['washerPresent']} ({res['washerReason']}); side: {res['side']}"
           + (f" axis {res['axis']:.0f} deg" if res["axis"] is not None else "")
           + (f"; black share legs half {res['blackShareLegs']:.3f} (whole {res['blackShare']:.3f}); black length whole "
@@ -138,7 +148,7 @@ KEYS = ("black_share_legs", "black_length", "black_length_legs", "black_share", 
 
 
 def summary(rows, model):
-    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, pipeline {PIPE['name']} (open {LF.OPEN_1}+{LF.OPEN_2}, close {LF.CLOSE_1}+{LF.CLOSE_2}), red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
+    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, pipeline {PIPE['name']} (sigmaColor {LF.SIGMA_COLOR}, sigmaSpace {LF.SIGMA_SPACE}, refine inner {LL.REFINE_INNER}, open {LF.OPEN_1}+{LF.OPEN_2}, close {LF.CLOSE_1}+{LF.CLOSE_2}), red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
     for lab in sorted({r.get("label") or "-" for r in rows}):
         rs = [r for r in rows if (r.get("label") or "-") == lab]
         present = [r for r in rs if r.get("washer_present")]
@@ -233,6 +243,17 @@ def main():
                 self.morph[key] = tk.StringVar(master=root, value=str(value))
                 mcb = ttk.Combobox(bar, textvariable=self.morph[key], values=["3", "4", "5", "6"], state="readonly", width=2)
                 mcb.pack(side="left"); mcb.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="sigmaColor").pack(side="left", padx=(10, 2))
+            self.sc = tk.StringVar(master=root, value=str(int(LF.SIGMA_COLOR)))
+            e1 = ttk.Entry(bar, textvariable=self.sc, width=5); e1.pack(side="left")
+            ttk.Label(bar, text="sigmaSpace").pack(side="left", padx=(6, 2))
+            self.ss = tk.StringVar(master=root, value=str(int(LF.SIGMA_SPACE)))
+            e2 = ttk.Entry(bar, textvariable=self.ss, width=5); e2.pack(side="left")
+            for e_ in (e1, e2):
+                e_.bind("<Return>", self.redChanged); e_.bind("<FocusOut>", self.redChanged)
+            self.refine = tk.BooleanVar(master=root, value=LL.REFINE_INNER)
+            ttk.Checkbutton(bar, text="Further refine inner boundary of washer", variable=self.refine,
+                            command=lambda: self.redChanged(None)).pack(side="left", padx=(10, 2))
             ttk.Label(bar, text="Red by").pack(side="left", padx=(12, 2))
             self.method = tk.StringVar(master=root, value=LR.RED_METHOD)
             mc = ttk.Combobox(bar, textvariable=self.method, values=("rgb", "hsv"), state="readonly", width=4)
@@ -405,6 +426,8 @@ def main():
                 LR.RED_S_MIN = int(self.sMin.get()); LR.RED_V_MIN = int(self.vMin.get())
                 LR.RED_METHOD = self.method.get(); LR.GREY_WHITE = int(self.greyW.get()); LR.RGB_R_MINUS_B = int(self.rb.get())
                 PIPE["name"] = self.pipe.get()
+                LF.SIGMA_COLOR = int(self.sc.get()); LF.SIGMA_SPACE = int(self.ss.get())
+                LL.REFINE_INNER = bool(self.refine.get())
                 LF.OPEN_1, LF.OPEN_2 = int(self.morph["o1"].get()), int(self.morph["o2"].get())
                 LF.CLOSE_1, LF.CLOSE_2 = int(self.morph["c1"].get()), int(self.morph["c2"].get())
             except ValueError:
