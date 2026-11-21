@@ -5772,3 +5772,9 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   request. His note: the fixed second closing of 3 makes no visible difference - expected: a closing is idempotent, so a
   closing with a 3 kernel after one with a kernel of 3 or more adds almost nothing, and OpenCV's 3 x 3 "ellipse" is a
   plus shape that only fills single-pixel gaps.
+
+## 191. Study_Legs_Length_UI: Otsu adjustment 0, first closing 4, second closing from a dropdown 3 / 4 (2026-11-21)
+
+- Uddi, 2026-11-21 14:09: the Otsu adjustment starts at 0 (`OTSU_ADJUST`), the first closing at 4 (`CLOSE_KERNEL`); the
+  second closing's kernel from a dropdown ("then", 3 / 4, 4 at start; `CLOSE_KERNEL_2`, `--close-kernel-2`); either
+  change redraws the picture shown. Issued without a run here, at his request (both files parse).
