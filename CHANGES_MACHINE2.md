@@ -5744,3 +5744,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   colour imprint of 185 on DOST (best cut >= 166: 12 OK called NOT OK, 5 NOT OK called OK; with past the outline <= 11:
   5 + 4); DOSTPLUS: total >= 38 calls 4 of 6 straight-pin pictures OK.
 - Window built under Xvfb (3.12); the dropdown redraw run on a cached picture at -25 and +50; `--auto` both sets.
+
+## 188. Study_Legs_Length_UI: closing after Otsu, Otsu dropdown from -50, the Otsu value on the picture (2026-11-21)
+
+- Uddi, 2026-11-21 13:29: after Otsu, a closing with a circular kernel (dropdown 3 / 5 / 7 / 9, 5 at start); the Otsu
+  adjustment dropdown from -50 (to +50); the original binarisation value top left of the picture.
+- `_legs_length`: `CLOSE_KERNEL` (5); `ring(..., closeKernel)` closes the light (binarised) picture with an elliptical
+  kernel and keeps it inside the outline; the inner-edge search, dark share, dark length and the legs all use the
+  closed picture. `measure(..., closeKernel)`. Tile (1) starts with "Otsu (original) N"; tile (2) shows the closing.
+- `Study_Legs_Length_UI.py`: "Close" dropdown and `--close-kernel`; the Otsu dropdown -50 .. +50; either change redraws
+  the picture shown; the setting in the SET / summary lines.
+- Sandbox runs at Otsu -10, close 5 (MobileSAM, `--holes morphology`):
+  DOST: total >= 33: 2 OK called NOT OK, 15 NOT OK called OK; with past the outline <= 29: 1 + 5; dark share legs half
+  >= 0.247: 2 + 8; dark length legs half >= 0.450: 4 + 5; both: 4 + 3.
+  DOSTPLUS: the closing fills the straight pin's dark pixels too - dark share / length no longer separate it (4 - 6 of
+  6 called OK; without the closing, 186: all 72); past the outline still separates all.
+- Window built under Xvfb (3.12) with both dropdowns, redraw run at (-50, 3) and (0, 9) on a cached picture.

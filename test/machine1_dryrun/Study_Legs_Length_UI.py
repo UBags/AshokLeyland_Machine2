@@ -13,6 +13,7 @@ outside length as well). Optional: save the pictures to <folder>\\legs_length_re
 
   --auto <folder> [--model DOST|DOSTPLUS]   no window: every picture, the lines and the summary on the terminal
   --legs-colour none|blue|both              the legs by not-washer colour (default none), the blue marker, or both
+  --otsu-adjust N (-10), --close-kernel 3|5|7|9 (5)   as the window's "Otsu +" and "Close" dropdowns
   --holes sam|morphology, --sam <mobile_sam.pt>, --yolo-conf  as Study_Washer_SAM
 
 Run from the project root (laptop: GPU and the YOLO weights):
@@ -28,7 +29,8 @@ import numpy as np
 import _legs_length as L
 
 COLOUR = S.arg("--legs-colour", "none")
-OTSU = {"adjust": int(S.arg("--otsu-adjust", str(L.OTSU_ADJUST)))}   # the window's dropdown sets it (-25 .. +50)
+OTSU = {"adjust": int(S.arg("--otsu-adjust", str(L.OTSU_ADJUST))),   # the window's dropdowns set them (-50 .. +50)
+        "close": int(S.arg("--close-kernel", str(L.CLOSE_KERNEL)))}     # 3 / 5 / 7 / 9
 if COLOUR not in ("none", "blue", "both"):
     sys.exit(f"--legs-colour must be none, blue or both, not {COLOUR}")
 
@@ -42,7 +44,7 @@ def processOne(p, lab, model, models):
         x0, y0 = g["x0"], g["y0"]
         g["crop"] = im[y0:y0 + 2 * S.CROP_HALF, x0:x0 + 2 * S.CROP_HALF].copy()
     t1 = time.perf_counter()
-    res = L.measure(g, r, model, COLOUR, OTSU["adjust"])
+    res = L.measure(g, r, model, COLOUR, OTSU["adjust"], OTSU["close"])
     r.update(washer_present=res["washerPresent"], washer_reason=res["washerReason"], legs_side=res["side"],
              legs=[round(x, 1) for x in res["legs"]], legs_total=round(res["total"], 1),
              inner_edge=None if res["innerEdge"] is None else round(res["innerEdge"], 1),
@@ -55,7 +57,7 @@ def processOne(p, lab, model, models):
                  dark_share=round(R["darkShare"], 3), dark_share_legs=round(R.get("darkShareLegs", float("nan")), 3),
                  dark_length=round(R["darkLength"], 3), dark_length_legs=round(R.get("darkLengthLegs", float("nan")), 3))
         S.log(f"   RING centroid ({R['centroid'][0] + g['x0']:.1f}, {R['centroid'][1] + g['y0']:.1f}) outline tips r {R['rTips']:.1f} "
-              f"valleys r {R['rValleys']:.1f} -> inner estimate {R['rEstimate']:.1f}; Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = "
+              f"valleys r {R['rValleys']:.1f} -> inner estimate {R['rEstimate']:.1f}; close {R['close']}; Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = "
               f"{R['threshold']:.0f}; inner edge r {R['rInner']:.1f} (light share jump {R['jump']:.2f}); dark share "
               f"{R['darkShare']:.3f} (legs half {R.get('darkShareLegs', float('nan')):.3f}); dark length {R['darkLength']:.3f} "
               f"(legs half {R.get('darkLengthLegs', float('nan')):.3f})")
@@ -81,16 +83,16 @@ def redraw(r, model):
     g = r.get("_g")
     if g is None or g.get("crop") is None:
         return None
-    res = L.measure(g, r, model, COLOUR, OTSU["adjust"])
+    res = L.measure(g, r, model, COLOUR, OTSU["adjust"], OTSU["close"])
     R = res.get("ring") or {}
-    S.log(f"   REDRAW {r.get('name')} at Otsu {OTSU['adjust']:+d}: legs {' + '.join(f'{x:.0f}' for x in res['legs']) or 'none'} = "
+    S.log(f"   REDRAW {r.get('name')} at Otsu {OTSU['adjust']:+d}, close {OTSU['close']}: legs {' + '.join(f'{x:.0f}' for x in res['legs']) or 'none'} = "
           f"{res['total']:.0f} px" + (f"; dark share legs half {R.get('darkShareLegs', float('nan')):.3f}, dark length legs half "
                                       f"{R.get('darkLengthLegs', float('nan')):.3f}" if R.get("found") else ""))
     return L.drawn(g, res)
 
 
 def summary(rows, model):
-    S.log(f"\n================ LEGS LENGTH SUMMARY ({len(rows)} pictures, model {model}, colour {COLOUR}) ================")
+    S.log(f"\n================ LEGS LENGTH SUMMARY ({len(rows)} pictures, model {model}, colour {COLOUR}, Otsu {OTSU['adjust']:+d}, close {OTSU['close']}) ================")
     labels = sorted({r.get("label") or "-" for r in rows})
     for lab in labels:
         rs = [r for r in rows if (r.get("label") or "-") == lab]
@@ -163,7 +165,7 @@ def auto(folder, model):
     models = S.setUp()
     S.log(setHubPicture(None) + f" (model {model})")
     items = S.picturesIn(folder)
-    S.log(f"SET {model}: {len(items)} pictures from {folder}; legs colour {COLOUR}")
+    S.log(f"SET {model}: {len(items)} pictures from {folder}; legs colour {COLOUR}; Otsu {OTSU['adjust']:+d}, close {OTSU['close']}")
     rows = []
     for p, lab in items:
         r, _, _ = processOne(p, lab, model, models)
@@ -217,8 +219,12 @@ def main():
                          state="readonly", width=4).pack(side="left")
             ttk.Label(bar, text="Otsu +").pack(side="left", padx=(10, 2))
             self.otsu = tk.StringVar(master=root, value=str(OTSU["adjust"]))
-            oc = ttk.Combobox(bar, textvariable=self.otsu, values=[str(v) for v in range(-25, 51, 5)], state="readonly", width=4)
+            oc = ttk.Combobox(bar, textvariable=self.otsu, values=[str(v) for v in range(-50, 51, 5)], state="readonly", width=4)
             oc.pack(side="left"); oc.bind("<<ComboboxSelected>>", self.otsuChanged)
+            ttk.Label(bar, text="Close").pack(side="left", padx=(8, 2))
+            self.close_ = tk.StringVar(master=root, value=str(OTSU["close"]))
+            cc = ttk.Combobox(bar, textvariable=self.close_, values=["3", "5", "7", "9"], state="readonly", width=3)
+            cc.pack(side="left"); cc.bind("<<ComboboxSelected>>", self.otsuChanged)
             self.save = tk.BooleanVar(master=root, value=False)
             ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)
             self.startButton = ttk.Button(bar, text="Start", command=self.start); self.startButton.pack(side="left")
@@ -368,10 +374,10 @@ def main():
         def otsuChanged(self, _):
             """A new Otsu adjustment: used from the next picture on; the picture shown is measured again with it."""
             try:
-                OTSU["adjust"] = int(self.otsu.get())
+                OTSU["adjust"] = int(self.otsu.get()); OTSU["close"] = int(self.close_.get())
             except ValueError:
                 return
-            S.log(f"Otsu adjustment now {OTSU['adjust']:+d} (from the next picture on; the picture shown is redrawn)")
+            S.log(f"Otsu adjustment now {OTSU['adjust']:+d}, closing kernel {OTSU['close']} (from the next picture on; the picture shown is redrawn)")
             sel = self.listbox.curselection()
             i = sel[0] if sel else (len(self.rows) - 1)
             if 0 <= i < len(self.rows) and (self.worker is None or not self.worker.is_alive() or sel):

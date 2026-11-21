@@ -27,13 +27,14 @@ NUT_R = {"DOST": 28.0, "DOSTPLUS": 30.0}
 # limits (valleys); Otsu on the inside of the outline, lowered; the inner edge searched round the estimate
 RING_WIDTH_FROM_TIPS = 19.0         # px
 RING_WIDTH_FROM_VALLEYS = 11.0      # px
-OTSU_ADJUST = -10                   # added to Otsu's threshold (the window's dropdown, -25 .. +50; CHANGES 187)
+OTSU_ADJUST = -10                   # added to Otsu's threshold (the window's dropdown, -50 .. +50; CHANGES 187, 188)
+CLOSE_KERNEL = 5                    # px, circular closing of the binarised (light) picture after Otsu (dropdown 3 / 5 / 7 / 9; CHANGES 188)
 INNER_SEARCH = 4.0                  # px either side of the estimated inner edge
 INNER_STEP = 0.5                    # px between the circles tried
 DARK_COLUMN_SHARE = 0.25            # a degree of the flat ring counts as dark when this share of its pixels is dark
 
 
-def ring(g: dict, axis=None, otsuAdjust=None) -> dict:
+def ring(g: dict, axis=None, otsuAdjust=None, closeKernel=None) -> dict:
     """(a) - (g): the washer ring between its fitted outline and its inner edge, the dark share in it and the dark
     length along it. dict(found, reason, centroid, rTips, rValleys, rEstimate, rInner, otsu, threshold, jumps,
     ringMask, light, darkShare, darkShareLegs, darkLength, darkLengthLegs, polar)."""
@@ -66,6 +67,11 @@ def ring(g: dict, axis=None, otsuAdjust=None) -> dict:
     adjust = OTSU_ADJUST if otsuAdjust is None else otsuAdjust
     thr = float(otsu) + float(adjust)
     light = (grey > thr) & outerMask
+    # closing with a circular kernel: small dark gaps in the light washer (shadows, scallop valleys) closed
+    k = int(CLOSE_KERNEL if closeKernel is None else closeKernel)
+    if k > 1:
+        light = cv2.morphologyEx(light.astype(np.uint8), cv2.MORPH_CLOSE,
+                                 cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))).astype(bool) & outerMask
     # (d') circles round the estimate: the light share on each; the inner edge = the circle whose share jumps most
     # above the mean of the two next smaller circles
     yy, xx = np.mgrid[:h, :w]
@@ -80,7 +86,7 @@ def ring(g: dict, axis=None, otsuAdjust=None) -> dict:
     # (e) the ring: inside the outline, outside the inner edge
     ringMask = outerMask & (d >= rInner)
     out.update(found=True, centroid=(cx, cy), rTips=rTips, rValleys=rValleys, rEstimate=rEst, rInner=rInner,
-               jump=jump, otsu=float(otsu), adjust=float(adjust), threshold=thr, ringMask=ringMask, light=light,
+               jump=jump, otsu=float(otsu), adjust=float(adjust), threshold=thr, close=k, ringMask=ringMask, light=light,
                dark=ringMask & ~light)
     # (f) the dark share in the ring (and on the legs half)
     dark = ringMask & ~light
@@ -136,7 +142,7 @@ def lineLength(S: np.ndarray) -> float:
     return float(straight + math.sqrt(2) * diagonal)
 
 
-def measure(g: dict, row: dict, model: str, colour: str = "none", otsuAdjust=None) -> dict:
+def measure(g: dict, row: dict, model: str, colour: str = "none", otsuAdjust=None, closeKernel=None) -> dict:
     """Everything of steps (b) - (f) on one picture's geometry g (Study_Washer_SAM.analyse, crop coordinates) and its
     values row. colour: "none" (default), "blue" or "both". Returns dict(washerPresent, washerR, washerReason, side,
     axis, eyeMask, legs (lengths, longest first), total, legsSkeleton, legsFill, innerEdge, outside, outsideBlue)."""
@@ -196,7 +202,7 @@ def measure(g: dict, row: dict, model: str, colour: str = "none", otsuAdjust=Non
     legsHalf = rel <= 90
     # (d) the imprint over the washer: since CHANGES 187 the dark pixels of the Otsu-binarised ring (colour "none"; the
     # blue marker with "blue" / "both"), on the legs half, pieces that start at the ring's inner edge (the spindle)
-    R = ring(g, out["axis"], otsuAdjust)
+    R = ring(g, out["axis"], otsuAdjust, closeKernel)
     out["ring"] = R
     if R.get("found"):
         ringD = np.hypot(xx - R["centroid"][0], yy - R["centroid"][1])
@@ -285,10 +291,10 @@ def drawn(g: dict, res: dict, scale: int = 3, half: int = 75) -> np.ndarray:
     if res.get("legsSkeleton") is not None:
         for t in (2, 3):
             _skeletonOn(tiles[t], res["legsSkeleton"], x0, y0, half, g, scale, (0, 0, 255))
-    _text(tiles[0], ["(1) washer mask"] + ([f"inner edge r {R['rInner']:.1f}, outline tips r {R['rTips']:.1f}"]
+    _text(tiles[0], ([f"Otsu (original) {R['otsu']:.0f}"] if R.get("found") else []) + ["(1) washer mask"] + ([f"inner edge r {R['rInner']:.1f}, outline tips r {R['rTips']:.1f}"]
                                           if R.get("found") else ["ring not found: MobileSAM mask"])
                      + ([] if res.get("washerPresent") else ["washer: NOT found"]))
-    _text(tiles[1], ["(2) Otsu inside the mask"] + ([f"Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = {R['threshold']:.0f}"]
+    _text(tiles[1], ["(2) Otsu inside the mask"] + ([f"Otsu {R['otsu']:.0f} {R['adjust']:+.0f} = {R['threshold']:.0f}, close {R['close']}"]
                                                     if R.get("found") else []))
     _text(tiles[2], ["(3) legs' lines"] + [f"leg {i + 1}: {L:.0f} px" for i, L in enumerate(res.get("legs", []))]
                      + [f"total: {res.get('total', 0.0):.0f} px"])
