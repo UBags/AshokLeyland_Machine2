@@ -12,6 +12,9 @@ legs half), how far the red reaches past the outline. The summary at the end: th
 each and on pairs.
 
   --auto <folder> [--model DOST|DOSTPLUS]   no window: every picture, the lines and the summary on the terminal
+  --pipeline red|bilateral|guided (red)     red: the red marking; bilateral / guided (CHANGES 196): grey, the filter per
+                                            half of the washer, openings --open-1 / --open-2 (4, 4), Otsu, closings
+                                            --close-1 / --close-2 (4, 4) - the window's "Pipeline" / open / close dropdowns
   --red-method rgb|hsv (rgb)                rgb (CHANGES 193): grey > --grey-white (148) = washer, else R > G, R > B,
                                             R - B > --rb (20) = red; hsv (CHANGES 192): the hue / S / V limits
   --red-s-min N (35), --red-v-min N (30)    the hsv limits (the window's dropdowns)
@@ -29,12 +32,29 @@ import Study_Washer_SAM as S          # sets the paths, the vendor and cv2 / num
 import cv2
 import numpy as np
 import _legs_red as LR
+import _legs_filtered as LF
 from Study_Legs_Length_UI import cutLine, bothLine
 
 # the washer and its outline only: none of the washer study's nut / eye / pin / leg-grid / YOLO steps (CHANGES 195);
 # --all-steps runs them as Study_Washer_SAM does
 S.STEPS["nut"] = S.STEPS["legs_study"] = "--all-steps" in sys.argv
 LR.RED_METHOD = S.arg("--red-method", LR.RED_METHOD)
+# the pipeline for the legs on the washer (CHANGES 196): "red" (the red marking, 192 / 193), or "bilateral" / "guided"
+# (grey, the edge-preserving filter per half of the washer, two openings, Otsu, two closings - _legs_filtered)
+PIPE = {"name": S.arg("--pipeline", "red")}
+LF.OPEN_1 = int(S.arg("--open-1", str(LF.OPEN_1))); LF.OPEN_2 = int(S.arg("--open-2", str(LF.OPEN_2)))
+LF.CLOSE_1 = int(S.arg("--close-1", str(LF.CLOSE_1))); LF.CLOSE_2 = int(S.arg("--close-2", str(LF.CLOSE_2)))
+
+
+def measureNow(g, r, model):
+    """The legs by the pipeline chosen."""
+    if PIPE["name"] in ("bilateral", "guided"):
+        return LF.measureFiltered(g, r, model, PIPE["name"])
+    return LR.measureRed(g, r, model)
+
+
+def drawNow(g, res):
+    return LF.drawnFiltered(g, res) if PIPE["name"] in ("bilateral", "guided") else LR.drawnRed(g, res)
 LR.RED_S_MIN = int(S.arg("--red-s-min", str(LR.RED_S_MIN)))
 LR.GREY_WHITE = int(S.arg("--grey-white", str(LR.GREY_WHITE)))
 LR.RGB_R_MINUS_B = int(S.arg("--rb", str(LR.RGB_R_MINUS_B)))
@@ -77,9 +97,9 @@ def processOne(p, lab, model, models):
         x0, y0 = g["x0"], g["y0"]
         g["crop"] = im[y0:y0 + 2 * S.CROP_HALF, x0:x0 + 2 * S.CROP_HALF].copy()
     t1 = time.perf_counter()
-    res = LR.measureRed(g, r, model)
+    res = measureNow(g, r, model)
     R = res.get("ring") or {}
-    r.update(washer_present=res["washerPresent"], washer_reason=res["washerReason"], legs_side=res["side"],
+    r.update(pipeline=PIPE["name"], washer_present=res["washerPresent"], washer_reason=res["washerReason"], legs_side=res["side"],
              reach=round(res["reach"], 1), t_red=round(time.perf_counter() - t1, 3))
     for k_out, k_in in (("black_share_legs", "blackShareLegs"), ("black_share", "blackShare"),
                         ("black_length", "blackLength"), ("black_length_legs", "blackLengthLegs")):
@@ -93,7 +113,7 @@ def processOne(p, lab, model, models):
              f"{res['blackLength']:.3f} (legs half {res['blackLengthLegs']:.3f})" if res.get("blackShareLegs") is not None else "")
           + f"; reach past the outline {res['reach']:.0f} px; {r['t_red']:.2f} s")
     if g is not None and g.get("crop") is not None and R.get("found"):
-        view = LR.drawnRed(g, res)
+        view = drawNow(g, res)
     elif im is not None:
         view = cv2.resize(im[270:420, 570:720], None, fx=5, fy=5, interpolation=cv2.INTER_NEAREST)
     else:
@@ -107,18 +127,18 @@ def redraw(r, model):
     g = r.get("_g")
     if g is None or g.get("crop") is None:
         return None
-    res = LR.measureRed(g, r, model)
-    S.log(f"   REDRAW {r.get('name')} red by {LR.RED_METHOD}: black share legs half "
+    res = measureNow(g, r, model)
+    S.log(f"   REDRAW {PIPE['name']} {r.get('name')} red by {LR.RED_METHOD}: black share legs half "
           f"{res.get('blackShareLegs') if res.get('blackShareLegs') is None else round(res['blackShareLegs'], 3)}, black length "
           f"{res.get('blackLength') if res.get('blackLength') is None else round(res['blackLength'], 3)}, reach {res['reach']:.0f} px")
-    return LR.drawnRed(g, res) if (res.get("ring") or {}).get("found") else None
+    return drawNow(g, res) if (res.get("ring") or {}).get("found") else None
 
 
 KEYS = ("black_share_legs", "black_length", "black_length_legs", "black_share", "reach")
 
 
 def summary(rows, model):
-    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
+    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, pipeline {PIPE['name']} (open {LF.OPEN_1}+{LF.OPEN_2}, close {LF.CLOSE_1}+{LF.CLOSE_2}), red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
     for lab in sorted({r.get("label") or "-" for r in rows}):
         rs = [r for r in rows if (r.get("label") or "-") == lab]
         present = [r for r in rs if r.get("washer_present")]
@@ -203,7 +223,17 @@ def main():
             self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled"); self.stopButton.pack(side="left", padx=4)
 
             bar = ttk.Frame(root); bar.pack(fill="x", padx=6, pady=(0, 4))   # second row: the red limits
-            ttk.Label(bar, text="Red by").pack(side="left", padx=(0, 2))
+            ttk.Label(bar, text="Pipeline").pack(side="left", padx=(0, 2))
+            self.pipe = tk.StringVar(master=root, value=PIPE["name"])
+            pc = ttk.Combobox(bar, textvariable=self.pipe, values=("red", "bilateral", "guided"), state="readonly", width=9)
+            pc.pack(side="left"); pc.bind("<<ComboboxSelected>>", self.redChanged)
+            self.morph = {}
+            for key, label, value in (("o1", "open", LF.OPEN_1), ("o2", "+", LF.OPEN_2), ("c1", "close", LF.CLOSE_1), ("c2", "+", LF.CLOSE_2)):
+                ttk.Label(bar, text=label).pack(side="left", padx=(6 if label != "+" else 2, 2))
+                self.morph[key] = tk.StringVar(master=root, value=str(value))
+                mcb = ttk.Combobox(bar, textvariable=self.morph[key], values=["3", "4", "5", "6"], state="readonly", width=2)
+                mcb.pack(side="left"); mcb.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="Red by").pack(side="left", padx=(12, 2))
             self.method = tk.StringVar(master=root, value=LR.RED_METHOD)
             mc = ttk.Combobox(bar, textvariable=self.method, values=("rgb", "hsv"), state="readonly", width=4)
             mc.pack(side="left"); mc.bind("<<ComboboxSelected>>", self.redChanged)
@@ -374,6 +404,9 @@ def main():
             try:
                 LR.RED_S_MIN = int(self.sMin.get()); LR.RED_V_MIN = int(self.vMin.get())
                 LR.RED_METHOD = self.method.get(); LR.GREY_WHITE = int(self.greyW.get()); LR.RGB_R_MINUS_B = int(self.rb.get())
+                PIPE["name"] = self.pipe.get()
+                LF.OPEN_1, LF.OPEN_2 = int(self.morph["o1"].get()), int(self.morph["o2"].get())
+                LF.CLOSE_1, LF.CLOSE_2 = int(self.morph["c1"].get()), int(self.morph["c2"].get())
             except ValueError:
                 return
             S.log(f"red now by {LR.RED_METHOD} (rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) (from the next picture on; the picture shown is redrawn)")

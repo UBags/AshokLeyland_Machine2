@@ -5842,3 +5842,18 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   turns them on again). The red step itself (ring, red paint, values) was 0.01 - 0.02 s.
 - Sandbox (CPU): 1.8 - 2.1 s per picture instead of 4.8 - 6.0 (holes 0.1 s with the dark-blob finder; nearly all the rest
   is MobileSAM's image embedding on the CPU, a small part of that on the GPU).
+
+## 196. Study_Red_Legs_UI: pipelines "bilateral" and "guided" (2026-11-21)
+
+- Uddi, 2026-11-21 18:26: on the final washer mask, the two halves (pin head, legs) filtered independently with values
+  from inside each half only - grey first, bilateral d = -1, sigmaColor 50, sigmaSpace 15 (the project's masked
+  bilateral, `utils/ImageNormalisationWithMask.bilateral_filter_masked`), or a guided filter; then two openings with
+  circular kernels 4 and 4, Otsu, two closings 4 and 4; that picture decides. Issued without a run here, at his request
+  (the files parse).
+- `_legs_filtered.py` (new): `bilateralInMask`, `guidedInMask` (cv2.ximgproc.guidedFilter is in opencv-contrib only,
+  not in the project's opencv-python 4.11: the same filter written with cv2.boxFilter, self-guided, box means weighted
+  by the half's mask; radius 4, eps 650 = (0.1 x 255)^2), `measureFiltered` (measureRed for the ring, legs side and red
+  reach; the black values from the filtered picture, the red ones kept as red_*), `drawnFiltered` (2 x 2: mask,
+  filtered and opened ring, binary, result).
+- `Study_Red_Legs_UI.py`: "Pipeline" dropdown red / bilateral / guided and open / close kernel dropdowns (3 - 6); every
+  change redraws the picture shown; `--pipeline`, `--open-1`, `--open-2`, `--close-1`, `--close-2`.
