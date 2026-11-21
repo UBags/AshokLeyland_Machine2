@@ -46,6 +46,12 @@ CROP_HALF = 120                       # SAM sees a 240 x 240 crop round the esti
 # about 28 / 31); printed and re-measured here
 R_WASHER = {"DOST": 46.0, "DOSTPLUS": 44.6}
 R_NUT = {"DOST": 28.0, "DOSTPLUS": 30.0}
+# which steps of analyse() run (CHANGES 195): the washer prompts and the outline fit always; the rest only for the
+# washer / legs study of 180 - 181. Study_Red_Legs_UI turns them off - it needs the washer and its outline only.
+STEPS = {
+    "nut": True,            # 3 MobileSAM prompts for the nut (the spindle centre); off: the centre = holes + offset
+    "legs_study": True,     # eye, coverage, pin prompts, leg grid, YOLO boxes, blue share - the 180 study's leg steps
+}
 
 
 def arg(name, default=None, many=False):
@@ -173,11 +179,11 @@ def analyse(im, model, pred, holesResult, offset):
         # ---- the nut (spindle centre): point on the nut + box round it
         t1 = time.perf_counter()
         nutCands = []
-        for name, kw in (("N1 point+box", dict(point_coords=np.array([c]), point_labels=np.array([1]),
+        for name, kw in ([] if not STEPS["nut"] else (("N1 point+box", dict(point_coords=np.array([c]), point_labels=np.array([1]),
                                                 box=np.array([*(c - Rn - 8), *(c + Rn + 8)]))),
                          ("N2 point", dict(point_coords=np.array([c]), point_labels=np.array([1]))),
                          ("N3 point+ringneg", dict(point_coords=np.array([c] + [c + rmid * np.array([math.cos(a), math.sin(a)]) for a in np.deg2rad(np.arange(0, 360, 45))]),
-                                                   point_labels=np.array([1] + [0] * 8)))):
+                                                   point_labels=np.array([1] + [0] * 8))))):
             masks, scores, _ = pred.predict(multimask_output=True, **kw)
             for i, (m, s) in enumerate(zip(masks, scores)):
                 ys, xs = np.nonzero(m)
@@ -277,6 +283,8 @@ def analyse(im, model, pred, holesResult, offset):
                prof_cx=cc[0] + co["a1"] + x0, prof_cy=cc[1] + co["b1"] + y0)
     out["prof_vs_holes_dx"] = out["prof_cx"] - hx; out["prof_vs_holes_dy"] = out["prof_cy"] - hy
     base["prof"] = (out["prof_cx"], out["prof_cy"])
+    if not STEPS["legs_study"]:                                 # the washer and its outline only (CHANGES 195)
+        return out, dict(base, M=M, fo=fo, eye=None, Rn=Rn_used)
 
     # ---- eye, legs half, coverage, standing out
     angle = (np.degrees(np.arctan2(yy - cc[1], xx - cc[0])) % 360)

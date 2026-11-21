@@ -31,6 +31,9 @@ import numpy as np
 import _legs_red as LR
 from Study_Legs_Length_UI import cutLine, bothLine
 
+# the washer and its outline only: none of the washer study's nut / eye / pin / leg-grid / YOLO steps (CHANGES 195);
+# --all-steps runs them as Study_Washer_SAM does
+S.STEPS["nut"] = S.STEPS["legs_study"] = "--all-steps" in sys.argv
 LR.RED_METHOD = S.arg("--red-method", LR.RED_METHOD)
 LR.RED_S_MIN = int(S.arg("--red-s-min", str(LR.RED_S_MIN)))
 LR.GREY_WHITE = int(S.arg("--grey-white", str(LR.GREY_WHITE)))

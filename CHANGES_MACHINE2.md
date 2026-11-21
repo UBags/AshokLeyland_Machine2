@@ -5831,3 +5831,14 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   1790.
 - Labels: 112450399 is OK (Uddi): with it, the 192 HSV rule (share >= 0.037, reach <= 18.9) gets 66 of 67 right - the
   one left, OK 125618252, has the paint pressed off by the pliers (to be repainted by the operator).
+
+## 195. Study_Red_Legs_UI: only the washer and the red legs (2026-11-21)
+
+- Uddi, 2026-11-21 16:40: 5 s per picture - the red study ran every step of the washer study (nut prompts, eye,
+  coverage, 4 pin prompt sets, the leg grid, YOLO + a mask per box); keep only what finds the washer and the red legs.
+- `Study_Washer_SAM.STEPS` (new): `nut` and `legs_study` (eye, coverage, pin, leg grid, YOLO boxes, blue share), True
+  by default (the 180 / 181 study unchanged). With `nut` off the centre is holes + offset; with `legs_study` off
+  `analyse` returns after the washer prompts and the outline fit. `Study_Red_Legs_UI` turns both off (`--all-steps`
+  turns them on again). The red step itself (ring, red paint, values) was 0.01 - 0.02 s.
+- Sandbox (CPU): 1.8 - 2.1 s per picture instead of 4.8 - 6.0 (holes 0.1 s with the dark-blob finder; nearly all the rest
+  is MobileSAM's image embedding on the CPU, a small part of that on the GPU).
