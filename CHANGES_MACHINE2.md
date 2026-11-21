@@ -5760,3 +5760,8 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   DOSTPLUS: the closing fills the straight pin's dark pixels too - dark share / length no longer separate it (4 - 6 of
   6 called OK; without the closing, 186: all 72); past the outline still separates all.
 - Window built under Xvfb (3.12) with both dropdowns, redraw run at (-50, 3) and (0, 9) on a cached picture.
+
+## 189. Study_Legs_Length_UI: a second, fixed closing of 3; the Close dropdown starts at 3 (2026-11-21)
+
+- Uddi, 2026-11-21 14:00: after the closing set by the dropdown, a second closing with a fixed circular kernel of 3; the
+  dropdown's initial value 3 (`CLOSE_KERNEL`). Issued without a run here, at Uddi's request - he runs it on the laptop.

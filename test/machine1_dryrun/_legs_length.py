@@ -28,7 +28,7 @@ NUT_R = {"DOST": 28.0, "DOSTPLUS": 30.0}
 RING_WIDTH_FROM_TIPS = 19.0         # px
 RING_WIDTH_FROM_VALLEYS = 11.0      # px
 OTSU_ADJUST = -10                   # added to Otsu's threshold (the window's dropdown, -50 .. +50; CHANGES 187, 188)
-CLOSE_KERNEL = 5                    # px, circular closing of the binarised (light) picture after Otsu (dropdown 3 / 5 / 7 / 9; CHANGES 188)
+CLOSE_KERNEL = 3                    # px, circular closing of the binarised (light) picture after Otsu (dropdown 3 / 5 / 7 / 9; CHANGES 188)
 INNER_SEARCH = 4.0                  # px either side of the estimated inner edge
 INNER_STEP = 0.5                    # px between the circles tried
 DARK_COLUMN_SHARE = 0.25            # a degree of the flat ring counts as dark when this share of its pixels is dark
@@ -72,6 +72,9 @@ def ring(g: dict, axis=None, otsuAdjust=None, closeKernel=None) -> dict:
     if k > 1:
         light = cv2.morphologyEx(light.astype(np.uint8), cv2.MORPH_CLOSE,
                                  cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))).astype(bool) & outerMask
+    # then a second closing with a fixed circular kernel of 3 (Uddi, 2026-11-21 14:00; CHANGES 189)
+    light = cv2.morphologyEx(light.astype(np.uint8), cv2.MORPH_CLOSE,
+                             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))).astype(bool) & outerMask
     # (d') circles round the estimate: the light share on each; the inner edge = the circle whose share jumps most
     # above the mean of the two next smaller circles
     yy, xx = np.mgrid[:h, :w]
