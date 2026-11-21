@@ -12,7 +12,9 @@ legs half), how far the red reaches past the outline. The summary at the end: th
 each and on pairs.
 
   --auto <folder> [--model DOST|DOSTPLUS]   no window: every picture, the lines and the summary on the terminal
-  --red-s-min N (35), --red-v-min N (30)    the red paint limits (the window's "Red S >=" / "V >=" dropdowns)
+  --red-method rgb|hsv (rgb)                rgb (CHANGES 193): grey > --grey-white (148) = washer, else R > G, R > B,
+                                            R - B > --rb (20) = red; hsv (CHANGES 192): the hue / S / V limits
+  --red-s-min N (35), --red-v-min N (30)    the hsv limits (the window's dropdowns)
   --holes sam|morphology, --sam <mobile_sam.pt>  as Study_Washer_SAM
 The hub's holes not found: the washer step from the fixed centre (vision.splitpin.centre) instead (HOLES line).
 
@@ -29,7 +31,10 @@ import numpy as np
 import _legs_red as LR
 from Study_Legs_Length_UI import cutLine, bothLine
 
+LR.RED_METHOD = S.arg("--red-method", LR.RED_METHOD)
 LR.RED_S_MIN = int(S.arg("--red-s-min", str(LR.RED_S_MIN)))
+LR.GREY_WHITE = int(S.arg("--grey-white", str(LR.GREY_WHITE)))
+LR.RGB_R_MINUS_B = int(S.arg("--rb", str(LR.RGB_R_MINUS_B)))
 LR.RED_V_MIN = int(S.arg("--red-v-min", str(LR.RED_V_MIN)))
 
 NOT_OK_NAMES = ("NOT_OK", "Not OK", "NOT OK", "Not_OK", "not ok", "Not ok", "NotOK")
@@ -100,7 +105,7 @@ def redraw(r, model):
     if g is None or g.get("crop") is None:
         return None
     res = LR.measureRed(g, r, model)
-    S.log(f"   REDRAW {r.get('name')} at red S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}: black share legs half "
+    S.log(f"   REDRAW {r.get('name')} red by {LR.RED_METHOD}: black share legs half "
           f"{res.get('blackShareLegs') if res.get('blackShareLegs') is None else round(res['blackShareLegs'], 3)}, black length "
           f"{res.get('blackLength') if res.get('blackLength') is None else round(res['blackLength'], 3)}, reach {res['reach']:.0f} px")
     return LR.drawnRed(g, res) if (res.get("ring") or {}).get("found") else None
@@ -110,7 +115,7 @@ KEYS = ("black_share_legs", "black_length", "black_length_legs", "black_share", 
 
 
 def summary(rows, model):
-    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, red S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
+    S.log(f"\n================ RED LEGS SUMMARY ({len(rows)} pictures, model {model}, red method {LR.RED_METHOD}, rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) ================")
     for lab in sorted({r.get("label") or "-" for r in rows}):
         rs = [r for r in rows if (r.get("label") or "-") == lab]
         present = [r for r in rs if r.get("washer_present")]
@@ -189,7 +194,19 @@ def main():
             self.seconds = tk.StringVar(master=root, value="3")
             ttk.Combobox(bar, textvariable=self.seconds, values=["0", "0.5", "1", "2", "3", "4", "5", "6", "8", "10", "15", "20"],
                          state="readonly", width=4).pack(side="left")
-            ttk.Label(bar, text="Red S >=").pack(side="left", padx=(10, 2))
+            ttk.Label(bar, text="Red by").pack(side="left", padx=(10, 2))
+            self.method = tk.StringVar(master=root, value=LR.RED_METHOD)
+            mc = ttk.Combobox(bar, textvariable=self.method, values=("rgb", "hsv"), state="readonly", width=4)
+            mc.pack(side="left"); mc.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="grey >").pack(side="left", padx=(6, 2))
+            self.greyW = tk.StringVar(master=root, value=str(LR.GREY_WHITE))
+            gc_ = ttk.Combobox(bar, textvariable=self.greyW, values=[str(v) for v in range(108, 189, 10)], state="readonly", width=4)
+            gc_.pack(side="left"); gc_.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="R-B >").pack(side="left", padx=(6, 2))
+            self.rb = tk.StringVar(master=root, value=str(LR.RGB_R_MINUS_B))
+            rc = ttk.Combobox(bar, textvariable=self.rb, values=[str(v) for v in range(0, 51, 5)], state="readonly", width=3)
+            rc.pack(side="left"); rc.bind("<<ComboboxSelected>>", self.redChanged)
+            ttk.Label(bar, text="hsv: S >=").pack(side="left", padx=(10, 2))
             self.sMin = tk.StringVar(master=root, value=str(LR.RED_S_MIN))
             sc = ttk.Combobox(bar, textvariable=self.sMin, values=[str(v) for v in range(20, 71, 5)], state="readonly", width=3)
             sc.pack(side="left"); sc.bind("<<ComboboxSelected>>", self.redChanged)
@@ -348,9 +365,10 @@ def main():
             """New red limits: used from the next picture on; the picture shown (or selected) is measured again."""
             try:
                 LR.RED_S_MIN = int(self.sMin.get()); LR.RED_V_MIN = int(self.vMin.get())
+                LR.RED_METHOD = self.method.get(); LR.GREY_WHITE = int(self.greyW.get()); LR.RGB_R_MINUS_B = int(self.rb.get())
             except ValueError:
                 return
-            S.log(f"red limits now S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN} (from the next picture on; the picture shown is redrawn)")
+            S.log(f"red now by {LR.RED_METHOD} (rgb: grey > {LR.GREY_WHITE} white, R-B > {LR.RGB_R_MINUS_B}; hsv: S >= {LR.RED_S_MIN}, V >= {LR.RED_V_MIN}) (from the next picture on; the picture shown is redrawn)")
             sel = self.listbox.curselection()
             i = sel[0] if sel else (len(self.rows) - 1)
             if 0 <= i < len(self.rows) and (self.worker is None or not self.worker.is_alive() or sel):

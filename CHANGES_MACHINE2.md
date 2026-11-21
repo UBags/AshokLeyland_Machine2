@@ -5804,3 +5804,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   from the fixed centre does not lie under the legs). Margins thin (reach: OK up to 18.9, a NOT OK at 18.1); fitted
   on these pictures.
 - Window built under Xvfb (3.12), the red dropdown redraw run; `--auto` on the 67 pictures (3.11, MobileSAM).
+
+## 193. Study_Red_Legs_UI: Uddi's RGB rule for the red (2026-11-21)
+
+- Uddi, 2026-11-21 15:38: under the washer mask, grey > 148 = white; of the rest, R > G, R > B and R - B > 20 = black
+  (the legs), else white.
+- `_legs_red.redPaintRGB` (the rule, applied to the whole crop so the reach past the outline uses it too; opened
+  2 x 2), `RED_METHOD` "rgb" (default) / "hsv" (192), `GREY_WHITE` 148, `RGB_R_MINUS_B` 20. Window: "Red by" (rgb / hsv),
+  "grey >" (108 - 188) and "R-B >" (0 - 50) dropdowns, redraw; `--red-method`, `--grey-white`, `--rb`.
+- The two pictures the 192 rule got wrong (share legs half >= 0.037, reach <= 18.9): OK 125618252 (share 0.035) and
+  NOT OK 112450399 (legs folded on the washer like an OK part - label to be checked).
+- Sandbox runs (fixed centre, as 192):
+  R - B > 20: the dark maroon over the seal is lost (on these JPEGs it is purple-ish, R only 5 - 15 above B); best pair
+  black share legs half >= 0.005 and reach <= 7: 6 OK called NOT OK, 3 NOT OK called OK - worse than hsv.
+  R - B > 5: best pair black share legs half >= 0.049 and reach <= 16.2 px: 0 OK called NOT OK, 1 NOT OK called OK
+  (112450399 again). Margins thin: OK reach up to 16, NOT OK from 18 (the low-reach NOT OK caught by share 0.042 -
+  0.044 against the cut 0.049).

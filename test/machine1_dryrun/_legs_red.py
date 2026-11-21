@@ -26,12 +26,32 @@ RED_HUE_HIGH = 155                  # ... or >= this (OpenCV hue 0 - 180)
 RED_S_MIN = 35                      # the window's dropdown (20 .. 70)
 RED_V_MIN = 30                      # the window's dropdown (15 .. 60)
 RED_SIDE_MIN = 20                   # px of red on / just outside the washer to take the legs side from the red
+RED_METHOD = "rgb"                  # "rgb" (CHANGES 193, Uddi's rule) or "hsv" (CHANGES 192)
+GREY_WHITE = 148                    # rgb: grey above this = white (washer), not looked at for red
+RGB_R_MINUS_B = 20                  # rgb: R > G, R > B and R - B > this = red (black in the binarised washer)
 RED_COLUMN_SHARE = 0.25             # a degree of the flat ring counts as black when this share of its pixels is red
 REACH_MAX = 45                      # px past the outline looked at for the reach
 
 
+def redPaintRGB(crop: np.ndarray) -> np.ndarray:
+    """Uddi's rule (2026-11-21 15:38): grey > GREY_WHITE is white (the washer); of the rest, R > G and R > B and
+    R - B > RGB_R_MINUS_B is red. Applied to the whole crop (inside the washer mask it is his steps (a) - (c); past the
+    outline the seal is dark, so every pixel there goes to the colour rule)."""
+    grey = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    b, g, r = (crop[..., i].astype(int) for i in range(3))
+    red = (grey <= GREY_WHITE) & (r > g) & (r > b) & ((r - b) > RGB_R_MINUS_B)
+    return cv2.morphologyEx(red.astype(np.uint8), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)).astype(bool)
+
+
 def redPaint(crop: np.ndarray) -> np.ndarray:
-    """The red marking on a BGR picture (bool)."""
+    """The red marking on a BGR picture (bool), by RED_METHOD."""
+    if str(RED_METHOD).lower() == "rgb":
+        return redPaintRGB(crop)
+    return redPaintHSV(crop)
+
+
+def redPaintHSV(crop: np.ndarray) -> np.ndarray:
+    """The red marking on a BGR picture (bool) by hue / saturation / brightness (CHANGES 192)."""
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV).astype(int)
     H, S, V = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     red = ((H <= RED_HUE_LOW) | (H >= RED_HUE_HIGH)) & (S >= RED_S_MIN) & (V >= RED_V_MIN)
