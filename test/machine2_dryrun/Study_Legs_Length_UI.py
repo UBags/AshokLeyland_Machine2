@@ -13,7 +13,7 @@ outside length as well). Optional: save the pictures to <folder>\\legs_length_re
 
   --auto <folder> [--model DOST|DOSTPLUS]   no window: every picture, the lines and the summary on the terminal
   --legs-colour none|blue|both              the legs by not-washer colour (default none), the blue marker, or both
-  --otsu-adjust N (-10), --close-kernel 3|5|7|9 (5)   as the window's "Otsu +" and "Close" dropdowns
+  --otsu-adjust N (-10), --close-kernel 3|4|5|6|7 (3)   as the window's "Otsu +" and "Close" dropdowns
   --holes sam|morphology, --sam <mobile_sam.pt>, --yolo-conf  as Study_Washer_SAM
 
 Run from the project root (laptop: GPU and the YOLO weights):
@@ -30,7 +30,7 @@ import _legs_length as L
 
 COLOUR = S.arg("--legs-colour", "none")
 OTSU = {"adjust": int(S.arg("--otsu-adjust", str(L.OTSU_ADJUST))),   # the window's dropdowns set them (-50 .. +50)
-        "close": int(S.arg("--close-kernel", str(L.CLOSE_KERNEL)))}     # 3 / 5 / 7 / 9
+        "close": int(S.arg("--close-kernel", str(L.CLOSE_KERNEL)))}     # 3 / 4 / 5 / 6 / 7
 if COLOUR not in ("none", "blue", "both"):
     sys.exit(f"--legs-colour must be none, blue or both, not {COLOUR}")
 
@@ -223,7 +223,7 @@ def main():
             oc.pack(side="left"); oc.bind("<<ComboboxSelected>>", self.otsuChanged)
             ttk.Label(bar, text="Close").pack(side="left", padx=(8, 2))
             self.close_ = tk.StringVar(master=root, value=str(OTSU["close"]))
-            cc = ttk.Combobox(bar, textvariable=self.close_, values=["3", "5", "7", "9"], state="readonly", width=3)
+            cc = ttk.Combobox(bar, textvariable=self.close_, values=["3", "4", "5", "6", "7"], state="readonly", width=3)
             cc.pack(side="left"); cc.bind("<<ComboboxSelected>>", self.otsuChanged)
             self.save = tk.BooleanVar(master=root, value=False)
             ttk.Checkbutton(bar, text="Save pictures", variable=self.save).pack(side="left", padx=8)

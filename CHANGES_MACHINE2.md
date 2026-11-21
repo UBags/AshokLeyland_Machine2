@@ -5765,3 +5765,10 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 
 - Uddi, 2026-11-21 14:00: after the closing set by the dropdown, a second closing with a fixed circular kernel of 3; the
   dropdown's initial value 3 (`CLOSE_KERNEL`). Issued without a run here, at Uddi's request - he runs it on the laptop.
+
+## 190. Study_Legs_Length_UI: Close dropdown 3 / 4 / 5 / 6 / 7 (2026-11-21)
+
+- Uddi, 2026-11-21 14:04: the Close dropdown offers 3, 4, 5, 6, 7 (was 3, 5, 7, 9). Issued without a run here, at his
+  request. His note: the fixed second closing of 3 makes no visible difference - expected: a closing is idempotent, so a
+  closing with a 3 kernel after one with a kernel of 3 or more adds almost nothing, and OpenCV's 3 x 3 "ellipse" is a
+  plus shape that only fills single-pixel gaps.
