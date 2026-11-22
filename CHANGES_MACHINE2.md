@@ -5904,3 +5904,10 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - `Study_NoColour_Legs_UI.py` (new): a copy of `Study_Red_Legs_UI` with the red controls removed, pipeline guided
   (default) / bilateral. The red window is unchanged.
 - Run here: `measureNoColour` on two cached DOST pictures (guided and bilateral), the window built under Xvfb.
+
+## 201. Working branch now `main` (2026-11-22)
+
+- Uddi, 2026-11-22: the repository's history moved to `main` (the branch `machine2-io-fe-db-cam` is gone on GitHub; the
+  real properties files are kept local, sanitised `*.example.properties` in git - his commits 4e4b8ef, ed25c2b,
+  3818fe5). CLAUDE.md §1, §6, §10, README.md §9 and docs/LLD.md now name `main`. Records of where something was traced
+  or measured (CODE_GRAPH, vision_positions_machine2, the history above) keep the old branch name.

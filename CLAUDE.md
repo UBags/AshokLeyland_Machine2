@@ -21,7 +21,7 @@ component.
 - **Machine 2:** Siemens S7-1515 (pyS7). **Machine 1:** Allen-Bradley (pycomm3). One code base; the only build-time
   difference is `plc.vendor`. Per-machine values live under `siemens.` / `allenbradley.` prefixes in the properties.
 - Repo: `https://github.com/UBags/AshokLeyland_Machine2.git` (use exactly this URL), working branch
-  `machine2-io-fe-db-cam`.
+  `main` (until 2026-11-22: `machine2-io-fe-db-cam`).
 - The code this repo started from differs slightly from what runs in production.
 
 ## 2. Where things run
@@ -176,7 +176,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `claude/PLC_Interface_Spec.md`, `claude/state_sync.md`, `claude/plant-pc-verification.md`,
   `claude/vision_positions_machine2.md`,
   `claude/machine2-changes-log-81-onwards.md` = CHANGES from §81 with a two-line header). Refresh them after a push.
-- Commits end with the attribution lines the session asks for; push to `machine2-io-fe-db-cam`.
+- Commits end with the attribution lines the session asks for; push to `main`.
 
 ## 7. Plant PC verification (`docs/plant-pc-verification.md`)
 
@@ -275,6 +275,6 @@ No per-check times were recorded with the report; when they are, put them in the
 
 - Terse replies; diagnosis first; honest uncertainty (say what was not run and why); catch and own mistakes.
 - Root causes over workarounds; outline a design before building it when asked.
-- Full git command blocks ready to paste, for the laptop (`git pull origin machine2-io-fe-db-cam`, the dry runs to
+- Full git command blocks ready to paste, for the laptop (`git pull origin main`, the dry runs to
   run, `runNuitka.bat siemens`). Markdown docs need no separate download: `git pull` brings them.
 - Run the relevant dry runs before shipping and report the counts.

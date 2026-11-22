@@ -370,7 +370,7 @@ flowchart LR
 ```bat
 :: laptop
 cd C:\PythonProjects\AshokLeyland_Machine2
-git pull origin machine2-io-fe-db-cam
+git pull origin main
 .\runNuitka.bat siemens
 :: copy MainProgram.dist to D:\AshokLeyland on the Machine 2 PC
 ```

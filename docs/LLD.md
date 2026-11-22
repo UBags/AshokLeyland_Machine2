@@ -4,7 +4,7 @@
 |---|---|
 | Document | Low-level design (LLD) |
 | Read with | `HLD.md` (overview), `PLC_Interface_Spec.md` (PLC tags and timings) |
-| Code at | Branch `machine2-io-fe-db-cam` |
+| Code at | Branch `main` (until 2026-11-22: `machine2-io-fe-db-cam`) |
 
 ---
 
