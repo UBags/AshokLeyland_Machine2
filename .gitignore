@@ -66,3 +66,7 @@ Internal/frontend_language.txt
 *.zip
 compilation-report.xml
 models/
+
+# Real configs stay local; commit *.example.properties
+ApplicationConfiguration*.properties
+!ApplicationConfiguration*.example.properties
