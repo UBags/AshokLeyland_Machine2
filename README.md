@@ -19,6 +19,12 @@ with each other over Redis to exchange messages and keep the process ensemble in
 Machine State.
 
 <p align="center">
+  <img src="docs/images/operator_screen_production.jpg" alt="Operator screen in production, part way through a cycle" width="100%"><br>
+  <i>The operator screen in production, part way through a cycle: one tile per step, each vision tile with its outlined
+  picture, the PLC's torque values, and the next instruction across the bottom (captured in production, March 2026, on an earlier build)</i>
+</p>
+
+<p align="center">
   <b>CosTheta Technologies</b> · Python 3.12 · PySide6 · Redis · PostgreSQL · YOLO + MobileSAM · Siemens S7-1515 / Allen-Bradley Micro-850
 </p>
 
@@ -68,6 +74,24 @@ One code base serves both machines; the only build-time difference is `plc.vendo
   <img src="docs/Machine%20Sequence%20-%202.jpg" alt="Machine sequence, part 2" width="48%">
   <br><i>The machine sequence (docs/machine2-sequence.md)</i>
 </p>
+
+The operator picks the screen's language from the dropdown beside the QR code line; the choice is kept across restarts.
+Results stay in English inside the software and in the database.
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/images/operator_screen_en.jpg" alt="Operator screen in English"><br><sub>English</sub></td>
+    <td align="center" width="50%"><img src="docs/images/operator_screen_kn.jpg" alt="Operator screen in Kannada"><br><sub>ಕನ್ನಡ — Kannada</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/operator_screen_ta.jpg" alt="Operator screen in Tamil"><br><sub>தமிழ் — Tamil</sub></td>
+    <td align="center"><img src="docs/images/operator_screen_hi.jpg" alt="Operator screen in Hindi"><br><sub>हिन्दी — Hindi</sub></td>
+  </tr>
+</table>
+
+<sub>Waiting for the first component, in test mode with no devices connected. Rendered headless by
+`DryRun_Frontend_Languages.py --screenshots` (Linux fonts stand in for the plant PC's). The Indic translations are
+drafts awaiting a native speaker's review.</sub>
 
 ---
 
@@ -271,6 +295,32 @@ The camera server keeps the cycle's vision state in `ImageProcessor` and writes 
 
 Pictures sent to the operator carry **outlines only** — green OK, red NOT OK. Values and reasons go to the log.
 
+What the camera sees at each check (one fixed overhead camera; pictures cropped round the part):
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/stations/1_knuckle.jpg" width="130" alt="Knuckle"><br><sub>3 · Knuckle</sub></td>
+    <td align="center"><img src="docs/images/stations/2_hub.jpg" width="130" alt="Hub and bottom bearing"><br><sub>5 · Hub + bottom bearing</sub></td>
+    <td align="center"><img src="docs/images/stations/3_top_bearing.jpg" width="130" alt="Top bearing"><br><sub>7 · Top bearing</sub></td>
+    <td align="center"><img src="docs/images/stations/4_nut_washer.jpg" width="130" alt="Nut and plate washer"><br><sub>9 · Nut + plate washer</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/stations/5_bung.jpg" width="130" alt="Bung"><br><sub>13 / 24 · Bung</sub></td>
+    <td align="center"><img src="docs/images/stations/6_split_pin.jpg" width="130" alt="Split pin and washer"><br><sub>20 · Split pin + washer</sub></td>
+    <td align="center"><img src="docs/images/stations/7_cap.jpg" width="130" alt="Cap"><br><sub>22 · Cap</sub></td>
+    <td></td>
+  </tr>
+</table>
+
+Why the bung check is strict: the bung placed at Station 1 must stay seated until the 2.5 t press at Station 4. A tilted
+bung (right) is NOT OK, however close it looks.
+
+<p align="center">
+  <img src="docs/images/bung_seated.jpg" width="32%" alt="Bung seated">
+  <img src="docs/images/bung_not_seated.jpg" width="32%" alt="Bung not seated"><br>
+  <sub>Seated (OK) · not seated (NOT OK)</sub>
+</p>
+
 ### 7.1 Hub holes — the common reference for cap, bung and split pin
 
 ```mermaid
@@ -412,6 +462,18 @@ python test\machine2_dryrun\Study_Red_Legs_UI.py --model DOSTPLUS
 python test\machine2_dryrun\Study_NoColour_Legs_UI.py --auto "C:\path\to\pictures" --model DOSTPLUS
 ```
 
+Pictures from the studies (values are written on study pictures, never on the operator's):
+
+<p align="center">
+  <img src="docs/knuckle_regions_machine2.jpg" height="230" alt="Knuckle regions study">
+  <img src="docs/top_bearing_ring_refinement.png" height="230" alt="Top bearing ring refinement">
+  <img src="docs/nut_washer_comparison_fix.png" height="230" alt="Nut and washer comparison fix"><br>
+  <sub>Knuckle regions (DOST LHS / DOST+ RHS) · top bearing ring refinement · nut + washer comparison before / after</sub>
+</p>
+
+The screenshots in this README are in `docs/images`; the four language screens are regenerated with
+`DryRun_Frontend_Languages.py --screenshots <folder>` (it writes `frontend_<language>.png`; the copies here are JPEGs).
+
 ---
 
 ## 11. Repository layout
@@ -430,6 +492,7 @@ Internal/locale/            Kannada, Tamil, Hindi catalogues (.po / .mo)
 test/machine1_dryrun/       dry runs and studies (Machine 1 settings)
 test/machine2_dryrun/       dry runs and studies (Machine 2 settings)
 docs/                       HLD, LLD, PLC interface, state sync, plant verification, code graphs
+docs/images/                screenshots and camera pictures used in this README
 archive/                    old versions, kept for reference
 ```
 
