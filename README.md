@@ -4,9 +4,22 @@
 
 <h1 align="center">Hub and Disc Assembly SPM — PC Software (Machine 2)</h1>
 
+This project is **live** in Ashok Leyland, a $ 5 bn automotive company in India, and is being used on 2 machines which
+assemble the hub, knuckle, and bearings for the front axles of 2 LCV models – DOST and DOSTPLUS. The assembly process
+has intermixed automated activities and manual activities. The challenge was to ensure that the manual activities are
+checked and ratified in real-time with vision checks. I wrote the software that interacts with the machine and ensures
+that every step in the defined process is adhered to.
+
+On one machine, the software interlocks with an Allen-Bradley PLC (Micro 850) and on the other with a Siemens PLC
+(S7-1515).
+
+**The software has 8 processes** – an IO Server, a Front End Server, a Database Server, a QRCode Scanning Server, a
+Logging Server, a Heartbeat Monitoring Server, a Camera & Image Processing Server, and the Main Program – which interact
+with each other over Redis to exchange messages and keep the process ensemble in sync with respect to the current
+Machine State.
+
 <p align="center">
-  Vision-checked, PLC-driven assembly of the front hub, disc and bearings for Ashok Leyland DOST / DOST+ spindle knuckles<br>
-  <b>CosTheta Technologies</b> · Python 3 · PySide6 · Redis · PostgreSQL · YOLO + MobileSAM · Siemens S7-1515 / Allen-Bradley
+  <b>CosTheta Technologies</b> · Python 3.12 · PySide6 · Redis · PostgreSQL · YOLO + MobileSAM · Siemens S7-1515 / Allen-Bradley Micro-850
 </p>
 
 ---
@@ -15,7 +28,7 @@
 
 1. [What it does](#1-what-it-does)
 2. [System at a glance](#2-system-at-a-glance)
-3. [The seven processes](#3-the-seven-processes)
+3. [The eight processes](#3-the-eight-processes)
 4. [How the processes talk](#4-how-the-processes-talk)
 5. [The 28-state assembly cycle](#5-the-28-state-assembly-cycle)
 6. [A vision check, end to end](#6-a-vision-check-end-to-end)
@@ -46,7 +59,7 @@ One code base serves both machines; the only build-time difference is `plc.vendo
 
 | | Machine 1 | Machine 2 |
 |---|---|---|
-| PLC | Allen-Bradley (pycomm3) | Siemens S7-1515 (pyS7) |
+| PLC | Allen-Bradley Micro 850 (pycomm3) | Siemens S7-1515 (pyS7) |
 | Properties prefix | `allenbradley.` | `siemens.` |
 | Build | `runNuitka.bat allenbradley` | `runNuitka.bat siemens` |
 
@@ -95,13 +108,15 @@ flowchart LR
 
 ---
 
-## 3. The seven processes
+## 3. The eight processes
 
 `MainProgram.py` checks the model files and Redis, backs up the database (in a thread, beside the mode and login dialogs),
-then starts seven processes under `utils/ProcessSupervisor.py`, which restarts any that dies (rate-limited).
+then starts seven server processes under `utils/ProcessSupervisor.py`, which restarts any that dies (rate-limited);
+the Main Program itself is the eighth.
 
 | # | Process | Module | Job |
 |---|---|---|---|
+| P0 | Main Program | `MainProgram.py` | start-up checks, database backup, mode and login, starts and supervises the others |
 | P1 | Logging | `logutils` | central file and console logs |
 | P2 | Camera server | `camera/CameraProcessorServer.py` | RTSP pictures; every vision check runs in a `VisionCheckWorker` child process with a 12 s deadline |
 | P3 | QR code server | `costhetaio/qrcodescanner/QRCodeScanningServer.py` | reads and validates the component QR code |
