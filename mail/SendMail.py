@@ -53,5 +53,3 @@ def sendMailThroughGmail(user : str, password : str, fromaddr : str, toaddrs : s
     except HTTPError as error:
         print(f'An error occurred: {error}')
         message = None
-
-# sendMailThroughGmail("Uddipan", "REMOVED", "uddipan@gmail.com", "uddipan@gmail.com", "Trial", messageToBeSent = "Some message", isHTML=False)
