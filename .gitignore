@@ -57,3 +57,12 @@ C:/
 # camera server cycle state (camera/CameraStateFile.py)
 Temp/
 Internal/frontend_language.txt
+
+# Nuitka build output and archives (never commit)
+*.dist/
+*.build/
+*.onefile-build/
+*.exe
+*.zip
+compilation-report.xml
+models/
