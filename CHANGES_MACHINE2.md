@@ -5947,3 +5947,15 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   within ~1 px on these pictures). Uddi runs it on the laptop on the OK and NOT OK folders.
 - Note: a seated cap's centre is not on the hole circle's centre - `offset.cap.dost` (0.3, -4.7) - so seated caps
   will not score 12 by construction (about 1.2 on the vertical diameter alone).
+
+## 204. Study_Cap_Annulus_UI: the annulus measure in a window (2026-11-27)
+
+- Uddi, 2026-11-27: the study as a window, to see what happens on each picture.
+- The measure moved to `_cap_annulus.py` (unchanged), shared by `Study_Cap_Annulus.py` (no window) and the new
+  `Study_Cap_Annulus_UI.py` (PySide6 - the sandbox has no tkinter, so the window could be driven here): folder, model,
+  seconds between pictures, SAM gamma, Save, Start / Stop; whole picture and a 2x view round the hub centre, outlines
+  only; a table row per picture with its check time, click to see it again; every diameter's L+ / L- and ratio in the
+  text box; summary and csv at the end. Both dry-run folders.
+- Run here: `Study_Cap_Annulus.py` on 5 of the OK pictures after the move - the same scores as before it (12.294,
+  12.558, 12.823, 13.751, 13.317 ellipse); the window driven offscreen on the same 5 (dark-blob holes, MobileSAM on CPU):
+  5 rows, the same scores, the saved pictures and the csv written, ~1.1 s a picture after the first (model load).

@@ -1,0 +1,255 @@
+"""
+Study_Cap_Annulus_UI - the cap annulus measure (_cap_annulus.py, CHANGES 203 / 204) in a window, study only.
+
+Folder..., model (DOST / DOSTPLUS / from the file name), seconds between pictures (1 - 10; changeable during the run),
+gamma of the picture given to MobileSAM, Save; Start / Stop. Each picture: the whole picture and a 2x view of the cap,
+both with outlines only - hole circle and hub centre (blue), MobileSAM prompt points (cyan), cap mask outline (green),
+fitted ellipse (yellow), the 12 diameters (grey). No values on the pictures: the table (one row per picture, its check
+time included) and the text box below (steps 1 - 2 values, hub centre, ellipse, every diameter's lengths L+ / L- and
+ratio, for the ellipse and for the mask outline). Click a row to see that picture again. At the end the summary in the
+text box and annulus_<time>.csv (+ the marked pictures with Save) in <folder>/cap_annulus_results/.
+
+Run from the project root:
+    python test\\machine2_dryrun\\Study_Cap_Annulus_UI.py [<folder>] [--sam <mobile_sam.pt>] [--holes morphology]
+"""
+import argparse
+import pathlib
+import sys
+import threading
+import time
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import _cap_annulus as A                                                     # noqa: E402
+
+import cv2                                                                    # noqa: E402
+import numpy as np                                                            # noqa: E402
+from PySide6.QtCore import Qt, QObject, Signal                                # noqa: E402
+from PySide6.QtGui import QImage, QPixmap, QFont                              # noqa: E402
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout,  # noqa
+                               QHeaderView, QLabel, QMainWindow, QPlainTextEdit, QPushButton, QSpinBox, QSplitter,
+                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+
+COLUMNS = ("file", "cap", "R-B", "bright", "hub", "R", "ell - hub", "score ellipse", "score mask", "time s", "note")
+FULL_W, FULL_H = 800, 450
+ZOOM_HALF = 170                     # px round the hub centre in the 2x view
+
+
+def toPixmap(bgr: np.ndarray, w: int, h: int) -> QPixmap:
+    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+    img = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format_RGB888).copy()
+    return QPixmap.fromImage(img).scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+
+def zoomOf(marked: np.ndarray, res: dict) -> np.ndarray:
+    h, w = marked.shape[:2]
+    cx, cy = (res["hub"][0], res["hub"][1]) if res.get("hub") else (w / 2, h / 2)
+    x0, y0 = int(max(0, min(w - 2 * ZOOM_HALF, cx - ZOOM_HALF))), int(max(0, min(h - 2 * ZOOM_HALF, cy - ZOOM_HALF)))
+    return marked[y0:y0 + 2 * ZOOM_HALF, x0:x0 + 2 * ZOOM_HALF]
+
+
+class Bridge(QObject):
+    picture = Signal(int, str, object, object)       # index, file name, marked picture, result
+    status = Signal(str)
+    finished = Signal(str)
+
+
+class Window(QMainWindow):
+    def __init__(self, folder: str | None):
+        super().__init__()
+        self.setWindowTitle(f"Study_Cap_Annulus_UI - cap seating by the annulus (hole finder {A.holeFinder()})")
+        self.folder = pathlib.Path(folder) if folder else None
+        self.results = []                                # (name, marked, res) per row
+        self.stopFlag = threading.Event()
+        self.worker = None
+        self.bridge = Bridge()
+        self.bridge.picture.connect(self.onPicture)
+        self.bridge.status.connect(lambda s: self.statusLine.setText(s))
+        self.bridge.finished.connect(self.onFinished)
+
+        top = QHBoxLayout()
+        self.folderButton = QPushButton("Folder...")
+        self.folderButton.clicked.connect(self.chooseFolder)
+        self.folderLabel = QLabel(str(self.folder) if self.folder else "(no folder)")
+        self.model = QComboBox()
+        self.model.addItems(["DOST", "DOSTPLUS", "From file name"])
+        self.seconds = QSpinBox()
+        self.seconds.setRange(1, 10)
+        self.seconds.setValue(3)
+        self.gamma = QDoubleSpinBox()
+        self.gamma.setRange(1.0, 6.0)
+        self.gamma.setSingleStep(0.5)
+        self.gamma.setValue(1.0)
+        self.save = QCheckBox("Save")
+        self.startButton = QPushButton("Start")
+        self.startButton.clicked.connect(self.start)
+        self.stopButton = QPushButton("Stop")
+        self.stopButton.setEnabled(False)
+        self.stopButton.clicked.connect(self.stopFlag.set)
+        for wdg in (self.folderButton, self.folderLabel):
+            top.addWidget(wdg)
+        top.addStretch(1)
+        for text, wdg in (("Model", self.model), ("Seconds between pictures", self.seconds), ("Gamma (SAM)", self.gamma)):
+            top.addWidget(QLabel(text))
+            top.addWidget(wdg)
+        for wdg in (self.save, self.startButton, self.stopButton):
+            top.addWidget(wdg)
+
+        views = QHBoxLayout()
+        self.fullView = QLabel()
+        self.fullView.setFixedSize(FULL_W, FULL_H)
+        self.fullView.setAlignment(Qt.AlignCenter)
+        self.fullView.setStyleSheet("background: #202020")
+        self.zoomView = QLabel()
+        self.zoomView.setFixedSize(FULL_H, FULL_H)
+        self.zoomView.setAlignment(Qt.AlignCenter)
+        self.zoomView.setStyleSheet("background: #202020")
+        views.addWidget(self.fullView)
+        views.addWidget(self.zoomView)
+
+        self.table = QTableWidget(0, len(COLUMNS))
+        self.table.setHorizontalHeaderLabels(COLUMNS)
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.cellClicked.connect(lambda row, _c: self.showRow(row))
+        self.text = QPlainTextEdit()
+        self.text.setReadOnly(True)
+        self.text.setFont(QFont("Consolas", 9))
+        split = QSplitter(Qt.Vertical)
+        split.addWidget(self.table)
+        split.addWidget(self.text)
+        split.setSizes([260, 260])
+        self.statusLine = QLabel("Choose a folder, then Start")
+
+        layout = QVBoxLayout()
+        layout.addLayout(top)
+        layout.addLayout(views)
+        layout.addWidget(split, 1)
+        layout.addWidget(self.statusLine)
+        central = QWidget()
+        central.setLayout(layout)
+        self.setCentralWidget(central)
+        self.resize(FULL_W + FULL_H + 40, 1000)
+
+    def chooseFolder(self):
+        chosen = QFileDialog.getExistingDirectory(self, "Folder of cap pictures", str(self.folder or A.HERE))
+        if chosen:
+            self.folder = pathlib.Path(chosen)
+            self.folderLabel.setText(chosen)
+
+    def log(self, line: str):
+        self.text.appendPlainText(line)
+
+    def start(self):
+        if self.folder is None or not self.folder.is_dir():
+            self.statusLine.setText("Choose a folder first")
+            return
+        files = A.pictures(self.folder)
+        if not files:
+            self.statusLine.setText(f"No pictures in {self.folder}")
+            return
+        self.results.clear()
+        self.table.setRowCount(0)
+        self.text.clear()
+        self.log(f"{len(files)} pictures in {self.folder} - hole finder {A.holeFinder()}, gamma {self.gamma.value()}")
+        self.stopFlag.clear()
+        self.startButton.setEnabled(False)
+        self.stopButton.setEnabled(True)
+        choice, gamma, save = self.model.currentText(), self.gamma.value(), self.save.isChecked()
+        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save), daemon=True)
+        self.worker.start()
+
+    def run(self, files, choice, gamma, save):
+        resultsDir = self.folder / "cap_annulus_results"
+        resultsDir.mkdir(exist_ok=True)
+        rows = []
+        try:
+            for i, p in enumerate(files):
+                if self.stopFlag.is_set():
+                    break
+                self.bridge.status.emit(f"{i + 1} / {len(files)}: {p.name} ... checking")
+                img = cv2.imread(str(p))
+                if img is None:
+                    res = dict.fromkeys(A.HEADER, "")
+                    res.update(file=p.name, note="could not read", hub=None)
+                    self.bridge.picture.emit(i, p.name, np.zeros((720, 1280, 3), np.uint8), res)
+                    rows.append(res)
+                    continue
+                try:
+                    res = A.measure(img, A.modelFor(choice, p.name), gamma)
+                except Exception as e:                    # shown, and the run goes on
+                    res = dict.fromkeys(A.HEADER, "")
+                    res.update(model=A.modelFor(choice, p.name), hub=None, note=f"exception: {e}")
+                res["file"] = p.name
+                picture = A.marked(img, res)
+                if save:
+                    cv2.imwrite(str(resultsDir / f"{p.stem}_annulus.jpg"), picture)
+                rows.append(res)
+                self.bridge.picture.emit(i, p.name, picture, res)
+                end = time.monotonic() + self.seconds.value()
+                while time.monotonic() < end and not self.stopFlag.is_set():
+                    time.sleep(0.05)
+            csvPath = resultsDir / f"annulus_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+            A.writeCsv(csvPath, rows)
+            summary = A.summaryLines(rows) + [f"written: {csvPath}"]
+            self.bridge.finished.emit(("Stopped. " if self.stopFlag.is_set() else "") + "\n".join(summary))
+        except Exception as e:
+            self.bridge.finished.emit(f"Run ended by an exception: {e}")
+
+    def onPicture(self, index, name, picture, res):
+        self.results.append((name, picture, res))
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+        hub = f"({res.get('hub_x')}, {res.get('hub_y')})" if res.get("hub_x") else "-"
+        off = f"{res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']}" if res.get("ell_cx") else "-"
+        values = (name, res.get("cap_found", ""), res.get("rb_silver", ""), res.get("brightness", ""), hub,
+                  res.get("hole_r") or "-", off, res.get("score_ellipse") or "-", res.get("score_mask") or "-",
+                  res.get("seconds", ""), res.get("note", ""))
+        for col, v in enumerate(values):
+            self.table.setItem(row, col, QTableWidgetItem(str(v)))
+        self.table.scrollToBottom()
+        self.showRow(row)
+        if res.get("model"):
+            for line in A.detailLines(name, res):
+                self.log(line)
+        else:
+            self.log(f"{name}: {res.get('note')}")
+
+    def showRow(self, row):
+        if not (0 <= row < len(self.results)):
+            return
+        name, picture, res = self.results[row]
+        self.fullView.setPixmap(toPixmap(picture, FULL_W, FULL_H))
+        self.zoomView.setPixmap(toPixmap(zoomOf(picture, res), FULL_H, FULL_H))
+        self.statusLine.setText(f"{name}: score ellipse {res.get('score_ellipse') or '-'}, mask "
+                                f"{res.get('score_mask') or '-'}, {res.get('seconds')} s")
+
+    def onFinished(self, text):
+        self.log("")
+        self.log(text)
+        self.startButton.setEnabled(True)
+        self.stopButton.setEnabled(False)
+        self.statusLine.setText("Finished" if not self.stopFlag.is_set() else "Stopped")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Cap seating by the annulus, in a window (study)")
+    ap.add_argument("folder", nargs="?", default=None)
+    ap.add_argument("--sam", default=None)
+    ap.add_argument("--holes", default=None, choices=["morphology"])
+    args = ap.parse_args()
+    A.configure(args.sam, args.holes)
+    app = QApplication.instance() or QApplication(sys.argv)
+    try:
+        from frontend.QtMessages import installQtMessageHandler   # Qt's own messages to the log, not the C stderr
+        installQtMessageHandler()
+    except Exception:
+        pass
+    w = Window(args.folder)
+    w.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
