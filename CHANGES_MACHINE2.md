@@ -5911,3 +5911,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   real properties files are kept local, sanitised `*.example.properties` in git - his commits 4e4b8ef, ed25c2b,
   3818fe5). CLAUDE.md §1, §6, §10, README.md §9 and docs/LLD.md now name `main`. Records of where something was traced
   or measured (CODE_GRAPH, vision_positions_machine2, the history above) keep the old branch name.
+
+## 202. No black trial pictures from the vision worker's warm-up (2026-11-27)
+
+- Uddi, 2026-11-27: arbitrary and completely dark pictures in the sub-folders of `C:/Temp/TrialImages`.
+- Cause of the dark pictures: `VisionCheckWorker._warmUp` runs `assessPictures` on a black 1280 x 720 picture for the
+  hub, nut + washer, bung (component press) and no-bung states, and `assessPictures` saves the first picture of these
+  single-picture checks when `save.all.pictures.because.its.in.trial.mode` is on (since 2026-11-17). So every worker
+  start - the camera server's start and every restart after a timed-out check - wrote one black picture into
+  `HubAndBottomBearing`, `NutAndPlateWasher`, `BungForComponentPress` and `NoBung`.
+- Fix: `_warmUp` turns `ImageProcessor.saveTrialPictures` off for the warm-up and puts it back after (also when a
+  check raises). Run here (stand-in `cps` with the real save rule): before - 4 black pictures in those 4 folders; after -
+  none, saving on again afterwards, left off when it was off.
+- Pictures in the wrong step folder: not explained by the saving code - each picture is saved once, in the folder of
+  the state of the request it was taken for (`assessPictures` / `_assessCap` / `ImageProcessor.check*`). Being
+  checked with `Diag_Trial_Pictures.py` (new, both dry-run folders; read only): all trial pictures in time order across
+  folders, dark ones marked, and pictures that show the same scene as a picture in another folder within 2 minutes.

@@ -116,16 +116,24 @@ def _warmUp(cps) -> None:
     from statemachine.StateMachine import MachineState as MS
     blank = np.zeros((720, 1280, 3), dtype=np.uint8)
     t0 = time.monotonic()
-    for state in (MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
-                  MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
-                  MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
-                  MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG):
-        snapshot = cps.ImageProcessor.snapshotState()
-        try:
-            cps.assessPictures(state, [blank] * 6)
-        except Exception:
-            pass
-        cps.ImageProcessor.restoreState(snapshot)
+    # The blank pictures are not parts: never saved as trial pictures (save.all.pictures.because.its.in.trial.mode).
+    # Before CHANGES 202 every worker start - camera server start and every restart after a timed-out check - wrote
+    # a black picture into HubAndBottomBearing, NutAndPlateWasher, BungForComponentPress and NoBung.
+    saveTrialPictures = cps.ImageProcessor.saveTrialPictures
+    cps.ImageProcessor.saveTrialPictures = False
+    try:
+        for state in (MS.READ_TAKE_PICTURE_FOR_CHECKING_HUB_AND_BOTTOM_BEARING,
+                      MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER,
+                      MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
+                      MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG):
+            snapshot = cps.ImageProcessor.snapshotState()
+            try:
+                cps.assessPictures(state, [blank] * 6)
+            except Exception:
+                pass
+            cps.ImageProcessor.restoreState(snapshot)
+    finally:
+        cps.ImageProcessor.saveTrialPictures = saveTrialPictures
     _log('logInfo', f"Vision check worker: warm-up of the model-based checks took {time.monotonic() - t0:.1f} s "
                     f"(the NOT OK results logged during it are on blank pictures, not parts)")
 
