@@ -10,6 +10,8 @@ Run on one folder at a time (all pictures in it, sub-folders not searched):
                                      [--save] [--gamma 1.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
   --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points.
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
+  --conf / --stability / --iou / --merge : the boxes method's YOLO confidence, MobileSAM minimums, merge overlap
+                 (else the properties values); --share: share of a mask in the hole circle for the masks picture.
   --gamma      : points method only (boxes use vision.cap.mask.gamma, as production).
   --save       : marked pictures (outlines only, no values) and the masks in the hole circle (coloured, largest
                  painted first) to <folder>/cap_annulus_results/.
@@ -34,12 +36,18 @@ def main():
     ap.add_argument("--model", default="DOST", choices=["DOST", "DOSTPLUS", "name"])
     ap.add_argument("--mask", default="boxes", choices=list(A.MASK_METHODS))
     ap.add_argument("--save", action="store_true")
+    ap.add_argument("--conf", type=float, default=None, help="YOLO confidence (boxes; else the properties value)")
+    ap.add_argument("--stability", type=float, default=None, help="MobileSAM stability minimum (boxes)")
+    ap.add_argument("--iou", type=float, default=None, help="MobileSAM predicted IoU minimum (boxes)")
+    ap.add_argument("--merge", type=float, default=None, help="box overlap above which masks merge (boxes; 1 = none)")
+    ap.add_argument("--share", type=float, default=0.5, help="share of a mask in the hole circle (masks picture)")
     ap.add_argument("--gamma", type=float, default=1.0, help="gamma of the picture given to MobileSAM (1 = none)")
     ap.add_argument("--floor", type=float, default=1.0, help="px; the shorter length is at least this in a ratio")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--holes", default=None, choices=["morphology"])
     args = ap.parse_args()
     A.configure(args.sam, args.holes)
+    mp = A.setMaskParameters(args.conf, args.stability, args.iou, args.merge)
     folder = pathlib.Path(args.folder)
     files = A.pictures(folder)
     if not files:
@@ -48,7 +56,7 @@ def main():
     resultsDir.mkdir(exist_ok=True)
     csvPath = resultsDir / f"annulus_{time.strftime('%Y%m%d_%H%M%S')}.csv"
     rows = []
-    print(f"Study_Cap_Annulus on {len(files)} pictures in {folder} (model {args.model}, mask {args.mask}, hole finder {A.holeFinder()}, "
+    print(f"Study_Cap_Annulus on {len(files)} pictures in {folder} (model {args.model}, mask {args.mask} {mp}, hole finder {A.holeFinder()}, "
           f"gamma {args.gamma}, floor {args.floor} px)")
     print(f"{'file':<36} {'cap':<9} {'R-B':>6} {'bright':>6} {'hub':>15} {'R':>6} {'ell-hub':>12} "
           f"{'ellipse':>8} {'mask':>8}  note")
@@ -58,7 +66,7 @@ def main():
             print(f"{p.name:<36} could not read")
             rows.append(dict(file=p.name, note="could not read"))
             continue
-        res = A.measure(img, A.modelFor(args.model, p.name), args.gamma, args.floor, args.mask)
+        res = A.measure(img, A.modelFor(args.model, p.name), args.gamma, args.floor, args.mask, args.share)
         res["file"] = p.name
         rows.append(res)
         if args.save:

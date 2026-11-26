@@ -5992,3 +5992,21 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   6 x 6 grid of small boxes, so that MobileSAM gives several masks; the real YOLO is on the laptop): 10 - 13 masks in
   the circle per picture (largest ~72,000 px = the hub face round the cap, then the cap ~35,000, the top face ~13,500,
   small pieces), the panel drawn as asked; the cap mask chosen as before.
+
+## 207. Study_Cap_Annulus: YOLO confidence, MobileSAM minimums and merging as controls (2026-11-27)
+
+- Uddi, 2026-11-27: on the laptop only 2 or 6 masks per picture in the third panel (2 large, 4 small in the holes);
+  lower the confidence, as a value he can change.
+- Where masks are lost in the boxes method (CapMaskFinder's steps): YOLO boxes below `vision.cap.mask.yolo.confidence`
+  (0.15); boxes not centred on the disc; masks below MobileSAM's predicted IoU (0.50) or stability (0.70); masks merged
+  when their boxes overlap above 0.50 (one per object kept); then the panel's own rule (half the area in the circle).
+- `_cap_annulus.setMaskParameters` (study process only - the properties and production are not touched): sets
+  CapMaskFinder's YOLO_CONFIDENCE / STABILITY_MIN / IOU_MIN / MERGE_IOU, which it reads at each call. Window: a second
+  row - YOLO confidence, Stability >=, Predicted IoU >=, Merge above overlap (1.0 = no merging), In-circle share - set at
+  Start, the properties values at start; the table's new boxes/disc/pass/merged column shows which stage cuts the
+  masks; the values used in the text box and the csv. No-window script: `--conf --stability --iou --merge --share`;
+  window `--conf` for the start value. These values change the cap mask too (it is the largest mask left).
+- Run here (window offscreen, 5 OK pictures, the richer stand-in boxes of 206 - the YOLO confidence cannot be tried here,
+  the stand-in has no scores): merge 0.5 / stability 0.7: 10 - 13 masks in the circle; merge 1.0 / stability 0.5: 21 - 25.
+  With merging off the largest mask on picture 1 was the cap plus pieces of the hub (43,262 px against ~35,000), and its
+  mask score rose from 12.8 to 15.1 - looser values can spoil the cap mask the score is computed on.

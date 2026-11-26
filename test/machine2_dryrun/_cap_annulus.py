@@ -58,7 +58,8 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
 MASK_METHODS = ("boxes", "points")
 
-HEADER = (["file", "model", "mask_method", "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
+HEADER = (["file", "model", "mask_method", "yolo_conf", "stability_min", "iou_min", "merge_iou", "stages",
+           "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
           + [f"ell_{d}" for d in DIAMETER_ANGLES] + [f"mask_{d}" for d in DIAMETER_ANGLES])
@@ -83,6 +84,24 @@ def configure(samPath: str | None = None, holes: str | None = None) -> None:
 
         CheckCap.samModelProvider = staticmethod(_loadSam)
         FindHubHoles.samModelProvider = staticmethod(_loadSam)
+
+
+def maskParameters() -> dict:
+    """The values the boxes method (CapMaskFinder's steps) uses now."""
+    return dict(conf=float(CapMaskFinder.YOLO_CONFIDENCE), stability=float(CapMaskFinder.STABILITY_MIN),
+                iou=float(CapMaskFinder.IOU_MIN), merge=float(CapMaskFinder.MERGE_IOU))
+
+
+def setMaskParameters(conf=None, stability=None, iou=None, merge=None) -> dict:
+    """Study only (CHANGES 207): change, in this process, the YOLO confidence, MobileSAM's minimum stability score and
+    predicted IoU, and the box overlap above which two masks are merged, that CapMaskFinder's steps use (its module
+    values, read at each call; the properties file and production are not touched). None leaves a value as it is.
+    They change both the masks in the third panel and the cap mask chosen from them."""
+    for name, value in (("YOLO_CONFIDENCE", conf), ("STABILITY_MIN", stability), ("IOU_MIN", iou),
+                        ("MERGE_IOU", merge)):
+        if value is not None:
+            setattr(CapMaskFinder, name, float(value))
+    return maskParameters()
 
 
 def holeFinder() -> str:
@@ -273,11 +292,14 @@ def score(dist, R, floor: float = 1.0):
     return sum(ratios), ratios, lengths
 
 
-def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0, maskMethod: str = "boxes") -> dict:
+def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0, maskMethod: str = "boxes",
+            inCircleShare: float = 0.5) -> dict:
     """Everything for one picture: the csv row values (HEADER keys) and, for drawing / showing, hub (hx, hy, R),
     pts, mask, ellipse, ratiosE / lengthsE, ratiosM / lengthsM."""
     t0 = time.perf_counter()
     res = dict.fromkeys(HEADER, "")
+    mp = maskParameters()
+    res.update(yolo_conf=mp["conf"], stability_min=mp["stability"], iou_min=mp["iou"], merge_iou=mp["merge"])
     res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", masksPicture=None,
                masksInCircle="", hub=None, pts=np.zeros((0, 2)),
                mask=None, ellipse=None, ratiosE=None, lengthsE=None, ratiosM=None, lengthsM=None)
@@ -297,10 +319,12 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
             mask, samScore = capMask(img, hx, hy, gamma)
             if mask is None:
                 notes.append(samScore)
-            inCircle = masksInCircle([mask], hx, hy, R) if mask is not None else []
+            inCircle = masksInCircle([mask], hx, hy, R, inCircleShare) if mask is not None else []
         else:
             mask, info = capMaskByBoxes(img, hx, hy)
-            inCircle = masksInCircle(info["allMasks"], hx, hy, R)
+            inCircle = masksInCircle(info["allMasks"], hx, hy, R, inCircleShare)
+            c = info["counts"]
+            res["stages"] = f"{c.get('boxes', 0)}/{c.get('onDisc', 0)}/{c.get('passed', 0)}/{c.get('merged', 0)}"
             res["maskInfo"] = describeCounts(info["counts"]) + (
                 f"; predicted IoU {info['score']:.3f}, stability {info['stability']:.3f}" if mask is not None else "")
             samScore = info["score"]
@@ -367,6 +391,9 @@ def detailLines(name: str, res: dict) -> list:
         lines.append(f"  {res['maskInfo']}")
     if res.get("masks_in_circle") not in ("", None):
         lines.append(f"  masks in the hole circle: {res['masks_in_circle']} (areas, largest first: {res['masksInCircle']})")
+    if res.get("mask_method") == "boxes":
+        lines.append(f"  YOLO confidence {res['yolo_conf']}, stability >= {res['stability_min']}, predicted IoU >= "
+                     f"{res['iou_min']}, merge above box overlap {res['merge_iou']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")

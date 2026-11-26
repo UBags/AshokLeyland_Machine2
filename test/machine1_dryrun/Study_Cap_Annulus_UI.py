@@ -3,7 +3,12 @@ Study_Cap_Annulus_UI - the cap annulus measure (_cap_annulus.py, CHANGES 203 / 2
 
 Folder..., model (DOST / DOSTPLUS / from the file name), cap mask method ("YOLO boxes (cap check)" = the production cap
 mask's steps on a disc round the hub centre, default; "24 points"), seconds between pictures (1 - 10; changeable during
-the run), gamma of the picture given to MobileSAM (24 points only), Save; Start / Stop. Each picture: the whole picture and a 2x view of the cap,
+the run), gamma of the picture given to MobileSAM (24 points only), Save; Start / Stop. Second row (CHANGES 207, set at
+Start): YOLO confidence, MobileSAM stability and predicted IoU minimums, the box overlap above which masks are merged
+(the properties values at start; they change the masks and the cap mask chosen from them, in this window only), and
+the share of a mask's area that must be in the hole circle for the third panel. The table's boxes/disc/pass/merged
+column shows where masks are lost: YOLO boxes, boxes centred on the disc, masks past the IoU / stability filters,
+masks left after merging. Each picture: the whole picture and a 2x view of the cap,
 both with outlines only - hole circle and hub centre (blue), MobileSAM prompt points (cyan), cap mask outline (green),
 fitted ellipse (yellow), the 12 diameters (grey). Third panel (CHANGES 206): every MobileSAM mask with at least half its
 area inside the hole circle (boxes method: the masks after MobileSAM's IoU / stability filters and merging - the ones
@@ -33,7 +38,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
                                QHeaderView, QLabel, QMainWindow, QPlainTextEdit, QPushButton, QSpinBox, QSplitter,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-COLUMNS = ("file", "cap", "R-B", "bright", "hub", "R", "ell - hub", "score ellipse", "score mask", "time s", "note")
+COLUMNS = ("file", "cap", "R-B", "bright", "hub", "R", "boxes/disc/pass/merged", "masks", "ell - hub", "score ellipse",
+           "score mask", "time s", "note")
 FULL_W, FULL_H = 640, 360
 PANEL = 360                         # side of the 2x view and of the masks view
 ZOOM_HALF = 170                     # px round the hub centre in the 2x view
@@ -80,6 +86,25 @@ class Window(QMainWindow):
         self.model.addItems(["DOST", "DOSTPLUS", "From file name"])
         self.maskMethod = QComboBox()
         self.maskMethod.addItems(["YOLO boxes (cap check)", "24 points"])
+        mp = A.maskParameters()
+
+        def spin(value, low, high, step, tip):
+            box = QDoubleSpinBox()
+            box.setDecimals(2)
+            box.setRange(low, high)
+            box.setSingleStep(step)
+            box.setValue(value)
+            box.setToolTip(tip)
+            return box
+
+        self.conf = spin(mp["conf"], 0.01, 0.95, 0.01, "YOLO confidence: boxes below it are not prompts "
+                         "(vision.cap.mask.yolo.confidence)")
+        self.stability = spin(mp["stability"], 0.0, 1.0, 0.05, "MobileSAM stability score a mask must reach "
+                              "(vision.cap.mask.stability.min)")
+        self.iou = spin(mp["iou"], 0.0, 1.0, 0.05, "MobileSAM predicted IoU a mask must reach (vision.cap.mask.iou.min)")
+        self.merge = spin(mp["merge"], 0.05, 1.0, 0.05, "Two masks whose boxes overlap more than this are one "
+                          "(vision.cap.mask.merge.iou); 1.0 = no merging")
+        self.share = spin(0.5, 0.0, 1.0, 0.05, "Third panel: share of a mask's area that must lie in the hole circle")
         self.seconds = QSpinBox()
         self.seconds.setRange(1, 10)
         self.seconds.setValue(3)
@@ -101,6 +126,13 @@ class Window(QMainWindow):
             top.addWidget(wdg)
         for wdg in (self.save, self.startButton, self.stopButton):
             top.addWidget(wdg)
+        second = QHBoxLayout()
+        second.addWidget(QLabel("Masks (YOLO boxes method):"))
+        for text, wdg in (("YOLO confidence", self.conf), ("Stability >=", self.stability), ("Predicted IoU >=", self.iou),
+                          ("Merge above overlap", self.merge), ("In-circle share (3rd panel)", self.share)):
+            second.addWidget(QLabel(text))
+            second.addWidget(wdg)
+        second.addStretch(1)
 
         views = QHBoxLayout()
         self.fullView = QLabel()
@@ -138,6 +170,7 @@ class Window(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addLayout(top)
+        layout.addLayout(second)
         layout.addLayout(views)
         layout.addWidget(split, 1)
         layout.addWidget(self.statusLine)
@@ -172,11 +205,14 @@ class Window(QMainWindow):
         self.stopButton.setEnabled(True)
         choice, gamma, save = self.model.currentText(), self.gamma.value(), self.save.isChecked()
         method = "points" if self.maskMethod.currentIndex() == 1 else "boxes"
-        self.log(f"cap mask: {method}")
-        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save, method), daemon=True)
+        mp = A.setMaskParameters(self.conf.value(), self.stability.value(), self.iou.value(), self.merge.value())
+        share = self.share.value()
+        self.log(f"cap mask: {method}; YOLO confidence {mp['conf']}, stability >= {mp['stability']}, predicted IoU >= "
+                 f"{mp['iou']}, merge above {mp['merge']}; in-circle share {share}")
+        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save, method, share), daemon=True)
         self.worker.start()
 
-    def run(self, files, choice, gamma, save, method):
+    def run(self, files, choice, gamma, save, method, share):
         resultsDir = self.folder / "cap_annulus_results"
         resultsDir.mkdir(exist_ok=True)
         rows = []
@@ -193,7 +229,7 @@ class Window(QMainWindow):
                     rows.append(res)
                     continue
                 try:
-                    res = A.measure(img, A.modelFor(choice, p.name), gamma, 1.0, method)
+                    res = A.measure(img, A.modelFor(choice, p.name), gamma, 1.0, method, share)
                 except Exception as e:                    # shown, and the run goes on
                     res = dict.fromkeys(A.HEADER, "")
                     res.update(model=A.modelFor(choice, p.name), hub=None, note=f"exception: {e}")
@@ -222,7 +258,7 @@ class Window(QMainWindow):
         hub = f"({res.get('hub_x')}, {res.get('hub_y')})" if res.get("hub_x") else "-"
         off = f"{res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']}" if res.get("ell_cx") else "-"
         values = (name, res.get("cap_found", ""), res.get("rb_silver", ""), res.get("brightness", ""), hub,
-                  res.get("hole_r") or "-", off, res.get("score_ellipse") or "-", res.get("score_mask") or "-",
+                  res.get("hole_r") or "-", res.get("stages") or "-", res.get("masks_in_circle", ""), off, res.get("score_ellipse") or "-", res.get("score_mask") or "-",
                   res.get("seconds", ""), res.get("note", ""))
         for col, v in enumerate(values):
             self.table.setItem(row, col, QTableWidgetItem(str(v)))
@@ -260,8 +296,10 @@ def main():
     ap.add_argument("folder", nargs="?", default=None)
     ap.add_argument("--sam", default=None)
     ap.add_argument("--holes", default=None, choices=["morphology"])
+    ap.add_argument("--conf", type=float, default=None, help="YOLO confidence at start (else the properties value)")
     args = ap.parse_args()
     A.configure(args.sam, args.holes)
+    A.setMaskParameters(conf=args.conf)
     app = QApplication.instance() or QApplication(sys.argv)
     try:
         from frontend.QtMessages import installQtMessageHandler   # Qt's own messages to the log, not the C stderr
