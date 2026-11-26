@@ -5976,3 +5976,19 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   that were wrong with the points among them); score (ellipse) 12.10 - 14.54, median 12.87; (mask) 12.54 - 14.35, median
   13.02 (points: 12.29 - 16.05 / 12.45 - 15.74). ~3.5 s a picture on CPU. The window driven offscreen on 5 pictures:
   the same scores. Cut-offs still wait for the laptop runs (real YOLO, the SAM hole finder) on OK and NOT OK.
+
+## 206. Study_Cap_Annulus_UI: third panel - every mask in the hole circle (2026-11-27)
+
+- Uddi, 2026-11-27: a third panel with all the masks inside the circle through the holes, coloured, the largest painted
+  first, then the next, and so on.
+- `_cap_annulus.capMaskByBoxes` keeps every mask MobileSAM gave on the disc (after its predicted IoU / stability filters
+  and box merging - the masks the cap mask is chosen from); `masksInCircle` keeps those with at least half their area
+  inside the hole circle, cut to it, largest first; `masksPicture` paints them in distinct colours, largest first and
+  each smaller one over it, blended 60 / 40 with the picture, a thin dark edge round each, the hole circle in blue - no
+  values. Points method: its one mask. The window's views are now 640 x 360 + two 360 x 360 (2x round the hub centre:
+  outlines; masks). The count and areas (largest first) in the text box, `masks_in_circle` in the csv; `--save` also
+  writes `<name>_masks.jpg` (window and no-window script).
+- Run here: the window offscreen on 5 OK pictures with richer stand-in YOLO boxes (squares round the disc centre and a
+  6 x 6 grid of small boxes, so that MobileSAM gives several masks; the real YOLO is on the laptop): 10 - 13 masks in
+  the circle per picture (largest ~72,000 px = the hub face round the cap, then the cap ~35,000, the top face ~13,500,
+  small pieces), the panel drawn as asked; the cap mask chosen as before.

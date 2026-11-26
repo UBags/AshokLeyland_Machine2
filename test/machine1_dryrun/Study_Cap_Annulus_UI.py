@@ -5,7 +5,10 @@ Folder..., model (DOST / DOSTPLUS / from the file name), cap mask method ("YOLO 
 mask's steps on a disc round the hub centre, default; "24 points"), seconds between pictures (1 - 10; changeable during
 the run), gamma of the picture given to MobileSAM (24 points only), Save; Start / Stop. Each picture: the whole picture and a 2x view of the cap,
 both with outlines only - hole circle and hub centre (blue), MobileSAM prompt points (cyan), cap mask outline (green),
-fitted ellipse (yellow), the 12 diameters (grey). No values on the pictures: the table (one row per picture, its check
+fitted ellipse (yellow), the 12 diameters (grey). Third panel (CHANGES 206): every MobileSAM mask with at least half its
+area inside the hole circle (boxes method: the masks after MobileSAM's IoU / stability filters and merging - the ones
+the cap mask is chosen from; points method: its one mask), cut to the circle and coloured, the largest painted first
+and each smaller one over it; their areas in the text box. No values on the pictures: the table (one row per picture, its check
 time included) and the text box below (steps 1 - 2 values, hub centre, ellipse, every diameter's lengths L+ / L- and
 ratio, for the ellipse and for the mask outline). Click a row to see that picture again. At the end the summary in the
 text box and annulus_<time>.csv (+ the marked pictures with Save) in <folder>/cap_annulus_results/.
@@ -31,7 +34,8 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 COLUMNS = ("file", "cap", "R-B", "bright", "hub", "R", "ell - hub", "score ellipse", "score mask", "time s", "note")
-FULL_W, FULL_H = 800, 450
+FULL_W, FULL_H = 640, 360
+PANEL = 360                         # side of the 2x view and of the masks view
 ZOOM_HALF = 170                     # px round the hub centre in the 2x view
 
 
@@ -42,6 +46,7 @@ def toPixmap(bgr: np.ndarray, w: int, h: int) -> QPixmap:
 
 
 def zoomOf(marked: np.ndarray, res: dict) -> np.ndarray:
+    """The region round the hub centre (same for the outlines view and the masks view)."""
     h, w = marked.shape[:2]
     cx, cy = (res["hub"][0], res["hub"][1]) if res.get("hub") else (w / 2, h / 2)
     x0, y0 = int(max(0, min(w - 2 * ZOOM_HALF, cx - ZOOM_HALF))), int(max(0, min(h - 2 * ZOOM_HALF, cy - ZOOM_HALF)))
@@ -103,11 +108,17 @@ class Window(QMainWindow):
         self.fullView.setAlignment(Qt.AlignCenter)
         self.fullView.setStyleSheet("background: #202020")
         self.zoomView = QLabel()
-        self.zoomView.setFixedSize(FULL_H, FULL_H)
+        self.zoomView.setFixedSize(PANEL, PANEL)
         self.zoomView.setAlignment(Qt.AlignCenter)
         self.zoomView.setStyleSheet("background: #202020")
+        self.masksView = QLabel()
+        self.masksView.setFixedSize(PANEL, PANEL)
+        self.masksView.setAlignment(Qt.AlignCenter)
+        self.masksView.setStyleSheet("background: #202020")
+        self.masksView.setToolTip("Every MobileSAM mask in the hole circle, largest painted first, smaller ones over it")
         views.addWidget(self.fullView)
         views.addWidget(self.zoomView)
+        views.addWidget(self.masksView)
 
         self.table = QTableWidget(0, len(COLUMNS))
         self.table.setHorizontalHeaderLabels(COLUMNS)
@@ -133,7 +144,7 @@ class Window(QMainWindow):
         central = QWidget()
         central.setLayout(layout)
         self.setCentralWidget(central)
-        self.resize(FULL_W + FULL_H + 40, 1000)
+        self.resize(FULL_W + 2 * PANEL + 50, 980)
 
     def chooseFolder(self):
         chosen = QFileDialog.getExistingDirectory(self, "Folder of cap pictures", str(self.folder or A.HERE))
@@ -190,6 +201,8 @@ class Window(QMainWindow):
                 picture = A.marked(img, res)
                 if save:
                     cv2.imwrite(str(resultsDir / f"{p.stem}_annulus.jpg"), picture)
+                    if res.get("masksPicture") is not None:
+                        cv2.imwrite(str(resultsDir / f"{p.stem}_masks.jpg"), res["masksPicture"])
                 rows.append(res)
                 self.bridge.picture.emit(i, p.name, picture, res)
                 end = time.monotonic() + self.seconds.value()
@@ -226,7 +239,11 @@ class Window(QMainWindow):
             return
         name, picture, res = self.results[row]
         self.fullView.setPixmap(toPixmap(picture, FULL_W, FULL_H))
-        self.zoomView.setPixmap(toPixmap(zoomOf(picture, res), FULL_H, FULL_H))
+        self.zoomView.setPixmap(toPixmap(zoomOf(picture, res), PANEL, PANEL))
+        if res.get("masksPicture") is not None:
+            self.masksView.setPixmap(toPixmap(zoomOf(res["masksPicture"], res), PANEL, PANEL))
+        else:
+            self.masksView.clear()
         self.statusLine.setText(f"{name}: score ellipse {res.get('score_ellipse') or '-'}, mask "
                                 f"{res.get('score_mask') or '-'}, {res.get('seconds')} s")
 

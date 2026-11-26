@@ -11,7 +11,8 @@ Run on one folder at a time (all pictures in it, sub-folders not searched):
   --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points.
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
   --gamma      : points method only (boxes use vision.cap.mask.gamma, as production).
-  --save       : marked pictures (outlines only, no values) to <folder>/cap_annulus_results/.
+  --save       : marked pictures (outlines only, no values) and the masks in the hole circle (coloured, largest
+                 painted first) to <folder>/cap_annulus_results/.
   --sam        : MobileSAM from this file (else through ModelManager, as production).
   --holes morphology : the old dark-blob hole finder (where the YOLO weights are missing - the sandbox).
 Writes <folder>/cap_annulus_results/annulus_<time>.csv and prints a line per picture and a summary.
@@ -62,6 +63,8 @@ def main():
         rows.append(res)
         if args.save:
             cv2.imwrite(str(resultsDir / f"{p.stem}_annulus.jpg"), A.marked(img, res))
+            if res.get("masksPicture") is not None:
+                cv2.imwrite(str(resultsDir / f"{p.stem}_masks.jpg"), res["masksPicture"])
         hub = f"({res['hub_x']}, {res['hub_y']})" if res["hub_x"] else "-"
         off = f"{res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']}" if res["ell_cx"] else "-"
         print(f"{p.name:<36} {res['cap_found']:<9} {float(res['rb_silver']):6.1f} {float(res['brightness']):6.1f} "

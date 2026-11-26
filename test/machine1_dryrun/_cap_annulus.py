@@ -58,7 +58,7 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
 MASK_METHODS = ("boxes", "points")
 
-HEADER = (["file", "model", "mask_method", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
+HEADER = (["file", "model", "mask_method", "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
           + [f"ell_{d}" for d in DIAMETER_ANGLES] + [f"mask_{d}" for d in DIAMETER_ANGLES])
@@ -146,6 +146,12 @@ def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
     picture = CapMaskFinder.applyGamma(img, CapMaskFinder.GAMMA)
     crop, disc, (x0, y0) = CapMaskFinder.cutDisc(picture, (hx, hy), CapMaskFinder.DISC_RADIUS)
     found, counts = CapMaskFinder.yoloSamMasks(crop, disc, CheckCap._sam_predictor(), CheckCap._yolo_model())
+    allMasks = []                                      # every mask MobileSAM gave (after its filters and merging)
+    for d in found:
+        m = np.zeros(img.shape[:2], bool)
+        seg = np.asarray(d["segmentation"]).astype(bool)
+        m[y0:y0 + seg.shape[0], x0:x0 + seg.shape[1]] = seg
+        allMasks.append(m)
     kept, outside, small, edge, large = [], 0, 0, 0, 0
     for d in found:
         seg = np.asarray(d["segmentation"]).astype(bool)
@@ -166,7 +172,7 @@ def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
             continue
         kept.append((d, inside, n))
     counts.update(outside=outside, small=small, edge=edge, large=large, kept=len(kept))
-    info = dict(counts=counts, score=None, reason="")
+    info = dict(counts=counts, score=None, reason="", allMasks=allMasks)
     if not kept:
         info["reason"] = "no cap mask (no mask left after the filters)"
         return None, info
@@ -176,6 +182,46 @@ def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
     info["score"] = float(d["predicted_iou"])
     info["stability"] = float(d["stability_score"])
     return full, info
+
+
+def masksInCircle(allMasks: list, hx: float, hy: float, R: float, share: float = 0.5) -> list:
+    """The masks with at least `share` of their area inside the hole circle, cut to the circle, largest first."""
+    h, w = allMasks[0].shape if allMasks else (0, 0)
+    yy, xx = np.ogrid[:h, :w]
+    circle = (xx - hx) ** 2 + (yy - hy) ** 2 <= R * R
+    out = []
+    for m in allMasks:
+        n = int(m.sum())
+        inside = m & circle
+        if n and inside.sum() >= share * n:
+            out.append(inside)
+    return sorted(out, key=lambda m: int(m.sum()), reverse=True)
+
+
+PALETTE = [(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180),
+           (70, 240, 240), (240, 50, 230), (210, 245, 60), (250, 190, 212), (0, 128, 128), (220, 190, 255),
+           (170, 110, 40), (255, 250, 200), (128, 0, 0), (170, 255, 195), (128, 128, 0), (255, 215, 180)]
+
+
+def masksPicture(img: np.ndarray, hub, masks: list) -> np.ndarray:
+    """Every mask in the hole circle coloured (BGR, distinct colours), the largest painted first and each smaller one
+    over it, blended 60 / 40 with the picture; the hole circle (blue). No values."""
+    out = img.copy()
+    paint = img.copy()
+    for i, m in enumerate(masks):
+        r, g, b = PALETTE[i % len(PALETTE)]
+        paint[m] = (b, g, r)
+    covered = np.zeros(img.shape[:2], bool)
+    for m in masks:
+        covered |= m
+    out[covered] = (0.6 * paint[covered] + 0.4 * img[covered]).astype(np.uint8)
+    for m in masks:                                       # thin dark edge round each mask so neighbours separate
+        cs, _ = cv2.findContours(m.astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(out, cs, -1, (30, 30, 30), 1)
+    if hub is not None:
+        hx, hy, R = hub
+        cv2.circle(out, (int(round(hx)), int(round(hy))), int(round(R)), (255, 128, 0), 1)
+    return out
 
 
 def describeCounts(c: dict) -> str:
@@ -232,7 +278,8 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
     pts, mask, ellipse, ratiosE / lengthsE, ratiosM / lengthsM."""
     t0 = time.perf_counter()
     res = dict.fromkeys(HEADER, "")
-    res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", hub=None, pts=np.zeros((0, 2)),
+    res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", masksPicture=None,
+               masksInCircle="", hub=None, pts=np.zeros((0, 2)),
                mask=None, ellipse=None, ratiosE=None, lengthsE=None, ratiosM=None, lengthsM=None)
     found, right, rbB, rbS, bright = steps12(img, model)
     res.update(cap_found=found or "none", right_cap=right, rb_brass=f"{rbB:.1f}", rb_silver=f"{rbS:.1f}",
@@ -250,13 +297,18 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
             mask, samScore = capMask(img, hx, hy, gamma)
             if mask is None:
                 notes.append(samScore)
+            inCircle = masksInCircle([mask], hx, hy, R) if mask is not None else []
         else:
             mask, info = capMaskByBoxes(img, hx, hy)
+            inCircle = masksInCircle(info["allMasks"], hx, hy, R)
             res["maskInfo"] = describeCounts(info["counts"]) + (
                 f"; predicted IoU {info['score']:.3f}, stability {info['stability']:.3f}" if mask is not None else "")
             samScore = info["score"]
             if mask is None:
                 notes.append(info["reason"])
+        res["masksPicture"] = masksPicture(img, res["hub"], inCircle)
+        res["masksInCircle"] = ", ".join(str(int(m.sum())) for m in inCircle)
+        res["masks_in_circle"] = len(inCircle)
         if mask is not None:
             res.update(mask=mask, sam_score=f"{samScore:.3f}", mask_area=int(mask.sum()))
             fit = CapMaskFinder.fitCapEllipse(mask, float(CapMaskFinder.ELLIPSE_TOLERANCE),
@@ -313,6 +365,8 @@ def detailLines(name: str, res: dict) -> list:
         lines.append(f"  cap mask ({res['maskMethod']}) area {res['mask_area']}, SAM score {res['sam_score']}")
     if res.get("maskInfo"):
         lines.append(f"  {res['maskInfo']}")
+    if res.get("masks_in_circle") not in ("", None):
+        lines.append(f"  masks in the hole circle: {res['masks_in_circle']} (areas, largest first: {res['masksInCircle']})")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")
