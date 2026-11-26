@@ -1,8 +1,9 @@
 """
 Study_Cap_Annulus_UI - the cap annulus measure (_cap_annulus.py, CHANGES 203 / 204) in a window, study only.
 
-Folder..., model (DOST / DOSTPLUS / from the file name), seconds between pictures (1 - 10; changeable during the run),
-gamma of the picture given to MobileSAM, Save; Start / Stop. Each picture: the whole picture and a 2x view of the cap,
+Folder..., model (DOST / DOSTPLUS / from the file name), cap mask method ("YOLO boxes (cap check)" = the production cap
+mask's steps on a disc round the hub centre, default; "24 points"), seconds between pictures (1 - 10; changeable during
+the run), gamma of the picture given to MobileSAM (24 points only), Save; Start / Stop. Each picture: the whole picture and a 2x view of the cap,
 both with outlines only - hole circle and hub centre (blue), MobileSAM prompt points (cyan), cap mask outline (green),
 fitted ellipse (yellow), the 12 diameters (grey). No values on the pictures: the table (one row per picture, its check
 time included) and the text box below (steps 1 - 2 values, hub centre, ellipse, every diameter's lengths L+ / L- and
@@ -72,6 +73,8 @@ class Window(QMainWindow):
         self.folderLabel = QLabel(str(self.folder) if self.folder else "(no folder)")
         self.model = QComboBox()
         self.model.addItems(["DOST", "DOSTPLUS", "From file name"])
+        self.maskMethod = QComboBox()
+        self.maskMethod.addItems(["YOLO boxes (cap check)", "24 points"])
         self.seconds = QSpinBox()
         self.seconds.setRange(1, 10)
         self.seconds.setValue(3)
@@ -88,7 +91,7 @@ class Window(QMainWindow):
         for wdg in (self.folderButton, self.folderLabel):
             top.addWidget(wdg)
         top.addStretch(1)
-        for text, wdg in (("Model", self.model), ("Seconds between pictures", self.seconds), ("Gamma (SAM)", self.gamma)):
+        for text, wdg in (("Model", self.model), ("Cap mask", self.maskMethod), ("Seconds between pictures", self.seconds), ("Gamma (SAM)", self.gamma)):
             top.addWidget(QLabel(text))
             top.addWidget(wdg)
         for wdg in (self.save, self.startButton, self.stopButton):
@@ -157,10 +160,12 @@ class Window(QMainWindow):
         self.startButton.setEnabled(False)
         self.stopButton.setEnabled(True)
         choice, gamma, save = self.model.currentText(), self.gamma.value(), self.save.isChecked()
-        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save), daemon=True)
+        method = "points" if self.maskMethod.currentIndex() == 1 else "boxes"
+        self.log(f"cap mask: {method}")
+        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save, method), daemon=True)
         self.worker.start()
 
-    def run(self, files, choice, gamma, save):
+    def run(self, files, choice, gamma, save, method):
         resultsDir = self.folder / "cap_annulus_results"
         resultsDir.mkdir(exist_ok=True)
         rows = []
@@ -177,7 +182,7 @@ class Window(QMainWindow):
                     rows.append(res)
                     continue
                 try:
-                    res = A.measure(img, A.modelFor(choice, p.name), gamma)
+                    res = A.measure(img, A.modelFor(choice, p.name), gamma, 1.0, method)
                 except Exception as e:                    # shown, and the run goes on
                     res = dict.fromkeys(A.HEADER, "")
                     res.update(model=A.modelFor(choice, p.name), hub=None, note=f"exception: {e}")

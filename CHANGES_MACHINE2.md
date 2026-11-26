@@ -5959,3 +5959,20 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run here: `Study_Cap_Annulus.py` on 5 of the OK pictures after the move - the same scores as before it (12.294,
   12.558, 12.823, 13.751, 13.317 ellipse); the window driven offscreen on the same 5 (dark-blob holes, MobileSAM on CPU):
   5 rows, the same scores, the saved pictures and the csv written, ~1.1 s a picture after the first (model load).
+
+## 205. Study_Cap_Annulus: the cap mask by the production cap mask's steps (2026-11-27)
+
+- Uddi, 2026-11-27: in the window the green mask outline did not follow the cap (the 24-point MobileSAM prompt); the
+  earlier code found the cap's mask well - use its logic.
+- `_cap_annulus.capMaskByBoxes` (new; default `--mask boxes`, window "Cap mask: YOLO boxes (cap check)"): the steps of
+  `CapMaskFinder.findCap` (CHANGES 139 - 142) with its own functions and values - gamma 2.0, disc r 160, the YOLO boxes
+  on the disc as MobileSAM box prompts, IoU / stability filters, merging, then outside / small / disc edge / large
+  dropped and the largest mask kept - with the disc cut round the hub centre H instead of `vision.cap.center`. findCap
+  returns no mask, so its steps are repeated in the study; `CapMaskFinder` is not changed. The 24 points stay as
+  `--mask points`. The mask's YOLO / filter counts, predicted IoU and stability are in the text box; `mask_method` in the csv.
+- Run here on the 39 OK pictures with the stand-in YOLO boxes of `DryRun_Cap_Hub_Distance` (squares round the disc
+  centre; no YOLO weights here) and the dark-blob holes: a mask on every picture, one mask left after merging (area
+  ~35000, predicted IoU ~0.96), the green outline on the cap's rim with the ellipse on it (4 pictures looked at, the two
+  that were wrong with the points among them); score (ellipse) 12.10 - 14.54, median 12.87; (mask) 12.54 - 14.35, median
+  13.02 (points: 12.29 - 16.05 / 12.45 - 15.74). ~3.5 s a picture on CPU. The window driven offscreen on 5 pictures:
+  the same scores. Cut-offs still wait for the laptop runs (real YOLO, the SAM hole finder) on OK and NOT OK.

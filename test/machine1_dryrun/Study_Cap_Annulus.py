@@ -1,14 +1,16 @@
 """
 Study_Cap_Annulus - a simpler cap seating measure (Uddi, 2026-11-27), study only: production is not changed.
 Without a window; the same measure in a window: Study_Cap_Annulus_UI.py. The measure is described in _cap_annulus.py:
-steps 1 - 2 (R-B, brightness r 25), hub centre from the hub's holes, cap mask by MobileSAM from 24 points round the hub
-centre, ellipse, and the sum over 12 diameters of longer / shorter length in the annulus between the cap outline and
+steps 1 - 2 (R-B, brightness r 25), hub centre from the hub's holes, cap mask (the production cap mask's steps - YOLO
+boxes as MobileSAM prompts on a disc round the hub centre - or 24 points round the hub centre), ellipse, and the sum over 12 diameters of longer / shorter length in the annulus between the cap outline and
 the hole circle (12 = centred).
 
 Run on one folder at a time (all pictures in it, sub-folders not searched):
-    python test\\machine2_dryrun\\Study_Cap_Annulus.py <folder> [--model DOST|DOSTPLUS|name] [--save] [--gamma 1.0]
-                                                          [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
+    python test\\machine2_dryrun\\Study_Cap_Annulus.py <folder> [--model DOST|DOSTPLUS|name] [--mask boxes|points]
+                                     [--save] [--gamma 1.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
+  --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points.
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
+  --gamma      : points method only (boxes use vision.cap.mask.gamma, as production).
   --save       : marked pictures (outlines only, no values) to <folder>/cap_annulus_results/.
   --sam        : MobileSAM from this file (else through ModelManager, as production).
   --holes morphology : the old dark-blob hole finder (where the YOLO weights are missing - the sandbox).
@@ -29,6 +31,7 @@ def main():
     ap = argparse.ArgumentParser(description="Cap seating by the annulus (study)")
     ap.add_argument("folder")
     ap.add_argument("--model", default="DOST", choices=["DOST", "DOSTPLUS", "name"])
+    ap.add_argument("--mask", default="boxes", choices=list(A.MASK_METHODS))
     ap.add_argument("--save", action="store_true")
     ap.add_argument("--gamma", type=float, default=1.0, help="gamma of the picture given to MobileSAM (1 = none)")
     ap.add_argument("--floor", type=float, default=1.0, help="px; the shorter length is at least this in a ratio")
@@ -44,7 +47,7 @@ def main():
     resultsDir.mkdir(exist_ok=True)
     csvPath = resultsDir / f"annulus_{time.strftime('%Y%m%d_%H%M%S')}.csv"
     rows = []
-    print(f"Study_Cap_Annulus on {len(files)} pictures in {folder} (model {args.model}, hole finder {A.holeFinder()}, "
+    print(f"Study_Cap_Annulus on {len(files)} pictures in {folder} (model {args.model}, mask {args.mask}, hole finder {A.holeFinder()}, "
           f"gamma {args.gamma}, floor {args.floor} px)")
     print(f"{'file':<36} {'cap':<9} {'R-B':>6} {'bright':>6} {'hub':>15} {'R':>6} {'ell-hub':>12} "
           f"{'ellipse':>8} {'mask':>8}  note")
@@ -54,7 +57,7 @@ def main():
             print(f"{p.name:<36} could not read")
             rows.append(dict(file=p.name, note="could not read"))
             continue
-        res = A.measure(img, A.modelFor(args.model, p.name), args.gamma, args.floor)
+        res = A.measure(img, A.modelFor(args.model, p.name), args.gamma, args.floor, args.mask)
         res["file"] = p.name
         rows.append(res)
         if args.save:

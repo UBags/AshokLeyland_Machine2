@@ -8,9 +8,17 @@ measure(picture, model) per cap picture:
      step (needs the hub / top bearing / nut pictures of the same part) is not run.
   2. Hub centre: the hub's holes in this picture by the production routine (FindHubHoles.findHoles, check "cap") ->
      centre H and radius R of the circle through the hole centres.
-  3. Cap mask: MobileSAM with 24 positive points round H (r 30 / 60 / 90 px x angles 0, 45, ..., 315), one mask
-     (multimask off, as for several points); the part of the mask connected to H is kept. Its outline (largest outer
-     contour) and the two-stage ellipse fitted to it (CapMaskFinder.fitCapEllipse, the production cap ellipse fit).
+  3. Cap mask, two ways (maskMethod):
+     "boxes" (default, CHANGES 205): the steps of the production cap mask (CapMaskFinder.findCap, CHANGES 139 - 142):
+       the picture brightened by gamma vision.cap.mask.gamma (2.0), a disc of r vision.cap.mask.disc.radius (160) cut
+       round H, the object-aware YOLO's boxes on the disc as MobileSAM box prompts (MobileSAMv2), predicted IoU /
+       stability filters and box merging, then masks mostly outside the disc, below area.min, the disc's own edge and
+       above area.max dropped; the largest left is the cap. Only the disc's centre differs from production (H here,
+       vision.cap.center there).
+     "points" (CHANGES 203): MobileSAM with 24 positive points round H (r 30 / 60 / 90 px x angles 0, 45, ..., 315),
+       one mask; the part connected to H.
+     Then its outline (largest outer contour) and the two-stage ellipse fitted to it (CapMaskFinder.fitCapEllipse, the
+     production cap ellipse fit).
   4. Annulus = between the cap outline and the hole circle. Diameters through H at 15, 30, ..., 180 deg (12); on each,
      the length inside the annulus on the + side and on the - side (R - distance from H to the cap outline along
      that ray, 0 if the outline is outside the circle). Ratio = longer / shorter (shorter floored at `floor` px).
@@ -48,8 +56,9 @@ PROMPT_ANGLES = tuple(range(0, 360, 45))
 DIAMETER_ANGLES = tuple(range(15, 181, 15))            # 15, 30, ..., 180: 12 diameters
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
+MASK_METHODS = ("boxes", "points")
 
-HEADER = (["file", "model", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
+HEADER = (["file", "model", "mask_method", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
           + [f"ell_{d}" for d in DIAMETER_ANGLES] + [f"mask_{d}" for d in DIAMETER_ANGLES])
@@ -130,6 +139,51 @@ def capMask(img: np.ndarray, hx: float, hy: float, gamma: float = 1.0):
     return labels == labels[iy, ix], float(scores[0])
 
 
+def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
+    """The production cap mask's steps (CapMaskFinder.findCap) on a disc round H: (full-picture mask, info dict) or
+    (None, info dict with reason). findCap returns no mask, so its steps are repeated here with its own functions and
+    values; CapMaskFinder is not changed."""
+    picture = CapMaskFinder.applyGamma(img, CapMaskFinder.GAMMA)
+    crop, disc, (x0, y0) = CapMaskFinder.cutDisc(picture, (hx, hy), CapMaskFinder.DISC_RADIUS)
+    found, counts = CapMaskFinder.yoloSamMasks(crop, disc, CheckCap._sam_predictor(), CheckCap._yolo_model())
+    kept, outside, small, edge, large = [], 0, 0, 0, 0
+    for d in found:
+        seg = np.asarray(d["segmentation"]).astype(bool)
+        inside = seg & disc
+        n = int(inside.sum())
+        if n * 2 < int(seg.sum()) or n == 0:
+            outside += 1
+            continue
+        if n < CapMaskFinder.AREA_MIN:
+            small += 1
+            continue
+        circle = CapMaskFinder.circleOfOutline(inside)
+        if circle is not None and circle[2] > CapMaskFinder.DISC_EDGE_FRACTION * CapMaskFinder.DISC_RADIUS:
+            edge += 1
+            continue
+        if n > CapMaskFinder.AREA_MAX:
+            large += 1
+            continue
+        kept.append((d, inside, n))
+    counts.update(outside=outside, small=small, edge=edge, large=large, kept=len(kept))
+    info = dict(counts=counts, score=None, reason="")
+    if not kept:
+        info["reason"] = "no cap mask (no mask left after the filters)"
+        return None, info
+    d, inside, n = max(kept, key=lambda t: t[2])
+    full = np.zeros(img.shape[:2], bool)
+    full[y0:y0 + inside.shape[0], x0:x0 + inside.shape[1]] = inside
+    info["score"] = float(d["predicted_iou"])
+    info["stability"] = float(d["stability_score"])
+    return full, info
+
+
+def describeCounts(c: dict) -> str:
+    return (f"YOLO boxes {c.get('boxes', 0)} ({c.get('onDisc', 0)} on the disc), {c.get('passed', 0)} passed, "
+            f"{c.get('merged', 0)} after merging; dropped {c.get('outside', 0)} outside / {c.get('small', 0)} small / "
+            f"{c.get('edge', 0)} disc edge / {c.get('large', 0)} large; {c.get('kept', 0)} kept")
+
+
 def rayToEllipse(hx, hy, phi, e):
     """Distance from H along direction phi (rad) to the ellipse e = (cx, cy, a, b, angle deg); None if no crossing."""
     cx, cy, a, b, ang = e
@@ -173,13 +227,13 @@ def score(dist, R, floor: float = 1.0):
     return sum(ratios), ratios, lengths
 
 
-def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0) -> dict:
+def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0, maskMethod: str = "boxes") -> dict:
     """Everything for one picture: the csv row values (HEADER keys) and, for drawing / showing, hub (hx, hy, R),
     pts, mask, ellipse, ratiosE / lengthsE, ratiosM / lengthsM."""
     t0 = time.perf_counter()
     res = dict.fromkeys(HEADER, "")
-    res.update(model=model, hub=None, pts=np.zeros((0, 2)), mask=None, ellipse=None, ratiosE=None, lengthsE=None,
-               ratiosM=None, lengthsM=None)
+    res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", hub=None, pts=np.zeros((0, 2)),
+               mask=None, ellipse=None, ratiosE=None, lengthsE=None, ratiosM=None, lengthsM=None)
     found, right, rbB, rbS, bright = steps12(img, model)
     res.update(cap_found=found or "none", right_cap=right, rb_brass=f"{rbB:.1f}", rb_silver=f"{rbS:.1f}",
                brightness=f"{bright:.1f}")
@@ -190,11 +244,20 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0)
         notes.append(f"hub holes not found ({holes.get('reason')})")
     else:
         hx, hy, R = float(holes["cx"]), float(holes["cy"]), float(holes["radius"])
-        res.update(hub=(hx, hy, R), hub_x=f"{hx:.1f}", hub_y=f"{hy:.1f}", hole_r=f"{R:.1f}", pts=promptPoints(hx, hy))
-        mask, samScore = capMask(img, hx, hy, gamma)
-        if mask is None:
-            notes.append(samScore)
+        res.update(hub=(hx, hy, R), hub_x=f"{hx:.1f}", hub_y=f"{hy:.1f}", hole_r=f"{R:.1f}")
+        if maskMethod == "points":
+            res["pts"] = promptPoints(hx, hy)
+            mask, samScore = capMask(img, hx, hy, gamma)
+            if mask is None:
+                notes.append(samScore)
         else:
+            mask, info = capMaskByBoxes(img, hx, hy)
+            res["maskInfo"] = describeCounts(info["counts"]) + (
+                f"; predicted IoU {info['score']:.3f}, stability {info['stability']:.3f}" if mask is not None else "")
+            samScore = info["score"]
+            if mask is None:
+                notes.append(info["reason"])
+        if mask is not None:
             res.update(mask=mask, sam_score=f"{samScore:.3f}", mask_area=int(mask.sum()))
             fit = CapMaskFinder.fitCapEllipse(mask, float(CapMaskFinder.ELLIPSE_TOLERANCE),
                                               int(CapMaskFinder.ELLIPSE_TRIES))
@@ -216,7 +279,7 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0)
 
 
 def marked(img: np.ndarray, res: dict) -> np.ndarray:
-    """Outlines only, no values: hole circle and hub centre (blue), prompt points (cyan), mask outline (green),
+    """Outlines only, no values: hole circle and hub centre (blue), prompt points (cyan, points method only), mask outline (green),
     ellipse (yellow), diameters (thin grey)."""
     out = img.copy()
     if res.get("hub") is None:
@@ -247,7 +310,9 @@ def detailLines(name: str, res: dict) -> list:
     if res.get("hub") is not None:
         lines.append(f"  hub centre ({res['hub_x']}, {res['hub_y']}), hole circle r {res['hole_r']} ({holeFinder()})")
     if res.get("mask") is not None:
-        lines.append(f"  cap mask area {res['mask_area']}, SAM score {res['sam_score']}")
+        lines.append(f"  cap mask ({res['maskMethod']}) area {res['mask_area']}, SAM score {res['sam_score']}")
+    if res.get("maskInfo"):
+        lines.append(f"  {res['maskInfo']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")
