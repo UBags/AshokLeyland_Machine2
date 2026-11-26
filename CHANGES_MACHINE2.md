@@ -5927,3 +5927,23 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   the state of the request it was taken for (`assessPictures` / `_assessCap` / `ImageProcessor.check*`). Being
   checked with `Diag_Trial_Pictures.py` (new, both dry-run folders; read only): all trial pictures in time order across
   folders, dark ones marked, and pictures that show the same scene as a picture in another folder within 2 minutes.
+
+## 203. Study_Cap_Annulus: a simpler cap seating measure (2026-11-27)
+
+- Uddi, 2026-11-27: DOST (silver) caps that are seated are refused (top-face fit 0.57 - 0.64 < 0.64 on 37 of 39 OK
+  pictures; the 5 px hub-distance rule on some). The check has become too complex; study a simpler measure first.
+- `Study_Cap_Annulus.py` (new, both dry-run folders; production unchanged): steps 1 - 2 of CheckCap (R-B, brightness
+  r 25, production helpers round `vision.cap.center`; no brightening step); the hub centre H and radius R of the circle
+  through the hole centres from `FindHubHoles.findHoles(check="cap")`; the cap mask by MobileSAM from 24 positive points
+  round H (r 30 / 60 / 90 - Uddi's r 33 / 66 / 99 brought in to leave room for a pushed-aside cap - x 0 - 315 deg every
+  45), one mask, the part connected to H; the two-stage ellipse (`CapMaskFinder.fitCapEllipse`). Annulus between the cap
+  outline and the hole circle; 12 diameters through H at 15, 30, ..., 180 deg (Uddi's list had 175 - taken as 165);
+  on each the length in the annulus on both sides, ratio longer / shorter; score = sum of the 12 ratios (12 = centred),
+  with the ellipse and with the mask's own outline. The top face is not used.
+- Run here on Uddi's 39 OK DOST pictures of 2026-11-26 with the dark-blob hole finder (`--holes morphology`, no YOLO
+  weights here) and the MobileSAM weights: all 39 steps 1 - 2 OK, a mask and an ellipse on every picture, ~1 s each on
+  CPU; score (ellipse) 12.29 - 16.05, median 13.18; (mask) 12.45 - 15.74. Not meaningful for a cut-off: the dark-blob
+  centres of the same part move up to 10 px and R 151 - 156 (the laptop's SAM finder gave r 149.2 +- 0.1 and a centre
+  within ~1 px on these pictures). Uddi runs it on the laptop on the OK and NOT OK folders.
+- Note: a seated cap's centre is not on the hole circle's centre - `offset.cap.dost` (0.3, -4.7) - so seated caps
+  will not score 12 by construction (about 1.2 on the vertical diameter alone).
