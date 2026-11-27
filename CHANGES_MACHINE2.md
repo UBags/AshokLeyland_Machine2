@@ -6196,7 +6196,7 @@ What changed (Uddi, 2026-11-27: "no ambiguities should remain"):
   - The camera server's live check of the camera connection keys uses `vision.<vendor>.camera.`.
   - VisionFrame's centre and oval names now carry the model first (`dost.bung.seating.seated.centre`,
     `dost.bung.seating.reference.oval`).
-  - 18 code files were renamed by the rule; 38 docstrings and comments had their placeholders rewritten.
+  - 18 code files were renamed by the rule; the `<vendor>.vision.x` placeholders in docstrings and comments were rewritten in 38 files.
 - **Old names are not read** (zero ambiguity). A file that still has them is reported once:
   `[Configuration] ... has N old-style vision key(s) ... convert the file with 'python utils/VisionKeyNames.py <file>'`.
   Each value then falls back to its code default (the Machine 1 value) and is reported as missing.
