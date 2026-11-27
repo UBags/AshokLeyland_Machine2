@@ -593,6 +593,7 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `vision.<vendor>.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
 | `vision.<vendor>.cap.seating.check` / `vision.<vendor>.<dost\|dostplus>.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
 | `vision.<vendor>.<dost\|dostplus>.bung.seating.position.source` / `vision.<vendor>.<dost\|dostplus>.bung.seating.hub.offset` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
+| `vision.<vendor>.dostplus.bung.method` / `.hubcentre.region` / `.hubcentre.region.notok.above` / `.region.ok.below` / `.roundness.notok.below` / `.roundness.ok.above` / `.outside.notok.above` / `.outside.ok.below` (CHANGES §220) | fixed (Machine 2: hubcentre) / 27,33,11 / 1.0 / 0.7 / 0.945 / 0.955 / 0.11 / 0.07 | 3 |
 | `vision.<vendor>.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.3,-4.7 and -0.7,-4.5 (SAM centres, §170; Machine 1: 0,0) | 3 |
 | `vision.<vendor>.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |

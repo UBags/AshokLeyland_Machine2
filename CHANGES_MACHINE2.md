@@ -6435,7 +6435,7 @@ by CHANGES 170); a picture whose hub holes are not found stops at once. Check ti
 - `docs/plant-pc-verification.md`: step 18 (DOSTPLUS bung on the hub centre: keys in the properties before the build,
   laptop SUMMARY (production) and times, plant summary lines of a shift, DOST unchanged) and its results row; CLAUDE.md
   §7 row 18; §8 dated 2026-11-27.
-- `docs/vision_positions_machine2.md`: the DOSTPLUS hub-centre row (region half-axes, oval on H).
+- `docs/vision_positions_machine2.md`: the DOSTPLUS hub-centre row (region half-axes, oval on H); `docs/LLD.md` §10: the 8 new keys.
 - The claude.ai Project copies refreshed (HLD, LLD, PLC interface, state sync, plant-PC verification, vision positions,
   code graph, changes log from §81).
 No code changed.
