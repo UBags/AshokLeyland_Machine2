@@ -20,7 +20,8 @@ For a DOSTPLUS picture:
          on H itself (Uddi: on the hub centre; the seated face sits ~17 px off H - the camera angle - so this share is
          larger than production's and its limit is to be recalibrated). The share with the oval at production's seated
          position is printed beside it.
-     Verdict with STUDY_LIMITS (start: today's Machine 2 DOSTPLUS values; outside.max to be set from the pictures).
+     Verdict: Uddi's rule of 2026-11-27 (STUDY_RULE_NOT_OK / STUDY_RULE_OK, CHANGES 216; from his 10 good / 5 bad
+     plant pictures): stage 1 - any -> NOT OK; stage 2 - any -> OK; else NOT OK. No hole pattern or no top-face mask -> NOT OK.
   4. Measure, then decide (Uddi): every value per picture on a "STUDY" line; with pictures in subfolders named OK and
      NOT_OK (or GOOD / BAD) the summary at the end gives, per value, the OK and NOT OK ranges, the worst OK and the closest
      NOT OK, and a limit midway between them where they separate.
@@ -31,21 +32,27 @@ import time
 import cv2
 import numpy as np
 
-# Limits of the study's seating verdict - start: Machine 2's DOSTPLUS values in production; edit here to try others.
-STUDY_LIMITS = dict(
-    offset_max=20.0,        # px, hole-pattern centre to H + hub offset (production: dostplus.bung.seating.hole.centre.offset.max)
-    roundness_min=0.925,    # production: dostplus.bung.seating.roundness.min
-    fit_min=0.98,           # production: dostplus.bung.seating.ellipse.fit.area.ratio.min
-    fit_max=1.02,           # production: ...max
-    outside_max=0.06,       # share of the face outside the oval centred on H - TO BE RECALIBRATED (production: 0.06, oval
-                            # at H + offset)
-)
+# Uddi's rule of 2026-11-27 17:38 (CHANGES 216), from his DOSTPLUS plant pictures (10 good / 5 bad):
+#   NOT OK if offset > 26 px or roundness < 0.945 or outside (oval on H) > 11 % or outside (oval at H + offset) > 12 %;
+#   else OK if offset < 18 px or roundness > 0.955 or outside (oval on H) < 7 % or outside (oval at H + offset) < 7 %;
+#   else NOT OK.
+# (label, values key, operator, limit) - edit here to try other limits.
+STUDY_RULE_NOT_OK = (("hole centre to seated position", "offset", ">", 26.0),
+                     ("face roundness", "roundness", "<", 0.945),
+                     ("face outside the oval on H", "outside", ">", 0.11),
+                     ("face outside the oval at H + offset", "outside_at_seated", ">", 0.12))
+STUDY_RULE_OK = (("hole centre to seated position", "offset", "<", 18.0),
+                 ("face roundness", "roundness", ">", 0.955),
+                 ("face outside the oval on H", "outside", "<", 0.07),
+                 ("face outside the oval at H + offset", "outside_at_seated", "<", 0.07))
+STUDY_LIMITS = {"NOT OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_NOT_OK],
+                "else OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_OK]}
 # per value: (key, label, kind) - kind "max": OK when value <= limit; "min": OK when value >= limit; "range": both sides
 VALUES = (("offset", "hole centre to seated position (px)", "max"),
           ("roundness", "face roundness", "min"),
-          ("fit_ratio", "face / fitted ellipse", "range"),
           ("outside", "face outside the oval on H", "max"),
-          ("outside_at_seated", "face outside the oval on H + offset (info)", "max"),
+          ("outside_at_seated", "face outside the oval on H + offset", "max"),
+          ("fit_ratio", "face / fitted ellipse (info)", "range"),
           ("face_radius", "face radius (px, info)", "range"))
 OK_FOLDERS = ("ok", "good")
 NOT_OK_FOLDERS = ("not_ok", "notok", "not ok", "bad", "nok")
@@ -156,21 +163,28 @@ class DostplusHubCentreStudy:
 
     @staticmethod
     def verdict(values) -> tuple:
-        """(seated, reason) with STUDY_LIMITS."""
-        L = STUDY_LIMITS
+        """(seated, reason) by Uddi's rule (STUDY_RULE_NOT_OK, STUDY_RULE_OK)."""
         if values.get("hole_centre") is None:
             return False, "no hole pattern"
         if values.get("roundness") is None:
             return False, "no top-face mask of face radius"
-        tests = [("offset", values["offset"] <= L["offset_max"], f"offset {values['offset']:.1f} <= {L['offset_max']}"),
-                 ("roundness", values["roundness"] >= L["roundness_min"],
-                  f"roundness {values['roundness']:.3f} >= {L['roundness_min']}"),
-                 ("fit", L["fit_min"] <= values["fit_ratio"] <= L["fit_max"],
-                  f"fit {values['fit_ratio']:.3f} in {L['fit_min']}-{L['fit_max']}"),
-                 ("outside", values["outside"] <= L["outside_max"],
-                  f"outside (oval on H) {values['outside']:.1%} <= {L['outside_max']:.0%}")]
-        failed = [text for _, ok, text in tests if not ok]
-        return (not failed), ("all met" if not failed else "failed: " + "; ".join(failed))
+
+        def hits(rule):
+            out = []
+            for label, key, op, limit in rule:
+                v = float(values[key])
+                if (v > limit) if op == ">" else (v < limit):
+                    shown = f"{v:.1%}" if key.startswith("outside") else f"{v:.3g}"
+                    lim = f"{limit:.0%}" if key.startswith("outside") else f"{limit:g}"
+                    out.append(f"{label} {shown} {op} {lim}")
+            return out
+        bad = hits(STUDY_RULE_NOT_OK)
+        if bad:
+            return False, "stage 1 (any -> NOT OK): " + "; ".join(bad)
+        good = hits(STUDY_RULE_OK)
+        if good:
+            return True, "stage 2 (any -> OK): " + "; ".join(good)
+        return False, "stage 3: no stage-1 and no stage-2 condition met"
 
     @staticmethod
     def line(values) -> str:

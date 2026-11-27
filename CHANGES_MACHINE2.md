@@ -6309,3 +6309,31 @@ Run here (sandbox: no YOLO, so the point grid alone; hub holes by the dark-blob 
   restored after. Face outside the oval on H 5.6 - 5.7 % (1.8 - 3.6 % at production's position), so near the 6 % limit,
   as expected. A not-seated picture: NOT OK, because the bung covers the hub's holes (holes not found).
 - `DryRun_Knuckle_Frame.py --quick`: 88/88 (the per-model disc centres placed by the frame and restored). `DryRun_Import_Boundaries.py`: PASS (the study module stays in test/).
+
+## 216. DOSTPLUS bung study: Uddi's verdict rule (2026-11-27)
+
+What changed: the study's verdict (`test/machine*_dryrun/_bung_hubcentre_study.py`, used by `DryRun_Bung_Check_UI.py`;
+production unchanged) is now Uddi's rule, set from the values of his 15 DOSTPLUS plant pictures (10 labelled good, 5
+bad; `STUDY_RULE_NOT_OK` / `STUDY_RULE_OK`):
+- stage 1 (any -> NOT OK): hole centre to seated position > 26 px; face roundness < 0.945; face outside the oval on the
+  hub centre > 11 %; face outside the oval at the seated position (hub centre + offset) > 12 %;
+- stage 2 (any -> OK): offset < 18 px; roundness > 0.955; outside on the hub centre < 7 %; outside at the seated
+  position < 7 %;
+- else NOT OK. No hole pattern or no top-face mask -> NOT OK. Face / fitted ellipse is printed only (it did not separate:
+  good 1.006 - 1.008, bad 0.957 - 1.009).
+
+Measured on his 15 pictures (values from his laptop run, CHANGES 215):
+
+| Value | 9 good | 5 bad | 12-46-43 (labelled good) |
+|---|---|---|---|
+| Offset | 1.2 - 11.7 px | 35.9 - 46.0 px | 25.5 px |
+| Roundness | 0.963 - 0.998 | 0.885 - 0.934 | 0.910 |
+| Outside, oval on the hub centre | 4.1 - 8.0 % | 8.2 - 23.6 % | 17.2 % |
+| Outside, oval at the seated position | 3.7 - 6.9 % | 10.8 - 21.5 % | 14.3 % |
+
+Result: 14 of 15 as labelled. Every bad picture fails stage 1 on at least 2 conditions. The 9 good pictures pass at
+stage 2. 12-46-43 (21 Nov, labelled good) is NOT OK at stage 1 on roundness and both outside shares, as before the
+rule; its values sit with the bad pictures.
+
+Run here: the rule applied to the 15 pictures' values (the verdict function itself, no models needed): 14 / 15 as
+labelled, 12-46-43 NOT OK.
