@@ -1,20 +1,20 @@
 {
   "_baseline": "5728def",
   "baseline_per_file": {
-    "camera/CheckKnuckle.py": "6846f37",
-    "camera/CheckHubAndBottomBearing.py": "1d199cd",
-    "camera/CheckTopBearing.py": "8d7cdd5",
-    "camera/CheckNutAndPlateWasher.py": "3d91a76",
-    "camera/HexagonNutDetector.py": "4e04121",
-    "camera/CheckCap.py": "a74230e",
-    "camera/BungSegmenter.py": "7c322df",
-    "camera/HubAndBearingSegmenter.py": "7f04479",
-    "camera/KnuckleLocator.py": "f3aa0ed",
-    "camera/VisionFrame.py": "2376cf9",
-    "camera/CheckNoBung.py": "0ff5470",
-    "camera/CapMaskFinder.py": "fb8f11f",
-    "camera/CheckSplitPinAndWasher.py": "760b7da",
-    "camera/FindHubHoles.py": "f9ab748"
+    "camera/CheckKnuckle.py": "e4f71c9",
+    "camera/CheckHubAndBottomBearing.py": "a76ecd2",
+    "camera/CheckTopBearing.py": "cbf5134",
+    "camera/CheckNutAndPlateWasher.py": "d37f862",
+    "camera/HexagonNutDetector.py": "7296694",
+    "camera/CheckCap.py": "e8834dc",
+    "camera/BungSegmenter.py": "9958fae",
+    "camera/HubAndBearingSegmenter.py": "da41733",
+    "camera/KnuckleLocator.py": "5f2fa1d",
+    "camera/VisionFrame.py": "a06e282",
+    "camera/CheckNoBung.py": "cb8e3c8",
+    "camera/CapMaskFinder.py": "c53b7c7",
+    "camera/CheckSplitPinAndWasher.py": "f240364",
+    "camera/FindHubHoles.py": "c5e0e05"
   },
   "extracted": {
     "vision.bung.dostplus.hole.pair.distance.max": {
