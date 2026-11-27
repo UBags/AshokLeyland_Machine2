@@ -204,6 +204,16 @@ class CheckNoCapBung:
         # This model's bung values (vision.<vendor>.<dost|dostplus>.bung.*, CHANGES 215)
         BS_MODULE.useModel(model)
 
+        # DOSTPLUS on the hub centre (vision.dostplus.bung.method=hubcentre, CHANGES 220): the hub's holes first; the
+        # segmented disc = the hub-hole circle; not found -> NOT OK
+        hub = None
+        if BS_MODULE.onHubCentre(model):
+            hub = BS_MODULE.placeOnHubCentre(anImage, model)
+            if not hub.get("found"):
+                logBoth('logError', _src, f"[CheckNoCapBung] summary: NOT OK - model {model}, the hub's holes not found "
+                        f"({hub.get('reason')}), bung not checked", MessageType.ISSUE)
+                return _maybe_crop(anImage), False, None
+
         # Convert BGR to RGB (camera provides BGR, segmenter expects RGB)
         anImage_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
         if PRINT_IMAGE_PREPROCESSING:
@@ -319,7 +329,9 @@ class CheckNoCapBung:
                         seating = None
                         if success and BS_MODULE.SEATING_CHECK:
                             try:
-                                seating = BS_MODULE.check_bung_seating(anImage_rgb, components, model)
+                                seating = (BS_MODULE.check_bung_seating_on_hub_centre(anImage_rgb, components, hub, model)
+                                           if hub is not None else
+                                           BS_MODULE.check_bung_seating(anImage_rgb, components, model))
                             except Exception as e:
                                 seating = dict(seated=False, reason=f"segmenter error: {e}", face_contour=None)
                             success = bool(seating["seated"])
@@ -339,7 +351,7 @@ class CheckNoCapBung:
                         # Always (holes passed or not, seating run or not): the reference oval, and the hole-pattern
                         # centre of the holes found
                         drawSeatingMarks(result_image, seating if seating is not None else
-                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model,
+                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components), "hub": hub}, model,
                                          source_rgb=anImage_rgb)
 
                         if PRINT_RESULT_PAINTING:
@@ -360,7 +372,7 @@ class CheckNoCapBung:
                     logBoth('logError', _src, f"[CheckNoCapBung] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
                 no_pattern = anImage_rgb.copy()
-                drawSeatingMarks(no_pattern, {}, model, source_rgb=anImage_rgb)   # the reference oval only (no hole pattern)
+                drawSeatingMarks(no_pattern, {"hub": hub}, model, source_rgb=anImage_rgb)   # the reference oval only (no hole pattern)
                 result_bgr = cv2.cvtColor(no_pattern, cv2.COLOR_RGB2BGR)
                 return _maybe_crop(result_bgr), False, None
 

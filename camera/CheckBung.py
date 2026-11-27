@@ -60,7 +60,8 @@ def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str,
                      source_rgb: np.ndarray | None = None) -> None:
     """Seating marks on the result picture (RGB, no text): the model's reference oval (thick yellow contour, centred on
     the seated position), the hole-pattern centre (thick blue cross) and, with the seated position from the hub's holes
-    (CHANGES 153), the hub's hole circle (thin blue). The seated position is the seating step's only: when the seating
+    (CHANGES 153), the hub's hole circle (thin blue); DOSTPLUS on the hub centre (CHANGES 220): the oval on the hub centre
+    and the allowed region of the hole-pattern centre round it (orange). The seated position is the seating step's only: when the seating
     step did not run (hole pattern failed, or no pattern), the hub's holes are not looked for just to draw the marks
     (CHANGES 173; from CHANGES 157 to 172 they were, on source_rgb - up to 3 - 4 s with YOLO + MobileSAM) and no oval is
     drawn. source_rgb is kept in the signature for the callers."""
@@ -72,6 +73,12 @@ def drawSeatingMarks(image_rgb: np.ndarray, seating: Dict[str, Any], model: str,
     if seated_at is not None:
         cv2.ellipse(image_rgb, ((float(seated_at[0]), float(seated_at[1])), (float(oval[0]), float(oval[1])),
                                 float(oval[2])), (255, 255, 0), 3)
+    axes = seating.get("region_axes")      # DOSTPLUS on the hub centre (CHANGES 220): the allowed region round H (orange)
+    if axes is not None and seated_at is not None:
+        c = (int(round(seated_at[0])), int(round(seated_at[1])))
+        ew = int(round(axes[0]))
+        cv2.ellipse(image_rgb, c, (ew, int(round(axes[1]))), 0, 180, 360, (255, 140, 0), 2)
+        cv2.ellipse(image_rgb, c, (ew, int(round(axes[2]))), 0, 0, 180, (255, 140, 0), 2)
     centre = seating.get("hole_centre")
     if centre is not None:
         cv2.drawMarker(image_rgb, (int(round(centre[0])), int(round(centre[1]))), (0, 0, 255),
@@ -220,6 +227,16 @@ class CheckBung:
         # This model's bung values (vision.<vendor>.<dost|dostplus>.bung.*, CHANGES 215)
         BS_MODULE.useModel(model)
 
+        # DOSTPLUS on the hub centre (vision.dostplus.bung.method=hubcentre, CHANGES 220): the hub's holes first; the
+        # segmented disc = the hub-hole circle; not found -> NOT OK
+        hub = None
+        if BS_MODULE.onHubCentre(model):
+            hub = BS_MODULE.placeOnHubCentre(anImage, model)
+            if not hub.get("found"):
+                logBoth('logError', _src, f"[CheckBung] summary: NOT OK - model {model}, the hub's holes not found "
+                        f"({hub.get('reason')}), bung not checked", MessageType.ISSUE)
+                return _maybe_crop(anImage), False, None
+
         # Convert BGR to RGB (camera provides BGR, segmenter expects RGB)
         anImage_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
         if PRINT_IMAGE_PREPROCESSING:
@@ -335,7 +352,9 @@ class CheckBung:
                         seating = None
                         if success and BS_MODULE.SEATING_CHECK:
                             try:
-                                seating = BS_MODULE.check_bung_seating(anImage_rgb, components, model)
+                                seating = (BS_MODULE.check_bung_seating_on_hub_centre(anImage_rgb, components, hub, model)
+                                           if hub is not None else
+                                           BS_MODULE.check_bung_seating(anImage_rgb, components, model))
                             except Exception as e:
                                 seating = dict(seated=False, reason=f"segmenter error: {e}", face_contour=None)
                             success = bool(seating["seated"])
@@ -355,7 +374,7 @@ class CheckBung:
                         # Always (holes passed or not, seating run or not): the reference oval, and the hole-pattern
                         # centre of the holes found
                         drawSeatingMarks(result_image, seating if seating is not None else
-                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components)}, model,
+                                         {"hole_centre": BS_MODULE.hole_pattern_centre(components), "hub": hub}, model,
                                          source_rgb=anImage_rgb)
 
                         if PRINT_RESULT_PAINTING:
@@ -376,7 +395,7 @@ class CheckBung:
                     logBoth('logError', _src, f"[CheckBung] ✗ FAIL - No definitive pattern found in any gamma", MessageType.ISSUE)
 
                 no_pattern = anImage_rgb.copy()
-                drawSeatingMarks(no_pattern, {}, model, source_rgb=anImage_rgb)   # no pattern, no seating: nothing drawn (CHANGES 173)
+                drawSeatingMarks(no_pattern, {"hub": hub}, model, source_rgb=anImage_rgb)   # no pattern, no seating: nothing drawn (CHANGES 173)
                 result_bgr = cv2.cvtColor(no_pattern, cv2.COLOR_RGB2BGR)
                 return _maybe_crop(result_bgr), False, None
 
