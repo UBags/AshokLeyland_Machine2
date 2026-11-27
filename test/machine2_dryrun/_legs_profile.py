@@ -37,10 +37,10 @@ circle round the outline's centroid). All coordinates below are in the 240 x 240
        max(R - B, 0) -> Otsu, 1 = bright  AND  R - G -> Otsu (not below RG_FLOOR_B), 1 = bright;
        only pieces reaching within TOUCH_B px of region (b)'s inner edge are kept (a leg outside comes out of the
        washer; the white highlight where a leg crosses the washer's edge can break its first px).
-   Since 02:51 (Uddi): (a)'s grey Otsu x A_GREY_FACTOR (0.8) and R-G Otsu x A_RG_FACTOR (1.2), the strong R-G Otsu over
-   the values above the adjusted one; then inside each area the grey refinement (refineInGrey): grey, relative gamma
-   round the area's mean (above: GAMMA_HIGH 1.5, brighter, <= 255; below: GAMMA_LOW 0.6, darker, >= 0), Otsu of the
-   result x A_REFINE_FACTOR (0.8), the dark pixels are the legs on the washer (a). (b) since CHANGES 224 (Uddi 03:12):
+   Since 02:51 (Uddi): inside the (a) area the grey refinement (refineInGrey): grey, relative gamma round the area's mean
+   (above: GAMMA_HIGH 1.5, brighter, <= 255; below: GAMMA_LOW 0.6, darker, >= 0), Otsu of the result, the dark pixels
+   are the legs on the washer. (CHANGES 223 multiplied (a)'s grey / R-G / refine Otsu values by 0.8 / 1.2 / 0.8;
+   removed in 226, Uddi 03:27: every Otsu value is used as it is.) (b) since CHANGES 224 (Uddi 03:12):
    each connected piece of the (b) area on its own - 2R - G - B (negatives 0), Otsu over the piece, the bright side
    are the legs (refineByRedness; no histogram equalisation since CHANGES 225).
    The leg profile = (a) OR (b).
@@ -82,11 +82,8 @@ GAP_B = 3                  # px past the outline where region (b) starts
 OUT = 30                   # px past the outline where region (b) ends
 RG_FLOOR_B = 8             # region (b): the R - G threshold is never below this
 TOUCH_B = 8                # px: a region (b) piece must reach within this of region (b)'s inner edge
-A_GREY_FACTOR = 0.8        # (a) the grey Otsu value x this (towards zero by 20 %; Uddi 02:51)
-A_RG_FACTOR = 1.2          # (a) the R-G Otsu value x this (away from zero by 20 %)
 GAMMA_HIGH = 1.5           # grey refinement: above the mask's mean, mean * (v / mean) ** GAMMA_HIGH (brighter, <= 255)
 GAMMA_LOW = 0.6            # below the mean, mean * (v / mean) ** (1 / GAMMA_LOW) (darker, >= 0)
-A_REFINE_FACTOR = 0.8      # (a) refinement: Otsu x this, the dark pixels are the legs
 REFINE_MIN_PX = 10         # a mask with fewer pixels is not refined
 
 
@@ -316,13 +313,13 @@ def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
     regA = sector & (din >= rInner) & (d <= FR)
     regB = sector & (d > FR + GAP_B) & (d <= FR + OUT)
     tAgreyOtsu, tArgOtsu = _otsu(grey[regA]), _otsu(rg[regA])
-    tAgrey, tArg = tAgreyOtsu * A_GREY_FACTOR, tArgOtsu * A_RG_FACTOR
+    tAgrey, tArg = tAgreyOtsu, tArgOtsu                 # no adjustment since CHANGES 226 (223 had x 0.8 / x 1.2)
     aDark, aRG = regA & (grey <= tAgrey), regA & (rg > tArg)
     upper = rg[regA & (rg > tArg)]
     tAstrong = _otsu(upper) if upper.size >= 10 else 255.0
     aStrong = regA & (rg > tAstrong)
     areaA = (aDark & aRG) | aStrong
-    legsA, tArefine = refineInGrey(grey, areaA, A_REFINE_FACTOR, dark=True)
+    legsA, tArefine = refineInGrey(grey, areaA, 1.0, dark=True)   # Otsu as it is since CHANGES 226 (223: x 0.8)
     tBrb, tBrgOtsu = _otsu(rb[regB]), _otsu(rg[regB])
     tBrg = max(tBrgOtsu, RG_FLOOR_B)
     bRB, bRG = regB & (rb > tBrb), regB & (rg > tBrg)

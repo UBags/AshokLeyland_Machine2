@@ -6528,3 +6528,12 @@ No code changed.
   with >= 50 px there (224: 0.41 - 0.87, median 0.50) - the share now follows the piece instead of sitting near half;
   the legs beyond the washer stay continuous; contact sheets checked by eye; the window driven offscreen (18 pictures);
   both files parse on Python 3.11.
+
+## 226. Study_Legs_Profile_UI: no Otsu adjustments in region (a) (2026-11-28)
+
+- Uddi, 2026-11-28 03:27: remove the Otsu adjustments of 223 over the split pin washer - the grey Otsu x 0.8, the R-G
+  Otsu x 1.2 and the refine Otsu x 0.8 (constants `A_GREY_FACTOR`, `A_RG_FACTOR`, `A_REFINE_FACTOR` and their spin
+  boxes gone); every Otsu value is used as it is. The relative gamma of region (a)'s grey refinement stays (1.5 / 0.6,
+  spin boxes). Region (b)'s adjustment (223's x 1.2) was already gone with 224; region (b) keeps only its R-G floor of 8
+  (222) and the touch rule.
+- Run: the window driven offscreen (18 pictures); both files parse on Python 3.11.
