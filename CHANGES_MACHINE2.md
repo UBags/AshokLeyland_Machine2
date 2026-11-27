@@ -6379,4 +6379,4 @@ ellipse is not an ellipse). Both dry-run folders. Stage-2 fraction (e < 0.7) unc
 
 **Effect on the 17 logged values:** verdicts as in 218 - 9 / 9 good OK, 5 / 5 bad NOT OK, "good?" 12-46-43 NOT OK
 (e 1.39), 153625563 OK. **153622275 ("bad?", dx -27.8, dy -2.8) now just outside (e 1.07, was 1.24)**: a little more
-east-west would let it in (e = 1 at east-west ~ 28.9).
+east-west would let it in (e = 1 at east-west ~ 27.9).
