@@ -43,7 +43,18 @@ circle round the outline's centroid). All coordinates below are in the 240 x 240
    removed in 226, Uddi 03:27: every Otsu value is used as it is.) (b) since CHANGES 224 (Uddi 03:12):
    each connected piece of the (b) area on its own - 2R - G - B (negatives 0), Otsu over the piece, the bright side
    are the legs (refineByRedness; no histogram equalisation since CHANGES 225).
-   The leg profile = (a) OR (b).
+   The leg masks = (a) OR (b).
+5. Leg profile from the skeletons (profileFromSkeleton; Uddi 03:55, CHANGES 228): each mask ((a) and (b) apart) thinned
+   to a one-pixel skeleton (_legs_length.thin) and split at its junctions into branches (crossing legs apart; spurs under
+   BRANCH_MIN px dropped), each branch smoothed over SMOOTH points; on each side the whole branch moved out 1 px at a
+   time until, along at least EDGE_SHARE of its points, the pixel 1 px further out and the one 1 px further in differ by
+   - (a) grey: outside lighter by EDGE_GREY_MIN,  (b) 2R - G - B: inside higher by EDGE_RED_MIN ("much less red" outside);
+   the first such offset is the edge (none up to EDGE_MAX: where the mask itself ends on that side, median over the
+   branch - maskExit; marked "no edge"); the tube between the left and right edges, with round ends, is the leg profile;
+   a piece of the mask with no branch (skeleton under BRANCH_MIN px) is kept as it is.
+   Measured (24 Nov pictures): across a leg's edge beyond the washer 2R - G - B changes by about 17 between the pixels
+   1 px either side (median of the best offset; p90 31) - the colour is spread over the JPEG's 8 x 8 blocks; with a
+   minimum difference of 10 / 20 / 30, 202 / 68 / 24 of 248 sides find an edge.
 Measured on the 150 DOST pictures of 2026-11-24 (38 OK / 112 NOT OK, permanent marker; sandbox: dark-blob hole finder,
 MobileSAM on the CPU): see CHANGES 222.
 """
@@ -51,6 +62,8 @@ import math
 
 import cv2
 import numpy as np
+
+import _legs_length as _LL                    # thin(): Zhang-Suen thinning
 
 NB = 360
 T = np.deg2rad(np.arange(NB) + 0.5)
@@ -78,13 +91,20 @@ ROUGH_REACH = 45           # px past the outline
 ROUGH_AREA_MIN = 25        # px
 # 4. leg profile
 SECTOR = 60                # deg either side of the legs axis
-GAP_B = 3                  # px past the outline where region (b) starts
+GAP_B = 1                  # px past the outline where region (b) starts (3 in 222 - 227; 1 since 228, Uddi 03:55)
 OUT = 30                   # px past the outline where region (b) ends
 RG_FLOOR_B = 8             # region (b): the R - G threshold is never below this
 TOUCH_B = 8                # px: a region (b) piece must reach within this of region (b)'s inner edge
 GAMMA_HIGH = 1.5           # grey refinement: above the mask's mean, mean * (v / mean) ** GAMMA_HIGH (brighter, <= 255)
 GAMMA_LOW = 0.6            # below the mean, mean * (v / mean) ** (1 / GAMMA_LOW) (darker, >= 0)
 REFINE_MIN_PX = 10         # a mask with fewer pixels is not refined
+# 5. leg profile from the skeletons (CHANGES 228)
+BRANCH_MIN = 6             # px: shorter skeleton branches (spurs) are dropped
+SMOOTH = 5                 # points: moving average along a branch before its normals are taken
+EDGE_MAX = 10              # px: the farthest offset tried on each side
+EDGE_SHARE = 0.7           # share of a branch's points that must pass at an offset for it to be the edge
+EDGE_GREY_MIN = 15         # (a): grey 1 px outside minus grey 1 px inside, at least this
+EDGE_RED_MIN = 30          # (b): 2R - G - B 1 px inside minus 1 px outside, at least this
 
 
 def _bilinear(img, x, y):
@@ -300,6 +320,116 @@ def refineByRedness(crop: np.ndarray, area: np.ndarray):
     return out, pieces
 
 
+def branches(mask: np.ndarray) -> list:
+    """The mask thinned to a one-pixel skeleton and split at its junctions: [ordered (N x 2) x, y arrays], spurs under
+    BRANCH_MIN px dropped. Crossing legs give separate branches."""
+    sk = _LL.thin(mask.astype(np.uint8)).astype(np.uint8)
+    if sk.sum() == 0:
+        return []
+    # a junction is where the line goes three or more ways: three or more 0 -> 1 changes going round the pixel's eight
+    # neighbours (not three neighbours - the staircase corners of a thinned line have three without branching)
+    P = np.pad(sk, 1)
+    ring = [P[0:-2, 1:-1], P[0:-2, 2:], P[1:-1, 2:], P[2:, 2:], P[2:, 1:-1], P[2:, 0:-2], P[1:-1, 0:-2], P[0:-2, 0:-2]]
+    crossings = sum(((ring[i] == 0) & (ring[(i + 1) % 8] == 1)).astype(int) for i in range(8))
+    junction = (sk == 1) & (crossings >= 3)
+    rest = (sk == 1) & ~junction
+    n, lab = cv2.connectedComponents(rest.astype(np.uint8), connectivity=8)
+    out = []
+    for i in range(1, n):
+        ys, xs = np.nonzero(lab == i)
+        if len(xs) < BRANCH_MIN:
+            continue
+        pts = set(zip(xs.tolist(), ys.tolist()))
+        deg = {p: sum((p[0] + dx, p[1] + dy) in pts for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy) for p in pts}
+        start = min(pts, key=lambda p: (deg[p], p))           # an end (1 neighbour) if there is one
+        path, seen, cur = [start], {start}, start
+        while True:
+            nxt = [(cur[0] + dx, cur[1] + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx or dy)]
+            nxt = [p for p in nxt if p in pts and p not in seen]
+            if not nxt:
+                break
+            cur = min(nxt, key=lambda p: abs(p[0] - path[-1][0]) + abs(p[1] - path[-1][1]))   # straight before diagonal
+            path.append(cur)
+            seen.add(cur)
+        if len(path) >= BRANCH_MIN:
+            out.append(np.array(path, float))
+    return out
+
+
+def _smoothNormals(path: np.ndarray):
+    k = min(SMOOTH, len(path))
+    if k >= 3:
+        pad = np.vstack([np.repeat(path[:1], k // 2, 0), path, np.repeat(path[-1:], k // 2, 0)])
+        sm = np.column_stack([np.convolve(pad[:, j], np.ones(k) / k, "valid") for j in range(2)])[:len(path)]
+    else:
+        sm = path.copy()
+    t = np.gradient(sm, axis=0)
+    L = np.hypot(t[:, 0], t[:, 1]) + 1e-9
+    return sm, np.column_stack([-t[:, 1] / L, t[:, 0] / L])     # left normal
+
+
+def edgeOffset(img: np.ndarray, sm: np.ndarray, nrm: np.ndarray, side: int, darkInside: bool, minDiff: float):
+    """Move the whole branch 1 px at a time to one side (side +1 / -1) until, along at least EDGE_SHARE of it, the
+    pixel 1 px further out differs from the one 1 px further in by minDiff (darkInside: outside lighter by minDiff;
+    else inside higher by minDiff). (offset px, share at it, found)."""
+    best = (EDGE_MAX, 0.0)
+    for d in range(1, EDGE_MAX + 1):
+        pin = sm + side * (d - 1) * nrm
+        pout = sm + side * (d + 1) * nrm
+        vin, vout = _bilinear(img, pin[:, 0], pin[:, 1]), _bilinear(img, pout[:, 0], pout[:, 1])
+        diff = (vout - vin) if darkInside else (vin - vout)
+        share = float(np.mean(diff >= minDiff))
+        if share >= EDGE_SHARE:
+            return d, share, True
+        if share > best[1]:
+            best = (d, share)
+    return best[0], best[1], False
+
+
+def maskExit(mask: np.ndarray, sm: np.ndarray, nrm: np.ndarray, side: int) -> int:
+    """Where the mask ends on one side of a branch: per point the first offset (1 .. EDGE_MAX) outside the mask, the
+    median over the branch."""
+    h, w = mask.shape
+    first = np.full(len(sm), EDGE_MAX)
+    for d in range(EDGE_MAX, 0, -1):
+        p = np.round(sm + side * d * nrm).astype(int)
+        inside = mask[np.clip(p[:, 1], 0, h - 1), np.clip(p[:, 0], 0, w - 1)]
+        first[~inside] = d
+    return int(np.median(first))
+
+
+def profileFromSkeleton(mask: np.ndarray, img: np.ndarray, darkInside: bool, minDiff: float):
+    """Steps (b)(1) / (b)(2) of CHANGES 228: every branch of the mask's skeleton, its edge on the left and on the right,
+    the tube between them (round ends). (profile mask, [branch dicts])."""
+    h, w = mask.shape
+    out = np.zeros((h, w), np.uint8)
+    info = []
+    for path in branches(mask):
+        sm, nrm = _smoothNormals(path)
+        dl, shl, fl = edgeOffset(img, sm, nrm, +1, darkInside, minDiff)
+        dr, shr, fr = edgeOffset(img, sm, nrm, -1, darkInside, minDiff)
+        if not fl:
+            dl = maskExit(mask, sm, nrm, +1)          # no edge: where the mask itself ends on that side
+        if not fr:
+            dr = maskExit(mask, sm, nrm, -1)
+        left, right = sm + dl * nrm, sm - dr * nrm
+        poly = np.round(np.vstack([left, right[::-1]])).astype(np.int32)
+        cv2.fillPoly(out, [poly], 1)
+        rcap = int(round((dl + dr) / 2))
+        for p in (sm[0], sm[-1]):
+            cv2.circle(out, (int(round(p[0])), int(round(p[1]))), max(rcap, 1), 1, -1)
+        info.append(dict(path=sm, left=left, right=right, length=len(path), dl=dl, dr=dr, shl=shl, shr=shr,
+                         foundL=fl, foundR=fr))
+    # a piece of the mask with no branch (its skeleton shorter than BRANCH_MIN) is kept as it is
+    out = out.astype(bool)
+    n, lab = cv2.connectedComponents(mask.astype(np.uint8), connectivity=8)
+    for k in range(1, n):
+        piece = lab == k
+        if not (piece & out).any():
+            out |= piece
+    return out, info
+
+
 def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
     """Step 4. Every mask is returned for the window's mask views."""
     B, G, R = (crop[..., k].astype(float) for k in range(3))
@@ -332,7 +462,14 @@ def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
         if (comp & start).any():
             areaB |= comp
     legsB, tBrefine = refineByRedness(crop, areaB)
-    return dict(axis=legsAxis, regA=regA, regB=regB, aDark=aDark, aRG=aRG, aStrong=aStrong, bRB=bRB, bRG=bRG, bRaw=raw,
+    # 5. the leg profile from the skeletons (CHANGES 228): on the washer the boundary dark inside / light outside in grey;
+    # beyond it red inside / much less red outside in 2R - G - B
+    greyF = grey.astype(np.float32)
+    redF = (2 * R - G - B).astype(np.float32)
+    profA, brA = profileFromSkeleton(legsA, greyF, True, EDGE_GREY_MIN)
+    profB, brB = profileFromSkeleton(legsB, redF, False, EDGE_RED_MIN)
+    return dict(axis=legsAxis, regA=regA, regB=regB, maskA=legsA, maskB=legsB, profA=profA, profB=profB,
+                branchesA=brA, branchesB=brB, profile=profA | profB, aDark=aDark, aRG=aRG, aStrong=aStrong, bRB=bRB, bRG=bRG, bRaw=raw,
                 areaA=areaA, areaB=areaB, legsA=legsA, legsB=legsB, legs=legsA | legsB,
                 tA_grey=tAgrey, tA_rg=tArg, tA_grey_otsu=tAgreyOtsu, tA_rg_otsu=tArgOtsu, tA_refine=tArefine, tB_refine=tBrefine, tA_strong=tAstrong, tB_rb=tBrb, tB_rg=tBrg, tB_rg_otsu=tBrgOtsu,
                 pxA=int(legsA.sum()), pxB=int(legsB.sum()))
@@ -364,4 +501,9 @@ def summaryLine(res: dict) -> str:
                  f" R-G {L['tA_rg_otsu']:.0f} -> {L['tA_rg']:.0f}, strong {L['tA_strong']:.0f}, refine {f(L['tA_refine'])}),"
                  f" outside {L['pxB']} of {int(L['areaB'].sum())} px (Otsu R-B {L['tB_rb']:.0f}, R-G {L['tB_rg_otsu']:.0f} -> {L['tB_rg']:.0f},"
                  f" pieces {_pieces(L['tB_refine'])} (px:Otsu:kept))")
+        line += f"; profile on washer {int(L['profA'].sum())} px, outside {int(L['profB'].sum())} px"
+        for tag, brs in (("a", L["branchesA"]), ("b", L["branchesB"])):
+            for b in brs:
+                line += (f"; branch {tag} {b['length']} px: left {b['dl']} px ({b['shl']:.2f}{'' if b['foundL'] else ' no edge'}),"
+                         f" right {b['dr']} px ({b['shr']:.2f}{'' if b['foundR'] else ' no edge'})")
     return line

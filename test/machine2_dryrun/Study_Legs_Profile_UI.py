@@ -10,14 +10,17 @@ Row 1: Folder... (OK\\ and NOT_OK\\ - or "Not OK" - sub-folders give the label; 
 seconds between pictures (changeable during the run), Save (marked pictures and a csv in <folder>/legs_profile_results/),
 Start / Stop.
 Row 2: the main values of _legs_profile (taken at Start, this window only): scallop shift +- px, scallop found share,
-legs sector +- deg, region (b) start / end px past the outline, region (b) R-G floor, region (b) touch px.
+legs sector +- deg, region (b) start / end px past the outline, region (b) R-G floor, region (b) touch px; the edge
+search of the skeleton step (CHANGES 228): share, (a) grey difference, (b) 2R - G - B difference.
 Row 3: gamma above / below the mean (1.5 / 0.6) of region (a)'s grey refinement (CHANGES 223; its Otsu factors removed
 in 226 - every Otsu value is used as it is). Region (b)'s refinement (CHANGES 224 / 225: 2R - G - B per piece, Otsu) has no values to set.
 Views (outlines only, no values on the pictures):
   - the whole picture;
   - the washer x3: scallops (dark blue; found / placed in the table and the text box), inner edge (yellow), pin head
-    (white), leg profile (red); beyond the washer also region (b)'s area before its 2R - G - B Otsu (yellow, CHANGES 227);
-  - the washer x3 with one mask, chosen in "Mask view" (redraws the picture shown): leg profile, (a) / (b) area before
+    (white), leg profile from the skeletons (red, CHANGES 228); beyond the washer also region (b)'s area before its
+    2R - G - B Otsu (yellow, CHANGES 227);
+  - the washer x3 with one mask, chosen in "Mask view" (redraws the picture shown): leg profile (skeletons), skeleton
+    branches (green, left edge red, right edge magenta), leg masks before the skeletons, (a) / (b) area before
     the grey refinement (CHANGES 223), (a) grey dark, (a) R-G
     bright, (a) strong R-G, (b) R-B bright, (b) R-G bright, (b) before the touch rule, rough legs; the regions (a) / (b)
     thin grey.
@@ -49,7 +52,8 @@ import _legs_profile as LP                                                      
 NOT_OK_NAMES = ("NOT_OK", "Not OK", "NOT OK", "Not_OK", "not ok", "Not ok", "NotOK")
 COLUMNS = ("file", "label", "holes", "scallops found / placed", "max |shift|", "head", "legs on washer px",
            "legs outside px", "Otsu a: grey / R-G / strong", "Otsu b: R-B / R-G", "time s", "note")
-MASK_VIEWS = (("leg profile", "legs", (0, 0, 255)), ("(a) area before the grey refinement", "areaA", (0, 0, 255)),
+MASK_VIEWS = (("leg profile (skeletons)", "profile", (0, 0, 255)), ("skeleton branches", "branches", (0, 255, 0)),
+              ("leg masks before the skeletons", "legs", (0, 0, 255)), ("(a) area before the grey refinement", "areaA", (0, 0, 255)),
               ("(b) area before the grey refinement", "areaB", (0, 0, 255)), ("(a) grey dark", "aDark", (255, 0, 0)),
               ("(a) R-G bright", "aRG", (0, 255, 255)), ("(a) strong R-G", "aStrong", (0, 165, 255)),
               ("(b) R-B bright", "bRB", (255, 0, 255)), ("(b) R-G bright", "bRG", (0, 255, 0)),
@@ -133,8 +137,7 @@ def _outlines(img, out, off, scale, legs=True):
         # region (b), over the plate washer / seal (Uddi 03:35): its area before the 2R - G - B Otsu yellow, the legs
         # after it red; region (a)'s legs red
         _contours(img, res["legs"]["areaB"], off, scale, AREA_B_COLOUR)
-        _contours(img, res["legs"]["legsA"], off, scale, (0, 0, 255))
-        _contours(img, res["legs"]["legsB"], off, scale, (0, 0, 255))
+        _contours(img, res["legs"]["profile"], off, scale, (0, 0, 255))      # the profile from the skeletons (CHANGES 228)
 
 
 def fullPicture(out):
@@ -164,6 +167,13 @@ def zoomPicture(out, maskKey=None):
         _contours(z, L["regA"], off, ZOOM_SCALE, (110, 110, 110))
         _contours(z, L["regB"], off, ZOOM_SCALE, (110, 110, 110))
     key, col = maskKey
+    if key == "branches":
+        if L is not None:
+            for b in L["branchesA"] + L["branchesB"]:
+                _poly(z, b["path"], off, ZOOM_SCALE, col, closed=False)
+                _poly(z, b["left"], off, ZOOM_SCALE, (0, 0, 255), closed=False)
+                _poly(z, b["right"], off, ZOOM_SCALE, (255, 0, 255), closed=False)
+        return z
     m = out["res"]["rough"] if key == "rough" else (L[key] if L is not None else None)
     _contours(z, m, off, ZOOM_SCALE, col)
     return z
@@ -300,6 +310,9 @@ def window(folder):
             spin("OUT", "(b) to px", 10, 60, 5)
             spin("RG_FLOOR_B", "(b) R-G floor", 0, 40, 1)
             spin("TOUCH_B", "(b) touch px", 1, 20, 1)
+            spin("EDGE_SHARE", "Edge share", 0.3, 1.0, 0.05, 2)
+            spin("EDGE_GREY_MIN", "(a) edge grey >=", 1, 80, 1)
+            spin("EDGE_RED_MIN", "(b) edge 2R-G-B >=", 1, 150, 5)
             row2.addStretch(1)
             row2b = QHBoxLayout()
             spin("GAMMA_HIGH", "Gamma above mean", 1.0, 3.0, 0.1, 2, row2b)

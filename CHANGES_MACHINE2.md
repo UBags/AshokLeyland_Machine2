@@ -6543,3 +6543,30 @@ No code changed.
 - Uddi, 2026-11-28 03:35: over the plate washer / seal, draw the area before the 2R - G - B Otsu in yellow and the
   legs after it in red (whole picture, washer view, saved pictures). Drawing only; `_legs_profile.py` unchanged.
 - Run: the window driven offscreen (18 pictures).
+
+## 228. Study_Legs_Profile_UI: leg profile from the skeletons; region (b) from 1 px past the outline (2026-11-28)
+
+- Uddi, 2026-11-28 03:55: (a) region (b) (plate washer / seal) starts 1 px past the scallop profile (`GAP_B` 3 -> 1);
+  (b) skeletonise the masks along their axis, move the skeleton out 1 px at a time on the left until a boundary along
+  the whole stretch - on the washer darker inside / lighter outside, beyond it redder inside / much less red outside -
+  then on the right likewise; (c) these profiles drawn red.
+- `_legs_profile`, step 5 (`branches`, `edgeOffset`, `maskExit`, `profileFromSkeleton`): each mask ((a) and (b) apart)
+  thinned (`_legs_length.thin`, Zhang-Suen) and split at its junctions into branches (crossing legs apart; spurs under 6
+  px dropped; a junction = three or more 0 -> 1 changes round the pixel - first built with "three or more neighbours",
+  which took the staircase corners of a thinned line for junctions: 50 of 96 skeleton pixels on one picture, branches of
+  1 - 8 px); each branch smoothed over 5 points; per side the whole branch moved out 1 px at a time; at offset d the
+  pixels at d - 1 (inside) and d + 1 (outside): (a) grey outside lighter by >= 15, (b) 2R - G - B inside higher by >= 30;
+  the first d where >= 70 % of the branch's points pass is the edge (up to 10 px); no edge -> where the mask itself ends
+  on that side (median over the branch; first built with the widest offset tried, which ballooned the tube to 10 px);
+  the tube between the edges with round ends; a mask piece with no branch kept as it is. Values in spin boxes (edge
+  share, (a) grey difference, (b) 2R - G - B difference).
+- Window: the red outline is now this profile; mask views "leg profile (skeletons)", "skeleton branches" (green, left
+  edge red, right edge magenta), "leg masks before the skeletons"; text box: per branch its length, left / right offset
+  and share, "no edge" where the fallback was used.
+- Measured (sandbox, the 150 pictures, dark-blob holes): 3 branches per picture (median, 0 - 9), washer branches 15 px
+  (median); edges found on 390 of 578 washer sides (67 %) and 23 of 248 sides beyond the washer (9 %). Beyond the washer
+  2R - G - B changes by about 17 between the pixels 1 px either side of a leg's edge (median of the best offset, p90 31):
+  the colour is spread over the JPEG's 8 x 8 blocks; with a minimum of 10 / 20 / 30, 202 / 68 / 24 of 248 sides find an
+  edge - 30 kept (Uddi's "much less red"), the spin box sets it; where none is found the mask's own width is used. On
+  12 pictures the profile covers less than half of the masks. Steps 1 - 5 0.04 - 0.10 s per picture (CPU). Contact
+  sheets checked by eye; the window driven offscreen (18 pictures); both files parse on Python 3.11.
