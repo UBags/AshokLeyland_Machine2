@@ -88,6 +88,7 @@ def main():
         if args.mask == "annulus":
             print(A.annulusLine(p.name, res), flush=True)
             print(f"VERDICT {p.name}: {res.get('verdict')} - {res.get('why')}", flush=True)
+            print("AND %s: %s - %s (alternative, not used)" % ((p.name,) + A.verdictAnd(res)), flush=True)
         if args.save:
             cv2.imwrite(str(resultsDir / f"{p.stem}_annulus.jpg"), A.marked(img, res))
             if res.get("masksPicture") is not None:

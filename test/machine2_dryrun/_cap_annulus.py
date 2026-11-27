@@ -1,6 +1,7 @@
 """
 _cap_annulus - the measure of Study_Cap_Annulus.py / Study_Cap_Annulus_UI.py (CHANGES 203, 204; Uddi 2026-11-27).
-Study only: production is not changed.
+Since CHANGES 212 the annulus method and its verdict are production's (camera/CapAnnulus.py, the silver cap seating);
+this module calls it, so the study and the cap check measure alike.
 
 measure(picture, model) per cap picture:
   1. Steps 1 - 2 of CheckCap (production helpers, round vision.cap.center): R-B in the brass and silver circles,
@@ -49,6 +50,7 @@ import camera.CheckCap as CheckCapModule
 from camera.CheckCap import CheckCap
 from camera import CapMaskFinder
 from camera.FindHubHoles import FindHubHoles
+from camera import CapAnnulus          # the production method (CHANGES 212): prompts, mask, inner ellipse, widths, rule
 
 CheckCapModule.logBoth = lambda *a, **k: None          # the study shows its own lines
 
@@ -58,10 +60,11 @@ DIAMETER_ANGLES = tuple(range(15, 181, 15))            # 15, 30, ..., 180: 12 di
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
 MASK_METHODS = ("boxes", "points", "annulus")
-ANNULUS_INSET = 5                  # px: the annulus prompts lie on a circle this far inside the hole circle
-ANNULUS_STEP_DEG = 5               # one prompt every this many degrees on it ...
-ANNULUS_HOLE_CLEARANCE = 28        # px: ... except within this distance of a hole centre (the holes are r ~15 - 20)
-ANNULUS_NEGATIVE_RADII = (0, 30, 60)   # negative prompts on the cap: H, and r 30 / 60 x every 45 deg (17 points)
+# Since CHANGES 212 the annulus method's values are camera/CapAnnulus.py's (vision.cap.annulus.* keys)
+ANNULUS_INSET = CapAnnulus.PROMPT_INSET            # px: the annulus prompts lie on a circle this far inside the hole circle
+ANNULUS_STEP_DEG = CapAnnulus.PROMPT_STEP_DEG      # one prompt every this many degrees on it ...
+ANNULUS_HOLE_CLEARANCE = CapAnnulus.HOLE_CLEARANCE # px: ... except within this distance of a hole centre
+ANNULUS_NEGATIVE_RADII = CapAnnulus.NEGATIVE_RADII # negative prompts on the cap: H, and r 30 / 60 x every 45 deg
 MASK_GAMMA_DEFAULT = float(CapMaskFinder.GAMMA)        # production cap mask: 2.0
 
 HEADER = (["file", "model", "mask_method", "prompts", "ann_area", "inner_points", "inliers", "inlier_share",
@@ -105,18 +108,37 @@ MASK_OVERDETECT = dict(conf=0.10, yolo_iou=0.80, max_det=1000, multimask=True, i
 MASK_STUDY = dict(conf=0.05, yolo_iou=0.95, max_det=300, multimask=True, iou=0.15, stability=0.25, merge=0.90)
 STUDY_METHOD = "annulus"
 STUDY_HOLES_GAMMA = 1.0
-STUDY_MASK_GAMMA = 2.0
-INNER_TOLERANCE = 2.0              # px: an inner edge point this close to the inner ellipse is on it
-INNER_TRIES = 1500                 # RANSAC ellipses through 5 inner edge points (fixed seed)
-WIDTH_STEP_DEG = 10                # annulus width printed every this many degrees (36 values)
+STUDY_MASK_GAMMA = float(CapAnnulus.MASK_GAMMA)
+INNER_TOLERANCE = CapAnnulus.INNER_TOLERANCE      # px: an inner edge point this close to the inner ellipse is on it
+INNER_TRIES = CapAnnulus.INNER_TRIES              # RANSAC ellipses through 5 inner edge points (fixed seed)
+WIDTH_STEP_DEG = CapAnnulus.WIDTH_STEP_DEG        # annulus width printed every this many degrees (36 values)
 
-# Uddi's verdict rule of 2026-11-27 11:29 (CHANGES 211), annulus method. 0 errors on his 39 OK / 33 NOT OK pictures of
-# 26 Nov (two sessions, 13 parts each). Stage 1: any -> NOT OK. Stage 2: any -> OK. Else NOT OK.
-RULE_NOT_OK = (("centre offset", "ell_hub_dist", ">", 7.0), ("score_ellipse", "score_ellipse", ">", 16.0),
-               ("islands", "islands", ">", 230), ("w_opp_max", "w_opp_max", ">", 17), ("width_p90", "width_p90", ">", 50),
-               ("width_max", "width_max", ">", 52))
-RULE_OK = (("inlier_share", "inlier_share", ">", 0.70), ("width_sd", "width_sd", "<", 3.5), ("islands", "islands", "<", 200),
-           ("w_opp_max", "w_opp_max", "<", 11), ("width_p90", "width_p90", "<", 47), ("width_max", "width_max", "<", 48.25))
+# Uddi's verdict rule (CHANGES 211; islands NOT OK limit 230 -> 450 in CHANGES 212, Uddi 2026-11-27), annulus method,
+# the limits from camera/CapAnnulus.py (production). 0 errors on his 116 distinct pictures of 13, 17 and 26 Nov (71 OK,
+# 45 NOT OK). Stage 1: any -> NOT OK. Stage 2: any -> OK. Else NOT OK.
+# Values are compared as printed (rounded as in the ANNULUS line); production compares the unrounded values - a value
+# within the rounding of a limit can differ.
+RULE_NOT_OK = (("centre offset", "ell_hub_dist", ">", CapAnnulus.NOT_OK_OFFSET),
+               ("score_ellipse", "score_ellipse", ">", CapAnnulus.NOT_OK_SCORE),
+               ("islands", "islands", ">", CapAnnulus.NOT_OK_ISLANDS),
+               ("w_opp_max", "w_opp_max", ">", CapAnnulus.NOT_OK_OPPOSITE),
+               ("width_p90", "width_p90", ">", CapAnnulus.NOT_OK_WIDTH_P90),
+               ("width_max", "width_max", ">", CapAnnulus.NOT_OK_WIDTH_MAX))
+RULE_OK = (("inlier_share", "inlier_share", ">", CapAnnulus.OK_INLIER_SHARE),
+           ("width_sd", "width_sd", "<", CapAnnulus.OK_WIDTH_SD), ("islands", "islands", "<", CapAnnulus.OK_ISLANDS),
+           ("w_opp_max", "w_opp_max", "<", CapAnnulus.OK_OPPOSITE),
+           ("width_p90", "width_p90", "<", CapAnnulus.OK_WIDTH_P90),
+           ("width_max", "width_max", "<", CapAnnulus.OK_WIDTH_MAX))
+# ALTERNATIVE, recorded, not used (Uddi 2026-11-27; also in CapAnnulus's docstring): an AND rule that separated the same
+# 116 pictures with 0 errors, each limit midway between the worst OK and the closest NOT OK value:
+#   OK if centre offset < 6.5 and score_ellipse < 15.0 and w_opp_max < 13.8 and width_p90 < 47.7 and width_max < 49.6
+#   (optionally also islands < 1000 and width_min > 25), else NOT OK.
+#   Worst OK / closest NOT OK: offset 5.32 / 8.46, score 14.27 / 15.50, w_opp_max 13.5 / 14.0, p90 46.9 / 48.4,
+#   width_max 48.8 / 50.5; every NOT OK picture fails at least 2 of the 5 (29 fail all 5). islands, width_sd and
+#   inlier_share are left out: OK and NOT OK overlap on them.
+RULE_AND_OK = (("centre offset", "ell_hub_dist", "<", 6.5), ("score_ellipse", "score_ellipse", "<", 15.0),
+               ("w_opp_max", "w_opp_max", "<", 13.8), ("width_p90", "width_p90", "<", 47.7),
+               ("width_max", "width_max", "<", 49.6))
 _mask = dict(MASK_STUDY)
 
 
@@ -249,114 +271,27 @@ def capMask(img: np.ndarray, hx: float, hy: float, gamma: float = 1.0):
 
 
 def annulusPrompts(hx: float, hy: float, R: float, holePoints) -> np.ndarray:
-    """Points every ANNULUS_STEP_DEG on the circle ANNULUS_INSET px inside the hole circle, none within
-    ANNULUS_HOLE_CLEARANCE px of a hole centre."""
-    holes = np.asarray(holePoints, dtype=np.float64).reshape(-1, 2) if holePoints is not None else np.zeros((0, 2))
-    r = R - ANNULUS_INSET
-    pts = []
-    for a in range(0, 360, ANNULUS_STEP_DEG):
-        x, y = hx + r * math.cos(math.radians(a)), hy + r * math.sin(math.radians(a))
-        if len(holes) and np.hypot(holes[:, 0] - x, holes[:, 1] - y).min() < ANNULUS_HOLE_CLEARANCE:
-            continue
-        pts.append((x, y))
-    return np.array(pts, dtype=np.float32)
+    """CapAnnulus.prompts (production, CHANGES 212)."""
+    return CapAnnulus.prompts(hx, hy, R, holePoints)
 
 
 def annulusMask(img: np.ndarray, hx: float, hy: float, R: float, holePoints, gamma: float):
-    """CHANGES 209 (Uddi 2026-11-27): a mask of ONLY the annulus between the cap and the holes. MobileSAM, one mask, from
-    positive prompts on the circle ANNULUS_INSET px inside the hole circle (avoiding the holes) and negative prompts on
-    the cap (H, and r 30 / 60 round it every 45 deg). With the one negative at H alone MobileSAM took hub and cap as one
-    mask (99 % of the cap covered on 3 OK pictures); with the 17 it covered none of it and 96 % of the ring. The annulus = that mask inside the hole circle; the cap = the region inside the hole circle, not in
-    the annulus, connected to H (its outline is the annulus's inner edge). -> (annulus, cap, score, prompts) or
-    (None, None, reason, prompts)."""
-    import torch
-    pts = annulusPrompts(hx, hy, R, holePoints)
-    if len(pts) < 3:
-        return None, None, "too few annulus prompts", pts
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    rgb = CapMaskFinder.applyGamma(rgb, gamma)
-    predictor = CheckCap._sam_predictor()
-    predictor.set_image(rgb)
-    negatives = np.array([[hx + r * math.cos(math.radians(a)), hy + r * math.sin(math.radians(a))]
-                          for r in ANNULUS_NEGATIVE_RADII for a in (range(0, 360, 45) if r else (0,))], dtype=np.float32)
-    coords = np.vstack([pts, negatives]).astype(np.float32)
-    labels = np.r_[np.ones(len(pts)), np.zeros(len(negatives))]
-    with torch.inference_mode():
-        masks, scores, _ = predictor.predict(point_coords=coords, point_labels=labels, multimask_output=False)
-    h, w = img.shape[:2]
-    yy, xx = np.ogrid[:h, :w]
-    circle = (xx - hx) ** 2 + (yy - hy) ** 2 <= R * R
-    ann = np.asarray(masks[0]).astype(bool) & circle
-    inside = (~ann & circle).astype(np.uint8)
-    n, lab = cv2.connectedComponents(inside)
-    ix, iy = int(round(hx)), int(round(hy))
-    if not ann.any() or n < 2 or lab[iy, ix] == 0:
-        return None, None, "annulus mask covers the hub centre or is empty", pts
-    return ann, lab == lab[iy, ix], float(scores[0]), np.vstack([pts, negatives])
+    """CHANGES 209 (Uddi 2026-11-27), production since CHANGES 212: CapAnnulus.annulusMask with this window's gamma.
+    -> (annulus, cap, score, prompts incl. the 17 negatives) or (None, None, reason, positive prompts)."""
+    ann, cap, samScore, pos, neg = CapAnnulus.annulusMask(img, hx, hy, R, holePoints, CheckCap._sam_predictor(), gamma)
+    return ann, cap, samScore, (np.vstack([pos, neg]) if ann is not None else pos)
 
 
 def innerEdgePoints(ann: np.ndarray, cap: np.ndarray) -> np.ndarray:
-    """The annulus pixels that touch the region it encloses (the inner edge; pieces of the mask lying inside the cap
-    give points too - they are outliers for the fit). -> N x 2 (x, y)."""
-    grown = cv2.dilate(cap.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-    ys, xs = np.nonzero(ann & grown)
-    return np.c_[xs, ys].astype(np.float64)
+    """CapAnnulus.innerEdgePoints (production, CHANGES 212)."""
+    return CapAnnulus.innerEdgePoints(ann, cap)
 
 
 def maxInliersEllipse(points: np.ndarray, tolerance: float = INNER_TOLERANCE, tries: int = INNER_TRIES,
                       seed: int = 0) -> Optional[dict]:
-    """CHANGES 210 (Uddi 2026-11-27): the ellipse on which the MOST points lie within `tolerance` px - a consensus fit,
-    not least squares (a least-squares ellipse is pulled by every stray point; this one ignores the points off it).
-      1. candidates: the least-squares ellipse of all points (start only) and `tries` ellipses through 5 random points
-         (fixed seed): the one with the most points within tolerance;
-      2. then a local search on (cx, cy, a, b, angle) - steps 1 px / 1 px / 1 px / 1 px / 2 deg, halved down to
-         0.05 px / 0.1 deg - taking any move that puts more points on the ellipse (equal count: a smaller mean distance
-         of those points).
-    -> dict(e=(cx, cy, a, b, angle deg), inliers, points, share, meanDist) or None."""
-    if len(points) < 10:
-        return None
-    dist = lambda e: CapMaskFinder.ellipseDistances(points, e)
-
-    def value(e):
-        d = dist(e)
-        on = d <= tolerance
-        return int(on.sum()), (-float(d[on].mean()) if on.any() else 0.0)
-
-    rng = np.random.default_rng(seed)
-    pts32 = points.astype(np.float32)
-    best = CapMaskFinder._cvToEllipse(cv2.fitEllipse(pts32))
-    bestV = value(best)
-    for _ in range(int(tries)):
-        try:
-            e = CapMaskFinder._cvToEllipse(cv2.fitEllipse(pts32[rng.choice(len(points), 5, replace=False)]))
-        except cv2.error:
-            continue
-        if not (np.isfinite(e).all() and 20 < e[3] <= e[2] < 400):
-            continue
-        v = value(e)
-        if v > bestV:
-            best, bestV = e, v
-    steps = np.array([1.0, 1.0, 1.0, 1.0, 2.0])
-    e = np.array(best, dtype=np.float64)
-    while steps[0] >= 0.05:
-        moved = False
-        for k in range(5):
-            for sign in (1, -1):
-                trial = e.copy()
-                trial[k] += sign * steps[k]
-                if trial[3] <= 0 or trial[2] <= 0:
-                    continue
-                v = value(tuple(trial))
-                if v > bestV:
-                    e, bestV, moved = trial, v, True
-        if not moved:
-            steps = steps / 2.0
-    cx, cy, a, b, ang = e
-    if b > a:
-        a, b, ang = b, a, ang + 90.0
-    e = (float(cx), float(cy), float(a), float(b), float(ang % 180.0))
-    n, neg = value(e)
-    return dict(e=e, inliers=n, points=len(points), share=n / len(points), meanDist=-neg)
+    """CHANGES 210, production since CHANGES 212: CapAnnulus.maxInliersEllipse (the ellipse with the MOST points within
+    tolerance px; RANSAC through 5 points, then a local search)."""
+    return CapAnnulus.maxInliersEllipse(points, tolerance, tries, seed)
 
 
 def annulusWidths(hx: float, hy: float, R: float, ann: np.ndarray, stepDeg: int = WIDTH_STEP_DEG) -> list:
@@ -618,25 +553,12 @@ def measureAnnulus(res: dict, hx, hy, R, ann, cap, samScore, floor) -> None:
                **{f"mask_{d}": f"{r:.3f}" for d, r in zip(DIAMETER_ANGLES, rM)})
 
 
-HOLE_ZONE = 45.0                   # px inside the hole circle where gaps in the ring (the holes) are passed over
+HOLE_ZONE = CapAnnulus.HOLE_ZONE   # px inside the hole circle where gaps in the ring (the holes) are passed over
 
 
 def _ringWidthAt(hx, hy, R, ann, phi, holeZone: float = HOLE_ZONE) -> float:
-    """The ring's width along the ray from H at phi (rad): walking in from the hole circle, gaps in the mask within
-    holeZone px of the circle (a hole, the ring's thin edge round it) are passed over; after that the first pixel off
-    the mask ends the ring. Width = R minus the distance of the last mask pixel (so pieces of the mask inside the cap,
-    not joined to the ring, do not count)."""
-    h, w = ann.shape
-    c, s_ = math.cos(phi), math.sin(phi)
-    t, last = R - 0.5, None
-    while t > 0:
-        x, y = int(round(hx + t * c)), int(round(hy + t * s_))
-        if 0 <= x < w and 0 <= y < h and ann[y, x]:
-            last = t
-        elif R - t > holeZone:
-            break
-        t -= 0.25
-    return R - last if last is not None else 0.0
+    """CapAnnulus.ringWidthAt (production, CHANGES 212; holeZone = CapAnnulus.HOLE_ZONE)."""
+    return CapAnnulus.ringWidthAt(hx, hy, R, ann, phi)
 
 
 def _ruleHits(res: dict, rules) -> list:
@@ -663,6 +585,15 @@ def verdict(res: dict):
     if good:
         return "OK", "stage 2 (any -> OK): " + "; ".join(good)
     return "NOT OK", "stage 3: no stage-1 and no stage-2 condition met"
+
+
+def verdictAnd(res: dict):
+    """The recorded AND alternative (RULE_AND_OK, not used): ("OK" / "NOT OK", the conditions failed)."""
+    if res.get("annulus") is None or res.get("ellipse") is None:
+        return "NOT OK", "no annulus values"
+    failed = [f"{label} {float(res[key]):g} not {op} {limit:g}" for label, key, op, limit in RULE_AND_OK
+              if res.get(key) not in ("", None) and not (float(res[key]) < limit)]
+    return ("NOT OK", "AND rule: " + "; ".join(failed)) if failed else ("OK", "AND rule: all 5 met")
 
 
 def annulusLine(name: str, res: dict) -> str:

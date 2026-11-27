@@ -15,11 +15,17 @@ multimask_output on, pred_iou_thresh 0.15, stability_score_thresh 0.25, box_nms_
 ("Study defaults" button; "Production values" = the cap check's). Annulus only draws and scores only the annulus: its
 edges (magenta) and the inner ellipse (yellow) - the ellipse with the most inner edge points within 2 px (not least
 squares) - and prints one "ANNULUS file=... key=value ..." line per picture on the terminal, to send back.
-Verdict (CHANGES 211, Uddi's rule of 2026-11-27; annulus only): stage 1 - centre offset > 7, score_ellipse > 16,
-islands > 230, w_opp_max > 17, ring width p90 > 50 or width_max > 52 -> NOT OK; stage 2 - inlier_share > 0.70,
+Verdict (CHANGES 211, Uddi's rule of 2026-11-27, islands limit 450 since CHANGES 212; annulus only; production's
+camera/CapAnnulus.py, the DOST cap seating since CHANGES 212): stage 1 - centre offset > 7, score_ellipse > 16,
+islands > 450, w_opp_max > 17, ring width p90 > 50 or width_max > 52 -> NOT OK; stage 2 - inlier_share > 0.70,
 width_sd < 3.5, islands < 200, w_opp_max < 11, p90 < 47 or width_max < 48.25 -> OK; else NOT OK. A "VERDICT file: OK /
 NOT OK - stage n: the conditions met" line on the terminal, a verdict column (green / red), OK in green or NOT OK in red
 written on the third panel, and a beep for NOT OK.
+Alternative AND rule (recorded, not used; Uddi 2026-11-27): OK if centre offset < 6.5 and score_ellipse < 15.0 and
+w_opp_max < 13.8 and width_p90 < 47.7 and width_max < 49.6 (optionally also islands < 1000, width_min > 25), else NOT
+OK - 0 errors on the same 116 pictures (71 OK / 43 NOT OK with values; worst OK / closest NOT OK: offset 5.32 / 8.46,
+score 14.27 / 15.50, w_opp_max 13.5 / 14.0, p90 46.9 / 48.4, width_max 48.8 / 50.5); _cap_annulus.verdictAnd, shown
+for information as an "AND file: ..." line on the terminal.
 Row 4, gamma: of the picture given to the hole finder (1 = as taken), and of the picture given to MobileSAM for the
 masks (every method; production cap mask 2.0).
 The values are taken at Start and apply in this window only (production and the properties file are not touched); the
@@ -334,6 +340,7 @@ class Window(QMainWindow):
                 if method == "annulus":
                     print(A.annulusLine(p.name, res), flush=True)        # the terminal line to send back
                     print(f"VERDICT {p.name}: {res.get('verdict')} - {res.get('why')}", flush=True)
+                    print("AND %s: %s - %s (alternative, not used)" % ((p.name,) + A.verdictAnd(res)), flush=True)
                 self.bridge.picture.emit(i, p.name, picture, res)
                 end = time.monotonic() + self.seconds.value()
                 while time.monotonic() < end and not self.stopFlag.is_set():
