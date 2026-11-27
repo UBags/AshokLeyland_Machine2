@@ -6362,3 +6362,13 @@ half-axis (8 px) is a guess.
 **Measured:** on the 17 logged values: 9 / 9 good OK; 5 / 5 bad and both "bad?" NOT OK; "good?" 12-46-43 (dy -36.7)
 NOT OK. Suggested region from them: east-west 18.9, north 28.5, south 8.0 - separates them too. Sandbox: the window
 logic run headless on one picture (morphology holes, no YOLO).
+
+## 218. DOSTPLUS bung study - hole-centre region 3 px larger all round (2026-11-27)
+
+**Asked (Uddi):** expand the egg-shaped region by 3 px all round. `HOLE_REGION` 22 / 30 / 8 -> east-west 25, north 33,
+south 11 (each half-axis + 3 px: exactly 3 px wider on the four axes, slightly less in between - an offset curve of an
+ellipse is not an ellipse). Both dry-run folders. Stage-2 fraction (e < 0.7) unchanged.
+
+**Effect on the 17 logged values:** 9 / 9 good OK, 5 / 5 bad NOT OK, 153622275 ("bad?") still NOT OK (e 1.24),
+"good?" 12-46-43 still NOT OK (e 1.42). **153625563 ("bad?", hole centre 9.9 px south) now OK** (e 0.81 inside the
+11 px south half-axis; stage 2 by roundness 0.969). Flagged to Uddi (strict bung rule).

@@ -78,7 +78,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `useModel(model)` (CheckBung / CheckNoCapBung, after the QR code) points the plain `X` at the model's values. DOST is
   checked exactly as before. DOSTPLUS on the hub centre (hub holes first; segmented disc = hub-hole circle; hole search
   r135 round the hub centre; reference oval on the hub centre) is a **study in `DryRun_Bung_Check_UI.py` only**
-  (`_bung_hubcentre_study.py`); hub offset ignored since CHANGES 217: the hole-pattern centre must lie in an egg-shaped region round H (`HOLE_REGION` east-west 22 / north 30 / south 8 px - the good bungs are seen north of H); provisional verdict: NOT OK if region e > 1 / roundness < 0.945 / outside on H > 11 %; else OK if e < 0.7 / roundness > 0.955 / outside < 7 %; else NOT OK.
+  (`_bung_hubcentre_study.py`); hub offset ignored since CHANGES 217: the hole-pattern centre must lie in an egg-shaped region round H (`HOLE_REGION` east-west 25 / north 33 / south 11 px since CHANGES 218 (217: 22 / 30 / 8) - the good bungs are seen north of H); provisional verdict: NOT OK if region e > 1 / roundness < 0.945 / outside on H > 11 %; else OK if e < 0.7 / roundness > 0.955 / outside < 7 %; else NOT OK.
 - Vision parameters: `vision.<vendor>.*`, declared in each check module through `camera/VisionConfig.py`
   (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
   knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the
