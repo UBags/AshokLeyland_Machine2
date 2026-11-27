@@ -40,7 +40,7 @@ import numpy as np
 # south). Start: from Uddi's 17 pictures of 26 / 27 Nov - the 9 good hole centres all lie NORTH of H (dy -9.5 .. -21.9,
 # dx -0.8 .. +14.5); the bad ones at 27.9 - 54.7 px, two of them south (+27.0, +9.9). south is a guess (no good bung
 # south of H yet). Recalibrate from the STUDY SUMMARY.
-HOLE_REGION = dict(east_west=25.0, north=33.0, south=11.0)   # CHANGES 218: 22 / 30 / 8 + 3 px each (Uddi)
+HOLE_REGION = dict(east_west=27.0, north=33.0, south=11.0)   # CHANGES 219 (Uddi; 218: 25 / 33 / 11, 217: 22 / 30 / 8)
 # Rule (provisional, CHANGES 217) - Uddi's rule of CHANGES 216 with the two offset-based terms replaced by the region:
 #   NOT OK if region e > 1 or roundness < 0.945 or outside (oval on H) > 11 %;
 #   else OK if region e < 0.7 or roundness > 0.955 or outside (oval on H) < 7 %;
