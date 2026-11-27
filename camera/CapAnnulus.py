@@ -43,31 +43,32 @@ import cv2
 import numpy as np
 
 from camera import CapMaskFinder
+from camera.VisionConfig import vInt, vFloat, vTuple
 
-PROMPT_INSET = 5                   # px: positive prompts on a circle this far inside the hole circle ...
-PROMPT_STEP_DEG = 5                # ... one every this many degrees ...
-HOLE_CLEARANCE = 28                # ... none within this distance of a hole centre (holes r ~15 - 20)
-NEGATIVE_RADII = (0, 30, 60)       # negative prompts on the cap: H, and these radii x every 45 deg
-MASK_GAMMA = 2.0                   # the picture brightened by this gamma for the annulus mask
-INNER_TOLERANCE = 2.0              # px: an inner edge point this close to the inner ellipse is on it
-INNER_TRIES = 1500                 # RANSAC ellipses through 5 inner edge points (fixed seed)
-WIDTH_STEP_DEG = 10                # ring width measured every this many degrees (36 rays)
-HOLE_ZONE = 45.0                   # px inside the hole circle where gaps in the ring (the holes) are passed over
-SCORE_FLOOR = 1.0                  # px: the shorter length of a diameter is at least this in its ratio
-# Verdict (Uddi, 2026-11-27): stage 1 - any -> NOT OK
-NOT_OK_OFFSET = 7.0
-NOT_OK_SCORE = 16.0
-NOT_OK_ISLANDS = 450
-NOT_OK_OPPOSITE = 17.0
-NOT_OK_WIDTH_P90 = 50.0
-NOT_OK_WIDTH_MAX = 52.0
+PROMPT_INSET = vInt("vision.cap.annulus.prompt.inset", 5)  # px: positive prompts on a circle this far inside the hole circle ...
+PROMPT_STEP_DEG = vInt("vision.cap.annulus.prompt.step.deg", 5)  # ... one every this many degrees ...
+HOLE_CLEARANCE = vInt("vision.cap.annulus.hole.clearance", 28)  # ... none within this distance of a hole centre (holes r ~15 - 20)
+NEGATIVE_RADII = vTuple("vision.cap.annulus.negative.radii", (0, 30, 60))  # negative prompts on the cap: H, and these radii x every 45 deg
+MASK_GAMMA = vFloat("vision.cap.annulus.mask.gamma", 2.0)  # the picture brightened by this gamma for the annulus mask
+INNER_TOLERANCE = vFloat("vision.cap.annulus.inner.tolerance", 2.0)  # px: an inner edge point this close to the inner ellipse is on it
+INNER_TRIES = vInt("vision.cap.annulus.inner.tries", 1500)  # RANSAC ellipses through 5 inner edge points (fixed seed)
+WIDTH_STEP_DEG = vInt("vision.cap.annulus.width.step.deg", 10)  # ring width measured every this many degrees (36 rays)
+HOLE_ZONE = vFloat("vision.cap.annulus.hole.zone", 45.0)  # px inside the hole circle where gaps in the ring (the holes) are passed over
+SCORE_FLOOR = vFloat("vision.cap.annulus.score.floor", 1.0)  # px: the shorter length of a diameter is at least this in its ratio
+# Values: <vendor>.vision.cap.annulus.* (CHANGES 212). Verdict (Uddi, 2026-11-27): stage 1 - any -> NOT OK
+NOT_OK_OFFSET = vFloat("vision.cap.annulus.notok.offset", 7.0)
+NOT_OK_SCORE = vFloat("vision.cap.annulus.notok.score", 16.0)
+NOT_OK_ISLANDS = vInt("vision.cap.annulus.notok.islands", 450)
+NOT_OK_OPPOSITE = vFloat("vision.cap.annulus.notok.opposite", 17.0)
+NOT_OK_WIDTH_P90 = vFloat("vision.cap.annulus.notok.width.p90", 50.0)
+NOT_OK_WIDTH_MAX = vFloat("vision.cap.annulus.notok.width.max", 52.0)
 # stage 2 - any -> OK; else NOT OK
-OK_INLIER_SHARE = 0.70
-OK_WIDTH_SD = 3.5
-OK_ISLANDS = 200
-OK_OPPOSITE = 11.0
-OK_WIDTH_P90 = 47.0
-OK_WIDTH_MAX = 48.25
+OK_INLIER_SHARE = vFloat("vision.cap.annulus.ok.inlier.share", 0.70)
+OK_WIDTH_SD = vFloat("vision.cap.annulus.ok.width.sd", 3.5)
+OK_ISLANDS = vInt("vision.cap.annulus.ok.islands", 200)
+OK_OPPOSITE = vFloat("vision.cap.annulus.ok.opposite", 11.0)
+OK_WIDTH_P90 = vFloat("vision.cap.annulus.ok.width.p90", 47.0)
+OK_WIDTH_MAX = vFloat("vision.cap.annulus.ok.width.max", 48.25)
 
 DIAMETER_ANGLES = tuple(range(15, 181, 15))            # 15, 30, ..., 180: 12 diameters
 

@@ -206,6 +206,7 @@ flowchart TB
   A -->|"S16 no bung"| NB["CheckNoBung"] --> HN
   A -->|"S20 split pin + washer"| SP["CheckSplitPinAndWasher"]
   A -->|"S22 cap"| CP["CheckCap"] --> CMF["CapMaskFinder"]
+  CP -->|"silver seating (annulus, CHANGES 212)"| CAN["CapAnnulus"] --> CMF
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
   SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus; centre from the picture itself, CHANGES 182; holes refined for the split pin, 183) / sam_slow / morphology"]
   BS -.->|"bung seated position"| FH
@@ -379,9 +380,10 @@ flowchart LR
     camera_BungSegmenter["BungSegmenter<br/><small>2048 lines</small>"]
     camera_CameraProcessorServer["CameraProcessorServer<br/><small>1725 lines</small>"]
     camera_CameraStateFile["CameraStateFile<br/><small>97 lines</small>"]
+    camera_CapAnnulus["CapAnnulus<br/><small>305 lines</small>"]
     camera_CapMaskFinder["CapMaskFinder<br/><small>289 lines</small>"]
     camera_CheckBung["CheckBung<br/><small>502 lines</small>"]
-    camera_CheckCap["CheckCap<br/><small>1034 lines</small>"]
+    camera_CheckCap["CheckCap<br/><small>1088 lines</small>"]
     camera_CheckHubAndBottomBearing["CheckHubAndBottomBearing<br/><small>613 lines</small>"]
     camera_CheckKnuckle["CheckKnuckle<br/><small>1091 lines</small>"]
     camera_CheckNoBung["CheckNoBung<br/><small>202 lines</small>"]
@@ -389,13 +391,13 @@ flowchart LR
     camera_CheckNutAndPlateWasher["CheckNutAndPlateWasher<br/><small>817 lines</small>"]
     camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>250 lines</small>"]
     camera_CheckTopBearing["CheckTopBearing<br/><small>2216 lines</small>"]
-    camera_FindHubHoles["FindHubHoles<br/><small>672 lines</small>"]
+    camera_FindHubHoles["FindHubHoles<br/><small>844 lines</small>"]
     camera_HexagonNutDetector["HexagonNutDetector<br/><small>2952 lines</small>"]
     camera_HubAndBearingSegmenter["HubAndBearingSegmenter<br/><small>3734 lines</small>"]
     camera_KnuckleLocator["KnuckleLocator<br/><small>491 lines</small>"]
     camera_ModelManager["ModelManager<br/><small>447 lines</small>"]
     camera_RTSPCam["RTSPCam<br/><small>1239 lines</small>"]
-    camera_VisionCheckWorker["VisionCheckWorker<br/><small>376 lines</small>"]
+    camera_VisionCheckWorker["VisionCheckWorker<br/><small>384 lines</small>"]
     camera_VisionFrame["VisionFrame<br/><small>354 lines</small>"]
   end
   subgraph pkg_costhetaio_allenbradley["costhetaio.allenbradley"]
@@ -504,8 +506,10 @@ flowchart LR
   camera_CameraProcessorServer -.-> camera_CameraStateFile
   camera_CameraProcessorServer -.-> camera_ModelManager
   camera_CameraProcessorServer -.-> camera_VisionCheckWorker
+  camera_CapAnnulus --> camera_CapMaskFinder
   camera_CheckBung --> camera_BungSegmenter
   camera_CheckCap --> camera_FindHubHoles
+  camera_CheckCap -.-> camera_CapAnnulus
   camera_CheckCap -.-> camera_CapMaskFinder
   camera_CheckCap -.-> camera_ModelManager
   camera_CheckHubAndBottomBearing --> camera_HubAndBearingSegmenter

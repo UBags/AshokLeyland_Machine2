@@ -224,6 +224,23 @@ the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.beari
 answer in time or the ring finder fails, the verdict is NOT OK too, with the reason (since 2026-11-15; before, the
 guard was not applied). In the dry-run windows the check runs the guard itself (a failing ring finder: NOT OK).
 
+**Silver cap seating by the annulus (CHANGES §212, default: `vision.cap.seating.silver.method=annulus`;
+`colour` = the silver rules below, kept):** `CheckCap.silverSeatingByAnnulus` -> `camera/CapAnnulus.py`. In the cap
+picture: the hub's 4 holes (`FindHubHoles.findHoles`, check cap; not found -> NOT seated) give the hub centre H and the
+hole circle R; MobileSAM (picture at gamma `cap.annulus.mask.gamma` 2.0, one mask) with positive prompts every 5° on a
+circle 5 px inside the hole circle (none within 28 px of a hole) and 17 negative prompts on the cap (H; r 30 / 60 every
+45°); annulus = that mask inside the hole circle, cap = the region it encloses round H. Inner ellipse = the ellipse with
+the most inner edge points within 2 px (1,500 RANSAC ellipses through 5 points, fixed seed, then a local search).
+Values: centre offset (ellipse centre - H), score (12 diameters through H, longer / shorter length between ellipse and
+hole circle, summed; 12 = centred), ring widths every 10° from the full hole circle (gaps within 45 px of it passed
+over) -> max, p90, sd, largest opposite-side difference; islands (mask pixels > 3 px inside the ellipse); inlier share.
+Verdict (Uddi, 2026-11-27; `cap.annulus.notok.*` / `ok.*`): NOT OK if offset > 7 or score > 16 or islands > 450 or
+opposite > 17 or p90 > 50 or max > 52; else OK if inlier share > 0.70 or sd < 3.5 or islands < 200 or opposite < 11 or
+p90 < 47 or max < 48.25; else NOT OK. 0 errors on 116 pictures (71 OK / 45 NOT OK). Recorded alternative (not used):
+OK only if offset < 6.5 and score < 15 and opposite < 13.8 and p90 < 47.7 and max < 49.6 (also 0 errors). Known miss:
+a tilted cap whose rim stays round and centred in the bore (old test picture `DOST_skewed_03`) passes both rules.
+Marked picture: hole circle and annulus edges blue (thin), inner ellipse green / red, hub-centre cross.
+
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): brass (CHANGES §128, no MobileSAM): the picture unwrapped
 round the cap centre, per angle the strongest fall of R-B in `seating.brass.edge.band` (55-112 px: the cap edge) and of
 grey in `seating.bore.edge.band` (106-140 px: the bore edge), a RANSAC circle fitted to each (fit share and radius

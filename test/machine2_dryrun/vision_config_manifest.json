@@ -6,7 +6,7 @@
     "camera/CheckTopBearing.py": "cbf5134",
     "camera/CheckNutAndPlateWasher.py": "d37f862",
     "camera/HexagonNutDetector.py": "7296694",
-    "camera/CheckCap.py": "e8834dc",
+    "camera/CheckCap.py": "2d5e7d0",
     "camera/BungSegmenter.py": "9958fae",
     "camera/HubAndBearingSegmenter.py": "da41733",
     "camera/KnuckleLocator.py": "5f2fa1d",
@@ -14,7 +14,8 @@
     "camera/CheckNoBung.py": "cb8e3c8",
     "camera/CapMaskFinder.py": "c53b7c7",
     "camera/CheckSplitPinAndWasher.py": "f240364",
-    "camera/FindHubHoles.py": "c5e0e05"
+    "camera/FindHubHoles.py": "c5e0e05",
+    "camera/CapAnnulus.py": "2d5e7d0"
   },
   "extracted": {
     "vision.bung.dostplus.hole.pair.distance.max": {

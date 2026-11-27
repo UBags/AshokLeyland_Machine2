@@ -6105,3 +6105,62 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run here: `verdict` on the rows of the two csv files - 0 errors (39 stage 2 / 33 stage 1); the window offscreen on 5 OK
   pictures - 3 OK, 2 NOT OK (width_max 56 / 56.5: the sandbox's dark-blob hole circle on those two is 4 px off, R 156
   against 149 on the laptop - not the rule).
+
+## 212. Silver (DOST) cap seating by the annulus in production; islands limit 450; AND rule recorded (2026-11-27)
+
+What changed (Uddi, 2026-11-27):
+- **Rule:** the islands NOT OK limit of the study's verdict goes from 230 to 450, all else as in CHANGES 211. On Uddi's 116
+  distinct pictures (13, 17 and 26 Nov; 71 OK, 45 NOT OK, 2 of them without annulus values) this gives 0 errors:
+  192.168.250.64_01_20261113152414604 (islands 351, otherwise clean) becomes OK; part 18-26-29 now reaches stage 2,
+  meets none of its six conditions and is NOT OK at stage 3.
+- **Production:** new `camera/CapAnnulus.py` holds the method of the study (CHANGES 209 - 211): the prompts, the annulus
+  mask, the inner ellipse with the most edge points on it, ring widths, islands, diameter score, and the verdict.
+  `CheckCap.checkSeating` sends a silver cap (DOST) to `CheckCap.silverSeatingByAnnulus` when
+  `vision.cap.seating.silver.method=annulus` (the default). That function finds the hub's holes in the cap picture
+  (`FindHubHoles.findHoles`, check cap; if they are not found, the cap is NOT seated), then calls CapAnnulus. The log
+  line gives the stage, the conditions met and every value. The marked picture shows the hole circle and the annulus
+  edges in thin blue, the inner ellipse in green or red, and the hub-centre cross; it has no text. `colour` keeps the
+  earlier silver rules (CHANGES 129, 143, 152). Brass is unchanged.
+- **One source:** `_cap_annulus.py` (used by `Study_Cap_Annulus.py` and `Study_Cap_Annulus_UI.py`) now calls CapAnnulus
+  for the prompts, the mask, the edge points, the ellipse, the widths and the rule limits, so the study and the cap check
+  measure alike. The study compares the values as printed (rounded); production compares them unrounded.
+- **AND alternative, recorded but not used:** it is in the docstring of CapAnnulus, the header of
+  `Study_Cap_Annulus_UI.py` and `_cap_annulus.RULE_AND_OK` / `verdictAnd`. The study prints it as an `AND file: ...`
+  line. The rule: OK if offset < 6.5, score < 15.0, w_opp_max < 13.8, width p90 < 47.7 and width_max < 49.6 (optionally
+  also islands < 1000 and width_min > 25); else NOT OK. It also gives 0 errors on the same pictures. Worst OK / closest
+  NOT OK:
+
+  | Value | Worst OK | Closest NOT OK |
+  |---|---|---|
+  | offset | 5.32 | 8.46 |
+  | score | 14.27 | 15.50 |
+  | w_opp_max | 13.5 | 14.0 |
+  | p90 | 46.9 | 48.4 |
+  | width_max | 48.8 | 50.5 |
+
+  Every NOT OK picture fails at least 2 of the 5 conditions.
+- **Keys:** `<vendor>.vision.cap.seating.silver.method=annulus` and 22 keys `<vendor>.vision.cap.annulus.*` (prompt.inset,
+  prompt.step.deg, hole.clearance, negative.radii, mask.gamma, inner.tolerance, inner.tries, width.step.deg, hole.zone,
+  score.floor, notok.{offset, score, islands, opposite, width.p90, width.max} and ok.{inlier.share, width.sd, islands,
+  opposite, width.p90, width.max}). They are in the three example properties files, with the same values for both
+  machines.
+- **Reference commit:** 2d5e7d0 (values hard-coded). `baseline_per_file` of CheckCap.py and CapAnnulus.py points at it
+  in both manifests.
+- **Dry runs:** `DryRun_Cap_Silver_Seating.py` now sets the method to `colour`, the rules it checks.
+
+Found (sandbox): **a known miss.** `cap_images/DOST_skewed_03.jpg` is an old staged picture of a tilted silver cap: the
+top face is shifted up-left and the side wall shows at the bottom right, but the rim stays round and centred in the bore.
+Both rules pass it: offset 1.36, score 12.47, islands 89, width_sd 3.09, w_opp_max 12.2, p90 47.5, width_max 49.0. The
+annulus sees the rim, not the face. The colour method's face rule caught it. None of Uddi's 45 NOT OK pictures is like
+it.
+
+Run here (sandbox: dark-blob hole finder, `--holes morphology`; no YOLO weights; MobileSAM from the clone):
+- `Verify_Vision_Config_Equivalence.py`, both machines: ALL EQUIVALENT (CapAnnulus.py and CheckCap.py against 2d5e7d0).
+- The study on 5 OK pictures: the ANNULUS and VERDICT lines before and after its switch to CapAnnulus are identical.
+  `CheckCap.checkSeating(DOST)` on the same pictures gives the same verdicts and values; the marked picture is drawn.
+- `DryRun_Cap_Check.py --holes morphology`: 4 unexpected results. Three are DOSTPLUS caps 03, 04 and 08; they fail the
+  same way at 7275b39, before this change (stand-in YOLO boxes in the sandbox). The fourth is DOST_skewed_03, now OK:
+  the miss above.
+- `DryRun_Cap_Production_Path.py --holes morphology`: 11 / 12. P2 DOST fails on DOST_skewed_03.
+- `DryRun_Cap_Silver_Seating.py` (colour): 5 / 6, the same as at 7275b39. S1 fails in the sandbox because there is no
+  YOLO for the hole finder.

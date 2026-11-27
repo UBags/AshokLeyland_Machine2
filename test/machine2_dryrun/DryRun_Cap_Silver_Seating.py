@@ -1,5 +1,6 @@
 """
-Dry run: silver cap seating by two rules (CHANGES 129), on the Machine 2 cap pictures.
+Dry run: silver cap seating by two rules (CHANGES 129), on the Machine 2 cap pictures. Since CHANGES 212 production
+uses the annulus method (camera/CapAnnulus.py); this run sets vision.cap.seating.silver.method to "colour" (kept).
 
   Rule 1  no part of the hub centre may be left uncovered (hub circle from the hub + bottom bearing picture)
   Rule 2  the cap's top face edge must lie on one circle (share of the 360 angles >= cap.seating.silver.face.fit.min)
@@ -60,6 +61,7 @@ def main():
     import camera.ModelManager  # noqa: F401 - its import sets the timm / registry warning filters (as in production)
     from mobile_sam import sam_model_registry
     from camera.CheckCap import CheckCap
+    CheckCap.SEATING_SILVER_METHOD = "colour"    # the rules this run checks (CHANGES 129); production uses "annulus" since 212
     CheckCap.samModelProvider = staticmethod(lambda: sam_model_registry["vit_t"](checkpoint=args.sam).eval())
     yolo, yoloNote = capMaskYolo()
     CheckCap.yoloModelProvider = lambda: yolo

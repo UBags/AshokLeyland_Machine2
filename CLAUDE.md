@@ -222,6 +222,10 @@ No per-check times were recorded with the report; when they are, put them in the
   side and an empty fixture; hub, bearing, nut, bung, cap of the same parts).
 - PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
   `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
+- **Silver (DOST) cap seating by the annulus** (CHANGES 212, Uddi 2026-11-27): `camera/CapAnnulus.py`, default
+  `vision.cap.seating.silver.method=annulus` (`colour` = the rules below, kept); Uddi's two-stage rule, islands NOT OK
+  limit 450; the AND alternative recorded in its docstring. Known miss: a tilted cap with a round, centred rim
+  (`DOST_skewed_03`) passes. Brass unchanged.
 - **Cap seating by the hub-centre distance** (CHANGES 143, 152): the cap's centre (stage-2 ellipse of the cap mask,
   `camera/CapMaskFinder.py` = the method frozen in CHANGES 139 - 142) must be within 5 px of the hub centre + offset.
   Since CHANGES 152 the hub centre is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the cap in the
