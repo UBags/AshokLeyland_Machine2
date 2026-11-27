@@ -11,8 +11,8 @@ seconds between pictures (changeable during the run), Save (marked pictures and 
 Start / Stop.
 Row 2: the main values of _legs_profile (taken at Start, this window only): scallop shift +- px, scallop found share,
 legs sector +- deg, region (b) start / end px past the outline, region (b) R-G floor, region (b) touch px.
-Row 3 (CHANGES 223): (a) grey / R-G Otsu factors (0.8 / 1.2), gamma above / below the mean (1.5 / 0.6), (a) / (b) refine
-Otsu factors (0.8 / 1.2).
+Row 3 (CHANGES 223): (a) grey / R-G Otsu factors (0.8 / 1.2), gamma above / below the mean (1.5 / 0.6), (a) refine
+Otsu factor (0.8). Region (b)'s refinement (CHANGES 224: 2R - G - B per piece, equalised, Otsu) has no values to set.
 Views (outlines only, no values on the pictures):
   - the whole picture;
   - the washer x3: scallops (dark blue; found / placed in the table and the text box), inner edge (yellow), pin head
@@ -302,7 +302,6 @@ def window(folder):
             spin("GAMMA_HIGH", "Gamma above mean", 1.0, 3.0, 0.1, 2, row2b)
             spin("GAMMA_LOW", "Gamma below mean", 0.2, 1.0, 0.05, 2, row2b)
             spin("A_REFINE_FACTOR", "(a) refine Otsu x", 0.3, 1.5, 0.05, 2, row2b)
-            spin("B_REFINE_FACTOR", "(b) refine Otsu x", 0.5, 2.0, 0.05, 2, row2b)
             row2b.addStretch(1)
 
             row3 = QHBoxLayout()

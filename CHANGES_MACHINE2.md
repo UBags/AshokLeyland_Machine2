@@ -6504,3 +6504,17 @@ No code changed.
   0.67) - the dark wire, without the washer pixels the colour blocks took in; the (b) areas (116 pictures with >= 50 px)
   - (v) keeps 0.04 - 0.40 (median 0.15): beyond the washer the outline is now the wire's lit top - thin, wire-like, but
   broken on some legs (17:11 - 17:16); contact sheets checked by eye; the window driven offscreen (18 pictures).
+
+## 224. Study_Legs_Profile_UI: the legs beyond the washer by 2R - G - B per piece (2026-11-28)
+
+- Uddi, 2026-11-28 03:12: with 223's gamma step (v) the legs over the plate washer / seal disappeared (it kept 4 - 40 %
+  of each (b) area, the wire's lit top only). In the (b) area the legs are the brighter part in red. So, in place of
+  that step: each connected piece of the (b) area on its own - 2R - G - B of its pixels, histogram equalised over that
+  piece, Otsu over that piece, the bright side = the legs (`_legs_profile.refineByRedness`; pieces under 10 px kept as
+  they are). Region (a) keeps 223's gamma refinement. `B_REFINE_FACTOR` and its spin box removed (no longer used).
+  Text box: per piece "px:Otsu:kept".
+- Run (sandbox, the 150 pictures, dark-blob holes): legs beyond the washer continuous again, narrower than the colour
+  block area; kept 0.41 - 0.87 of each (b) area (median 0.50) over the 116 pictures with >= 50 px there. Note: after
+  equalisation a piece's histogram is about flat, so its Otsu falls near the middle and keeps about the redder half of
+  the piece by construction, whatever share of it is leg (more where many pixels share one value). Contact sheets
+  checked by eye; the window driven offscreen (18 pictures); both files parse on Python 3.11.

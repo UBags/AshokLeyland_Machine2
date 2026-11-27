@@ -40,7 +40,9 @@ circle round the outline's centroid). All coordinates below are in the 240 x 240
    Since 02:51 (Uddi): (a)'s grey Otsu x A_GREY_FACTOR (0.8) and R-G Otsu x A_RG_FACTOR (1.2), the strong R-G Otsu over
    the values above the adjusted one; then inside each area the grey refinement (refineInGrey): grey, relative gamma
    round the area's mean (above: GAMMA_HIGH 1.5, brighter, <= 255; below: GAMMA_LOW 0.6, darker, >= 0), Otsu of the
-   result - (a) x A_REFINE_FACTOR (0.8), the dark pixels; (b) x B_REFINE_FACTOR (1.2), the light pixels.
+   result x A_REFINE_FACTOR (0.8), the dark pixels are the legs on the washer (a). (b) since CHANGES 224 (Uddi 03:12):
+   each connected piece of the (b) area on its own - 2R - G - B, histogram equalised over the piece, Otsu over the
+   piece, the bright side are the legs (refineByRedness).
    The leg profile = (a) OR (b).
 Measured on the 150 DOST pictures of 2026-11-24 (38 OK / 112 NOT OK, permanent marker; sandbox: dark-blob hole finder,
 MobileSAM on the CPU): see CHANGES 222.
@@ -85,7 +87,6 @@ A_RG_FACTOR = 1.2          # (a) the R-G Otsu value x this (away from zero by 20
 GAMMA_HIGH = 1.5           # grey refinement: above the mask's mean, mean * (v / mean) ** GAMMA_HIGH (brighter, <= 255)
 GAMMA_LOW = 0.6            # below the mean, mean * (v / mean) ** (1 / GAMMA_LOW) (darker, >= 0)
 A_REFINE_FACTOR = 0.8      # (a) refinement: Otsu x this, the dark pixels are the legs
-B_REFINE_FACTOR = 1.2      # (b) refinement: Otsu x this, the light pixels are the legs
 REFINE_MIN_PX = 10         # a mask with fewer pixels is not refined
 
 
@@ -263,6 +264,44 @@ def refineInGrey(grey: np.ndarray, area: np.ndarray, factor: float, dark: bool):
     return out, t
 
 
+def _equalised(vals: np.ndarray) -> np.ndarray:
+    """Histogram equalisation of the values of one mask (only its pixels count): each value -> 255 x the share of the
+    mask's pixels at or below it (the lowest value -> 0)."""
+    v = np.round(np.asarray(vals, float)).astype(int)
+    u, inv, cnt = np.unique(v, return_inverse=True, return_counts=True)
+    cdf = np.cumsum(cnt).astype(float)
+    lo = cdf[0]
+    span = max(cdf[-1] - lo, 1.0)
+    return np.round(255.0 * (cdf[inv] - lo) / span)
+
+
+def refineByRedness(crop: np.ndarray, area: np.ndarray):
+    """Step (v) since CHANGES 224 (Uddi 03:12; the legs over the plate washer / seal are brighter in red than what
+    lies round them): each connected piece of the (b) area on its own - 2R - G - B of its pixels, histogram equalised
+    over that piece, Otsu over that piece, the bright side = the legs. Pieces under REFINE_MIN_PX px stay as they are.
+    (legs mask, [(piece px, Otsu, kept px)])."""
+    B, G, R = (crop[..., k].astype(float) for k in range(3))
+    red = 2 * R - G - B
+    out = np.zeros(area.shape, bool)
+    n, lab = cv2.connectedComponents(area.astype(np.uint8), connectivity=8)
+    pieces = []
+    for k in range(1, n):
+        piece = lab == k
+        px = int(piece.sum())
+        if px < REFINE_MIN_PX:
+            out |= piece
+            pieces.append((px, None, px))
+            continue
+        eq = _equalised(red[piece])
+        t = _otsu(eq)
+        keep = eq > t
+        sub = np.zeros(area.shape, bool)
+        sub[piece] = keep
+        out |= sub
+        pieces.append((px, t, int(keep.sum())))
+    return out, pieces
+
+
 def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
     """Step 4. Every mask is returned for the window's mask views."""
     B, G, R = (crop[..., k].astype(float) for k in range(3))
@@ -294,7 +333,7 @@ def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
         comp = lab == k
         if (comp & start).any():
             areaB |= comp
-    legsB, tBrefine = refineInGrey(grey, areaB, B_REFINE_FACTOR, dark=False)
+    legsB, tBrefine = refineByRedness(crop, areaB)
     return dict(axis=legsAxis, regA=regA, regB=regB, aDark=aDark, aRG=aRG, aStrong=aStrong, bRB=bRB, bRG=bRG, bRaw=raw,
                 areaA=areaA, areaB=areaB, legsA=legsA, legsB=legsB, legs=legsA | legsB,
                 tA_grey=tAgrey, tA_rg=tArg, tA_grey_otsu=tAgreyOtsu, tA_rg_otsu=tArgOtsu, tA_refine=tArefine, tB_refine=tBrefine, tA_strong=tAstrong, tB_rb=tBrb, tB_rg=tBrg, tB_rg_otsu=tBrgOtsu,
@@ -311,6 +350,10 @@ def profile(crop, cc, fo, rInner, centroid) -> dict:
     return dict(outline=outline, head=head, legs=legs, rough=rough)
 
 
+def _pieces(pieces) -> str:
+    return " ".join("%d:%s:%d" % (p, "-" if t is None else "%d" % t, k) for p, t, k in pieces) or "none"
+
+
 def summaryLine(res: dict) -> str:
     o, h, L = res["outline"], res["head"], res["legs"]
     placed = sum(not s["found"] for s in o["segs"])
@@ -322,5 +365,5 @@ def summaryLine(res: dict) -> str:
         line += (f"; legs on washer {L['pxA']} of {int(L['areaA'].sum())} px (Otsu grey {L['tA_grey_otsu']:.0f} -> {L['tA_grey']:.0f},"
                  f" R-G {L['tA_rg_otsu']:.0f} -> {L['tA_rg']:.0f}, strong {L['tA_strong']:.0f}, refine {f(L['tA_refine'])}),"
                  f" outside {L['pxB']} of {int(L['areaB'].sum())} px (Otsu R-B {L['tB_rb']:.0f}, R-G {L['tB_rg_otsu']:.0f} -> {L['tB_rg']:.0f},"
-                 f" refine {f(L['tB_refine'])})")
+                 f" pieces {_pieces(L['tB_refine'])} (px:Otsu:kept))")
     return line
