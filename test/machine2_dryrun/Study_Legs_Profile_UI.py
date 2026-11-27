@@ -11,11 +11,14 @@ seconds between pictures (changeable during the run), Save (marked pictures and 
 Start / Stop.
 Row 2: the main values of _legs_profile (taken at Start, this window only): scallop shift +- px, scallop found share,
 legs sector +- deg, region (b) start / end px past the outline, region (b) R-G floor, region (b) touch px.
+Row 3 (CHANGES 223): (a) grey / R-G Otsu factors (0.8 / 1.2), gamma above / below the mean (1.5 / 0.6), (a) / (b) refine
+Otsu factors (0.8 / 1.2).
 Views (outlines only, no values on the pictures):
   - the whole picture;
-  - the washer x3: scallops (green = edge found, orange = placed from the adjacent corners), inner edge (cyan), pin head
+  - the washer x3: scallops (dark blue; found / placed in the table and the text box), inner edge (yellow), pin head
     (white), leg profile (red);
-  - the washer x3 with one mask, chosen in "Mask view" (redraws the picture shown): leg profile, (a) grey dark, (a) R-G
+  - the washer x3 with one mask, chosen in "Mask view" (redraws the picture shown): leg profile, (a) / (b) area before
+    the grey refinement (CHANGES 223), (a) grey dark, (a) R-G
     bright, (a) strong R-G, (b) R-B bright, (b) R-G bright, (b) before the touch rule, rough legs; the regions (a) / (b)
     thin grey.
 Table: one row per picture with its check time; click a row to see it again. Text box: the steps' values per picture
@@ -46,11 +49,14 @@ import _legs_profile as LP                                                      
 NOT_OK_NAMES = ("NOT_OK", "Not OK", "NOT OK", "Not_OK", "not ok", "Not ok", "NotOK")
 COLUMNS = ("file", "label", "holes", "scallops found / placed", "max |shift|", "head", "legs on washer px",
            "legs outside px", "Otsu a: grey / R-G / strong", "Otsu b: R-B / R-G", "time s", "note")
-MASK_VIEWS = (("leg profile", "legs", (0, 0, 255)), ("(a) grey dark", "aDark", (255, 0, 0)),
+MASK_VIEWS = (("leg profile", "legs", (0, 0, 255)), ("(a) area before the grey refinement", "areaA", (0, 0, 255)),
+              ("(b) area before the grey refinement", "areaB", (0, 0, 255)), ("(a) grey dark", "aDark", (255, 0, 0)),
               ("(a) R-G bright", "aRG", (0, 255, 255)), ("(a) strong R-G", "aStrong", (0, 165, 255)),
               ("(b) R-B bright", "bRB", (255, 0, 255)), ("(b) R-G bright", "bRG", (0, 255, 0)),
               ("(b) before the touch rule", "bRaw", (0, 255, 255)), ("rough legs", "rough", (0, 128, 255)))
 ZOOM_HALF, ZOOM_SCALE = 75, 3
+SCALLOP_COLOUR = (139, 0, 0)          # dark blue (Uddi 02:51; found / placed: the table and the text box)
+INNER_COLOUR = (0, 255, 255)          # yellow
 FULL_W, FULL_H = 640, 360
 PANEL = 450
 
@@ -116,10 +122,10 @@ def _outlines(img, out, off, scale, legs=True):
     res = out["res"]
     o = res["outline"]
     for sg in o["segs"]:
-        _poly(img, o["pts"][sg["idx"]], off, scale, (0, 255, 0) if sg["found"] else (0, 165, 255), closed=False)
+        _poly(img, o["pts"][sg["idx"]], off, scale, SCALLOP_COLOUR, closed=False)
     cx, cy = out["centroid"]
     cv2.circle(img, (int(round((cx - off[0]) * scale)), int(round((cy - off[1]) * scale))), int(round(out["rInner"] * scale)),
-               (255, 255, 0), 1, cv2.LINE_AA)
+               INNER_COLOUR, 1, cv2.LINE_AA)
     if res["head"]["found"]:
         _contours(img, res["head"]["mask"], off, scale, (255, 255, 255))
     if legs and res["legs"] is not None:
@@ -271,15 +277,16 @@ def window(folder):
             row2 = QHBoxLayout()
             self.spins = {}
 
-            def spin(key, title, low, high, step, dec=0):
+            def spin(key, title, low, high, step, dec=0, row=None):
+                row = row2 if row is None else row
                 s = QDoubleSpinBox() if dec else QSpinBox()
                 if dec:
                     s.setDecimals(dec)
                 s.setRange(low, high)
                 s.setSingleStep(step)
                 s.setValue(getattr(LP, key))
-                row2.addWidget(QLabel(title))
-                row2.addWidget(s)
+                row.addWidget(QLabel(title))
+                row.addWidget(s)
                 self.spins[key] = s
             spin("SHIFT", "Scallop shift +- px", 1, 30, 1, 1)
             spin("GOOD_SHARE", "Scallop found share", 0.3, 1.0, 0.05, 2)
@@ -289,6 +296,14 @@ def window(folder):
             spin("RG_FLOOR_B", "(b) R-G floor", 0, 40, 1)
             spin("TOUCH_B", "(b) touch px", 1, 20, 1)
             row2.addStretch(1)
+            row2b = QHBoxLayout()
+            spin("A_GREY_FACTOR", "(a) grey Otsu x", 0.3, 1.5, 0.05, 2, row2b)
+            spin("A_RG_FACTOR", "(a) R-G Otsu x", 0.5, 2.0, 0.05, 2, row2b)
+            spin("GAMMA_HIGH", "Gamma above mean", 1.0, 3.0, 0.1, 2, row2b)
+            spin("GAMMA_LOW", "Gamma below mean", 0.2, 1.0, 0.05, 2, row2b)
+            spin("A_REFINE_FACTOR", "(a) refine Otsu x", 0.3, 1.5, 0.05, 2, row2b)
+            spin("B_REFINE_FACTOR", "(b) refine Otsu x", 0.5, 2.0, 0.05, 2, row2b)
+            row2b.addStretch(1)
 
             row3 = QHBoxLayout()
             self.maskView = QComboBox()
@@ -317,7 +332,7 @@ def window(folder):
             self.statusLine = QLabel("")
 
             lay = QVBoxLayout()
-            for l_ in (row1, row2, row3, views):
+            for l_ in (row1, row2, row2b, row3, views):
                 lay.addLayout(l_)
             lay.addWidget(split, 1)
             lay.addWidget(self.statusLine)

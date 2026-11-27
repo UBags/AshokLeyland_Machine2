@@ -6483,3 +6483,24 @@ No code changed.
   MobileSAM embedding on the CPU; steps 1 - 4 alone 0.04 - 0.49 s). Contact sheets of every picture checked by eye at each
   step. The window driven offscreen (PySide6 6.12, 18 pictures, mask view switched). Not checked against hand-drawn
   outlines. Production unchanged; no vision file changed (no verifier run needed).
+
+## 223. Study_Legs_Profile_UI: grey refinement of the leg areas, (a) Otsu factors, colours (2026-11-28)
+
+- Uddi, 2026-11-28 02:51, five changes:
+  (i) scallops drawn dark blue (found / placed now only in the table and the text box); (ii) the inner edge yellow;
+  (iii) region (a): the grey Otsu value x 0.8 (`A_GREY_FACTOR`, towards zero), the R-G Otsu value x 1.2 (`A_RG_FACTOR`,
+  away from zero); the strong R-G Otsu is taken over the values above the adjusted one;
+  (iv) inside the (a) leg area: grey, relative gamma round the area's mean, Otsu x 0.8 (`A_REFINE_FACTOR`) -> the dark
+  pixels are the legs on the washer;
+  (v) inside the (b) leg area: the same gamma, Otsu x 1.2 (`B_REFINE_FACTOR`) -> the light pixels are the legs outside.
+- Relative gamma (`_legs_profile.relativeGamma`): above the mean, mean * (v / mean) ** 1.5 (brighter, clamped to 255);
+  below it, mean * (v / mean) ** (1 / 0.6) (darker, clamped to 0). Read so that 0.6 darkens: mean * (v / mean) ** 0.6
+  would move those pixels up towards the mean and none could reach 0 (stated to Uddi; both gammas are spin boxes:
+  `GAMMA_HIGH`, `GAMMA_LOW`). Areas under 10 px are not refined.
+- Window: a third row of spin boxes (the two (a) factors, the two gammas, the two refine factors); mask views
+  "(a) / (b) area before the grey refinement". Text box: each Otsu value before / after its factor, the refine
+  thresholds, leg pixels of their area.
+- Run (sandbox, same 150 pictures, dark-blob holes): the (a) areas 98 - 478 px, (iv) keeps 0.30 - 0.92 of them (median
+  0.67) - the dark wire, without the washer pixels the colour blocks took in; the (b) areas (116 pictures with >= 50 px)
+  - (v) keeps 0.04 - 0.40 (median 0.15): beyond the washer the outline is now the wire's lit top - thin, wire-like, but
+  broken on some legs (17:11 - 17:16); contact sheets checked by eye; the window driven offscreen (18 pictures).

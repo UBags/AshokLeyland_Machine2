@@ -37,6 +37,10 @@ circle round the outline's centroid). All coordinates below are in the 240 x 240
        max(R - B, 0) -> Otsu, 1 = bright  AND  R - G -> Otsu (not below RG_FLOOR_B), 1 = bright;
        only pieces reaching within TOUCH_B px of region (b)'s inner edge are kept (a leg outside comes out of the
        washer; the white highlight where a leg crosses the washer's edge can break its first px).
+   Since 02:51 (Uddi): (a)'s grey Otsu x A_GREY_FACTOR (0.8) and R-G Otsu x A_RG_FACTOR (1.2), the strong R-G Otsu over
+   the values above the adjusted one; then inside each area the grey refinement (refineInGrey): grey, relative gamma
+   round the area's mean (above: GAMMA_HIGH 1.5, brighter, <= 255; below: GAMMA_LOW 0.6, darker, >= 0), Otsu of the
+   result - (a) x A_REFINE_FACTOR (0.8), the dark pixels; (b) x B_REFINE_FACTOR (1.2), the light pixels.
    The leg profile = (a) OR (b).
 Measured on the 150 DOST pictures of 2026-11-24 (38 OK / 112 NOT OK, permanent marker; sandbox: dark-blob hole finder,
 MobileSAM on the CPU): see CHANGES 222.
@@ -76,6 +80,13 @@ GAP_B = 3                  # px past the outline where region (b) starts
 OUT = 30                   # px past the outline where region (b) ends
 RG_FLOOR_B = 8             # region (b): the R - G threshold is never below this
 TOUCH_B = 8                # px: a region (b) piece must reach within this of region (b)'s inner edge
+A_GREY_FACTOR = 0.8        # (a) the grey Otsu value x this (towards zero by 20 %; Uddi 02:51)
+A_RG_FACTOR = 1.2          # (a) the R-G Otsu value x this (away from zero by 20 %)
+GAMMA_HIGH = 1.5           # grey refinement: above the mask's mean, mean * (v / mean) ** GAMMA_HIGH (brighter, <= 255)
+GAMMA_LOW = 0.6            # below the mean, mean * (v / mean) ** (1 / GAMMA_LOW) (darker, >= 0)
+A_REFINE_FACTOR = 0.8      # (a) refinement: Otsu x this, the dark pixels are the legs
+B_REFINE_FACTOR = 1.2      # (b) refinement: Otsu x this, the light pixels are the legs
+REFINE_MIN_PX = 10         # a mask with fewer pixels is not refined
 
 
 def _bilinear(img, x, y):
@@ -228,6 +239,30 @@ def refineOutline(crop, cc, fo, legsRough=None) -> dict:
     return dict(pts=pts, fr=fr, segs=segs, corners=V, cornerShift=cs, found=found)
 
 
+def relativeGamma(vals: np.ndarray, mean: float) -> np.ndarray:
+    """Uddi 02:51: above the mean brighter (gamma GAMMA_HIGH, clamped to 255), below it darker (gamma GAMMA_LOW,
+    clamped to 0), both relative to the mean: mean * (v / mean) ** GAMMA_HIGH above, mean * (v / mean) ** (1 / GAMMA_LOW)
+    below (read so that 0.6 darkens: mean * (v / mean) ** 0.6 would move those pixels up towards the mean)."""
+    m = max(float(mean), 1.0)
+    r = np.asarray(vals, float) / m
+    out = np.where(r >= 1, m * r ** GAMMA_HIGH, m * r ** (1.0 / GAMMA_LOW))
+    return np.clip(out, 0, 255)
+
+
+def refineInGrey(grey: np.ndarray, area: np.ndarray, factor: float, dark: bool):
+    """Steps (iv) / (v): inside the leg area, grey -> relative gamma round the area's mean -> Otsu x factor; the dark
+    (iv) or light (v) pixels are the legs. (legs mask, threshold or None when the area is too small to refine)."""
+    if int(area.sum()) < REFINE_MIN_PX:
+        return area.copy(), None
+    vals = grey[area]
+    enh = relativeGamma(vals, float(vals.mean()))
+    t = _otsu(enh) * factor
+    keep = (enh <= t) if dark else (enh > t)
+    out = np.zeros(area.shape, bool)
+    out[area] = keep
+    return out, t
+
+
 def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
     """Step 4. Every mask is returned for the window's mask views."""
     B, G, R = (crop[..., k].astype(float) for k in range(3))
@@ -240,26 +275,29 @@ def findLegs(crop, cc, fr, rInner, centroid, legsAxis) -> dict:
     din = np.hypot(xx - centroid[0], yy - centroid[1])
     regA = sector & (din >= rInner) & (d <= FR)
     regB = sector & (d > FR + GAP_B) & (d <= FR + OUT)
-    tAgrey, tArg = _otsu(grey[regA]), _otsu(rg[regA])
+    tAgreyOtsu, tArgOtsu = _otsu(grey[regA]), _otsu(rg[regA])
+    tAgrey, tArg = tAgreyOtsu * A_GREY_FACTOR, tArgOtsu * A_RG_FACTOR
     aDark, aRG = regA & (grey <= tAgrey), regA & (rg > tArg)
     upper = rg[regA & (rg > tArg)]
     tAstrong = _otsu(upper) if upper.size >= 10 else 255.0
     aStrong = regA & (rg > tAstrong)
-    legsA = (aDark & aRG) | aStrong
+    areaA = (aDark & aRG) | aStrong
+    legsA, tArefine = refineInGrey(grey, areaA, A_REFINE_FACTOR, dark=True)
     tBrb, tBrgOtsu = _otsu(rb[regB]), _otsu(rg[regB])
     tBrg = max(tBrgOtsu, RG_FLOOR_B)
     bRB, bRG = regB & (rb > tBrb), regB & (rg > tBrg)
     raw = bRB & bRG
     n, lab = cv2.connectedComponents(raw.astype(np.uint8), connectivity=8)
     start = regB & (d <= FR + GAP_B + TOUCH_B)
-    legsB = np.zeros(raw.shape, bool)
+    areaB = np.zeros(raw.shape, bool)
     for k in range(1, n):
         comp = lab == k
         if (comp & start).any():
-            legsB |= comp
+            areaB |= comp
+    legsB, tBrefine = refineInGrey(grey, areaB, B_REFINE_FACTOR, dark=False)
     return dict(axis=legsAxis, regA=regA, regB=regB, aDark=aDark, aRG=aRG, aStrong=aStrong, bRB=bRB, bRG=bRG, bRaw=raw,
-                legsA=legsA, legsB=legsB, legs=legsA | legsB,
-                tA_grey=tAgrey, tA_rg=tArg, tA_strong=tAstrong, tB_rb=tBrb, tB_rg=tBrg, tB_rg_otsu=tBrgOtsu,
+                areaA=areaA, areaB=areaB, legsA=legsA, legsB=legsB, legs=legsA | legsB,
+                tA_grey=tAgrey, tA_rg=tArg, tA_grey_otsu=tAgreyOtsu, tA_rg_otsu=tArgOtsu, tA_refine=tArefine, tB_refine=tBrefine, tA_strong=tAstrong, tB_rb=tBrb, tB_rg=tBrg, tB_rg_otsu=tBrgOtsu,
                 pxA=int(legsA.sum()), pxB=int(legsB.sum()))
 
 
@@ -280,6 +318,9 @@ def summaryLine(res: dict) -> str:
     line = f"scallops found {len(o['segs']) - placed} placed {placed} (shifts {shifts}; * = placed)"
     line += f"; head {'at %.1f deg, %d px' % (h['end'], h['area']) if h['found'] else 'not found (%d px)' % h['area']}"
     if L is not None:
-        line += (f"; legs on washer {L['pxA']} px (Otsu grey {L['tA_grey']:.0f}, R-G {L['tA_rg']:.0f}, strong {L['tA_strong']:.0f}),"
-                 f" outside {L['pxB']} px (Otsu R-B {L['tB_rb']:.0f}, R-G {L['tB_rg_otsu']:.0f} -> {L['tB_rg']:.0f})")
+        f = lambda v: "-" if v is None else f"{v:.0f}"
+        line += (f"; legs on washer {L['pxA']} of {int(L['areaA'].sum())} px (Otsu grey {L['tA_grey_otsu']:.0f} -> {L['tA_grey']:.0f},"
+                 f" R-G {L['tA_rg_otsu']:.0f} -> {L['tA_rg']:.0f}, strong {L['tA_strong']:.0f}, refine {f(L['tA_refine'])}),"
+                 f" outside {L['pxB']} of {int(L['areaB'].sum())} px (Otsu R-B {L['tB_rb']:.0f}, R-G {L['tB_rg_otsu']:.0f} -> {L['tB_rg']:.0f},"
+                 f" refine {f(L['tB_refine'])})")
     return line
