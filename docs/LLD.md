@@ -284,7 +284,7 @@ circle, then the most blobs), not the last one's (§157). Holes not found -> NOT
 `vision.<model>.cap.seating.hub.distance.offset.cap` (Machine 2 since §165, for the SAM centres: 0.4,-4.8 / -0.7,-4.4; with the dark blobs 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
 caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
-move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
+move cancel. Bung (`vision.<model>.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position (CHANGES §153, `seating.position.source=hubholes`: `BungSegmenter.seated_position` = the
 hub's hole circle round the bung in the bung picture itself, `FindHubHoles.findHoles` (CHANGES §164) with the model's 4 / 5 holes, plus
 `vision.<model>.bung.seating.hub.offset` (Machine 2 since §165: 5.2,-17.9 / 4.5,-15.8; with the dark blobs 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
@@ -319,6 +319,16 @@ Result: found, cx, cy, radius, spread, gap, count, points, gamma, area, candidat
 radius, centre), seed, seedFrom, method, reason. The last `sam.cache.size` (12) results are kept (the split pin check's
 six pictures are three pictures twice). Offsets for this finder's centres (§170, laptop run of 2026-11-20): cap 0.3,-4.7 /
 -0.7,-4.5, bung 4.6,-16.8 / 4.7,-16.3 (good-labelled pictures only), split pin 1.3,-3.6 (DOSTPLUS 1.9,2.1 not measured).
+
+**Bung values per model (CHANGES §215, Uddi 2026-11-27):** every bung value is `vision.<vendor>.dost.bung.*` or
+`vision.<vendor>.dostplus.bung.*` (only the 5 `bung.debug.print.*` switches are shared). In `BungSegmenter` each is
+`X_DOST` / `X_DOSTPLUS`; the checks read the plain name `X`, which `useModel(model)` (called by `CheckBung` /
+`CheckNoCapBung` once the QR code gives the model) points at that model's values, with the mask generator's hole grid.
+The knuckle frame places `OUTER_DISC_CENTER_DOST` / `_DOSTPLUS` (targets `dost.bung.outer.disc.center` /
+`dostplus.bung.outer.disc.center`, like the seated centres). Both models start with the values they had before, so the
+checks are unchanged. **DOSTPLUS hub-centre study** (dry-run window only, `_bung_hubcentre_study.py`): hub holes
+first, the segmented disc = the hub-hole circle, the hole-search disc r135 round the hub centre, the reference oval on
+the hub centre; values printed for recalibration, production not changed.
 
 **Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bung.outer.disc.center`:
@@ -568,8 +578,8 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `vision.<vendor>.knuckle.method` | segmentation (Machine 1: regions) | 3 |
 | `vision.<vendor>.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
 | `vision.<vendor>.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
-| `vision.<vendor>.cap.seating.check` / `vision.<vendor>.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `vision.<vendor>.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
+| `vision.<vendor>.cap.seating.check` / `vision.<vendor>.<dost\|dostplus>.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
+| `vision.<vendor>.<dost\|dostplus>.bung.seating.position.source` / `vision.<vendor>.<dost\|dostplus>.bung.seating.hub.offset` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
 | `vision.<vendor>.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.3,-4.7 and -0.7,-4.5 (SAM centres, §170; Machine 1: 0,0) | 3 |
 | `vision.<vendor>.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |

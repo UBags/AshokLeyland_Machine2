@@ -331,7 +331,7 @@ class CheckBung:
                                         f"[CheckBung] Cancelled preprocessing of gamma {gamma_sequence[idx + 1]} (not needed)",
                                         MessageType.GENERAL)
 
-                        # Seating (after the hole pattern passed; vision.bung.seating.check)
+                        # Seating (after the hole pattern passed; vision.<model>.bung.seating.check)
                         seating = None
                         if success and BS_MODULE.SEATING_CHECK:
                             try:

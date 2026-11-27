@@ -3,7 +3,7 @@ DryRun_Bung_Hub_Holes - the bung's seated position from the hub's holes in the b
 
 The seating step (BungSegmenter.check_bung_seating) compares the bung's hole-pattern centre with the seated position;
 since CHANGES 153 that is the circle through the hub's 4 (DOST) / 5 (DOSTPLUS) holes round the bung in the same picture
-(camera/FindHubHoles.py since CHANGES 164: YOLO + MobileSAM; --holes morphology = the dark-blob finder) plus vision.bung.seating.hub.offset.<model>. The hole-pattern centres of the
+(camera/FindHubHoles.py since CHANGES 164: YOLO + MobileSAM; --holes morphology = the dark-blob finder) plus vision.<model>.bung.seating.hub.offset. The hole-pattern centres of the
 60 pictures of bung_images_20261113/ are read from hole_centres.json there (found by the production hole step with the
 point grid alone, CHANGES 153), so the hole step (YOLO, slow on a CPU) is not run here; the seating step is run for real
 (MobileSAM face mask).
@@ -58,7 +58,7 @@ def main() -> int:
     from _hub_holes_option import applyHolesOption
     applyHolesOption(args.holes)
     if not BS.SEATING_CHECK:
-        print("Bung seating is off for this machine (vision.bung.seating.check=False): nothing to check here.")
+        print("Bung seating is off for this machine (vision.<model>.bung.seating.check=False): nothing to check here.")
         return 0
     mm = MMmod.ModelManager.get_instance()
     mm.sam_model = sam_model_registry["vit_t"](checkpoint=args.sam).to(device=mm.device).eval()

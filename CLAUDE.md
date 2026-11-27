@@ -73,6 +73,12 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   read**: a file with them is reported once ("old-style vision keys"), and its values fall back to the code defaults
   (= Machine 1). Convert one with `python utils/VisionKeyNames.py <file>`. A new key follows the rule; the verifier
   rejects an old-style name.
+- **Bung values per model (CHANGES 215, Uddi 2026-11-27):** every bung key is `vision.<vendor>.dost.bung.*` or
+  `vision.<vendor>.dostplus.bung.*` (only `bung.debug.print.*` shared). `BungSegmenter` holds `X_DOST` / `X_DOSTPLUS`;
+  `useModel(model)` (CheckBung / CheckNoCapBung, after the QR code) points the plain `X` at the model's values. DOST is
+  checked exactly as before. DOSTPLUS on the hub centre (hub holes first; segmented disc = hub-hole circle; hole search
+  r135 round the hub centre; reference oval on the hub centre) is a **study in `DryRun_Bung_Check_UI.py` only**
+  (`_bung_hubcentre_study.py`); its limits are to be set from Uddi's plant pictures (measure, then he decides).
 - Vision parameters: `vision.<vendor>.*`, declared in each check module through `camera/VisionConfig.py`
   (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
   knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the

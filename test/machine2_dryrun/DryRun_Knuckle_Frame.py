@@ -201,7 +201,8 @@ def main():
                 "topbearing.annular.center": (TB.CheckTopBearing.ANNULAR_CENTER_X, TB.CheckTopBearing.ANNULAR_CENTER_Y),
                 "nutwasher.nut.detection.center": tuple(NW.CheckNutAndPlateWasher.NUT_DETECTION_CENTER),
                 "nobung.nut.detection.center": tuple(NB.CheckNoBung.NUT_DETECTION_CENTER),
-                "bung.outer.disc.center": tuple(BS.OUTER_DISC_CENTER),
+                "dost.bung.outer.disc.center": tuple(BS.OUTER_DISC_CENTER_DOST),
+                "dostplus.bung.outer.disc.center": tuple(BS.OUTER_DISC_CENTER_DOSTPLUS),
                 "dost.bung.seating.seated.centre": tuple(BS.SEATING_SEATED_CENTRE_DOST),
                 "dostplus.bung.seating.seated.centre": tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS),
                 "cap.center": tuple(CC.CheckCap.CENTER)}

@@ -13,7 +13,7 @@ its centre's difference from the morphology circle's. Per set and model: the mea
 offsets that keep every check's target where it was:
 
   cap       vision.cap.seating.hub.distance.offset.cap.<model>   + mean(morphology - SAM)
-  bung      vision.bung.seating.hub.offset.<model>               + mean(morphology - SAM)
+  bung      vision.<model>.bung.seating.hub.offset               + mean(morphology - SAM)
   splitpin  vision.splitpin.hub.offset.<model>                   + mean(morphology - SAM)
 
 (the SAM masks are the holes' outlines on the disc face; the dark blobs are the shadowed inside of each hole, seen a
@@ -188,8 +188,8 @@ def main() -> int:
                ("cap", "DOSTPLUS"): CC.CheckCap.SEATING_HUB_DISTANCE_OFFSET_CAP_DOSTPLUS,
                ("bung", "DOST"): BS.SEATING_HUB_OFFSET_DOST, ("bung", "DOSTPLUS"): BS.SEATING_HUB_OFFSET_DOSTPLUS,
                ("splitpin", "DOST"): SP.HUB_OFFSET_DOST, ("splitpin", "DOSTPLUS"): SP.HUB_OFFSET_DOSTPLUS}
-    keys = {"cap": "vision.cap.seating.hub.distance.offset.cap", "bung": "vision.bung.seating.hub.offset",
-            "splitpin": "vision.splitpin.hub.offset"}
+    keys = {"cap": "cap.seating.hub.distance.offset.cap", "bung": "bung.seating.hub.offset",     # vision.<model>.<key>
+            "splitpin": "splitpin.hub.offset"}                                                     # (CHANGES 213)
     for kind in ("hub", "splitpin", "cap", "bung"):
         for model in ("DOST", "DOSTPLUS"):
             d = np.array([r[2] for r in rows if r[0] == kind and r[1] == model])
@@ -203,7 +203,7 @@ def main() -> int:
                 # mean(morphology - SAM) away, so the SAM offset is that base + the mean - never the live value + it
                 # (the live value is already a SAM offset; CHANGES 166)
                 base, now = MORPHOLOGY_OFFSETS[kind][model], current[(kind, model)]
-                text += (f"  ->  {keys[kind]}.{model.lower()} = {base[0] + m[0]:.1f},{base[1] + m[1]:.1f} "
+                text += (f"  ->  vision.{os.environ['COSTHETA_PLC_VENDOR']}.{model.lower()}.{keys[kind]} = {base[0] + m[0]:.1f},{base[1] + m[1]:.1f} "
                          f"(morphology offset {base[0]:g},{base[1]:g} + mean; now {float(now[0]):g},{float(now[1]):g})")
             print(text)
     for model in ("DOST", "DOSTPLUS"):

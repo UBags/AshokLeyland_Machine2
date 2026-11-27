@@ -87,13 +87,13 @@ STATIONS = [
     ("nut", "Nut and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_NUT_AND_PLATEWASHER, ("nutwasher.nut.detection.center",),
      "nut_washer_images/{T}_nut_01.jpg"),
     ("bung1", "Bung (Component Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_COMPONENT_PRESS,
-     ("bung.outer.disc.center",), None),
+     ("dost.bung.outer.disc.center", "dostplus.bung.outer.disc.center"), None),
     ("nobung", "No Bung", MS.READ_TAKE_PICTURE_FOR_CHECKING_NO_BUNG, ("nobung.nut.detection.center",),
      "nut_washer_images/{T}_nut_01.jpg"),
     ("splitpin", "Split Pin and Washer", MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER, (),
      "splitpin_images/OK/192.168.250.64_01_20261119113613847.jpg"),
     ("cap", "Cap", MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, ("cap.center",), "cap_images/{T}_cap_01.jpg"),
-    ("bung2", "Bung (Cap Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, ("bung.outer.disc.center",), None),
+    ("bung2", "Bung (Cap Press)", MS.READ_TAKE_PICTURE_FOR_CHECKING_BUNG_FOR_CAP_PRESS, ("dost.bung.outer.disc.center", "dostplus.bung.outer.disc.center"), None),
 ]
 VOTE_STATES = (MS.READ_TAKE_PICTURE_FOR_CHECKING_CAP, MS.READ_TAKE_PICTURE_FOR_CHECKING_SPLITPIN_AND_WASHER)
 

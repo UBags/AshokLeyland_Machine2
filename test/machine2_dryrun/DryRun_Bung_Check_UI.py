@@ -22,7 +22,7 @@ round the same centre. One "[Bung] ..." log line per gamma.
   centre, red dots = the holes found (green border = OK, red = NOT OK). The list at the bottom and the terminal give,
   for each picture, the model checked, the number of holes found, OK / NOT OK, the time, the spacing, their centre's
   distance from the set centre and the deciding gamma. Terminal lines start "HOLES".
-  Seating (vision.bung.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
+  Seating (vision.<model>.bung.seating.check, Machine 2): after a hole pattern passes, the check measures the hole-pattern
   centre against the model's seated position, the roundness of the top-face mask (MobileSAM), how well it fits an
   ellipse and how much of it lies outside the model's reference oval; the line after HOLES
   starts "SEATING" (SEATED / NOT SEATED and both values; "not run" when the holes did not pass). On the picture the
@@ -30,6 +30,14 @@ round the same centre. One "[Bung] ..." log line per gamma.
   Hub holes (the seated position comes from them, FindHubHoles, CHANGES 153, 164 - 166): each hole ringed blue, the
   hole circle's centre a blue cross; the terminal line "HUBHOLES" gives centre, radius, spread, gap, method, gamma and
   seed (or why not found). --holes morphology = the dark-blob finder with its own offsets (no YOLO weights).
+
+  DOSTPLUS hub-centre study (CHANGES 215, Uddi 2026-11-27; "DOSTPLUS: hub-centre study", on by default; DOST is never
+  studied - its check is production's): the hub's 5 holes first; the segmented disc = the hub-hole circle (dark blue),
+  the hole search disc r135 round the hub centre (thin yellow, yellow cross); the production hole check runs on those
+  discs; the seating measured with the reference oval centred on the hub centre (thick yellow). Production
+  (camera/...) is not changed. One "STUDY" line per DOSTPLUS picture with every value; pictures in subfolders named
+  OK and NOT_OK (or GOOD / BAD) are labelled, and a "STUDY SUMMARY" at the end gives the OK / NOT OK range of each
+  value and a limit midway where they separate. The study's limits: STUDY_LIMITS in _bung_hubcentre_study.py.
 
 Run from the project root:   python test/machine2_dryrun/DryRun_Bung_Check_UI.py   [--holes morphology] [--hub-image <hub picture>]
 """
@@ -99,6 +107,9 @@ class BungCheckWindow:
         addHubPictureControl(bar, root, report=lambda line: self.status.set(line))
         self.save = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Save marked pictures", variable=self.save).pack(side="left", padx=10)
+        self.studyOn = tk.BooleanVar(value=True)
+        ttk.Checkbutton(bar, text="DOSTPLUS: hub-centre study", variable=self.studyOn).pack(side="left", padx=(0, 10))
+        self.study = None
         self.startButton = ttk.Button(bar, text="Start", command=self.start, state="disabled")
         self.startButton.pack(side="left")
         self.stopButton = ttk.Button(bar, text="Stop", command=self.stop, state="disabled")
@@ -187,6 +198,8 @@ class BungCheckWindow:
 
                 FindHubHoles.hubCentreFromPicture = staticmethod(timedHubCheck)
             self.BS = BS
+            from _bung_hubcentre_study import DostplusHubCentreStudy
+            self.study = DostplusHubCentreStudy(BS)
             self.checks = {CHECKS[0]: CheckBung.checkBung, CHECKS[1]: CheckNoCapBung.checkNoCapBung}
             self.results.put(("ready",
                 f"Models loaded in {time.time() - t0:.1f} s. Centre {tuple(BS.OUTER_DISC_CENTER)}, segmented disc "
@@ -209,7 +222,12 @@ class BungCheckWindow:
         folder = pathlib.Path(self.folder.get())
         if not self.folder.get() or not folder.is_dir():
             return []
-        return sorted(p for p in folder.iterdir() if p.suffix.lower() in EXTENSIONS)
+        from _bung_hubcentre_study import OK_FOLDERS, NOT_OK_FOLDERS
+        files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in EXTENSIONS]
+        for sub in folder.iterdir():                 # labelled subfolders OK / NOT_OK (GOOD / BAD) - CHANGES 215
+            if sub.is_dir() and sub.name.strip().lower() in OK_FOLDERS + NOT_OK_FOLDERS:
+                files += [p for p in sub.iterdir() if p.is_file() and p.suffix.lower() in EXTENSIONS]
+        return sorted(files)
 
     def start(self):
         files = self.pictures()
@@ -217,6 +235,8 @@ class BungCheckWindow:
             messagebox.showwarning("No pictures", "Choose a folder that contains jpg / png / bmp pictures.")
             return
         self.summary = []
+        if self.study is not None:
+            self.study.rows = []
         self.list.delete(0, "end")
         self.stopRequested.clear()
         self.startButton.config(state="disabled")
@@ -253,19 +273,49 @@ class BungCheckWindow:
                 if _recorder is not None:
                     _recorder.clear()
                 t0 = time.time()
+                studying = asModel == "DOSTPLUS" and self.studyOn.get() and self.study is not None
+                studyValues, studyText, studyHolesOK = None, "", False
                 try:
-                    marked, ok, gamma = check(image.copy(), QR[asModel], None)
-                    holes = self.holes()
-                    reason = self.reason(holes, gamma)
+                    if studying:
+                        found, why = self.study.begin(image)
+                        if not found:
+                            marked, ok, gamma, holes, reason = image.copy(), False, None, [], why
+                            studyText = why
+                    if not studying or found:
+                        marked, ok, gamma = check(image.copy(), QR[asModel], None)
+                        holes = self.holes()
+                        reason = self.reason(holes, gamma)
+                        if studying:
+                            studyHolesOK = ok
+                            if studyHolesOK:
+                                studyValues = self.study.seating(cv2.cvtColor(image, cv2.COLOR_BGR2RGB),
+                                                                 self.last["result"][1])
+                                seated, studyText = self.study.verdict(studyValues)
+                                ok = seated
+                            else:
+                                studyText = "hole pattern NOT OK"
                 except Exception as e:
                     marked, ok, holes, reason = None, False, [], f"exception: {e}"
+                    studyText = reason
+                finally:
+                    if studying:
+                        self.study.end()
                 seconds = time.time() - t0
                 hubHoles = _recorder.take() if _recorder is not None else []
                 seat = self.last.get("seating")
-                holesOK = ok or (seat is not None)          # seating runs only after the hole pattern passed
+                holesOK = studyHolesOK if studying else (ok or (seat is not None))   # seating only after the holes passed
                 print(f"HOLES    {path.name:28s} as {asModel:8s}  {len(holes)} holes  "
                       f"{'OK    ' if holesOK else 'NOT OK'}  {reason}", flush=True)
-                if self.BS.SEATING_CHECK:
+                if studying:
+                    label = self.labelOf(path)
+                    self.study.record(label, path.name, studyValues, "OK" if ok else "NOT OK", studyText)
+                    print(f"STUDY    {path.name:28s} as DOSTPLUS  {'OK    ' if ok else 'NOT OK'}"
+                          f"{'  (labelled ' + label + ')' if label else ''}  {studyText}"
+                          + (f"  |  {self.study.line(studyValues)}" if studyValues else "")
+                          + f"  |  hub holes {self.study.seconds.get('hub holes', 0):.2f} s, seating "
+                            f"{self.study.seconds.get('seating', 0):.2f} s", flush=True)
+                    reason += f"; study: {studyText}"
+                elif self.BS.SEATING_CHECK:
                     seatText = ("not run (hole check failed)" if seat is None else
                                 f"{'SEATED    ' if seat['seated'] else 'NOT SEATED'}  {seat['reason']}")
                     print(f"SEATING  {path.name:28s} as {asModel:8s}  {seatText}", flush=True)
@@ -276,7 +326,8 @@ class BungCheckWindow:
                 print(f"TIMES    {path.name:28s} as {asModel:8s}  {self.timesText(seconds)}", flush=True)
                 if seat is not None:
                     reason += f"; seating: {'SEATED' if seat['seated'] else 'NOT SEATED'} - {seat['reason']}"
-                shown = self.decorate(image, marked, ok, holes)
+                shown = self.decorate(image, marked, ok, holes,
+                                      study=(self.study.hub, studyValues) if studying else None)
                 if hubHoles:
                     shown = _recorder.draw(shown, hubHoles)
                 if save:
@@ -287,7 +338,18 @@ class BungCheckWindow:
                 self.advance.wait()
                 if self.stopRequested.is_set():
                     break
+        if self.study is not None:
+            lines = self.study.summaryLines()
+            for line in lines:
+                print(line, flush=True)
+            if lines:
+                self.results.put(("summary", lines))
         self.results.put(("done", None))
+
+    @staticmethod
+    def labelOf(path) -> str:
+        from _bung_hubcentre_study import labelOf
+        return labelOf(path)
 
     def timesText(self, total: float) -> str:
         """Where the check's time went: the bung's holes (gammas), the seating step (its hub holes and the dry run's hub
@@ -330,10 +392,31 @@ class BungCheckWindow:
         return (f"{len(holes)} holes, {spacing}, their centre ({mid[0]:.0f},{mid[1]:.0f}) is {off:.1f} px from the set "
                 f"centre; {decided}")
 
-    def decorate(self, image, marked, ok, holes):
-        """Shapes only, no text (verdict and values are in the list and the terminal)."""
+    def decorate(self, image, marked, ok, holes, study=None):
+        """Shapes only, no text (verdict and values are in the list and the terminal). BGR. Production: cyan circle =
+        the segmented disc, thin yellow circle + cross = the hole search disc and its centre. Study (DOSTPLUS, CHANGES
+        215): dark blue circle = the hub-hole circle (= the segmented disc), thin yellow circle + yellow cross = the
+        hole search disc r135 round the hub centre, thick yellow = the reference oval on the hub centre, the top-face
+        outline green (seated) / red."""
         BS = self.BS
         out = marked.copy() if marked is not None and marked.shape == image.shape else image.copy()
+        if study is not None:
+            hub, values = study
+            if hub is not None and hub.get("found"):
+                c = (int(round(hub["cx"])), int(round(hub["cy"])))
+                cv2.circle(out, c, int(round(hub["radius"])), (160, 0, 0), 2)
+                cv2.circle(out, c, int(BS.INNER_DISC_RADIUS_DOSTPLUS), (0, 255, 255), 1)
+                cv2.drawMarker(out, c, (0, 255, 255), cv2.MARKER_CROSS, 16, 1)
+                oval = BS.SEATING_REFERENCE_OVAL_DOSTPLUS
+                cv2.ellipse(out, ((float(hub["cx"]), float(hub["cy"])), (float(oval[0]), float(oval[1])),
+                                  float(oval[2])), (0, 255, 255), 3)
+            if values and values.get("face_contour") is not None:
+                cv2.drawContours(out, [values["face_contour"]], -1, (0, 170, 0) if ok else (0, 0, 220), 2)
+            for x, y in holes:
+                cv2.circle(out, (int(round(x)), int(round(y))), 4, (0, 0, 255), -1)
+            colour = (0, 170, 0) if ok else (0, 0, 220)
+            cv2.rectangle(out, (0, 0), (out.shape[1] - 1, out.shape[0] - 1), colour, 8)
+            return out
         centre = tuple(int(v) for v in BS.OUTER_DISC_CENTER)
         cv2.circle(out, centre, int(BS.OUTER_DISC_RADIUS), (255, 255, 0), 1)
         cv2.circle(out, centre, int(BS.INNER_DISC_RADIUS), (0, 255, 255), 1)
@@ -359,6 +442,10 @@ class BungCheckWindow:
                     self.status.set(data)
                 elif kind == "shown":
                     self.show(*data)
+                elif kind == "summary":
+                    for line in data:
+                        self.list.insert("end", line)
+                    self.list.see("end")
                 elif kind == "done":
                     okCount = sum(1 for r in self.summary if r)
                     self.status.set(f"Done: {len(self.summary)} check(s), model {self.model.get()}: {okCount} OK, "

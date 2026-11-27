@@ -6254,3 +6254,58 @@ What changed (Uddi, 2026-11-27):
 Run here: `DryRun_Import_Boundaries.py` PASS on both copies (173 production files, 212 test files); with a planted
 `from test.machine2_dryrun import _plc_sim` in `utils/ShutdownWait.py`: 1 violation found (then reverted).
 `PlantPC_Vision_Timing.py` compiled only: it needs the YOLO weights and the GPU, so it was not run here.
+
+## 215. Bung values per model; DOSTPLUS bung on the hub centre as a study in the dry-run window (2026-11-27)
+
+What changed (Uddi, 2026-11-27):
+- **Bung values per model (production):**
+  - Every bung key is now `vision.<vendor>.dost.bung.*` or `vision.<vendor>.dostplus.bung.*`. The 25 keys both models
+    shared (discs, mask areas, hole grid, duplicates / blobs, hole radius, square, three-hole, seating check / position
+    source / hole-centre offset / face radius / ellipse fit / outside share) are split, 50 lines per machine in each
+    properties file, each model with the value it had. The 5 `bung.debug.print.*` switches stay shared (log switches,
+    not inspection values).
+  - `square.*` is split too: the DOSTPLUS check uses it to recognise a DOST bung placed by mistake.
+  - `BungSegmenter` declares `X_DOST` / `X_DOSTPLUS`. The checks keep reading the plain `X`. The new
+    `useModel(model)`, called by `CheckBung` / `CheckNoCapBung` once the QR code gives the model, points every plain
+    name at that model's values and sets the mask generator's hole grid and mask-area limits from them (the generator
+    was built once, with the values of the time).
+  - The square limits used to be bound when the module was imported (default arguments of
+    `find_best_equidistant_subset_euclidean_robust`, so they were also never live-reloaded); they are now passed
+    explicitly at the one call.
+  - VisionFrame places the disc centre per model (`dost.bung.outer.disc.center` → `OUTER_DISC_CENTER_DOST`,
+    `dostplus...` → `_DOSTPLUS`), as it already did for the seated centres.
+  - Reference commit dba9135 (values hard-coded) for BungSegmenter.py and VisionFrame.py; both manifests point at it,
+    and the line of the two extracted DOSTPLUS pair-distance entries moved 1446 → 1550.
+  - Dry runs updated for the per-model names: knuckle frame, all-checks window, the hub-holes offset suggestion
+    (prints `vision.<vendor>.<model>.<key>`), and the bung hub-holes and bung window texts.
+- **DOSTPLUS on the hub centre - a study, production unchanged** (`test/machine*_dryrun/_bung_hubcentre_study.py`,
+  used by `DryRun_Bung_Check_UI.py` with "DOSTPLUS: hub-centre study", on by default; DOST never studied):
+  1. The hub's 5 holes first (`FindHubHoles.findHoles`; the window's hub picture is the fallback); not found → NOT OK.
+  2. The production hole check runs with the segmented disc = the hub-hole circle (centre H, radius R, drawn dark blue)
+     instead of r250 round the fixed (643, 334) (light blue, no longer drawn), and the hole-search disc r135 round H
+     (thin yellow circle, yellow cross).
+  3. Seating measured with the reference oval centred on H itself (thick yellow), as Uddi asked. Values: hole-centre
+     offset to H + hub offset (as production), face roundness, face / fitted ellipse, the share of the face outside the
+     oval on H (and, for information, outside the oval at production's seated position), face radius. Verdict with
+     `STUDY_LIMITS` (start: today's DOSTPLUS values). The outside share is to be recalibrated, because the seated face
+     sits ~17 px off H (camera angle; production offset 4.7, -16.3).
+  4. One `STUDY` line per picture. Pictures in subfolders `OK` / `NOT_OK` (or `GOOD` / `BAD`) are labelled, and
+     `STUDY SUMMARY` gives each value's OK / NOT OK range, worst OK, closest NOT OK and a midway limit where they
+     separate. Uddi decides the limits ("measure, then decide"). The extra leeway he asked for comes from that
+     recalibration; on 2026-11-19 he had settled that the bung check stays strict because of the 2.5 t press.
+  5. The cost: the hub holes are found before the bung's holes on every DOSTPLUS picture (about 0.5 - 0.7 s on the
+     laptop GPU, CHANGES 170). Today they run only when the bung's pattern passes. To be weighed against the 1.5 s /
+     2 s targets (CHANGES 214).
+
+Run here (sandbox: no YOLO, so the point grid alone; hub holes by the dark-blob finder):
+- `Verify_Vision_Config_Equivalence.py`, both machines: ALL EQUIVALENT, 459 parameters (BungSegmenter.py and
+  VisionFrame.py against dba9135).
+- The reference generator reproduced the old reference 9958fae exactly (AST) from the code before the change.
+- Old code (a6c739a) against new, the real `CheckBung` and `CheckNoCapBung` on bung pictures A01 - A03 of 13 Nov, each
+  as DOST and as DOSTPLUS: 12 of 12 results identical - verdict, gamma, disc, and every seating value to the last
+  decimal (A01 seated DOST, A02 bad, A03 seated DOSTPLUS). Stopped after 3 pictures; the CPU run takes about 1 min a
+  check.
+- The study on labelled DOSTPLUS pictures: A03, A04 (good) OK. Hub found at (644, 342) r 149; the discs moved there,
+  restored after. Face outside the oval on H 5.6 - 5.7 % (1.8 - 3.6 % at production's position), so near the 6 % limit,
+  as expected. A not-seated picture: NOT OK, because the bung covers the hub's holes (holes not found).
+- `DryRun_Knuckle_Frame.py --quick`: 88/88 (the per-model disc centres placed by the frame and restored). `DryRun_Import_Boundaries.py`: PASS (the study module stays in test/).
