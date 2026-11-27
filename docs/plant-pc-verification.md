@@ -24,24 +24,30 @@ multiprocessing "spawn", like the servers themselves, but it has not been run in
 **If the worker does not get ready** (no "ready" line, or every check NOT OK with "vision check worker starting"):
 there is no fallback (the thread mode was removed, CHANGES §105): stop, and tell the developer what the console showed.
 
-## 2. Vision check times against the 12 s timeout
+## 2. Vision check times against the targets
+
+**Targets (Uddi, 2026-11-27, CHANGES 214):** a vision check should take **1.5 s or less** (ideal), and **2 s at most on
+average**. `vision.siemens.check.timeout.sec` (12 s) is not a target: it is only the deadline after which the worker
+is stopped and the check counted NOT OK (a hung check must not stop the machine). A time "well inside the timeout" says
+nothing about meeting the targets.
 
 **2a. On the plant PC (exe):** run 10 cycles, DOST and DOSTPLUS, LHS and RHS. In the log, the line
 `<STATE>: check S s in the worker, transfer T s` gives each check's time. For every check:
 
-- the largest S must be below 80 % of `vision.siemens.check.timeout.sec` (12 s, so below 9.6 s);
+- S should be 1.5 s or less; its mean over the cycles must be 2 s or less;
 - T must be below 1 s (a warning "slow transfer to the worker process" is logged above that).
 
-A check over 80 %: raise `vision.siemens.check.timeout.sec` (the camera answer timeout follows it automatically: it
-is at least the check timeout + 8 s), or find out why the GPU is slow (`nvidia-smi`: is the GPU used, is another
-program using it?). Three timeouts in a row are reported on the screen as "vision checks too slow on this PC".
+A check over the 2 s average: find out why (`nvidia-smi`: is the GPU used, is another program using it?) and report
+the check and its times - the check itself has to get faster; raising the timeout does not help. Three timeouts in a
+row are reported on the screen as "vision checks too slow on this PC".
 
 **2b. With the source (laptop or a PC like the plant PC):**
 
     python test/machine2_dryrun/PlantPC_Vision_Timing.py
 
 It runs every stored test picture through its check with the real models and prints, per check, the median and
-largest time, the transfer time and the margin to the timeout. Exit code 1 if a check is over 80 % of the timeout.
+largest time, the transfer time and the margin to the timeout, and marks each check ideal (largest <= 1.5 s), within
+average (mean <= 2 s) or OVER. Exit code 1 if a check's mean is over 2 s.
 
 ## 3. A server process that dies is restarted
 
@@ -155,7 +161,7 @@ On the Machine 2 PC with the new exe:
    position, distance from the disc centre and area, what was dropped and why, the decision) and the `[CheckBung]
    Seating: ...` line with the four seating values. For any NOT OK on a correct bung, send these lines.
 5. **Time.** The bung check's time (the `check time` in the camera server's log) - each gamma now decodes about 220
-   point prompts; it must stay well inside the 12 s timeout (expected: well under a second per gamma on the GPU).
+   point prompts; the check must meet the targets of step 2 (1.5 s ideal, 2 s average; expected: well under a second per gamma on the GPU).
 6. **Seated position from the hub's holes (CHANGES 153).** The `[CheckBung] Seating:` line now reads `holes centre
    (x,y) d px from the seated position (x,y; hub from 4 holes (x, y) r .. spread .. gap .. deg, DOST offset (4.9,
    -13.7)) <= 20.0; ...`; a bung lying over the hub's holes gives `seated position unknown: the hub's 4 holes round
@@ -175,8 +181,9 @@ On the Machine 2 PC with the new exe:
    centre uncovered <n> px <= 400 (hub r .., cap outline .. px from hub centre)`; brass: `cap centre to bore centre`.
    Send these lines for a shift (seated caps) and for any wrong verdict - the silver limits were set without
    pictures of a hub and its own cap (the hub picture of the same cycle is used in production).
-4. **Time.** Silver seating now runs MobileSAM on two pictures (cap and hub); the cap check's time must stay well
-   inside the 12 s timeout.
+4. **Time.** Silver seating now runs MobileSAM on two pictures (cap and hub); the cap check's time must meet the
+   targets of step 2 (1.5 s ideal, 2 s average). Since CHANGES 212 (annulus seating) the DOST cap check takes 2.06 -
+   2.34 s on the laptop GPU - over the targets, accepted by Uddi for now (2026-11-27).
 5. **Hub-centre distance (CHANGES 143, 144).** Laptop: `DryRun_Cap_Hub_Distance.py` (11/11; with the YOLO weights it
    uses the real YOLO) and `DryRun_Cap_Hub_Distance_UI.py` (a hub picture and the caps of the same parts: the suggested
    offset and max). Machine 2 PC: the hub check writes `[CheckHubAndBottomBearing] hub centre (x, y) from 4 holes`
@@ -297,7 +304,7 @@ On the Machine 2 PC with the new exe:
    a good part NOT OK with `the hub's N holes not found (annulus ... from the hub centre given (4 holes): gamma ...)` is
    the thing to report, with the picture.
 6. Times: the cap, bung and split pin checks each run YOLO + MobileSAM on the annulus now (up to 6 gammas, first success
-   wins); their check times must stay well inside the 12 s timeout.
+   wins); their check times must meet the targets of step 2 (1.5 s ideal, 2 s average).
 8. (CHANGES 182) The centre now comes from the picture being checked: the cap / bung / split pin log lines say `seed this
    picture: 4 bolts (r .., spread .., gamma ..)` (or holes); `the hub check (given) ... (this picture: ...)` means pass 1
    found no set there and the cycle's hub check was used. Note the check times (one more pass per picture: about
@@ -340,7 +347,7 @@ On the Machine 2 PC with the new exe:
 | Step | Date | Exe build | Result | Notes |
 |---|---|---|---|---|
 | 1 Worker in the exe | 2026-11-15 | | Passed | Reported by Uddi: the worker runs inside the exe |
-| 2a Check times (largest per check) | 2026-11-15 | | Passed | Reported by Uddi: response times fast (per-check times not recorded) |
+| 2a Check times (largest per check) | 2026-11-15 | | Passed | Reported by Uddi: response times fast (per-check times not recorded). Judged then against the 12 s timeout; the targets since 2026-11-27 are 1.5 s / 2 s average: re-check with the per-check times |
 | 3 Restart: camera / QR / IO / DB / frontend / heartbeat / logging | | | | |
 | 3 Camera server killed during a cycle (state taken back) | | | | |
 | 3 Frontend killed during a cycle | | | | |

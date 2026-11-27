@@ -163,6 +163,11 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   PLC raised still True means carry on; otherwise (fallback: the side tag no longer as written) the PLC restarted ->
   reset. Both PLCs reset all values on restart.
 - The vision check always runs in the worker process (no thread fallback since CHANGES 105).
+- **Vision check time targets (Uddi, 2026-11-27):** ideally **1.5 s or less** per check, **2 s at most on average**.
+  `vision.<vendor>.check.timeout.sec` (12 s) is only the deadline after which the worker is stopped and the check counted
+  NOT OK - never a target. Report check times against 1.5 s / 2 s, never as "well inside the timeout".
+  `PlantPC_Vision_Timing.py` judges against these targets. Known over the targets: the DOST cap check with the annulus
+  seating, 2.06 - 2.34 s on the laptop GPU (CHANGES 212) - accepted by Uddi for now (2026-11-27).
 - MainProgram start-up (CHANGES 174): both databases are set up (`setDatabaseName`, createDB) **before** the start-up
   backup starts; the backup runs in a thread beside the mode and login dialogs; the DB server starts only after it
   (`waitForDatabaseBackup`), and so does every early exit. Do not run `setDatabaseName(createDB=True)` while it runs:
@@ -192,7 +197,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | Step | Status |
 |---|---|
 | 1 Vision check worker inside the exe | **Passed** - run on the Machine 2 PC, reported by Uddi on 2026-11-15: the worker starts and answers inside the Nuitka exe |
-| 2a Check times against the 12 s timeout (GPU) | **Passed** - same run: response times fast, well inside the timeout |
+| 2a Check times (GPU) | **Passed** against the 12 s timeout (same run, response times fast; per-check times not recorded). Since 2026-11-27 the targets are 1.5 s ideal / 2 s average (§5): re-check with per-check times |
 | 3 Process restart (each server killed), camera / frontend killed during a cycle | Not reported yet |
 | 4 Frozen screen | Not to be provoked |
 | 5 Real QR codes | Not reported yet |

@@ -6230,3 +6230,27 @@ Run here (sandbox):
   (VisionFrame's centres and ovals under the new names); `DryRun_CameraServer_Heartbeat.py` 4/4;
   `DryRun_Camera_State_File.py` 19/19; `DryRun_Tuning_Keys.py` 251/251.
 - `DryRun_Cap_Production_Path.py --holes morphology`: 11/12, as before (DOST_skewed_03, CHANGES 212).
+
+## 214. Vision check time targets recorded; production does not import the test package (2026-11-27)
+
+What changed (Uddi, 2026-11-27):
+- **Time targets:** a vision check should take 1.5 s or less (ideal) and 2 s at most on average.
+  `vision.<vendor>.check.timeout.sec` (12 s) is only the deadline after which the worker is stopped and the check
+  counted NOT OK; it is not a target. In CHANGES 212 I reported the DOST cap check's 2.06 - 2.34 s as "well inside the
+  12 s limit", which was wrong against these targets. Uddi accepts that time for now.
+  - Recorded in CLAUDE.md §5 and §7, the LLD (VisionCheckWorker), `docs/plant-pc-verification.md` (step 2 rewritten:
+    the targets, not 80 % of the timeout; the bung, cap and hub-holes time notes) and both dry-run READMEs.
+  - `PlantPC_Vision_Timing.py` (both copies) now prints each check's mean, median and largest time and marks it as
+    ideal (largest <= 1.5 s), within average (mean <= 2 s) or OVER. The margin to the timeout is shown for
+    information only. Exit code 1 if a check's mean is over 2 s (before: largest over 80 % of 12 s). It also now prints
+    the timeout's key under its CHANGES 213 name.
+- **Import boundary:** no production file imports from the test package.
+  - Checked: 173 production files (git, outside `test/` and `archive/`); every import, including those inside
+    functions, `importlib.import_module`, `runpy`, `__import__` and `sys.path` entries. Found: none; the only mentions
+    of test files are three docstrings naming a dry run.
+  - To keep it so: new `test/machine*_dryrun/DryRun_Import_Boundaries.py` FAILs when a production file reaches a module
+    under `test/`.
+
+Run here: `DryRun_Import_Boundaries.py` PASS on both copies (173 production files, 212 test files); with a planted
+`from test.machine2_dryrun import _plc_sim` in `utils/ShutdownWait.py`: 1 violation found (then reverted).
+`PlantPC_Vision_Timing.py` compiled only: it needs the YOLO weights and the GPU, so it was not run here.

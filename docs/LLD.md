@@ -340,6 +340,8 @@ One INFO line per gamma, `[Bung] <model> gamma <g>: masks ... candidates n: (x,y
 **VisionCheckWorker** (`VisionCheckWorker.py`):
 
 - A child process that loads the models once (`ModelManager`, MobileSAM, segmenters) and runs one check per request.
+- Targets for a check's time (Uddi, 2026-11-27): ideally 1.5 s or less, 2 s at most on average. The 12 s below is
+  only the cut-off for a hung check, not a target.
 - If a check does not finish in 12 s, the parent kills the child and starts a new one. The check counts as NOT OK. From the 3rd timeout in a row the reason says the checks are too slow on this PC (check the GPU); a check in time resets the count.
 - A worker that dies before it reports ready is started again after a pause of 1, 2, 4 ... at most 60 s
   (`RESTART_BACKOFF_*`, on a timer thread; `failedStarts`, reset when a worker gets ready); checks meanwhile are NOT
