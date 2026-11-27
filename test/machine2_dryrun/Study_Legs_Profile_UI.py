@@ -12,7 +12,7 @@ Start / Stop.
 Row 2: the main values of _legs_profile (taken at Start, this window only): scallop shift +- px, scallop found share,
 legs sector +- deg, region (b) start / end px past the outline, region (b) R-G floor, region (b) touch px.
 Row 3 (CHANGES 223): (a) grey / R-G Otsu factors (0.8 / 1.2), gamma above / below the mean (1.5 / 0.6), (a) refine
-Otsu factor (0.8). Region (b)'s refinement (CHANGES 224: 2R - G - B per piece, equalised, Otsu) has no values to set.
+Otsu factor (0.8). Region (b)'s refinement (CHANGES 224 / 225: 2R - G - B per piece, Otsu) has no values to set.
 Views (outlines only, no values on the pictures):
   - the whole picture;
   - the washer x3: scallops (dark blue; found / placed in the table and the text box), inner edge (yellow), pin head

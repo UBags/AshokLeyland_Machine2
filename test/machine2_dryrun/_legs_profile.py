@@ -41,8 +41,8 @@ circle round the outline's centroid). All coordinates below are in the 240 x 240
    the values above the adjusted one; then inside each area the grey refinement (refineInGrey): grey, relative gamma
    round the area's mean (above: GAMMA_HIGH 1.5, brighter, <= 255; below: GAMMA_LOW 0.6, darker, >= 0), Otsu of the
    result x A_REFINE_FACTOR (0.8), the dark pixels are the legs on the washer (a). (b) since CHANGES 224 (Uddi 03:12):
-   each connected piece of the (b) area on its own - 2R - G - B, histogram equalised over the piece, Otsu over the
-   piece, the bright side are the legs (refineByRedness).
+   each connected piece of the (b) area on its own - 2R - G - B (negatives 0), Otsu over the piece, the bright side
+   are the legs (refineByRedness; no histogram equalisation since CHANGES 225).
    The leg profile = (a) OR (b).
 Measured on the 150 DOST pictures of 2026-11-24 (38 OK / 112 NOT OK, permanent marker; sandbox: dark-blob hole finder,
 MobileSAM on the CPU): see CHANGES 222.
@@ -277,8 +277,9 @@ def _equalised(vals: np.ndarray) -> np.ndarray:
 
 def refineByRedness(crop: np.ndarray, area: np.ndarray):
     """Step (v) since CHANGES 224 (Uddi 03:12; the legs over the plate washer / seal are brighter in red than what
-    lies round them): each connected piece of the (b) area on its own - 2R - G - B of its pixels, histogram equalised
-    over that piece, Otsu over that piece, the bright side = the legs. Pieces under REFINE_MIN_PX px stay as they are.
+    lies round them): each connected piece of the (b) area on its own - 2R - G - B of its pixels (negatives 0, clamped
+    to 255), Otsu over that piece, the bright side = the legs. CHANGES 224 equalised the piece first; dropped in 225
+    (Uddi 03:17: after equalisation Otsu kept about half of every piece by construction); _equalised stays. Pieces under REFINE_MIN_PX px stay as they are.
     (legs mask, [(piece px, Otsu, kept px)])."""
     B, G, R = (crop[..., k].astype(float) for k in range(3))
     red = 2 * R - G - B
@@ -292,9 +293,9 @@ def refineByRedness(crop: np.ndarray, area: np.ndarray):
             out |= piece
             pieces.append((px, None, px))
             continue
-        eq = _equalised(red[piece])
-        t = _otsu(eq)
-        keep = eq > t
+        vals = np.clip(red[piece], 0, 255)               # CHANGES 225: Otsu on the values themselves (no equalisation)
+        t = _otsu(vals)
+        keep = vals > t
         sub = np.zeros(area.shape, bool)
         sub[piece] = keep
         out |= sub

@@ -6518,3 +6518,13 @@ No code changed.
   equalisation a piece's histogram is about flat, so its Otsu falls near the middle and keeps about the redder half of
   the piece by construction, whatever share of it is leg (more where many pixels share one value). Contact sheets
   checked by eye; the window driven offscreen (18 pictures); both files parse on Python 3.11.
+
+## 225. Study_Legs_Profile_UI: region (b) Otsu on 2R - G - B itself, no equalisation (2026-11-28)
+
+- Uddi, 2026-11-28 03:17: drop 224's histogram equalisation (after it a piece's histogram is about flat, so Otsu kept
+  about half of every piece by construction); Otsu straight on each piece's 2R - G - B values (negatives 0, clamped to
+  255), the bright side = the legs. `_legs_profile._equalised` stays (unused).
+- Run (sandbox, the 150 pictures, dark-blob holes): kept 0.25 - 0.62 of each (b) area (median 0.46) over the 116 pictures
+  with >= 50 px there (224: 0.41 - 0.87, median 0.50) - the share now follows the piece instead of sitting near half;
+  the legs beyond the washer stay continuous; contact sheets checked by eye; the window driven offscreen (18 pictures);
+  both files parse on Python 3.11.
