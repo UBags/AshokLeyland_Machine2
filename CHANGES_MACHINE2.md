@@ -6083,3 +6083,25 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   0.6 - 6.3 px; ring width 35 - 57 px, sd 1.8 - 4.9; score ellipse 12.22 - 14.54, ring 12.43 - 14.46 (the two agree within
   ~0.3). Uddi's Not OK run of 11:00 (before this change): score ellipse 12.67 - 27.40, median 16.58. The window driven
   offscreen at the new defaults: annulus only drawn, ANNULUS lines on the terminal.
+
+## 211. Study_Cap_Annulus: Uddi's verdict rule, VERDICT lines, OK / NOT OK on the third panel, beep (2026-11-27)
+
+- Uddi, 2026-11-27 11:29 / 11:34: the rule - if centre offset > 7.0 or score_ellipse > 16.0 or islands > 230 or
+  w_opp_max > 17 or ring width p90 > 50 or width_max > 52 then NOT OK; else if inlier_share > 0.70 or width_sd < 3.5 or
+  islands < 200 or w_opp_max < 11 or p90 < 47 or width_max < 48.25 then OK; else NOT OK. Add it; print the conditions
+  that led to the verdict; write OK in green / NOT OK in red on the third panel; a sound for red.
+- Checked on his csv files of 2026-11-27 11:09 / 11:11 (39 OK, 33 NOT OK pictures of 26 Nov, mask gamma 2.0): 0 errors -
+  every NOT OK picture in stage 1, every OK picture in stage 2 (3 - 6 of the stage-2 conditions met); none of the NOT OK
+  pictures meets a stage-2 condition. Thin spots: part 18-26-29 (3 pictures) is caught by islands > 230 alone (378 -
+  423; width_max 50.5 - 50.8 < 52, p90 48.5 - 49 < 50, w_opp_max 14 < 17); one picture of 18-25-59 has islands 220 (caught
+  by offset and widths). The two sets were taken in different sessions (hub y 344.8 / 341.9, brightness 164 - 189 /
+  158 - 230), 13 parts each.
+- `_cap_annulus`: `width_p90` and `w_opp_max` / `w_opp_mean` (|width(t) - width(t + 180)| over the 18 pairs) added to the
+  annulus values (csv, ANNULUS line); `RULE_NOT_OK`, `RULE_OK`, `verdict(res)` -> (OK / NOT OK, "stage n: conditions
+  met with their values"); a picture without annulus values (no holes / annulus / ellipse) is NOT OK with the reason.
+  Window: a verdict column (green / red), the verdict written on the third panel (Uddi's request - the one text on a
+  picture in the study window; values stay in the table and text box), a beep for NOT OK (winsound on Windows, else
+  Qt's), `VERDICT file: ...` on the terminal (also the no-window script), verdict counts in the summary.
+- Run here: `verdict` on the rows of the two csv files - 0 errors (39 stage 2 / 33 stage 1); the window offscreen on 5 OK
+  pictures - 3 OK, 2 NOT OK (width_max 56 / 56.5: the sandbox's dark-blob hole circle on those two is 4 px off, R 156
+  against 149 on the laptop - not the rule).

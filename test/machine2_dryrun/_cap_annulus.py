@@ -66,7 +66,7 @@ MASK_GAMMA_DEFAULT = float(CapMaskFinder.GAMMA)        # production cap mask: 2.
 
 HEADER = (["file", "model", "mask_method", "prompts", "ann_area", "inner_points", "inliers", "inlier_share",
            "inlier_mean_dist", "ell_angle", "axis_ratio", "ell_hub_dist", "islands", "width_min", "width_max",
-           "width_mean", "width_sd", "widths", "holes_gamma", "mask_gamma", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
+           "width_mean", "width_sd", "width_p90", "w_opp_max", "w_opp_mean", "verdict", "why", "widths", "holes_gamma", "mask_gamma", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
            "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
@@ -109,6 +109,14 @@ STUDY_MASK_GAMMA = 2.0
 INNER_TOLERANCE = 2.0              # px: an inner edge point this close to the inner ellipse is on it
 INNER_TRIES = 1500                 # RANSAC ellipses through 5 inner edge points (fixed seed)
 WIDTH_STEP_DEG = 10                # annulus width printed every this many degrees (36 values)
+
+# Uddi's verdict rule of 2026-11-27 11:29 (CHANGES 211), annulus method. 0 errors on his 39 OK / 33 NOT OK pictures of
+# 26 Nov (two sessions, 13 parts each). Stage 1: any -> NOT OK. Stage 2: any -> OK. Else NOT OK.
+RULE_NOT_OK = (("centre offset", "ell_hub_dist", ">", 7.0), ("score_ellipse", "score_ellipse", ">", 16.0),
+               ("islands", "islands", ">", 230), ("w_opp_max", "w_opp_max", ">", 17), ("width_p90", "width_p90", ">", 50),
+               ("width_max", "width_max", ">", 52))
+RULE_OK = (("inlier_share", "inlier_share", ">", 0.70), ("width_sd", "width_sd", "<", 3.5), ("islands", "islands", "<", 200),
+           ("w_opp_max", "w_opp_max", "<", 11), ("width_p90", "width_p90", "<", 47), ("width_max", "width_max", "<", 48.25))
 _mask = dict(MASK_STUDY)
 
 
@@ -568,6 +576,8 @@ def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = S
                        **{f"mask_{d}": f"{r:.3f}" for d, r in zip(DIAMETER_ANGLES, rM)})
     res["seconds"] = f"{time.perf_counter() - t0:.2f}"
     res["note"] = "; ".join(notes)
+    if maskMethod == "annulus":
+        res["verdict"], res["why"] = verdict(res)
     return res
 
 
@@ -581,6 +591,9 @@ def measureAnnulus(res: dict, hx, hy, R, ann, cap, samScore, floor) -> None:
     res.update(sam_score=f"{samScore:.3f}", mask_area=int(ann.sum()), ann_area=int(ann.sum()), inner_points=len(inner),
                width_min=f"{min(widths):.1f}", width_max=f"{max(widths):.1f}", width_mean=f"{np.mean(widths):.1f}",
                width_sd=f"{np.std(widths):.2f}", widths=" ".join(f"{w:.0f}" for w in widths),
+               width_p90=f"{np.percentile(widths, 90):.1f}",
+               w_opp_max=f"{max(abs(widths[i] - widths[i + len(widths) // 2]) for i in range(len(widths) // 2)):.1f}",
+               w_opp_mean=f"{np.mean([abs(widths[i] - widths[i + len(widths) // 2]) for i in range(len(widths) // 2)]):.2f}",
                prompts=len(res["pts"]) - 17)
     res["maskInfo"] = (f"annulus mask {int(ann.sum())} px from {len(res['pts']) - 17} prompts on r {R - ANNULUS_INSET:.1f}"
                        f" + 17 negative on the cap; {len(inner)} inner edge points")
@@ -626,15 +639,42 @@ def _ringWidthAt(hx, hy, R, ann, phi, holeZone: float = HOLE_ZONE) -> float:
     return R - last if last is not None else 0.0
 
 
+def _ruleHits(res: dict, rules) -> list:
+    hits = []
+    for label, key, op, limit in rules:
+        v = res.get(key)
+        if v in ("", None):
+            continue
+        v = float(v)
+        if (v > limit) if op == ">" else (v < limit):
+            hits.append(f"{label} {v:g} {op} {limit:g}")
+    return hits
+
+
+def verdict(res: dict):
+    """Uddi's rule (RULE_NOT_OK, RULE_OK): ("OK" / "NOT OK", "stage 1: ..." / "stage 2: ..." / "stage 3: ..."), or
+    ("", "") where the annulus values are missing (no holes / no annulus / no ellipse -> NOT OK, reason given)."""
+    if res.get("annulus") is None or res.get("ellipse") is None:
+        return "NOT OK", f"no annulus values ({res.get('note') or 'annulus method not run'})"
+    bad = _ruleHits(res, RULE_NOT_OK)
+    if bad:
+        return "NOT OK", "stage 1 (any -> NOT OK): " + "; ".join(bad)
+    good = _ruleHits(res, RULE_OK)
+    if good:
+        return "OK", "stage 2 (any -> OK): " + "; ".join(good)
+    return "NOT OK", "stage 3: no stage-1 and no stage-2 condition met"
+
+
 def annulusLine(name: str, res: dict) -> str:
     """One line per picture for the terminal (CHANGES 210): every annulus value, key=value, for Uddi to send back."""
     keys = ("model", "rb_silver", "brightness", "hub_x", "hub_y", "hole_r", "prompts", "sam_score", "ann_area",
             "inner_points", "inliers", "inlier_share", "inlier_mean_dist", "ell_cx", "ell_cy", "ell_a", "ell_b",
             "ell_angle", "axis_ratio", "ell_minus_hub_dx", "ell_minus_hub_dy", "ell_hub_dist", "islands", "width_min",
-            "width_max", "width_mean", "width_sd", "score_ellipse", "max_ratio_ellipse", "score_mask", "max_ratio_mask",
+            "width_max", "width_mean", "width_sd", "width_p90", "w_opp_max", "w_opp_mean", "score_ellipse", "max_ratio_ellipse", "score_mask", "max_ratio_mask",
             "seconds")
     parts = [f"{k}={res.get(k, '')}" for k in keys]
-    return f"ANNULUS file={name} " + " ".join(parts) + f" widths10=[{res.get('widths', '')}] note={res.get('note', '')!r}"
+    return (f"ANNULUS file={name} " + " ".join(parts) + f" widths10=[{res.get('widths', '')}] note={res.get('note', '')!r}"
+            f" verdict={res.get('verdict', '')!r} why={res.get('why', '')!r}")
 
 
 def marked(img: np.ndarray, res: dict) -> np.ndarray:
@@ -690,8 +730,8 @@ def detailLines(name: str, res: dict) -> list:
                      f"{res['ell_angle']}, axis ratio {res['axis_ratio']}, centre - hub distance {res['ell_hub_dist']} px; "
                      f"mask inside it {res['islands']} px")
     if res.get("annulus") is not None:
-        lines.append(f"  ring width min / mean / max / sd {res['width_min']} / {res['width_mean']} / {res['width_max']} / "
-                     f"{res['width_sd']} px; every {WIDTH_STEP_DEG} deg from 0: {res['widths']}")
+        lines.append(f"  ring width min / mean / max / sd / p90 {res['width_min']} / {res['width_mean']} / {res['width_max']} / "
+                     f"{res['width_sd']} / {res['width_p90']} px, opposite sides max / mean {res['w_opp_max']} / {res['w_opp_mean']}; every {WIDTH_STEP_DEG} deg from 0: {res['widths']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")
@@ -707,11 +747,16 @@ def detailLines(name: str, res: dict) -> list:
                                         in list(zip(DIAMETER_ANGLES, lengths, ratios))[6:]))
     if res["note"]:
         lines.append(f"  note: {res['note']}")
+    if res.get("verdict"):
+        lines.append(f"  VERDICT {res['verdict']} - {res['why']}")
     return lines
 
 
 def summaryLines(rows: list) -> list:
     lines = ["Summary (pictures with a score):"]
+    verdicts = [r.get("verdict") for r in rows if r.get("verdict")]
+    if verdicts:
+        lines.append(f"  verdicts: OK {verdicts.count('OK')}, NOT OK {verdicts.count('NOT OK')}")
     for key in ("score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask"):
         v = np.array([float(r[key]) for r in rows if r.get(key) not in ("", None)])
         if len(v):

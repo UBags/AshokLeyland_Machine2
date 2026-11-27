@@ -15,6 +15,11 @@ multimask_output on, pred_iou_thresh 0.15, stability_score_thresh 0.25, box_nms_
 ("Study defaults" button; "Production values" = the cap check's). Annulus only draws and scores only the annulus: its
 edges (magenta) and the inner ellipse (yellow) - the ellipse with the most inner edge points within 2 px (not least
 squares) - and prints one "ANNULUS file=... key=value ..." line per picture on the terminal, to send back.
+Verdict (CHANGES 211, Uddi's rule of 2026-11-27; annulus only): stage 1 - centre offset > 7, score_ellipse > 16,
+islands > 230, w_opp_max > 17, ring width p90 > 50 or width_max > 52 -> NOT OK; stage 2 - inlier_share > 0.70,
+width_sd < 3.5, islands < 200, w_opp_max < 11, p90 < 47 or width_max < 48.25 -> OK; else NOT OK. A "VERDICT file: OK /
+NOT OK - stage n: the conditions met" line on the terminal, a verdict column (green / red), OK in green or NOT OK in red
+written on the third panel, and a beep for NOT OK.
 Row 4, gamma: of the picture given to the hole finder (1 = as taken), and of the picture given to MobileSAM for the
 masks (every method; production cap mask 2.0).
 The values are taken at Start and apply in this window only (production and the properties file are not touched); the
@@ -43,12 +48,12 @@ import _cap_annulus as A                                                     # n
 import cv2                                                                    # noqa: E402
 import numpy as np                                                            # noqa: E402
 from PySide6.QtCore import Qt, QObject, Signal                                # noqa: E402
-from PySide6.QtGui import QImage, QPixmap, QFont                              # noqa: E402
+from PySide6.QtGui import QImage, QPixmap, QFont, QPainter, QColor                              # noqa: E402
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout,  # noqa
                                QHeaderView, QLabel, QMainWindow, QPlainTextEdit, QPushButton, QSpinBox, QSplitter,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-COLUMNS = ("file", "cap", "R-B", "bright", "hub", "R", "boxes/disc/sam/pass/merged", "masks", "ell - hub", "score ellipse",
+COLUMNS = ("file", "verdict", "cap", "R-B", "bright", "hub", "R", "boxes/disc/sam/pass/merged", "masks", "ell - hub", "score ellipse",
            "score mask", "time s", "note")
 FULL_W, FULL_H = 640, 360
 PANEL = 360                         # side of the 2x view and of the masks view
@@ -67,6 +72,31 @@ def zoomOf(marked: np.ndarray, res: dict) -> np.ndarray:
     cx, cy = (res["hub"][0], res["hub"][1]) if res.get("hub") else (w / 2, h / 2)
     x0, y0 = int(max(0, min(w - 2 * ZOOM_HALF, cx - ZOOM_HALF))), int(max(0, min(h - 2 * ZOOM_HALF, cy - ZOOM_HALF)))
     return marked[y0:y0 + 2 * ZOOM_HALF, x0:x0 + 2 * ZOOM_HALF]
+
+
+def withVerdict(pixmap: QPixmap, text: str) -> None:
+    """Uddi, 2026-11-27: the verdict written on the third panel - OK in green, NOT OK in red (the only text on a picture
+    in this window; values stay in the table and the text box)."""
+    painter = QPainter(pixmap)
+    font = QFont("Arial", 30)
+    font.setBold(True)
+    painter.setFont(font)
+    rect = pixmap.rect().adjusted(0, 6, 0, 0)
+    painter.setPen(QColor(0, 0, 0))                      # dark edge so the word reads on any background
+    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
+        painter.drawText(rect.translated(dx, dy), Qt.AlignHCenter | Qt.AlignTop, text)
+    painter.setPen(QColor(0, 220, 0) if text == "OK" else QColor(255, 30, 30))
+    painter.drawText(rect, Qt.AlignHCenter | Qt.AlignTop, text)
+    painter.end()
+
+
+def alarm() -> None:
+    """A sound for a NOT OK picture: Windows' beep (winsound, in a thread so the window does not wait), else Qt's."""
+    try:
+        import winsound
+        threading.Thread(target=lambda: winsound.Beep(1200, 400), daemon=True).start()
+    except Exception:
+        QApplication.beep()
 
 
 class Bridge(QObject):
@@ -303,6 +333,7 @@ class Window(QMainWindow):
                 rows.append(res)
                 if method == "annulus":
                     print(A.annulusLine(p.name, res), flush=True)        # the terminal line to send back
+                    print(f"VERDICT {p.name}: {res.get('verdict')} - {res.get('why')}", flush=True)
                 self.bridge.picture.emit(i, p.name, picture, res)
                 end = time.monotonic() + self.seconds.value()
                 while time.monotonic() < end and not self.stopFlag.is_set():
@@ -320,11 +351,19 @@ class Window(QMainWindow):
         self.table.insertRow(row)
         hub = f"({res.get('hub_x')}, {res.get('hub_y')})" if res.get("hub_x") else "-"
         off = f"{res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']}" if res.get("ell_cx") else "-"
-        values = (name, res.get("cap_found", ""), res.get("rb_silver", ""), res.get("brightness", ""), hub,
+        values = (name, res.get("verdict") or "-", res.get("cap_found", ""), res.get("rb_silver", ""), res.get("brightness", ""), hub,
                   res.get("hole_r") or "-", res.get("stages") or "-", res.get("masks_in_circle", ""), off, res.get("score_ellipse") or "-", res.get("score_mask") or "-",
                   res.get("seconds", ""), res.get("note", ""))
         for col, v in enumerate(values):
-            self.table.setItem(row, col, QTableWidgetItem(str(v)))
+            item = QTableWidgetItem(str(v))
+            if col == 1 and res.get("verdict"):
+                item.setForeground(QColor(0, 150, 0) if res["verdict"] == "OK" else QColor(210, 0, 0))
+                bold = item.font()
+                bold.setBold(True)
+                item.setFont(bold)
+            self.table.setItem(row, col, item)
+        if res.get("verdict") == "NOT OK":
+            alarm()
         self.table.scrollToBottom()
         self.showRow(row)
         if res.get("model"):
@@ -340,10 +379,13 @@ class Window(QMainWindow):
         self.fullView.setPixmap(toPixmap(picture, FULL_W, FULL_H))
         self.zoomView.setPixmap(toPixmap(zoomOf(picture, res), PANEL, PANEL))
         if res.get("masksPicture") is not None:
-            self.masksView.setPixmap(toPixmap(zoomOf(res["masksPicture"], res), PANEL, PANEL))
+            panel = toPixmap(zoomOf(res["masksPicture"], res), PANEL, PANEL)
+            if res.get("verdict"):
+                withVerdict(panel, res["verdict"])
+            self.masksView.setPixmap(panel)
         else:
             self.masksView.clear()
-        self.statusLine.setText(f"{name}: score ellipse {res.get('score_ellipse') or '-'}, mask "
+        self.statusLine.setText(f"{name}: {res.get('verdict') or ''} score ellipse {res.get('score_ellipse') or '-'}, mask "
                                 f"{res.get('score_mask') or '-'}, {res.get('seconds')} s")
 
     def onFinished(self, text):
