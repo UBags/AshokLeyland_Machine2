@@ -6537,3 +6537,9 @@ No code changed.
   spin boxes). Region (b)'s adjustment (223's x 1.2) was already gone with 224; region (b) keeps only its R-G floor of 8
   (222) and the touch rule.
 - Run: the window driven offscreen (18 pictures); both files parse on Python 3.11.
+
+## 227. Study_Legs_Profile_UI: region (b)'s area yellow, its legs red (2026-11-28)
+
+- Uddi, 2026-11-28 03:35: over the plate washer / seal, draw the area before the 2R - G - B Otsu in yellow and the
+  legs after it in red (whole picture, washer view, saved pictures). Drawing only; `_legs_profile.py` unchanged.
+- Run: the window driven offscreen (18 pictures).

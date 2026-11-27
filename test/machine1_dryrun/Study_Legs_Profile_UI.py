@@ -16,7 +16,7 @@ in 226 - every Otsu value is used as it is). Region (b)'s refinement (CHANGES 22
 Views (outlines only, no values on the pictures):
   - the whole picture;
   - the washer x3: scallops (dark blue; found / placed in the table and the text box), inner edge (yellow), pin head
-    (white), leg profile (red);
+    (white), leg profile (red); beyond the washer also region (b)'s area before its 2R - G - B Otsu (yellow, CHANGES 227);
   - the washer x3 with one mask, chosen in "Mask view" (redraws the picture shown): leg profile, (a) / (b) area before
     the grey refinement (CHANGES 223), (a) grey dark, (a) R-G
     bright, (a) strong R-G, (b) R-B bright, (b) R-G bright, (b) before the touch rule, rough legs; the regions (a) / (b)
@@ -57,6 +57,7 @@ MASK_VIEWS = (("leg profile", "legs", (0, 0, 255)), ("(a) area before the grey r
 ZOOM_HALF, ZOOM_SCALE = 75, 3
 SCALLOP_COLOUR = (139, 0, 0)          # dark blue (Uddi 02:51; found / placed: the table and the text box)
 INNER_COLOUR = (0, 255, 255)          # yellow
+AREA_B_COLOUR = (0, 255, 255)         # yellow: region (b)'s area before the 2R - G - B Otsu (CHANGES 227)
 FULL_W, FULL_H = 640, 360
 PANEL = 450
 
@@ -129,7 +130,11 @@ def _outlines(img, out, off, scale, legs=True):
     if res["head"]["found"]:
         _contours(img, res["head"]["mask"], off, scale, (255, 255, 255))
     if legs and res["legs"] is not None:
-        _contours(img, res["legs"]["legs"], off, scale, (0, 0, 255))
+        # region (b), over the plate washer / seal (Uddi 03:35): its area before the 2R - G - B Otsu yellow, the legs
+        # after it red; region (a)'s legs red
+        _contours(img, res["legs"]["areaB"], off, scale, AREA_B_COLOUR)
+        _contours(img, res["legs"]["legsA"], off, scale, (0, 0, 255))
+        _contours(img, res["legs"]["legsB"], off, scale, (0, 0, 255))
 
 
 def fullPicture(out):
