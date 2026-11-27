@@ -6439,3 +6439,47 @@ by CHANGES 170); a picture whose hub holes are not found stops at once. Check ti
 - The claude.ai Project copies refreshed (HLD, LLD, PLC interface, state sync, plant-PC verification, vision positions,
   code graph, changes log from §81).
 No code changed.
+
+## 222. Study_Legs_Profile_UI: the exact washer profile and the split pin leg profile (2026-11-28)
+
+- Uddi, 2026-11-28 00:02 - 02:17: new split pin pictures with the legs marked by permanent marker (24 Nov, DOST, 38 OK /
+  112 NOT OK). The colour rules of 192 / 193 miss much of it: the ink drifts from red (hue ~175 - 185, R-B 13 - 26, 16:13 -
+  16:22) to purple (hue ~153 - 170, R-B 2 - 18, 17:11 - 17:17), below hsv's hue >= 155 and rgb's R-B > 20; the "hue <= 15"
+  half also takes the bronze nut bore and the brown seal. Main job now (Uddi): find the exact washer profile and the
+  leg profile, in a window to check every picture; OK / NOT OK comes later.
+- `_legs_profile.py` (new; both dry-run folders, identical) - the steps and every value in its docstring:
+  1. outer outline: the fitted outline of `Study_Washer_SAM` split at its 12 corners; each whole scallop moved corner to
+     corner along the normal, -15 .. +15 px in 0.5 px, to the shift with the most points >= 25 grey levels brighter 2 px
+     inside than 2 px outside (the bright split pin washer on the darker plate washer); found when >= 0.75 of its points
+     pass and <= 0.25 lie on the rough legs, else placed from the adjacent corners (linear between their shifts); a
+     corner = the mean of the found scallops either side; found scallops blended to their corners over 6 deg;
+  2. pin head on its fixed axis (Uddi: the knuckle's hole fixes its angle): 117.8 +- 0.8 deg (86 pictures) / 295.5 +- 2.1
+     (53), axis 116.7 deg; within 12 deg of either end, 4 - 30 px past the outline, V >= 120, S <= 100 (golden heads under
+     warm light), R-G < 10 (not paint); the larger piece, >= 15 px (no pin 1 - 4 px, smallest heads 23 - 36);
+  3. rough legs (R-G, +-80 deg round the legs axis), only to tell which scallops a leg hides;
+  4. leg profile, +-60 deg round the legs axis, each Otsu over its own region: (a) on the washer (inner edge ..
+     outline): grey dark AND R-G bright, OR R-G above a second Otsu over the R-G values above the first (pale legs);
+     (b) outline + 3 .. 30 px: max(R-B, 0) bright AND R-G bright (threshold not below 8: Otsu 0 - 7 where no leg comes
+     out, 8 - 29 where one does), only pieces reaching within 8 px of region (b)'s inner edge.
+  Uddi's choices along the way: (b) starts 3 px past the outline (the washer's own edge pixels out of its Otsu), ends at
+  30 px; (a) takes strong R-G too; (b)(i) R-B instead of R (with R the region's Otsu split the seal from the darkest
+  groove and marked nearly all of it). Added here after looking at the results: the R-G floor of 8 in (b) (Otsu split
+  bare seal into JPEG colour blocks when no leg comes out) and the touch rule (8 px: the white highlight where a leg
+  crosses the washer's edge broke 6 NOT OK legs at 3 px).
+- `Study_Legs_Profile_UI.py` (new; both dry-run folders, identical): PySide6 window - folder (OK / NOT_OK sub-folders),
+  model, seconds, Save (marked pictures + csv in `<folder>/legs_profile_results/`), Start / Stop; the main values in spin
+  boxes (scallop shift, found share, legs sector, (b) from / to, (b) R-G floor, (b) touch); views: the whole picture, the
+  washer x3 (scallops green found / orange placed, inner edge cyan, head white, legs red), the washer x3 with one mask
+  chosen in "Mask view" (each of (a) / (b)'s masks, before the touch rule, rough legs; regions grey); outlines only, values
+  in the table (check time per picture) and the text box (every scallop's shift, share, share on the rough legs; head;
+  Otsu values; leg pixels). `--auto <folder>`: the same lines on the terminal and a SUMMARY. No verdict.
+- Known limits: the colour in these camera JPEGs is stored in 8 x 8 blocks and a leg is 4 - 5 px wide, so the leg
+  outline beyond the washer (colour only) is about one block wide; on the washer the grey step gives the wire's width.
+  The camera's JPEG quality setting is worth checking.
+- Run (sandbox: dark-blob hole finder - no YOLO weights; MobileSAM on the CPU), `--auto` on the 150 pictures: washer
+  outline on 147 (3 NOT OK: holes not found by the dark-blob finder), pin head on 139 = every picture with a pin (the 8
+  without a pin: none), legs on all 139 (on the washer 115 - 539 px, outside 0 - 532 px); scallops placed from the
+  neighbours per picture: 0 on 8, 1 on 11, 2 on 95, 3 on 25, 4 on 8; time per picture 1.01 - 4.48 s, median 1.20 (holes +
+  MobileSAM embedding on the CPU; steps 1 - 4 alone 0.04 - 0.49 s). Contact sheets of every picture checked by eye at each
+  step. The window driven offscreen (PySide6 6.12, 18 pictures, mask view switched). Not checked against hand-drawn
+  outlines. Production unchanged; no vision file changed (no verifier run needed).
