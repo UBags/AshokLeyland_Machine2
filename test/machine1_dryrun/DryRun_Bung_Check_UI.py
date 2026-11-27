@@ -182,7 +182,8 @@ class BungCheckWindow:
                 try:
                     return originalFind(anImage, model, hubCentre, check=check)
                 finally:
-                    add("hub holes (seating)" if self.inSeating else "hub holes (marks only)", time.perf_counter() - t)
+                    add("hub holes (study)" if getattr(self, "inStudy", False) else
+                        "hub holes (seating)" if self.inSeating else "hub holes (marks only)", time.perf_counter() - t)
 
             FindHubHoles.findHoles = staticmethod(timedFind)
             if FindHubHoles.hubCentreFromPicture is not None:
@@ -277,7 +278,11 @@ class BungCheckWindow:
                 studyValues, studyText, studyHolesOK = None, "", False
                 try:
                     if studying:
-                        found, why = self.study.begin(image)
+                        self.inStudy = True
+                        try:
+                            found, why = self.study.begin(image)
+                        finally:
+                            self.inStudy = False
                         if not found:
                             marked, ok, gamma, holes, reason = image.copy(), False, None, [], why
                             studyText = why
@@ -363,7 +368,9 @@ class BungCheckWindow:
         accounted = t.get("bung holes", 0.0) + t.get("seating", 0.0) + t.get("hub holes (marks only)", 0.0)
         return (f"total {total:.2f} s = bung holes {t.get('bung holes', 0.0):.2f} s ({t.get('gammas', 0)} gammas)"
                 f" + hub holes {holesSeat:.2f} s + seating face {seatingRest:.2f} s"
-                f" + hub holes for the marks only {holesMarks:.2f} s + other {total - accounted:.2f} s"
+                f" + hub holes for the marks only {holesMarks:.2f} s"
+                + (f" + hub holes first (study) {t['hub holes (study)']:.2f} s" if "hub holes (study)" in t else "")
+                + f" + other {total - accounted - t.get('hub holes (study)', 0.0):.2f} s"
                 f"  [dry run's own hub check, not in production: {hubCheckSeat + hubCheckMarks:.2f} s]")
 
     def holes(self):
