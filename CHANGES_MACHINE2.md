@@ -6031,3 +6031,29 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   as before (12.652, 12.404, 12.561, 14.313, 14.536); over-detect with the richer stand-in boxes: 111 MobileSAM masks (3 x
   37), 46 - 48 past the filters, 30 - 32 after merging, 21 - 23 in the circle (production values: 37 / 15 - 20 / 15 - 19 /
   10 - 13); the cap mask still on the rim (score ellipse 12.96 - 13.85).
+
+## 209. Study_Cap_Annulus: "Annulus only" mask, two gammas, controls in rows (2026-11-27)
+
+- Uddi, 2026-11-27 09:47: (a) a choice that gets a mask of ONLY the annulus - prompts along a contour 5 px inside the
+  hole circle, avoiding the holes; (b) two gammas - for the picture used to find the holes and for the picture used for
+  the masks; the in-circle share control removed; YOLO controls on one line, MobileSAM controls on another, named
+  pred_iou_thresh / stability_score_thresh; box_nms_thresh / crop_nms_thresh if they exist.
+- `_cap_annulus.annulusMask` (method "annulus"): positive prompts every 5 deg on the circle 5 px inside the hole circle,
+  none within 28 px of a hole centre (`FindHubHoles` result `points`); MobileSAM, one mask; annulus = that mask inside the
+  hole circle; cap = the region inside the hole circle not in the annulus and connected to H (outline = the annulus's
+  inner edge), then the same ellipse and scores. With one negative prompt at H MobileSAM took hub and cap as one mask
+  (99 % of the area within r 90 of H covered, 3 OK pictures); with 17 negatives on the cap (H, r 30 / 60 x every 45 deg)
+  it covered 0 % of it and 94 - 96 % of the ring (tried here: also r 0/30/60/90 - the same; 3 masks with one negative -
+  two of them cover the cap). The dark gap between the cap's rim and the hub face falls on the cap side (seen at the
+  bottom of the cap on these pictures).
+- Gammas: `measure(..., holesGamma, maskGamma)` - holes: the picture given to `FindHubHoles.findHoles` (1 = as taken; it
+  still tries its own gammas); masks: every method (boxes until now took CapMaskFinder.GAMMA 2.0 - still the default;
+  the points method's default moves from 1.0 to 2.0). No-window script `--holes-gamma --mask-gamma` (`--gamma` and
+  `--share` gone); the third panel keeps masks with at least half their area in the circle (fixed).
+- Window rows: 1 folder / model / cap mask (YOLO boxes, 24 points, Annulus only) / seconds / Save / Start / Stop;
+  2 YOLO conf, iou, max_det; 3 MobileSAM multimask_output, pred_iou_thresh, stability_score_thresh, box_nms_thresh
+  (= the merge overlap), Production values / Over-detect; 4 gamma for the holes / for the masks. There is no
+  crop_nms_thresh: no crop layers in this pipeline (one disc round the hub centre). Negative prompts drawn red.
+- Run here (5 OK pictures, dark-blob holes, stand-in boxes): boxes at the defaults - the same scores as before (12.652,
+  12.404, 12.561, 14.313, 14.536); annulus - annulus ~37,700 px, cap ~36,200 px, score (ellipse) 12.24 - 13.54, (mask)
+  12.52 - 13.73, ~1 s a picture on CPU; the window driven offscreen with "Annulus only": 5 rows, the same scores.

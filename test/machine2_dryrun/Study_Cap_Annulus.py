@@ -6,15 +6,16 @@ boxes as MobileSAM prompts on a disc round the hub centre - or 24 points round t
 the hole circle (12 = centred).
 
 Run on one folder at a time (all pictures in it, sub-folders not searched):
-    python test\\machine2_dryrun\\Study_Cap_Annulus.py <folder> [--model DOST|DOSTPLUS|name] [--mask boxes|points]
-                                     [--save] [--gamma 1.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
-  --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points.
+    python test\\machine2_dryrun\\Study_Cap_Annulus.py <folder> [--model DOST|DOSTPLUS|name] [--mask boxes|points|annulus]
+                                     [--save] [--holes-gamma 1.0] [--mask-gamma 2.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
+  --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points;
+                 annulus = a mask of only the annulus (prompts 5 px inside the hole circle, avoiding the holes).
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
   --conf / --stability / --iou / --merge / --yolo-iou / --max-det / --multimask : the boxes method's YOLO
                  confidence, MobileSAM minimums, merge overlap, YOLO NMS IoU and maximum detections, 3 masks per box
                  (else production's values); --overdetect: conf 0.10, NMS 0.80, max det 1000, 3 masks per box,
-                 predicted IoU 0.72, stability 0.78, merge 0.88; --share: share of a mask in the hole circle.
-  --gamma      : points method only (boxes use vision.cap.mask.gamma, as production).
+                 predicted IoU 0.72, stability 0.78, merge 0.88.
+  --holes-gamma / --mask-gamma : gamma of the picture for the hole finder / for MobileSAM's masks (every method).
   --save       : marked pictures (outlines only, no values) and the masks in the hole circle (coloured, largest
                  painted first) to <folder>/cap_annulus_results/.
   --sam        : MobileSAM from this file (else through ModelManager, as production).
@@ -42,12 +43,13 @@ def main():
     ap.add_argument("--stability", type=float, default=None, help="MobileSAM stability minimum (boxes)")
     ap.add_argument("--iou", type=float, default=None, help="MobileSAM predicted IoU minimum (boxes)")
     ap.add_argument("--merge", type=float, default=None, help="box overlap above which masks merge (boxes; 1 = none)")
-    ap.add_argument("--share", type=float, default=0.5, help="share of a mask in the hole circle (masks picture)")
     ap.add_argument("--yolo-iou", type=float, default=None, help="YOLO NMS IoU (boxes; production 0.7)")
     ap.add_argument("--max-det", type=int, default=None, help="YOLO maximum detections (boxes; production 300)")
     ap.add_argument("--multimask", action="store_true", help="3 MobileSAM masks per box (boxes; production 1)")
     ap.add_argument("--overdetect", action="store_true", help="Uddi's over-detection values (then the options above)")
-    ap.add_argument("--gamma", type=float, default=1.0, help="gamma of the picture given to MobileSAM (1 = none)")
+    ap.add_argument("--holes-gamma", type=float, default=1.0, help="gamma of the picture for the hole finder (1 = none)")
+    ap.add_argument("--mask-gamma", type=float, default=A.MASK_GAMMA_DEFAULT,
+                    help="gamma of the picture given to MobileSAM for the masks (production 2.0)")
     ap.add_argument("--floor", type=float, default=1.0, help="px; the shorter length is at least this in a ratio")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--holes", default=None, choices=["morphology"])
@@ -66,7 +68,7 @@ def main():
     csvPath = resultsDir / f"annulus_{time.strftime('%Y%m%d_%H%M%S')}.csv"
     rows = []
     print(f"Study_Cap_Annulus on {len(files)} pictures in {folder} (model {args.model}, mask {args.mask} {mp}, hole finder {A.holeFinder()}, "
-          f"gamma {args.gamma}, floor {args.floor} px)")
+          f"gamma holes {args.holes_gamma} / masks {args.mask_gamma}, floor {args.floor} px)")
     print(f"{'file':<36} {'cap':<9} {'R-B':>6} {'bright':>6} {'hub':>15} {'R':>6} {'ell-hub':>12} "
           f"{'ellipse':>8} {'mask':>8}  note")
     for p in files:
@@ -75,7 +77,7 @@ def main():
             print(f"{p.name:<36} could not read")
             rows.append(dict(file=p.name, note="could not read"))
             continue
-        res = A.measure(img, A.modelFor(args.model, p.name), args.gamma, args.floor, args.mask, args.share)
+        res = A.measure(img, A.modelFor(args.model, p.name), args.floor, args.mask, args.holes_gamma, args.mask_gamma)
         res["file"] = p.name
         rows.append(res)
         if args.save:

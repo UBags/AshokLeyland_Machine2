@@ -1,23 +1,27 @@
 """
 Study_Cap_Annulus_UI - the cap annulus measure (_cap_annulus.py, CHANGES 203 / 204) in a window, study only.
 
-Folder..., model (DOST / DOSTPLUS / from the file name), cap mask method ("YOLO boxes (cap check)" = the production cap
-mask's steps on a disc round the hub centre, default; "24 points"), seconds between pictures (1 - 10; changeable during
-the run), gamma of the picture given to MobileSAM (24 points only), Save; Start / Stop. Second row (CHANGES 207, set at
-Start): YOLO confidence, MobileSAM stability and predicted IoU minimums, the box overlap above which masks are merged
-(the properties values at start; they change the masks and the cap mask chosen from them, in this window only), and
-the share of a mask's area that must be in the hole circle for the third panel; since CHANGES 208 also YOLO's NMS IoU and
-maximum detections and MobileSAM's 3 masks per box, with "Production values" and "Over-detect" (Uddi's values of
-2026-11-27 09:09) buttons. The table's boxes/disc/sam/pass/merged column shows where masks are lost: YOLO boxes, boxes
-centred on the disc, MobileSAM masks (1 or 3 per box), masks past the IoU / stability filters, masks left after merging. Each picture: the whole picture and a 2x view of the cap,
-both with outlines only - hole circle and hub centre (blue), MobileSAM prompt points (cyan), cap mask outline (green),
-fitted ellipse (yellow), the 12 diameters (grey). Third panel (CHANGES 206): every MobileSAM mask with at least half its
-area inside the hole circle (boxes method: the masks after MobileSAM's IoU / stability filters and merging - the ones
-the cap mask is chosen from; points method: its one mask), cut to the circle and coloured, the largest painted first
-and each smaller one over it; their areas in the text box. No values on the pictures: the table (one row per picture, its check
-time included) and the text box below (steps 1 - 2 values, hub centre, ellipse, every diameter's lengths L+ / L- and
-ratio, for the ellipse and for the mask outline). Click a row to see that picture again. At the end the summary in the
-text box and annulus_<time>.csv (+ the marked pictures with Save) in <folder>/cap_annulus_results/.
+Row 1: Folder..., model (DOST / DOSTPLUS / from the file name), cap mask method - "YOLO boxes (cap check)" (the
+production cap mask's steps on a disc round the hub centre, default), "24 points" (r 30 / 60 / 90 round the hub centre),
+"Annulus only" (CHANGES 209: positive prompts every 5 deg on a circle 5 px inside the hole circle, none within 28 px of a
+hole centre, one negative prompt at the hub centre; the annulus mask inside the hole circle, the cap = what it encloses)
+- seconds between pictures (1 - 10, changeable during the run), Save, Start / Stop.
+Row 2, YOLO (YOLO boxes method): conf, iou (YOLO's NMS), max_det.
+Row 3, MobileSAM: multimask_output (3 masks per box), pred_iou_thresh, stability_score_thresh, box_nms_thresh (masks
+whose boxes overlap more than this are merged; 1.0 = none) - YOLO boxes method; "Production values" / "Over-detect".
+There is no crop_nms_thresh: this pipeline has no crop layers (one disc cut round the hub centre).
+Row 4, gamma: of the picture given to the hole finder (1 = as taken), and of the picture given to MobileSAM for the
+masks (every method; production cap mask 2.0).
+The values are taken at Start and apply in this window only (production and the properties file are not touched); the
+table's boxes/disc/sam/pass/merged column shows where masks are lost.
+Views: the whole picture and a 2x view round the hub centre, outlines only - hole circle and hub centre (blue), prompt
+points (cyan), annulus mask edges (magenta, annulus method), cap mask outline (green), fitted ellipse (yellow), the 12
+diameters (grey); third view: the masks in the hole circle coloured, largest painted first (YOLO boxes: every mask left
+after the filters and merging with at least half its area in the circle; points: its mask; annulus: the annulus, then
+the cap inside it). No values on the pictures: the table (one row per picture, its check time included) and the text
+box (steps 1 - 2 values, hub centre, masks, ellipse, every diameter's L+ / L- and ratio, for the ellipse and for the mask
+outline). Click a row to see that picture again. At the end the summary in the text box and annulus_<time>.csv (+ the
+marked pictures with Save) in <folder>/cap_annulus_results/.
 
 Run from the project root:
     python test\\machine2_dryrun\\Study_Cap_Annulus_UI.py [<folder>] [--sam <mobile_sam.pt>] [--holes morphology]
@@ -86,7 +90,7 @@ class Window(QMainWindow):
         self.model = QComboBox()
         self.model.addItems(["DOST", "DOSTPLUS", "From file name"])
         self.maskMethod = QComboBox()
-        self.maskMethod.addItems(["YOLO boxes (cap check)", "24 points"])
+        self.maskMethod.addItems(["YOLO boxes (cap check)", "24 points", "Annulus only"])
         mp = A.maskParameters()
 
         def spin(value, low, high, step, tip):
@@ -98,22 +102,22 @@ class Window(QMainWindow):
             box.setToolTip(tip)
             return box
 
-        self.conf = spin(mp["conf"], 0.01, 0.95, 0.01, "YOLO confidence: boxes below it are not prompts "
-                         "(vision.cap.mask.yolo.confidence)")
-        self.stability = spin(mp["stability"], 0.0, 1.0, 0.05, "MobileSAM stability score a mask must reach "
-                              "(vision.cap.mask.stability.min)")
-        self.iou = spin(mp["iou"], 0.0, 1.0, 0.05, "MobileSAM predicted IoU a mask must reach (vision.cap.mask.iou.min)")
-        self.merge = spin(mp["merge"], 0.05, 1.0, 0.05, "Two masks whose boxes overlap more than this are one "
-                          "(vision.cap.mask.merge.iou); 1.0 = no merging")
-        self.share = spin(0.5, 0.0, 1.0, 0.05, "Third panel: share of a mask's area that must lie in the hole circle")
-        self.yoloIou = spin(mp["yolo_iou"], 0.05, 1.0, 0.05, "YOLO's own NMS: boxes overlapping more than this become "
-                            "one (production 0.7)")
+        self.conf = spin(mp["conf"], 0.01, 0.95, 0.01, "YOLO conf: boxes below it are not prompts "
+                         "(production vision.cap.mask.yolo.confidence)")
+        self.stability = spin(mp["stability"], 0.0, 1.0, 0.01, "MobileSAM stability_score_thresh: a mask's stability "
+                              "score must reach it (production vision.cap.mask.stability.min)")
+        self.iou = spin(mp["iou"], 0.0, 1.0, 0.01, "MobileSAM pred_iou_thresh: a mask's predicted IoU must reach it "
+                        "(production vision.cap.mask.iou.min)")
+        self.merge = spin(mp["merge"], 0.05, 1.0, 0.01, "MobileSAM box_nms_thresh: masks whose boxes overlap more than "
+                          "this are merged (production vision.cap.mask.merge.iou); 1.0 = no merging")
+        self.yoloIou = spin(mp["yolo_iou"], 0.05, 1.0, 0.01, "YOLO iou (its NMS): boxes overlapping more than this "
+                            "become one (production 0.7)")
         self.maxDet = QSpinBox()
         self.maxDet.setRange(10, 5000)
         self.maxDet.setSingleStep(100)
         self.maxDet.setValue(mp["max_det"])
         self.maxDet.setToolTip("YOLO's maximum detections per picture (production 300)")
-        self.multimask = QCheckBox("3 masks per box")
+        self.multimask = QCheckBox("multimask_output (3 masks per box)")
         self.multimask.setChecked(mp["multimask"])
         self.multimask.setToolTip("MobileSAM multimask_output: 3 nested masks per YOLO box (part, whole, context) "
                                   "instead of 1 (production: 1)")
@@ -126,10 +130,10 @@ class Window(QMainWindow):
         self.seconds = QSpinBox()
         self.seconds.setRange(1, 10)
         self.seconds.setValue(3)
-        self.gamma = QDoubleSpinBox()
-        self.gamma.setRange(1.0, 6.0)
-        self.gamma.setSingleStep(0.5)
-        self.gamma.setValue(1.0)
+        self.holesGamma = spin(1.0, 0.2, 6.0, 0.1, "Gamma of the picture given to the hole finder (1 = as taken; "
+                               "the finder still tries its own gammas on it)")
+        self.maskGamma = spin(A.MASK_GAMMA_DEFAULT, 0.2, 6.0, 0.1, "Gamma of the picture given to MobileSAM for the "
+                              "masks, every method (production cap mask 2.0)")
         self.save = QCheckBox("Save")
         self.startButton = QPushButton("Start")
         self.startButton.clicked.connect(self.start)
@@ -139,25 +143,32 @@ class Window(QMainWindow):
         for wdg in (self.folderButton, self.folderLabel):
             top.addWidget(wdg)
         top.addStretch(1)
-        for text, wdg in (("Model", self.model), ("Cap mask", self.maskMethod), ("Seconds between pictures", self.seconds), ("Gamma (SAM)", self.gamma)):
+        for text, wdg in (("Model", self.model), ("Cap mask", self.maskMethod), ("Seconds between pictures", self.seconds)):
             top.addWidget(QLabel(text))
             top.addWidget(wdg)
         for wdg in (self.save, self.startButton, self.stopButton):
             top.addWidget(wdg)
-        second = QHBoxLayout()
-        second.addWidget(QLabel("YOLO:"))
-        for text, wdg in (("confidence", self.conf), ("NMS IoU", self.yoloIou), ("max det", self.maxDet)):
-            second.addWidget(QLabel(text))
-            second.addWidget(wdg)
-        second.addWidget(QLabel("   MobileSAM:"))
-        second.addWidget(self.multimask)
-        for text, wdg in (("pred. IoU >=", self.iou), ("stability >=", self.stability), ("merge above", self.merge),
-                          ("   in-circle share", self.share)):
-            second.addWidget(QLabel(text))
-            second.addWidget(wdg)
-        second.addStretch(1)
-        second.addWidget(self.productionButton)
-        second.addWidget(self.overButton)
+        def row(title, items, extra=()):
+            line = QHBoxLayout()
+            label = QLabel(title)
+            label.setMinimumWidth(150)
+            label.setStyleSheet("font-weight: bold")
+            line.addWidget(label)
+            for text, wdg in items:
+                line.addWidget(QLabel(text))
+                line.addWidget(wdg)
+            line.addStretch(1)
+            for wdg in extra:
+                line.addWidget(wdg)
+            return line
+
+        yoloRow = row("YOLO (boxes method):", (("conf", self.conf), ("iou", self.yoloIou), ("max_det", self.maxDet)))
+        samRow = row("MobileSAM (boxes method):", (("", self.multimask), ("pred_iou_thresh", self.iou),
+                                                   ("stability_score_thresh", self.stability),
+                                                   ("box_nms_thresh", self.merge)),
+                     (self.productionButton, self.overButton))
+        gammaRow = row("Gamma:", (("picture for the holes", self.holesGamma),
+                                  ("picture for the masks", self.maskGamma)))
 
         views = QHBoxLayout()
         self.fullView = QLabel()
@@ -195,7 +206,9 @@ class Window(QMainWindow):
 
         layout = QVBoxLayout()
         layout.addLayout(top)
-        layout.addLayout(second)
+        layout.addLayout(yoloRow)
+        layout.addLayout(samRow)
+        layout.addLayout(gammaRow)
         layout.addLayout(views)
         layout.addWidget(split, 1)
         layout.addWidget(self.statusLine)
@@ -233,22 +246,24 @@ class Window(QMainWindow):
         self.results.clear()
         self.table.setRowCount(0)
         self.text.clear()
-        self.log(f"{len(files)} pictures in {self.folder} - hole finder {A.holeFinder()}, gamma {self.gamma.value()}")
+        self.log(f"{len(files)} pictures in {self.folder} - hole finder {A.holeFinder()}")
         self.stopFlag.clear()
         self.startButton.setEnabled(False)
         self.stopButton.setEnabled(True)
-        choice, gamma, save = self.model.currentText(), self.gamma.value(), self.save.isChecked()
-        method = "points" if self.maskMethod.currentIndex() == 1 else "boxes"
+        choice, save = self.model.currentText(), self.save.isChecked()
+        method = A.MASK_METHODS[self.maskMethod.currentIndex()]
+        gammas = (self.holesGamma.value(), self.maskGamma.value())
         mp = A.setMaskParameters(self.conf.value(), self.stability.value(), self.iou.value(), self.merge.value(),
                                  self.yoloIou.value(), self.maxDet.value(), self.multimask.isChecked())
-        share = self.share.value()
-        self.log(f"cap mask: {method}; YOLO confidence {mp['conf']}, NMS IoU {mp['yolo_iou']}, max det {mp['max_det']}; "
-                 f"MobileSAM {'3 masks' if mp['multimask'] else '1 mask'} per box, predicted IoU >= {mp['iou']}, "
-                 f"stability >= {mp['stability']}, merge above {mp['merge']}; in-circle share {share}")
-        self.worker = threading.Thread(target=self.run, args=(files, choice, gamma, save, method, share), daemon=True)
+        self.log(f"cap mask: {method}; gamma: holes {gammas[0]}, masks {gammas[1]}")
+        if method == "boxes":
+            self.log(f"YOLO conf {mp['conf']}, iou {mp['yolo_iou']}, max_det {mp['max_det']}; MobileSAM multimask_output "
+                     f"{mp['multimask']}, pred_iou_thresh {mp['iou']}, stability_score_thresh {mp['stability']}, "
+                     f"box_nms_thresh {mp['merge']}")
+        self.worker = threading.Thread(target=self.run, args=(files, choice, gammas, save, method), daemon=True)
         self.worker.start()
 
-    def run(self, files, choice, gamma, save, method, share):
+    def run(self, files, choice, gammas, save, method):
         resultsDir = self.folder / "cap_annulus_results"
         resultsDir.mkdir(exist_ok=True)
         rows = []
@@ -265,7 +280,7 @@ class Window(QMainWindow):
                     rows.append(res)
                     continue
                 try:
-                    res = A.measure(img, A.modelFor(choice, p.name), gamma, 1.0, method, share)
+                    res = A.measure(img, A.modelFor(choice, p.name), 1.0, method, gammas[0], gammas[1])
                 except Exception as e:                    # shown, and the run goes on
                     res = dict.fromkeys(A.HEADER, "")
                     res.update(model=A.modelFor(choice, p.name), hub=None, note=f"exception: {e}")

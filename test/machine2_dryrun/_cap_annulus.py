@@ -56,9 +56,14 @@ PROMPT_ANGLES = tuple(range(0, 360, 45))
 DIAMETER_ANGLES = tuple(range(15, 181, 15))            # 15, 30, ..., 180: 12 diameters
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
-MASK_METHODS = ("boxes", "points")
+MASK_METHODS = ("boxes", "points", "annulus")
+ANNULUS_INSET = 5                  # px: the annulus prompts lie on a circle this far inside the hole circle
+ANNULUS_STEP_DEG = 5               # one prompt every this many degrees on it ...
+ANNULUS_HOLE_CLEARANCE = 28        # px: ... except within this distance of a hole centre (the holes are r ~15 - 20)
+ANNULUS_NEGATIVE_RADII = (0, 30, 60)   # negative prompts on the cap: H, and r 30 / 60 x every 45 deg (17 points)
+MASK_GAMMA_DEFAULT = float(CapMaskFinder.GAMMA)        # production cap mask: 2.0
 
-HEADER = (["file", "model", "mask_method", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
+HEADER = (["file", "model", "mask_method", "holes_gamma", "mask_gamma", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
            "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
@@ -224,11 +229,58 @@ def capMask(img: np.ndarray, hx: float, hy: float, gamma: float = 1.0):
     return labels == labels[iy, ix], float(scores[0])
 
 
-def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
+def annulusPrompts(hx: float, hy: float, R: float, holePoints) -> np.ndarray:
+    """Points every ANNULUS_STEP_DEG on the circle ANNULUS_INSET px inside the hole circle, none within
+    ANNULUS_HOLE_CLEARANCE px of a hole centre."""
+    holes = np.asarray(holePoints, dtype=np.float64).reshape(-1, 2) if holePoints is not None else np.zeros((0, 2))
+    r = R - ANNULUS_INSET
+    pts = []
+    for a in range(0, 360, ANNULUS_STEP_DEG):
+        x, y = hx + r * math.cos(math.radians(a)), hy + r * math.sin(math.radians(a))
+        if len(holes) and np.hypot(holes[:, 0] - x, holes[:, 1] - y).min() < ANNULUS_HOLE_CLEARANCE:
+            continue
+        pts.append((x, y))
+    return np.array(pts, dtype=np.float32)
+
+
+def annulusMask(img: np.ndarray, hx: float, hy: float, R: float, holePoints, gamma: float):
+    """CHANGES 209 (Uddi 2026-11-27): a mask of ONLY the annulus between the cap and the holes. MobileSAM, one mask, from
+    positive prompts on the circle ANNULUS_INSET px inside the hole circle (avoiding the holes) and negative prompts on
+    the cap (H, and r 30 / 60 round it every 45 deg). With the one negative at H alone MobileSAM took hub and cap as one
+    mask (99 % of the cap covered on 3 OK pictures); with the 17 it covered none of it and 96 % of the ring. The annulus = that mask inside the hole circle; the cap = the region inside the hole circle, not in
+    the annulus, connected to H (its outline is the annulus's inner edge). -> (annulus, cap, score, prompts) or
+    (None, None, reason, prompts)."""
+    import torch
+    pts = annulusPrompts(hx, hy, R, holePoints)
+    if len(pts) < 3:
+        return None, None, "too few annulus prompts", pts
+    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    rgb = CapMaskFinder.applyGamma(rgb, gamma)
+    predictor = CheckCap._sam_predictor()
+    predictor.set_image(rgb)
+    negatives = np.array([[hx + r * math.cos(math.radians(a)), hy + r * math.sin(math.radians(a))]
+                          for r in ANNULUS_NEGATIVE_RADII for a in (range(0, 360, 45) if r else (0,))], dtype=np.float32)
+    coords = np.vstack([pts, negatives]).astype(np.float32)
+    labels = np.r_[np.ones(len(pts)), np.zeros(len(negatives))]
+    with torch.inference_mode():
+        masks, scores, _ = predictor.predict(point_coords=coords, point_labels=labels, multimask_output=False)
+    h, w = img.shape[:2]
+    yy, xx = np.ogrid[:h, :w]
+    circle = (xx - hx) ** 2 + (yy - hy) ** 2 <= R * R
+    ann = np.asarray(masks[0]).astype(bool) & circle
+    inside = (~ann & circle).astype(np.uint8)
+    n, lab = cv2.connectedComponents(inside)
+    ix, iy = int(round(hx)), int(round(hy))
+    if not ann.any() or n < 2 or lab[iy, ix] == 0:
+        return None, None, "annulus mask covers the hub centre or is empty", pts
+    return ann, lab == lab[iy, ix], float(scores[0]), np.vstack([pts, negatives])
+
+
+def capMaskByBoxes(img: np.ndarray, hx: float, hy: float, gamma: float = MASK_GAMMA_DEFAULT):
     """The production cap mask's steps (CapMaskFinder.findCap) on a disc round H: (full-picture mask, info dict) or
     (None, info dict with reason). findCap returns no mask, so its steps are repeated here with its own functions and
     values; CapMaskFinder is not changed."""
-    picture = CapMaskFinder.applyGamma(img, CapMaskFinder.GAMMA)
+    picture = CapMaskFinder.applyGamma(img, gamma)
     crop, disc, (x0, y0) = CapMaskFinder.cutDisc(picture, (hx, hy), CapMaskFinder.DISC_RADIUS)
     found, counts = yoloSamMasksTunable(crop, disc, CheckCap._sam_predictor(), CheckCap._yolo_model())
     allMasks = []                                      # every mask MobileSAM gave (after its filters and merging)
@@ -359,8 +411,11 @@ def score(dist, R, floor: float = 1.0):
     return sum(ratios), ratios, lengths
 
 
-def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0, maskMethod: str = "boxes",
-            inCircleShare: float = 0.5) -> dict:
+def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = "boxes", holesGamma: float = 1.0,
+            maskGamma: float = MASK_GAMMA_DEFAULT, inCircleShare: float = 0.5) -> dict:
+    """holesGamma: gamma of the picture given to the hole finder (1 = as taken; FindHubHoles still tries its own
+    gammas on it). maskGamma: gamma of the picture given to MobileSAM for the masks (every method; production cap
+    mask 2.0)."""
     """Everything for one picture: the csv row values (HEADER keys) and, for drawing / showing, hub (hx, hy, R),
     pts, mask, ellipse, ratiosE / lengthsE, ratiosM / lengthsM."""
     t0 = time.perf_counter()
@@ -368,6 +423,7 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
     mp = maskParameters()
     res.update(yolo_conf=mp["conf"], yolo_iou=mp["yolo_iou"], max_det=mp["max_det"], multimask=mp["multimask"],
                stability_min=mp["stability"], iou_min=mp["iou"], merge_iou=mp["merge"])
+    res.update(holes_gamma=holesGamma, mask_gamma=maskGamma, annulus=None)
     res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", masksPicture=None,
                masksInCircle="", hub=None, pts=np.zeros((0, 2)),
                mask=None, ellipse=None, ratiosE=None, lengthsE=None, ratiosM=None, lengthsM=None)
@@ -375,7 +431,7 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
     res.update(cap_found=found or "none", right_cap=right, rb_brass=f"{rbB:.1f}", rb_silver=f"{rbS:.1f}",
                brightness=f"{bright:.1f}")
     notes = [] if right else [f"steps 1-2 NOT OK (cap found {found or 'none'})"]
-    holes = FindHubHoles.findHoles(img, model, None, check="cap")
+    holes = FindHubHoles.findHoles(CapMaskFinder.applyGamma(img, holesGamma), model, None, check="cap")
     res["holes_found"] = bool(holes.get("found"))
     if not holes.get("found"):
         notes.append(f"hub holes not found ({holes.get('reason')})")
@@ -384,12 +440,23 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
         res.update(hub=(hx, hy, R), hub_x=f"{hx:.1f}", hub_y=f"{hy:.1f}", hole_r=f"{R:.1f}")
         if maskMethod == "points":
             res["pts"] = promptPoints(hx, hy)
-            mask, samScore = capMask(img, hx, hy, gamma)
+            mask, samScore = capMask(img, hx, hy, maskGamma)
             if mask is None:
                 notes.append(samScore)
             inCircle = masksInCircle([mask], hx, hy, R, inCircleShare) if mask is not None else []
+        elif maskMethod == "annulus":
+            ann, mask, samScore, res["pts"] = annulusMask(img, hx, hy, R, holes.get("points"), maskGamma)
+            res["annulus"] = ann
+            if mask is None:
+                notes.append(samScore)
+                inCircle = []
+            else:
+                inCircle = [ann, mask]                    # annulus first (the larger), then the cap inside it
+                res["maskInfo"] = (f"annulus mask {int(ann.sum())} px from {len(res['pts']) - 17} prompts on r "
+                                   f"{R - ANNULUS_INSET:.1f} + 17 negative on the cap (r 0 / 30 / 60); cap = inside it, "
+                                   f"{int(mask.sum())} px")
         else:
-            mask, info = capMaskByBoxes(img, hx, hy)
+            mask, info = capMaskByBoxes(img, hx, hy, maskGamma)
             inCircle = masksInCircle(info["allMasks"], hx, hy, R, inCircleShare)
             c = info["counts"]
             res["stages"] = (f"{c.get('boxes', 0)}/{c.get('onDisc', 0)}/{c.get('samMasks', 0)}/{c.get('passed', 0)}/"
@@ -424,7 +491,8 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
 
 
 def marked(img: np.ndarray, res: dict) -> np.ndarray:
-    """Outlines only, no values: hole circle and hub centre (blue), prompt points (cyan, points method only), mask outline (green),
+    """Outlines only, no values: hole circle and hub centre (blue), prompt points (cyan; points / annulus methods),
+    annulus mask edges (magenta; annulus method), cap mask outline (green),
     ellipse (yellow), diameters (thin grey)."""
     out = img.copy()
     if res.get("hub") is None:
@@ -437,8 +505,13 @@ def marked(img: np.ndarray, res: dict) -> np.ndarray:
         cv2.line(out, p1, p2, (160, 160, 160), 1)
     cv2.circle(out, (int(round(hx)), int(round(hy))), int(round(R)), (255, 128, 0), 1)
     cv2.drawMarker(out, (int(round(hx)), int(round(hy))), (255, 128, 0), cv2.MARKER_CROSS, 16, 2)
-    for x, y in res["pts"]:
-        cv2.circle(out, (int(round(x)), int(round(y))), 2, (255, 255, 0), -1)
+    negatives = 17 if res.get("annulus") is not None else 0      # annulus method: the last 17 prompts are negative
+    for i, (x, y) in enumerate(res["pts"]):
+        colour = (0, 0, 255) if i >= len(res["pts"]) - negatives else (255, 255, 0)
+        cv2.circle(out, (int(round(x)), int(round(y))), 2, colour, -1)
+    if res.get("annulus") is not None:                   # annulus method: the annulus mask's edges (magenta)
+        cs, _ = cv2.findContours(res["annulus"].astype(np.uint8) * 255, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(out, cs, -1, (255, 0, 255), 1)
     if res.get("mask") is not None:
         cs, _ = cv2.findContours(res["mask"].astype(np.uint8) * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(out, cs, -1, (0, 255, 0), 1)
@@ -449,7 +522,7 @@ def marked(img: np.ndarray, res: dict) -> np.ndarray:
 
 def detailLines(name: str, res: dict) -> list:
     """The text lines of one picture (values go here, never on the picture)."""
-    lines = [f"{name}  {res['model']}  {res['seconds']} s",
+    lines = [f"{name}  {res['model']}  {res['seconds']} s  (gamma: holes {res.get('holes_gamma')}, masks {res.get('mask_gamma')})",
              f"  steps 1-2: cap found {res['cap_found']}, right cap {res['right_cap']}, R-B brass {res['rb_brass']} / "
              f"silver {res['rb_silver']}, brightness r25 {res['brightness']}"]
     if res.get("hub") is not None:
@@ -461,9 +534,9 @@ def detailLines(name: str, res: dict) -> list:
     if res.get("masks_in_circle") not in ("", None):
         lines.append(f"  masks in the hole circle: {res['masks_in_circle']} (areas, largest first: {res['masksInCircle']})")
     if res.get("mask_method") == "boxes":
-        lines.append(f"  YOLO confidence {res['yolo_conf']}, NMS IoU {res['yolo_iou']}, max det {res['max_det']}; "
-                     f"MobileSAM {'3 masks' if res['multimask'] else '1 mask'} per box, predicted IoU >= {res['iou_min']}, "
-                     f"stability >= {res['stability_min']}; merge above box overlap {res['merge_iou']}")
+        lines.append(f"  YOLO conf {res['yolo_conf']}, iou {res['yolo_iou']}, max_det {res['max_det']}; MobileSAM "
+                     f"multimask_output {res['multimask']}, pred_iou_thresh {res['iou_min']}, stability_score_thresh "
+                     f"{res['stability_min']}, box_nms_thresh {res['merge_iou']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")
