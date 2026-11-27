@@ -6010,3 +6010,24 @@ in English, at the start and never change it; 40 characters instead of 30, so th
   the stand-in has no scores): merge 0.5 / stability 0.7: 10 - 13 masks in the circle; merge 1.0 / stability 0.5: 21 - 25.
   With merging off the largest mask on picture 1 was the cap plus pieces of the hub (43,262 px against ~35,000), and its
   mask score rose from 12.8 to 15.1 - looser values can spoil the cap mask the score is computed on.
+
+## 208. Study_Cap_Annulus: YOLO NMS / max det, MobileSAM 3 masks per box, over-detection preset (2026-11-27)
+
+- Uddi, 2026-11-27 09:09: MobileSAM and YOLOv8 settings to over-detect - pred_iou_thresh 0.70 - 0.75, stability_score_thresh
+  0.75 - 0.80, box_nms_thresh 0.85 - 0.90, crop_n_layers 1 - 2, crop_nms_thresh 0.85, min_mask_region_area 0 - 10; YOLO
+  conf 0.10, iou 0.80, max_det 1000; MobileSAM multimask_output=True per box.
+- How they map onto the box-prompt pipeline (YOLO boxes -> SamPredictor, not SamAutomaticMaskGenerator):
+  pred_iou / stability -> the predicted IoU / stability minimums (the cap mask's are already lower, 0.50 / 0.70: 0.72 /
+  0.78 keep fewer masks than production, not more); box_nms -> the merge overlap (0.50 -> 0.88); YOLO conf / iou /
+  max_det as given (production: 0.15 / 0.7 hard-coded / 300 default); multimask: 3 masks per box. crop_n_layers,
+  crop_nms_thresh and min_mask_region_area belong to the automatic grid generator, which the cap path does not use
+  (no crops; no minimum region area before the panel - area.min 15,000 applies only to choosing the cap mask).
+- `_cap_annulus.yoloSamMasksTunable` (new): CapMaskFinder.yoloSamMasks' steps with every setting variable (YOLO conf,
+  NMS IoU, max_det; MobileSAM multimask - the B x 3 masks flattened into one list; IoU / stability minimums; merge,
+  skipped at 1.0). At the defaults (production's values) it is production's steps. `CapMaskFinder` is not changed.
+  Window: YOLO NMS IoU, max det, "3 masks per box", and "Production values" / "Over-detect" buttons; the stage column is
+  now boxes/disc/sam/pass/merged. No-window script: `--yolo-iou --max-det --multimask --overdetect`.
+- Run here (5 OK pictures; stand-in boxes, so conf / NMS / max det have no effect here): defaults - the same scores
+  as before (12.652, 12.404, 12.561, 14.313, 14.536); over-detect with the richer stand-in boxes: 111 MobileSAM masks (3 x
+  37), 46 - 48 past the filters, 30 - 32 after merging, 21 - 23 in the circle (production values: 37 / 15 - 20 / 15 - 19 /
+  10 - 13); the cap mask still on the rim (score ellipse 12.96 - 13.85).

@@ -58,7 +58,7 @@ EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
 MASK_METHODS = ("boxes", "points")
 
-HEADER = (["file", "model", "mask_method", "yolo_conf", "stability_min", "iou_min", "merge_iou", "stages",
+HEADER = (["file", "model", "mask_method", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
            "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
@@ -86,22 +86,88 @@ def configure(samPath: str | None = None, holes: str | None = None) -> None:
         FindHubHoles.samModelProvider = staticmethod(_loadSam)
 
 
+# The boxes method's settings (CHANGES 207, 208). Defaults = production (CapMaskFinder: the properties values, YOLO's
+# NMS 0.7 and 300 detections, one MobileSAM mask per box), so a run at the defaults gives the cap check's masks.
+MASK_DEFAULTS = dict(conf=float(CapMaskFinder.YOLO_CONFIDENCE), yolo_iou=0.7, max_det=300, multimask=False,
+                     iou=float(CapMaskFinder.IOU_MIN), stability=float(CapMaskFinder.STABILITY_MIN),
+                     merge=float(CapMaskFinder.MERGE_IOU))
+# Uddi's over-detection settings of 2026-11-27 09:09, as they map onto the box-prompt pipeline
+MASK_OVERDETECT = dict(conf=0.10, yolo_iou=0.80, max_det=1000, multimask=True, iou=0.72, stability=0.78, merge=0.88)
+_mask = dict(MASK_DEFAULTS)
+
+
 def maskParameters() -> dict:
-    """The values the boxes method (CapMaskFinder's steps) uses now."""
-    return dict(conf=float(CapMaskFinder.YOLO_CONFIDENCE), stability=float(CapMaskFinder.STABILITY_MIN),
-                iou=float(CapMaskFinder.IOU_MIN), merge=float(CapMaskFinder.MERGE_IOU))
+    """The values the boxes method uses now."""
+    return dict(_mask)
 
 
-def setMaskParameters(conf=None, stability=None, iou=None, merge=None) -> dict:
-    """Study only (CHANGES 207): change, in this process, the YOLO confidence, MobileSAM's minimum stability score and
-    predicted IoU, and the box overlap above which two masks are merged, that CapMaskFinder's steps use (its module
-    values, read at each call; the properties file and production are not touched). None leaves a value as it is.
-    They change both the masks in the third panel and the cap mask chosen from them."""
-    for name, value in (("YOLO_CONFIDENCE", conf), ("STABILITY_MIN", stability), ("IOU_MIN", iou),
-                        ("MERGE_IOU", merge)):
+def setMaskParameters(conf=None, stability=None, iou=None, merge=None, yolo_iou=None, max_det=None,
+                      multimask=None) -> dict:
+    """Study only (CHANGES 207, 208): the boxes method's YOLO confidence, YOLO NMS IoU, YOLO maximum detections,
+    MobileSAM masks per box (multimask: 3 nested masks instead of 1), MobileSAM's minimum predicted IoU and stability
+    score, and the box overlap above which two masks are merged (1.0 = none). None leaves a value as it is. The
+    properties file, CapMaskFinder and production are not touched. They change both the masks in the third panel and
+    the cap mask chosen from them."""
+    for name, value in (("conf", conf), ("stability", stability), ("iou", iou), ("merge", merge),
+                        ("yolo_iou", yolo_iou)):
         if value is not None:
-            setattr(CapMaskFinder, name, float(value))
+            _mask[name] = float(value)
+    if max_det is not None:
+        _mask["max_det"] = int(max_det)
+    if multimask is not None:
+        _mask["multimask"] = bool(multimask)
     return maskParameters()
+
+
+def yoloSamMasksTunable(crop: np.ndarray, disc: np.ndarray, predictor, yolo):
+    """CapMaskFinder.yoloSamMasks with every setting from _mask (CHANGES 208): YOLO conf / NMS IoU / max_det, MobileSAM
+    multimask, predicted IoU / stability minimums, merge overlap. At MASK_DEFAULTS it is the production function's steps
+    exactly (one mask per box). -> (list of dict(segmentation, predicted_iou, stability_score), counts)."""
+    import torch
+    from torchvision.ops import batched_nms
+    from mobile_sam.utils.amg import batched_mask_to_box, calculate_stability_score
+    rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+    results = yolo.predict(rgb, conf=float(_mask["conf"]), iou=float(_mask["yolo_iou"]), max_det=int(_mask["max_det"]),
+                           verbose=False)
+    boxes = (results[0].boxes.xyxy.cpu().numpy() if len(results) and results[0].boxes is not None
+             else np.zeros((0, 4)))
+    counts = dict(boxes=len(boxes))
+    h, w = disc.shape
+    if len(boxes):
+        cxs = np.clip(((boxes[:, 0] + boxes[:, 2]) / 2).astype(int), 0, w - 1)
+        cys = np.clip(((boxes[:, 1] + boxes[:, 3]) / 2).astype(int), 0, h - 1)
+        boxes = boxes[disc[cys, cxs]]
+    counts["onDisc"] = len(boxes)
+    if len(boxes) == 0:
+        counts.update(samMasks=0, passed=0, merged=0)
+        return [], counts
+    predictor.set_image(rgb)
+    model = predictor.model
+    multimask = bool(_mask["multimask"])
+    allMasks, allIou, allStab = [], [], []
+    with torch.inference_mode():
+        for i in range(0, len(boxes), CapMaskFinder.BOX_BATCH):
+            b = torch.as_tensor(boxes[i:i + CapMaskFinder.BOX_BATCH], dtype=torch.float, device=predictor.device)
+            tb = predictor.transform.apply_boxes_torch(b, rgb.shape[:2])
+            logits, iou, _ = predictor.predict_torch(point_coords=None, point_labels=None, boxes=tb,
+                                                     multimask_output=multimask, return_logits=True)
+            logits, iou = logits.flatten(0, 1), iou.flatten()       # B x 1 (or B x 3) masks -> one list
+            allStab.append(calculate_stability_score(logits, model.mask_threshold, 1.0))
+            allMasks.append(logits > model.mask_threshold)
+            allIou.append(iou)
+        masks, iou, stab = torch.cat(allMasks), torch.cat(allIou), torch.cat(allStab)
+        counts["samMasks"] = len(masks)
+        keep = (iou >= float(_mask["iou"])) & (stab >= float(_mask["stability"])) & (masks.flatten(1).sum(1) > 0)
+        counts["passed"] = int(keep.sum())
+        masks, iou, stab = masks[keep], iou[keep], stab[keep]
+        if len(masks) and float(_mask["merge"]) < 1.0:
+            mboxes = batched_mask_to_box(masks).float()
+            k = batched_nms(mboxes, iou, torch.zeros(len(masks), device=masks.device), float(_mask["merge"]))
+            masks, iou, stab = masks[k], iou[k], stab[k]
+    found = [dict(segmentation=m.cpu().numpy(), predicted_iou=float(q), stability_score=float(st))
+             for m, q, st in zip(masks, iou, stab)]
+    counts["merged"] = len(found)
+    return found, counts
 
 
 def holeFinder() -> str:
@@ -164,7 +230,7 @@ def capMaskByBoxes(img: np.ndarray, hx: float, hy: float):
     values; CapMaskFinder is not changed."""
     picture = CapMaskFinder.applyGamma(img, CapMaskFinder.GAMMA)
     crop, disc, (x0, y0) = CapMaskFinder.cutDisc(picture, (hx, hy), CapMaskFinder.DISC_RADIUS)
-    found, counts = CapMaskFinder.yoloSamMasks(crop, disc, CheckCap._sam_predictor(), CheckCap._yolo_model())
+    found, counts = yoloSamMasksTunable(crop, disc, CheckCap._sam_predictor(), CheckCap._yolo_model())
     allMasks = []                                      # every mask MobileSAM gave (after its filters and merging)
     for d in found:
         m = np.zeros(img.shape[:2], bool)
@@ -244,7 +310,8 @@ def masksPicture(img: np.ndarray, hub, masks: list) -> np.ndarray:
 
 
 def describeCounts(c: dict) -> str:
-    return (f"YOLO boxes {c.get('boxes', 0)} ({c.get('onDisc', 0)} on the disc), {c.get('passed', 0)} passed, "
+    return (f"YOLO boxes {c.get('boxes', 0)} ({c.get('onDisc', 0)} on the disc), {c.get('samMasks', 0)} MobileSAM "
+            f"masks, {c.get('passed', 0)} passed, "
             f"{c.get('merged', 0)} after merging; dropped {c.get('outside', 0)} outside / {c.get('small', 0)} small / "
             f"{c.get('edge', 0)} disc edge / {c.get('large', 0)} large; {c.get('kept', 0)} kept")
 
@@ -299,7 +366,8 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
     t0 = time.perf_counter()
     res = dict.fromkeys(HEADER, "")
     mp = maskParameters()
-    res.update(yolo_conf=mp["conf"], stability_min=mp["stability"], iou_min=mp["iou"], merge_iou=mp["merge"])
+    res.update(yolo_conf=mp["conf"], yolo_iou=mp["yolo_iou"], max_det=mp["max_det"], multimask=mp["multimask"],
+               stability_min=mp["stability"], iou_min=mp["iou"], merge_iou=mp["merge"])
     res.update(model=model, mask_method=maskMethod, maskMethod=maskMethod, maskInfo="", masksPicture=None,
                masksInCircle="", hub=None, pts=np.zeros((0, 2)),
                mask=None, ellipse=None, ratiosE=None, lengthsE=None, ratiosM=None, lengthsM=None)
@@ -324,7 +392,8 @@ def measure(img: np.ndarray, model: str, gamma: float = 1.0, floor: float = 1.0,
             mask, info = capMaskByBoxes(img, hx, hy)
             inCircle = masksInCircle(info["allMasks"], hx, hy, R, inCircleShare)
             c = info["counts"]
-            res["stages"] = f"{c.get('boxes', 0)}/{c.get('onDisc', 0)}/{c.get('passed', 0)}/{c.get('merged', 0)}"
+            res["stages"] = (f"{c.get('boxes', 0)}/{c.get('onDisc', 0)}/{c.get('samMasks', 0)}/{c.get('passed', 0)}/"
+                             f"{c.get('merged', 0)}")
             res["maskInfo"] = describeCounts(info["counts"]) + (
                 f"; predicted IoU {info['score']:.3f}, stability {info['stability']:.3f}" if mask is not None else "")
             samScore = info["score"]
@@ -392,8 +461,9 @@ def detailLines(name: str, res: dict) -> list:
     if res.get("masks_in_circle") not in ("", None):
         lines.append(f"  masks in the hole circle: {res['masks_in_circle']} (areas, largest first: {res['masksInCircle']})")
     if res.get("mask_method") == "boxes":
-        lines.append(f"  YOLO confidence {res['yolo_conf']}, stability >= {res['stability_min']}, predicted IoU >= "
-                     f"{res['iou_min']}, merge above box overlap {res['merge_iou']}")
+        lines.append(f"  YOLO confidence {res['yolo_conf']}, NMS IoU {res['yolo_iou']}, max det {res['max_det']}; "
+                     f"MobileSAM {'3 masks' if res['multimask'] else '1 mask'} per box, predicted IoU >= {res['iou_min']}, "
+                     f"stability >= {res['stability_min']}; merge above box overlap {res['merge_iou']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")

@@ -10,8 +10,10 @@ Run on one folder at a time (all pictures in it, sub-folders not searched):
                                      [--save] [--gamma 1.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
   --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points.
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
-  --conf / --stability / --iou / --merge : the boxes method's YOLO confidence, MobileSAM minimums, merge overlap
-                 (else the properties values); --share: share of a mask in the hole circle for the masks picture.
+  --conf / --stability / --iou / --merge / --yolo-iou / --max-det / --multimask : the boxes method's YOLO
+                 confidence, MobileSAM minimums, merge overlap, YOLO NMS IoU and maximum detections, 3 masks per box
+                 (else production's values); --overdetect: conf 0.10, NMS 0.80, max det 1000, 3 masks per box,
+                 predicted IoU 0.72, stability 0.78, merge 0.88; --share: share of a mask in the hole circle.
   --gamma      : points method only (boxes use vision.cap.mask.gamma, as production).
   --save       : marked pictures (outlines only, no values) and the masks in the hole circle (coloured, largest
                  painted first) to <folder>/cap_annulus_results/.
@@ -41,13 +43,20 @@ def main():
     ap.add_argument("--iou", type=float, default=None, help="MobileSAM predicted IoU minimum (boxes)")
     ap.add_argument("--merge", type=float, default=None, help="box overlap above which masks merge (boxes; 1 = none)")
     ap.add_argument("--share", type=float, default=0.5, help="share of a mask in the hole circle (masks picture)")
+    ap.add_argument("--yolo-iou", type=float, default=None, help="YOLO NMS IoU (boxes; production 0.7)")
+    ap.add_argument("--max-det", type=int, default=None, help="YOLO maximum detections (boxes; production 300)")
+    ap.add_argument("--multimask", action="store_true", help="3 MobileSAM masks per box (boxes; production 1)")
+    ap.add_argument("--overdetect", action="store_true", help="Uddi's over-detection values (then the options above)")
     ap.add_argument("--gamma", type=float, default=1.0, help="gamma of the picture given to MobileSAM (1 = none)")
     ap.add_argument("--floor", type=float, default=1.0, help="px; the shorter length is at least this in a ratio")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--holes", default=None, choices=["morphology"])
     args = ap.parse_args()
     A.configure(args.sam, args.holes)
-    mp = A.setMaskParameters(args.conf, args.stability, args.iou, args.merge)
+    if args.overdetect:
+        A.setMaskParameters(**A.MASK_OVERDETECT)
+    mp = A.setMaskParameters(args.conf, args.stability, args.iou, args.merge, args.yolo_iou, args.max_det,
+                             True if args.multimask else None)
     folder = pathlib.Path(args.folder)
     files = A.pictures(folder)
     if not files:
