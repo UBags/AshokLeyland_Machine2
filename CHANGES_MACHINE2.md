@@ -6337,3 +6337,28 @@ rule; its values sit with the bad pictures.
 
 Run here: the rule applied to the 15 pictures' values (the verdict function itself, no models needed): 14 / 15 as
 labelled, 12-46-43 NOT OK.
+
+## 217. DOSTPLUS bung study - hub offset ignored, hole centre judged by an egg-shaped region round the hub centre (2026-11-27)
+
+**Asked (Uddi):** recalibrate without the seated offset (4.7, -16.3); the allowed deviation of the bung's hole-pattern
+centre from the hub centre to be an ellipse, longer on one side (the camera is off-centre, the bung top nearer to it).
+
+**Found, from his 17 plant pictures of 26 / 27 Nov (hole centre - hub centre, picture px, y down = south):** all 9 good
+bungs lie **north** of H (dy -9.5 .. -21.9, dx -0.8 .. +14.5); the bad ones at 27.9 - 54.7 px, two of them south
+(18-04-02 +27.0, 153625563 +9.9). So in the picture the long half-axis is the northern one, the opposite of the
+direction asked for. Likely cause: the principal point (y 360) lies south of the hub (y ~343), so a point raised
+towards the camera is seen moved away from the picture centre, i.e. north. No good bung south of H yet: the southern
+half-axis (8 px) is a guess.
+
+**Changed (study only, `_bung_hubcentre_study.py` / `DryRun_Bung_Check_UI.py`, both dry-run folders):**
+- `HOLE_REGION = dict(east_west=22, north=30, south=8)`: two half ellipses on H;
+  `e = (dx / east_west)^2 + (dy / north or south)^2`, inside when e <= 1.
+- Rule (provisional): NOT OK if e > 1 or roundness < 0.945 or outside the oval on H > 11 %; else OK if e < 0.7 or
+  roundness > 0.955 or outside on H < 7 %; else NOT OK. The two offset terms of CHANGES 216 are gone.
+- STUDY line: dx, dy, e. Window: the region drawn round H in orange (no text).
+- STUDY SUMMARY: every OK / NOT OK (dx, dy), the OK extents per side, and for the current and a suggested region
+  (OK extents x 1.3, min 8 px, scaled until every OK point is inside) which OK points fall outside and which NOT OK inside.
+
+**Measured:** on the 17 logged values: 9 / 9 good OK; 5 / 5 bad and both "bad?" NOT OK; "good?" 12-46-43 (dy -36.7)
+NOT OK. Suggested region from them: east-west 18.9, north 28.5, south 8.0 - separates them too. Sandbox: the window
+logic run headless on one picture (morphology holes, no YOLO).

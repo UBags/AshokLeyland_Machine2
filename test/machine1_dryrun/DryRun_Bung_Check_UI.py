@@ -34,7 +34,9 @@ round the same centre. One "[Bung] ..." log line per gamma.
   DOSTPLUS hub-centre study (CHANGES 215, Uddi 2026-11-27; "DOSTPLUS: hub-centre study", on by default; DOST is never
   studied - its check is production's): the hub's 5 holes first; the segmented disc = the hub-hole circle (dark blue),
   the hole search disc r135 round the hub centre (thin yellow, yellow cross); the production hole check runs on those
-  discs; the seating measured with the reference oval centred on the hub centre (thick yellow). Production
+  discs; the seating measured with the reference oval centred on the hub centre (thick yellow); the hole-pattern centre
+  must lie in the region round the hub centre (orange; east-west, north and south half-axes, HOLE_REGION; CHANGES 217:
+  the hub offset is ignored). Production
   (camera/...) is not changed. One "STUDY" line per DOSTPLUS picture with every value; pictures in subfolders named
   OK and NOT_OK (or GOOD / BAD) are labelled, and a "STUDY SUMMARY" at the end gives the OK / NOT OK range of each
   value and a limit midway where they separate. The study's limits: STUDY_LIMITS in _bung_hubcentre_study.py.
@@ -403,8 +405,9 @@ class BungCheckWindow:
         """Shapes only, no text (verdict and values are in the list and the terminal). BGR. Production: cyan circle =
         the segmented disc, thin yellow circle + cross = the hole search disc and its centre. Study (DOSTPLUS, CHANGES
         215): dark blue circle = the hub-hole circle (= the segmented disc), thin yellow circle + yellow cross = the
-        hole search disc r135 round the hub centre, thick yellow = the reference oval on the hub centre, the top-face
-        outline green (seated) / red."""
+        hole search disc r135 round the hub centre, thick yellow = the reference oval on the hub centre, orange = the
+        allowed region of the hole-pattern centre round the hub centre (CHANGES 217; north and south half-axes may
+        differ), the top-face outline green (seated) / red."""
         BS = self.BS
         out = marked.copy() if marked is not None and marked.shape == image.shape else image.copy()
         if study is not None:
@@ -414,6 +417,10 @@ class BungCheckWindow:
                 cv2.circle(out, c, int(round(hub["radius"])), (160, 0, 0), 2)
                 cv2.circle(out, c, int(BS.INNER_DISC_RADIUS_DOSTPLUS), (0, 255, 255), 1)
                 cv2.drawMarker(out, c, (0, 255, 255), cv2.MARKER_CROSS, 16, 1)
+                from _bung_hubcentre_study import HOLE_REGION        # allowed region of the hole centre (CHANGES 217)
+                ew = int(round(HOLE_REGION["east_west"]))
+                cv2.ellipse(out, c, (ew, int(round(HOLE_REGION["north"]))), 0, 180, 360, (0, 140, 255), 2)
+                cv2.ellipse(out, c, (ew, int(round(HOLE_REGION["south"]))), 0, 0, 180, (0, 140, 255), 2)
                 oval = BS.SEATING_REFERENCE_OVAL_DOSTPLUS
                 cv2.ellipse(out, ((float(hub["cx"]), float(hub["cy"])), (float(oval[0]), float(oval[1])),
                                   float(oval[2])), (0, 255, 255), 3)

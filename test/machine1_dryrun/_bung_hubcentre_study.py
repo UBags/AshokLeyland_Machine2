@@ -13,15 +13,18 @@ For a DOSTPLUS picture:
          inside the hub-hole circle;
        - the hole-search disc = r vision.<vendor>.dostplus.bung.inner.disc.radius (135) round H.
   3. Seating, measured here (the production step's measures, with the reference oval moved):
-       - hole-pattern centre to the seated position (H + vision.<vendor>.dostplus.bung.seating.hub.offset, as production);
+       - the hole-pattern centre relative to H itself (CHANGES 217: the hub offset is ignored): dx, dy (picture
+         coordinates, y downwards = south) and where it lies in the allowed region round H - an egg of two half
+         ellipses with one east-west half-axis and separate north and south half-axes (HOLE_REGION; the bung's top is
+         nearer the camera than the holes, so it is seen displaced from H, more to one side than the other);
+         e = (dx / east_west)^2 + (dy / north or south)^2, e <= 1 inside;
        - the top-face mask (MobileSAM, prompted at the hole-pattern centre, the smallest mask of face radius
          seating.face.radius.min - max): roundness (minor / major axis), area / fitted-ellipse area;
        - the share of the face outside the reference oval (vision.<vendor>.dostplus.bung.seating.reference.oval) centred
          on H itself (Uddi: on the hub centre; the seated face sits ~17 px off H - the camera angle - so this share is
-         larger than production's and its limit is to be recalibrated). The share with the oval at production's seated
-         position is printed beside it.
-     Verdict: Uddi's rule of 2026-11-27 (STUDY_RULE_NOT_OK / STUDY_RULE_OK, CHANGES 216; from his 10 good / 5 bad
-     plant pictures): stage 1 - any -> NOT OK; stage 2 - any -> OK; else NOT OK. No hole pattern or no top-face mask -> NOT OK.
+         larger than production's and its limit is to be recalibrated).
+     Verdict (STUDY_RULE_NOT_OK / STUDY_RULE_OK; CHANGES 217, provisional until recalibrated on Uddi's pictures):
+     stage 1 - any -> NOT OK; stage 2 - any -> OK; else NOT OK. No hole pattern or no top-face mask -> NOT OK.
   4. Measure, then decide (Uddi): every value per picture on a "STUDY" line; with pictures in subfolders named OK and
      NOT_OK (or GOOD / BAD) the summary at the end gives, per value, the OK and NOT OK ranges, the worst OK and the closest
      NOT OK, and a limit midway between them where they separate.
@@ -32,30 +35,41 @@ import time
 import cv2
 import numpy as np
 
-# Uddi's rule of 2026-11-27 17:38 (CHANGES 216), from his DOSTPLUS plant pictures (10 good / 5 bad):
-#   NOT OK if offset > 26 px or roundness < 0.945 or outside (oval on H) > 11 % or outside (oval at H + offset) > 12 %;
-#   else OK if offset < 18 px or roundness > 0.955 or outside (oval on H) < 7 % or outside (oval at H + offset) < 7 %;
+# Allowed region of the hole-pattern centre round the hub centre H (CHANGES 217, Uddi 2026-11-27: the hub offset
+# ignored; an ellipse longer on one side). Two half ellipses sharing the east-west half-axis, px in the picture (y down =
+# south). Start: from Uddi's 17 pictures of 26 / 27 Nov - the 9 good hole centres all lie NORTH of H (dy -9.5 .. -21.9,
+# dx -0.8 .. +14.5); the bad ones at 27.9 - 54.7 px, two of them south (+27.0, +9.9). south is a guess (no good bung
+# south of H yet). Recalibrate from the STUDY SUMMARY.
+HOLE_REGION = dict(east_west=22.0, north=30.0, south=8.0)
+# Rule (provisional, CHANGES 217) - Uddi's rule of CHANGES 216 with the two offset-based terms replaced by the region:
+#   NOT OK if region e > 1 or roundness < 0.945 or outside (oval on H) > 11 %;
+#   else OK if region e < 0.7 or roundness > 0.955 or outside (oval on H) < 7 %;
 #   else NOT OK.
 # (label, values key, operator, limit) - edit here to try other limits.
-STUDY_RULE_NOT_OK = (("hole centre to seated position", "offset", ">", 26.0),
+STUDY_RULE_NOT_OK = (("hole centre outside the region round H (e)", "region", ">", 1.0),
                      ("face roundness", "roundness", "<", 0.945),
-                     ("face outside the oval on H", "outside", ">", 0.11),
-                     ("face outside the oval at H + offset", "outside_at_seated", ">", 0.12))
-STUDY_RULE_OK = (("hole centre to seated position", "offset", "<", 18.0),
+                     ("face outside the oval on H", "outside", ">", 0.11))
+STUDY_RULE_OK = (("hole centre well inside the region (e)", "region", "<", 0.7),
                  ("face roundness", "roundness", ">", 0.955),
-                 ("face outside the oval on H", "outside", "<", 0.07),
-                 ("face outside the oval at H + offset", "outside_at_seated", "<", 0.07))
-STUDY_LIMITS = {"NOT OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_NOT_OK],
+                 ("face outside the oval on H", "outside", "<", 0.07))
+STUDY_LIMITS = {"region": HOLE_REGION, "NOT OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_NOT_OK],
                 "else OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_OK]}
 # per value: (key, label, kind) - kind "max": OK when value <= limit; "min": OK when value >= limit; "range": both sides
-VALUES = (("offset", "hole centre to seated position (px)", "max"),
+VALUES = (("region", "hole centre in the region round H (e)", "max"),
           ("roundness", "face roundness", "min"),
           ("outside", "face outside the oval on H", "max"),
-          ("outside_at_seated", "face outside the oval on H + offset", "max"),
           ("fit_ratio", "face / fitted ellipse (info)", "range"),
           ("face_radius", "face radius (px, info)", "range"))
 OK_FOLDERS = ("ok", "good")
 NOT_OK_FOLDERS = ("not_ok", "notok", "not ok", "bad", "nok")
+
+
+def regionValue(dx: float, dy: float, region=None) -> float:
+    """Where (dx, dy) lies in the egg-shaped region round H: (dx / east_west)^2 + (dy / north or south)^2 (north for
+    dy < 0, picture y downwards); <= 1 inside."""
+    region = HOLE_REGION if region is None else region
+    half = region["north"] if dy < 0 else region["south"]
+    return (dx / region["east_west"]) ** 2 + (dy / half) ** 2
 
 
 def labelOf(path) -> str:
@@ -114,14 +128,13 @@ class DostplusHubCentreStudy:
         BS = self.BS
         t = time.perf_counter()
         hx, hy = self.centre
-        dx, dy = BS.SEATING_HUB_OFFSET_DOSTPLUS
-        seated = (hx + float(dx), hy + float(dy))
         centre = BS.hole_pattern_centre(components)
-        out = dict(hub=(hx, hy), seated_at=seated, hole_centre=centre, offset=None, roundness=None, fit_ratio=None,
-                   outside=None, outside_at_seated=None, face_radius=None, face_contour=None)
+        out = dict(hub=(hx, hy), hole_centre=centre, dx=None, dy=None, region=None, roundness=None, fit_ratio=None,
+                   outside=None, face_radius=None, face_contour=None)
         if centre is None:
             return out
-        out["offset"] = float(math.hypot(centre[0] - seated[0], centre[1] - seated[1]))
+        out.update(dx=float(centre[0] - hx), dy=float(centre[1] - hy))
+        out["region"] = regionValue(out["dx"], out["dy"])
         predictor = BS._seating_predictor()
         predictor.set_image(rgb)
         import torch
@@ -157,7 +170,7 @@ class DostplusHubCentreStudy:
 
             out.update(face_radius=float(r), roundness=float(roundness), face_contour=contour,
                        fit_ratio=float(area / (math.pi * a * b / 4.0)) if a > 0 and b > 0 else 0.0,
-                       outside=outsideOf((hx, hy)), outside_at_seated=outsideOf(seated))
+                       outside=outsideOf((hx, hy)))
         self.seconds["seating"] = time.perf_counter() - t
         return out
 
@@ -175,6 +188,8 @@ class DostplusHubCentreStudy:
                 v = float(values[key])
                 if (v > limit) if op == ">" else (v < limit):
                     shown = f"{v:.1%}" if key.startswith("outside") else f"{v:.3g}"
+                    if key == "region":
+                        shown += f" (dx {values['dx']:+.1f}, dy {values['dy']:+.1f})"
                     lim = f"{limit:.0%}" if key.startswith("outside") else f"{limit:g}"
                     out.append(f"{label} {shown} {op} {lim}")
             return out
@@ -193,9 +208,39 @@ class DostplusHubCentreStudy:
             return "-" if v is None else format(v, fmt)
         hub = values.get("hub")
         return (f"hub ({hub[0]:.1f}, {hub[1]:.1f}) " if hub else "") + (
-            f"offset {f('offset', '.1f')} px, roundness {f('roundness', '.3f')}, fit {f('fit_ratio', '.3f')}, "
-            f"outside on H {f('outside', '.1%')} (on H + offset {f('outside_at_seated', '.1%')}), "
+            f"hole centre dx {f('dx', '+.1f')} dy {f('dy', '+.1f')} px (y down = south), region e {f('region', '.2f')}, "
+            f"roundness {f('roundness', '.3f')}, fit {f('fit_ratio', '.3f')}, outside on H {f('outside', '.1%')}, "
             f"face r {f('face_radius', '.1f')}")
+
+    def regionLines(self) -> list:
+        """The hole centres (dx, dy) of the OK / NOT OK pictures and the region they suggest: OK extents east-west,
+        north, south, and the NOT OK points the current region and a suggested one would let in."""
+        ok = [(r[1], r[2]["dx"], r[2]["dy"]) for r in self.rows if r[0] == "OK" and r[2] and r[2].get("dx") is not None]
+        bad = [(r[1], r[2]["dx"], r[2]["dy"]) for r in self.rows if r[0] == "NOT OK" and r[2] and r[2].get("dx") is not None]
+        if not ok and not bad:
+            return []
+        lines = ["  hole centres relative to H (dx, dy; y down = south):"]
+        for label, pts in (("OK", ok), ("NOT OK", bad)):
+            if pts:
+                lines.append(f"    {label}: " + ", ".join(f"{n} ({dx:+.1f},{dy:+.1f})" for n, dx, dy in pts))
+        if ok:
+            ew = max(abs(dx) for _, dx, _ in ok)
+            north = max([-dy for _, _, dy in ok if dy < 0], default=0.0)
+            south = max([dy for _, _, dy in ok if dy >= 0], default=0.0)
+            lines.append(f"    OK extents: east-west {ew:.1f}, north {north:.1f}, south {south:.1f} px "
+                         f"(current region {HOLE_REGION})")
+            # suggestion: the OK extents x 1.3 (at least 8 px a side), then all axes scaled up until every OK point
+            # is inside (a point off both axes can lie outside although each extent is covered)
+            suggested = dict(east_west=max(ew * 1.3, 8.0), north=max(north * 1.3, 8.0), south=max(south * 1.3, 8.0))
+            worst = max(regionValue(dx, dy, suggested) for _, dx, dy in ok)
+            if worst > 1.0:
+                suggested = {k: v * math.sqrt(worst) for k, v in suggested.items()}
+            for name, region in (("current", HOLE_REGION), ("suggested", suggested)):
+                okOut = [n for n, dx, dy in ok if regionValue(dx, dy, region) > 1.0]
+                badIn = [n for n, dx, dy in bad if regionValue(dx, dy, region) <= 1.0]
+                lines.append(f"    region {name} {({k: round(v, 1) for k, v in region.items()})}: OK outside "
+                             f"{okOut or 'none'}, NOT OK inside {badIn or 'none'}")
+        return lines
 
     # ---------------------------------------------------------------- 4. summary over labelled pictures
     def record(self, label, name, values, verdict, reason):
@@ -225,6 +270,7 @@ class DostplusHubCentreStudy:
                 text += (f"; worst OK {min(ok):.3f}, closest NOT OK {max(bad):.3f} -> "
                          + (f"limit {(min(ok) + max(bad)) / 2:.3f}" if min(ok) > max(bad) else "OVERLAP"))
             lines.append(text)
+        lines += self.regionLines()
         stages = {}
         for r in self.rows:
             if r[0] == "NOT OK" and (r[2] is None or r[2].get("roundness") is None):
