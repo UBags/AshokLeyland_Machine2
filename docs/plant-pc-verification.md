@@ -29,10 +29,10 @@ there is no fallback (the thread mode was removed, CHANGES §105): stop, and tel
 **2a. On the plant PC (exe):** run 10 cycles, DOST and DOSTPLUS, LHS and RHS. In the log, the line
 `<STATE>: check S s in the worker, transfer T s` gives each check's time. For every check:
 
-- the largest S must be below 80 % of `siemens.vision.check.timeout.sec` (12 s, so below 9.6 s);
+- the largest S must be below 80 % of `vision.siemens.check.timeout.sec` (12 s, so below 9.6 s);
 - T must be below 1 s (a warning "slow transfer to the worker process" is logged above that).
 
-A check over 80 %: raise `siemens.vision.check.timeout.sec` (the camera answer timeout follows it automatically: it
+A check over 80 %: raise `vision.siemens.check.timeout.sec` (the camera answer timeout follows it automatically: it
 is at least the check timeout + 8 s), or find out why the GPU is slow (`nvidia-smi`: is the GPU used, is another
 program using it?). Three timeouts in a row are reported on the screen as "vision checks too slow on this PC".
 
@@ -107,7 +107,7 @@ The knuckle check (state 3) runs MobileSAM on one picture and gives the later ch
    whether the hub follows the spindle 1:1 (the open question of CHANGES 102).
 
 If the knuckle check fails on good parts after the camera was touched ("camera moved N px (limit 40) - set the camera
-again"), set the camera back. If it fails for another reason, `siemens.vision.knuckle.method=regions` brings back the
+again"), set the camera back. If it fails for another reason, `vision.siemens.knuckle.method=regions` brings back the
 grey-level check of CHANGES 95 (its regions are for the camera position of 13 Nov) and the later checks use the
 centres in the properties file.
 
@@ -160,7 +160,7 @@ On the Machine 2 PC with the new exe:
    (x,y) d px from the seated position (x,y; hub from 4 holes (x, y) r .. spread .. gap .. deg, DOST offset (4.9,
    -13.7)) <= 20.0; ...`; a bung lying over the hub's holes gives `seated position unknown: the hub's 4 holes round
    the bung not found (...)` and NOT OK. Laptop: `DryRun_Bung_Hub_Holes.py` (6/6). Send the seating lines of a shift.
-   To go back: `siemens.vision.bung.seating.position.source=fixed`.
+   To go back: `vision.siemens.bung.seating.position.source=fixed`.
 
 ## 10. Cap seating: brass by fitted circles, silver by two rules, both by the hub-centre distance (CHANGES 128, 129, 143)
 
@@ -183,9 +183,9 @@ On the Machine 2 PC with the new exe:
    (or bolts, circle r, spread); the cap check's seating line adds `cap centre (x, y) to hub centre (x, y) d px <= 5.0
    (... cap +dx / +dy px; ...)`. The 5 px limit and the zero offsets are not measured yet (no hub and cap pictures of
    the same part): send these lines for a shift of seated caps. If seated caps sit at a steady dx / dy (camera angle:
-   holes, bolt tips and the cap face are at three heights), that goes into `siemens.vision.cap.seating.hub.distance.offset.<holes|bolts>.<model>`
-   ; to stop the rule, `siemens.vision.cap.seating.hub.distance.check=False`.
-   Offsets per hub kind and model (CHANGES 147, keys `...offset.<holes|bolts>.<dost|dostplus>`): DOSTPLUS holes 0.1,-1.4
+   holes, bolt tips and the cap face are at three heights), that goes into `vision.siemens.<model>.cap.seating.hub.distance.offset.<holes|bolts>`
+   ; to stop the rule, `vision.siemens.cap.seating.hub.distance.check=False`.
+   Offsets per hub kind and model (CHANGES 147, keys `vision.<model>.cap.seating.hub.distance.offset.<holes|bolts>`): DOSTPLUS holes 0.1,-1.4
    (CHANGES 146), DOSTPLUS bolts -0.6,2.2 (CHANGES 147: 93 seated brass caps, one hub picture), DOST bolts -0.4,4.9
    (CHANGES 149: 18 seated silver caps of 17 Nov, two hub pictures; the 0.3,-2.7 of CHANGES 145 came from 13 Nov caps
    that sat about 10 px higher), DOST holes 0.3,0.5 (CHANGES 148: 18 seated
@@ -200,7 +200,7 @@ On the Machine 2 PC with the new exe:
    holes by dark blobs) the 9 seated DOST caps of 13 and 17 Nov lie 0.9 - 3.5 px from the hub centre; candidate for
    production once confirmed with the real hub check on the laptop.
    **Since CHANGES 152 production takes the hub centre from the holes round the cap in the cap picture**
-   (`siemens.vision.cap.seating.hub.source=cap`, offsets `...offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3, max 5.0).
+   (`vision.siemens.cap.seating.hub.source=cap`, offsets `...offset.cap.dost` 0.2,-0.1 / `.dostplus` -0.6,-5.3, max 5.0).
    The seating line reads `cap centre (x, y) to hub centre (x, y) d px <= 5.0 (hub from 4 cap holes (circle r .., spread
    .., gap .. deg), DOST offset ...)`; holes not found -> `the hub's 4 holes round the cap not found (...)` and NOT OK.
    Laptop: `DryRun_Cap_Hub_Distance_UI.py`, Hub source "cap holes" (the default), model and caps folder only - no hub
@@ -257,7 +257,7 @@ delivered exe has False unless the plant wants the check off.
    standing up -> NOT OK; no washer -> NOT OK. The log line `CheckSplitPinAndWasher: OK|NOT OK in <s> - ...` per
    picture (three per check) gives `expected ... hub from 4 holes ...`, `offsetFromExpected`, `tipRadius`, `cover`,
    `markerPixels`, `outsidePixels`, `outsideMax`. A good part NOT OK with "the hub's N holes not found" is the thing to
-   report (CHANGES 163: the washer is placed from the hub's holes; `siemens.vision.splitpin.centre.source=fixed` goes back).
+   report (CHANGES 163: the washer is placed from the hub's holes; `vision.siemens.splitpin.centre.source=fixed` goes back).
 3. Send the lines of a shift (and the pictures of any OK part called NOT OK, or the reverse): the limits come from 3
    OK parts; `vision.splitpin.leg.outside.distance` (8.0) / `.pixels.max` (2) are the ones to look at.
 4. DOSTPLUS (CHANGES 177): the limits and the offset 1.9,2.1 come from DOST parts only. Run the window with
@@ -271,7 +271,7 @@ delivered exe has False unless the plant wants the check off.
 by circle radius and smallest total mask area). On the laptop, before the build:
 `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --wrong-model` - every good picture FOUND (the other model never),
 the check time per picture (aim: 0.7 - 0.8 s with the GPU), each gamma's sets (total mask area, circle r), and at the end
-the area ranges of hole sets and bolt sets per model: set `vision.hubholes.holes.area.max.<model>` between them (all
+the area ranges of hole sets and bolt sets per model: set `vision.<model>.hubholes.holes.area.max` between them (all
 three properties files, both prefixes), and the cap / bung / split pin offsets from the printed morphology - SAM means.
 Steps 1 - 7 below describe the CHANGES 164 - 166 finder (now `sam_slow`).
 
@@ -279,14 +279,14 @@ On the laptop first (models with the YOLO weights), after `git pull`, **before b
 1. `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --wrong-model` - every picture of the four sets: the holes
    found by SAM wherever the dark-blob finder found them, never the other model's; `RESULT: PASS`.
 2. The end of its output prints, per check and model, the mean difference between the two finders' centres and the
-   offset that keeps each check's target where it was (`vision.cap.seating.hub.distance.offset.cap.<model>`,
-   `vision.bung.seating.hub.offset.<model>`, `vision.splitpin.hub.offset.<model>`). The values in the properties are
+   offset that keeps each check's target where it was (`vision.<model>.cap.seating.hub.distance.offset.cap`,
+   `vision.<model>.bung.seating.hub.offset`, `vision.<model>.splitpin.hub.offset`). The values in the properties are
    still those measured with the dark-blob finder (no YOLO in the sandbox): replace them with the laptop's (all three properties
    files, both `allenbradley.` and `siemens.`), then run `DryRun_SplitPin_Check_UI.py --auto`,
    `DryRun_Bung_Hub_Holes.py`, `DryRun_Cap_Hub_Distance.py` and build. Note the sd it prints: the cap rule allows 5 px.
 3. `python test\machine2_dryrun\DryRun_Hub_Holes_SAM.py --seed hubcheck` - the real hub check on the hub pictures as the
    seed (as in production); it prints SAM holes - hub check centre for kind holes (about 0) and bolts -> put the bolts
-   value in `vision.hubholes.sam.seed.bolts.offset.<model>` (now -0.7,4.4 / -0.7,3.7; DOST from CHANGES 147, DOSTPLUS
+   value in `vision.<model>.hubholes.sam.seed.bolts.offset` (now -0.7,4.4 / -0.7,3.7; DOST from CHANGES 147, DOSTPLUS
    measured on the laptop, one hub picture whose hub check took the bolts).
 4. Repeatability: two frames of the same part (e.g. split pin 113431189 / 113432153, or 113447333 / 113448348) should
    give SAM centres within about 1 px of each other.
@@ -301,13 +301,13 @@ On the Machine 2 PC with the new exe:
 8. (CHANGES 182) The centre now comes from the picture being checked: the cap / bung / split pin log lines say `seed this
    picture: 4 bolts (r .., spread .., gamma ..)` (or holes); `the hub check (given) ... (this picture: ...)` means pass 1
    found no set there and the cycle's hub check was used. Note the check times (one more pass per picture: about
-   0.3 - 0.5 s each on the laptop is expected). `siemens.vision.hubholes.centre.source=hubcheck` goes back.
+   0.3 - 0.5 s each on the laptop is expected). `vision.siemens.hubholes.centre.source=hubcheck` goes back.
 9. (CHANGES 183; switched off in 184, `refine.checks=none` - nothing to verify) Split pin only: its holes refined - the split pin log line says `refined (moved .. px; unrefined (..)
    r ..)`; the DOST circle radius should come in one mode (no r ~148 / ~149 split), the refine adds a few tenths of a
    second on the GPU. Then `DryRun_SplitPin_Check_UI.py --auto` on the laptop prints `SPLITPIN OFFSET <model>` - that
-   value goes into `siemens.vision.splitpin.hub.offset.<model>` (DOSTPLUS with `--model DOSTPLUS` on DOSTPLUS pictures).
-   `siemens.vision.hubholes.refine.checks=` (empty) goes back.
-7. To go back: `siemens.vision.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
+   value goes into `vision.siemens.<model>.splitpin.hub.offset` (DOSTPLUS with `--model DOSTPLUS` on DOSTPLUS pictures).
+   `vision.siemens.hubholes.refine.checks=` (empty) goes back.
+7. To go back: `vision.siemens.hubholes.method=morphology` (with the offsets of CHANGES 152, 153, 163:
    cap 0.2,-0.1 / -0.6,-5.3; bung 4.9,-13.7 / 4.2,-16.0; split pin 1.8,1.6).
 
 ## 15. Start-up: backup beside the login, launcher polling every 2 s (CHANGES 174)
@@ -332,7 +332,7 @@ On the Machine 2 PC with the new exe:
    the picture is back. The next component's vision checks pass.
 3. Wrong password -> "Wrong password: the camera was not rebooted", nothing sent. During a cycle -> the button says
    "A component is in the cycle ..." and nothing is asked or sent.
-4. Should the camera refuse (HTTP 401 / 403): the reason is shown; check `siemens.vision.camera.uid` / `.pwd` and that
+4. Should the camera refuse (HTTP 401 / 403): the reason is shown; check `vision.siemens.camera.uid` / `.pwd` and that
    the camera user may reboot (Hikvision: Configuration -> User Management, the admin user can).
 
 ## Results

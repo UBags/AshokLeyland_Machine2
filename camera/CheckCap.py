@@ -19,7 +19,7 @@ Detection Method:
           its body in the bore but its top slides over and the side wall shows on one side), and the outline centre
           within seating.silver.outline.offset.max of CENTER (a cap pushed right off the bore; 0 = not checked).
         Masks are picked by radius (seating.*.radius.min/max). No mask found = NOT OK. Run only when steps 2 and 3 pass.
-      Since CHANGES 212 the silver cap's seating is by default (vision.cap.seating.silver.method = annulus) the annulus
+      Since CHANGES 212 the silver cap's seating is by default (vision.dost.cap.seating.method = annulus) the annulus
       method of camera/CapAnnulus.py (Uddi, 2026-11-27): hub centre and hole circle from the hub's holes in the cap
       picture; a MobileSAM mask of only the annulus between the cap and the holes; its inner ellipse with the most
       inner edge points on it; centre offset, diameter score, ring widths, islands; Uddi's verdict rule. The alternative
@@ -27,7 +27,7 @@ Detection Method:
       above, kept.
     Result OK = right cap AND all 3 comparisons pass AND (seating off or the cap is seated).
 
-Parameters (per machine, <vendor>.vision.cap.* in ApplicationConfiguration.properties):
+Parameters (per machine, vision.<vendor>.cap.* in ApplicationConfiguration.properties):
     CENTER: centre of the cap region (Machine 1: 635, 360)
     RADIUS: 100 for DOST, 70 for DOSTPLUS
     DELTA_THRESHOLD_HUB/TOP/NUT: Step 3 minimum brightening against each earlier picture, per cap
@@ -88,64 +88,64 @@ class CheckCap:
     with previously captured images using a circular mask and color analysis.
     """
 
-    # Per machine (allenbradley.vision.cap.* / siemens.vision.cap.*), read through VisionConfig; a change in the
+    # Per machine (vision.allenbradley.cap.* / vision.siemens.cap.*), read through VisionConfig; a change in the
     # properties file is used from the next picture on.
     CENTER = vTuple("vision.cap.center", (635, 360))               # centre of the circle the check looks at
-    RADIUS_DOST = vInt("vision.cap.radius.dost", 100)
-    RADIUS_DOSTPLUS = vInt("vision.cap.radius.dostplus", 70)
-    RB_THRESHOLD_DOST = vFloat("vision.cap.rb.threshold.dost", -1.0)            # Step 2: R-B must be below this
-    RB_THRESHOLD_DOSTPLUS = vFloat("vision.cap.rb.threshold.dostplus", 15.0)    # Step 2: R-B must be above this
+    RADIUS_DOST = vInt("vision.dost.cap.radius", 100)
+    RADIUS_DOSTPLUS = vInt("vision.dostplus.cap.radius", 70)
+    RB_THRESHOLD_DOST = vFloat("vision.dost.cap.rb.threshold", -1.0)            # Step 2: R-B must be below this
+    RB_THRESHOLD_DOSTPLUS = vFloat("vision.dostplus.cap.rb.threshold", 15.0)    # Step 2: R-B must be above this
 
     # Step 1: the cap picture must be brighter than each earlier picture of the same part by at least these
-    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.cap.delta.threshold.hub.dost", 30.0)
-    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.cap.delta.threshold.top.dost", 30.0)
-    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.cap.delta.threshold.nut.dost", 35.0)
+    DELTA_THRESHOLD_HUB_DOST = vFloat("vision.dost.cap.delta.threshold.hub", 30.0)
+    DELTA_THRESHOLD_TOP_DOST = vFloat("vision.dost.cap.delta.threshold.top", 30.0)
+    DELTA_THRESHOLD_NUT_DOST = vFloat("vision.dost.cap.delta.threshold.nut", 35.0)
 
-    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.cap.delta.threshold.hub.dostplus", 35.0)
-    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.cap.delta.threshold.top.dostplus", 50.0)
-    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.cap.delta.threshold.nut.dostplus", 35.0)
+    DELTA_THRESHOLD_HUB_DOSTPLUS = vFloat("vision.dostplus.cap.delta.threshold.hub", 35.0)
+    DELTA_THRESHOLD_TOP_DOSTPLUS = vFloat("vision.dostplus.cap.delta.threshold.top", 50.0)
+    DELTA_THRESHOLD_NUT_DOSTPLUS = vFloat("vision.dostplus.cap.delta.threshold.nut", 35.0)
 
     # Silver cap test (after the brass test fails): mean brightness (B+G+R)/3 within this radius must reach the
     # minimum. A silver cap is bright in the middle; without a cap the bore and shaft end are dark there.
     # 0 = test off (every non-brass picture with a silver R-B counts as a silver cap, as before).
-    SILVER_BRIGHTNESS_RADIUS = vInt("vision.cap.silver.brightness.radius", 25)
-    SILVER_BRIGHTNESS_MIN = vFloat("vision.cap.silver.brightness.min", 0.0)
+    SILVER_BRIGHTNESS_RADIUS = vInt("vision.dost.cap.brightness.radius", 25)
+    SILVER_BRIGHTNESS_MIN = vFloat("vision.dost.cap.brightness.min", 0.0)
 
     # Step 4: seating (MobileSAM). Off = the check as before (Machine 1).
     SEATING_CHECK = vBool("vision.cap.seating.check", False)
-    SEATING_BRASS_RADIUS_MIN = vFloat("vision.cap.seating.brass.radius.min", 75.0)    # brass cap face mask
-    SEATING_BRASS_RADIUS_MAX = vFloat("vision.cap.seating.brass.radius.max", 95.0)
-    SEATING_BORE_RADIUS_MIN = vFloat("vision.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
-    SEATING_BORE_RADIUS_MAX = vFloat("vision.cap.seating.bore.radius.max", 120.0)
-    SEATING_SILVER_RADIUS_MIN = vFloat("vision.cap.seating.silver.radius.min", 95.0)  # silver cap outline mask
-    SEATING_SILVER_RADIUS_MAX = vFloat("vision.cap.seating.silver.radius.max", 112.0)
-    SEATING_BRASS_OFFSET_MAX = vFloat("vision.cap.seating.brass.offset.max", 9.0)     # cap centre to bore centre
-    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.cap.seating.silver.face.offset.max", 9.0)  # face to outline
-    SEATING_FACE_BOX_SCALE = vFloat("vision.cap.seating.face.box.scale", 0.8)
+    SEATING_BRASS_RADIUS_MIN = vFloat("vision.dostplus.cap.seating.radius.min", 75.0)    # brass cap face mask
+    SEATING_BRASS_RADIUS_MAX = vFloat("vision.dostplus.cap.seating.radius.max", 95.0)
+    SEATING_BORE_RADIUS_MIN = vFloat("vision.dostplus.cap.seating.bore.radius.min", 104.0)     # bore round a brass cap
+    SEATING_BORE_RADIUS_MAX = vFloat("vision.dostplus.cap.seating.bore.radius.max", 120.0)
+    SEATING_SILVER_RADIUS_MIN = vFloat("vision.dost.cap.seating.radius.min", 95.0)  # silver cap outline mask
+    SEATING_SILVER_RADIUS_MAX = vFloat("vision.dost.cap.seating.radius.max", 112.0)
+    SEATING_BRASS_OFFSET_MAX = vFloat("vision.dostplus.cap.seating.offset.max", 9.0)     # cap centre to bore centre
+    SEATING_SILVER_FACE_OFFSET_MAX = vFloat("vision.dost.cap.seating.face.offset.max", 9.0)  # face to outline
+    SEATING_FACE_BOX_SCALE = vFloat("vision.dost.cap.seating.face.box.scale", 0.8)
     # silver: the cap outline centre within this of CENTER (a cap pushed right off the bore); 0 = not checked
-    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.cap.seating.silver.outline.offset.max", 0.0)
+    SEATING_SILVER_OUTLINE_OFFSET_MAX = vFloat("vision.dost.cap.seating.outline.offset.max", 0.0)
     # brass seating by fitted circles (CHANGES 128)
-    SEATING_BRASS_EDGE_BAND = vTuple("vision.cap.seating.brass.edge.band", (55, 112))    # radii searched for the brass cap's edge (brass -> not brass)
-    SEATING_BORE_EDGE_BAND = vTuple("vision.cap.seating.bore.edge.band", (106, 140))    # radii searched for the bore's edge round a brass cap
+    SEATING_BRASS_EDGE_BAND = vTuple("vision.dostplus.cap.seating.edge.band", (55, 112))    # radii searched for the brass cap's edge (brass -> not brass)
+    SEATING_BORE_EDGE_BAND = vTuple("vision.dostplus.cap.seating.bore.edge.band", (106, 140))    # radii searched for the bore's edge round a brass cap
     SEATING_CIRCLE_FIT_TOLERANCE = vFloat("vision.cap.seating.circle.fit.tolerance", 2.0)    # px; an edge point within this of the circle counts as on it
-    SEATING_BRASS_FIT_MIN = vFloat("vision.cap.seating.brass.fit.min", 0.5)    # share of the angles whose cap edge is on the fitted circle
-    SEATING_BORE_FIT_MIN = vFloat("vision.cap.seating.bore.fit.min", 0.3)    # share of the angles whose bore edge is on the fitted circle
+    SEATING_BRASS_FIT_MIN = vFloat("vision.dostplus.cap.seating.fit.min", 0.5)    # share of the angles whose cap edge is on the fitted circle
+    SEATING_BORE_FIT_MIN = vFloat("vision.dostplus.cap.seating.bore.fit.min", 0.3)    # share of the angles whose bore edge is on the fitted circle
     # silver seating by two rules (CHANGES 129). Rule 1: no part of the hub centre may be left uncovered - the hub circle
     # comes from this cycle's hub + bottom bearing picture (MobileSAM, ring of points round CENTER plus a box).
-    SEATING_HUB_RING_RADIUS = vInt("vision.cap.seating.hub.ring.radius", 95)    # px; radius of the ring of prompt points
-    SEATING_HUB_BOX_HALF = vInt("vision.cap.seating.hub.box.half", 125)    # px; half side of the prompt box
-    SEATING_HUB_RADIUS_MIN = vFloat("vision.cap.seating.hub.radius.min", 100.0)    # hub circle radius accepted
-    SEATING_HUB_RADIUS_MAX = vFloat("vision.cap.seating.hub.radius.max", 125.0)
-    SEATING_HUB_CENTRE_INSET = vFloat("vision.cap.seating.hub.centre.inset", 12.0)    # px; hub centre = hub circle less this
-    SEATING_HUB_DARK_LEVEL = vInt("vision.cap.seating.hub.dark.level", 60)    # HSV value below this = uncovered (dark) hub
-    SEATING_HUB_DARK_OPEN = vInt("vision.cap.seating.hub.dark.open", 9)    # px; dark parts narrower than this are shadow
-    SEATING_HUB_VISIBLE_MAX = vInt("vision.cap.seating.hub.visible.max", 400)    # px; uncovered hub centre allowed
+    SEATING_HUB_RING_RADIUS = vInt("vision.dost.cap.seating.hub.ring.radius", 95)    # px; radius of the ring of prompt points
+    SEATING_HUB_BOX_HALF = vInt("vision.dost.cap.seating.hub.box.half", 125)    # px; half side of the prompt box
+    SEATING_HUB_RADIUS_MIN = vFloat("vision.dost.cap.seating.hub.radius.min", 100.0)    # hub circle radius accepted
+    SEATING_HUB_RADIUS_MAX = vFloat("vision.dost.cap.seating.hub.radius.max", 125.0)
+    SEATING_HUB_CENTRE_INSET = vFloat("vision.dost.cap.seating.hub.centre.inset", 12.0)    # px; hub centre = hub circle less this
+    SEATING_HUB_DARK_LEVEL = vInt("vision.dost.cap.seating.hub.dark.level", 60)    # HSV value below this = uncovered (dark) hub
+    SEATING_HUB_DARK_OPEN = vInt("vision.dost.cap.seating.hub.dark.open", 9)    # px; dark parts narrower than this are shadow
+    SEATING_HUB_VISIBLE_MAX = vInt("vision.dost.cap.seating.hub.visible.max", 400)    # px; uncovered hub centre allowed
     # Rule 2: the cap's top face must still be one circle (a tilted cap shows its side wall on one side and the face
     # edge stops lying on one circle). Face edge per angle: strongest fall of brightness outward between band.min and
     # the cap outline radius less edge.margin, round the cap outline centre; share of the angles on the fitted circle.
-    SEATING_SILVER_FACE_BAND_MIN = vInt("vision.cap.seating.silver.face.band.min", 60)
-    SEATING_SILVER_FACE_EDGE_MARGIN = vInt("vision.cap.seating.silver.face.edge.margin", 6)
-    SEATING_SILVER_FACE_FIT_MIN = vFloat("vision.cap.seating.silver.face.fit.min", 0.64)
+    SEATING_SILVER_FACE_BAND_MIN = vInt("vision.dost.cap.seating.face.band.min", 60)
+    SEATING_SILVER_FACE_EDGE_MARGIN = vInt("vision.dost.cap.seating.face.edge.margin", 6)
+    SEATING_SILVER_FACE_FIT_MIN = vFloat("vision.dost.cap.seating.face.fit.min", 0.64)
     # Hub-centre distance (CHANGES 143), brass and silver: the cap's centre - the stage-2 ellipse centre of the cap mask
     # (camera/CapMaskFinder.py, the method frozen in CHANGES 139 - 142) - must lie within hub.distance.max of the hub's
     # centre found by this cycle's hub check (circle through its 4 / 5 holes or bolts, ImageProcessor.hubCentre) moved
@@ -156,10 +156,10 @@ class CheckCap:
     SEATING_HUB_DISTANCE_MAX = vFloat("vision.cap.seating.hub.distance.max", 5.0)    # px
     # px (x, y) added to the hub centre, per hub kind and per model (CHANGES 147): the silver and the brass cap face sit at
     # different heights, so the camera's slight angle moves each by its own amount against the holes and the bolt tips
-    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST = vTuple("vision.cap.seating.hub.distance.offset.holes.dost", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS = vTuple("vision.cap.seating.hub.distance.offset.holes.dostplus", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST = vTuple("vision.cap.seating.hub.distance.offset.bolts.dost", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS = vTuple("vision.cap.seating.hub.distance.offset.bolts.dostplus", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOST = vTuple("vision.dost.cap.seating.hub.distance.offset.holes", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_HOLES_DOSTPLUS = vTuple("vision.dostplus.cap.seating.hub.distance.offset.holes", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOST = vTuple("vision.dost.cap.seating.hub.distance.offset.bolts", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_BOLTS_DOSTPLUS = vTuple("vision.dostplus.cap.seating.hub.distance.offset.bolts", (0.0, 0.0))
     # Where the hub centre for the distance rule comes from (CHANGES 152):
     #   "cap"      - the circle through the hub's holes round the cap, in the cap picture itself (hubHoles): hub and cap in
     #                one picture, so where the part sits on the fixture and any camera move cancel out
@@ -171,13 +171,13 @@ class CheckCap:
     # cycle's hub centre; the dark-blob finder and its values - keys vision.cap.seating.hub.holes.* - moved there)
     # px (x, y) added to the hole circle's centre (source "cap"), per model: the cap face and the holes are at different
     # heights, seen from a slight angle
-    SEATING_HUB_DISTANCE_OFFSET_CAP_DOST = vTuple("vision.cap.seating.hub.distance.offset.cap.dost", (0.0, 0.0))
-    SEATING_HUB_DISTANCE_OFFSET_CAP_DOSTPLUS = vTuple("vision.cap.seating.hub.distance.offset.cap.dostplus", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_CAP_DOST = vTuple("vision.dost.cap.seating.hub.distance.offset.cap", (0.0, 0.0))
+    SEATING_HUB_DISTANCE_OFFSET_CAP_DOSTPLUS = vTuple("vision.dostplus.cap.seating.hub.distance.offset.cap", (0.0, 0.0))
     # Silver (DOST) cap seating method (CHANGES 212): "annulus" = camera/CapAnnulus.py (Uddi, 2026-11-27: the annulus
     # between the cap and the hub's holes in the cap picture, its inner ellipse by the most edge points, ring widths,
     # Uddi's verdict rule; the AND-rule alternative is recorded in CapAnnulus's docstring); "colour" = the rules before
     # (_seatingByColour's silver face / hub-uncovered rules and hubCentreDistance), kept.
-    SEATING_SILVER_METHOD = vStr("vision.cap.seating.silver.method", "annulus")
+    SEATING_SILVER_METHOD = vStr("vision.dost.cap.seating.method", "annulus")
 
     # Cached circular masks, keyed on (image size, centre, radius)
     _circular_masks = {}
@@ -520,7 +520,7 @@ class CheckCap:
         cap_ellipse (contour) and hub_centre. A silver cap with SEATING_SILVER_METHOD "annulus" (CHANGES 212):
         silverSeatingByAnnulus instead."""
         if cap_found == DOST:
-            expectOneOf("vision.cap.seating.silver.method", CheckCap.SEATING_SILVER_METHOD, ("annulus", "colour"))
+            expectOneOf("vision.dost.cap.seating.method", CheckCap.SEATING_SILVER_METHOD, ("annulus", "colour"))
             if str(CheckCap.SEATING_SILVER_METHOD).strip().lower() == "annulus":
                 return CheckCap.silverSeatingByAnnulus(anImage, hubCentre)
         result = CheckCap._seatingByColour(anImage, cap_found, hubImage)

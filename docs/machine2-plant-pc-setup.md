@@ -89,7 +89,7 @@ Continues `claude/machine2-changes-log.md` (sections 1-73). Branch `machine2-fro
 
 ## 80. CheckKnuckle: alternate area for each presence check A–E (yellow paint marks) (commits a2bf819, 097fbfd)
 - **Why (user):** operators mark knuckles with yellow paint at random spots. A mark over one of the presence regions A–E makes it bright, and the knuckle was rejected.
-- **Change:** each region A–E can have an alternate area (`<vendor>.vision.knuckle.common.check.<a..e>.alt.*`; a width, height or radius of 0 means none). The region passes if it OR its alternate reads below the threshold (84). Both values are logged.
+- **Change:** each region A–E can have an alternate area (`vision.<vendor>.knuckle.common.check.<a..e>.alt.*`; a width, height or radius of 0 means none). The region passes if it OR its alternate reads below the threshold (84). Both values are logged.
 - **Machine 2 alternates.** Chosen on the 14 knuckle pictures and 5 empty-fixture pictures. Each must be:
   - dark on every knuckle;
   - bright on every empty fixture (A–D only);

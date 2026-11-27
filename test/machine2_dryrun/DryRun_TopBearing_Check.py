@@ -11,15 +11,15 @@ currentPictures[hubAndBottomBearingPicture]): the bearing ring must be brighter 
   1. Choose the folder, the hub reference picture, the seconds per picture (default 3); Start.
   2. Each picture is checked; the result is shown for the chosen time, then the next picture is checked.
   3. Markings drawn by this window on the full picture:
-       yellow circle = the area searched   (<vendor>.vision.topbearing.annular.center.* / outer.radius)
-       yellow crosses = the start centres tried (centre + <vendor>.vision.topbearing.center.offsets)
+       yellow circle = the area searched   (vision.<vendor>.topbearing.annular.center.* / outer.radius)
+       yellow crosses = the start centres tried (centre + vision.<vendor>.topbearing.center.offsets)
        green ring    = the bearing ring found (inner and outer edge), when OK
        inset (top right) = the check's own result picture (the searched area with its markings)
        banner        = OK / NOT OK, the reason (brightness difference against the limit, or no ring found),
                        the hub picture used and the time taken.
   4. At the end: number OK / NOT OK and the list. "Save marked pictures" writes them to <folder>/top_bearing_results/.
 
-Settings: <vendor>.vision.topbearing.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.topbearing.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens).
 
 Run from the project root:   python test/machine2_dryrun/DryRun_TopBearing_Check.py

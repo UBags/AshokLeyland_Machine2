@@ -51,7 +51,7 @@ camera server runs it. Everything needed to set the distance limit and the offse
      the hub centre in the same picture - where the part sat and any camera move cancel, no pairing needed. The step-3
      hub picture stays the chosen / stored one. Needs YOLO (laptop).
 
-Settings: <vendor>.vision.cap.* / vision.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.cap.* / vision.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). Models through ModelManager (MobileSAM, YOLO): needs models/ (the laptop).
 
 Run from the project root:   python test/machine2_dryrun/DryRun_Cap_Hub_Distance_UI.py

@@ -8,7 +8,7 @@ The real VisionCheckWorker and its assess(); the worker process here plays the n
   G2 washer-only pictures: the guard finds no bearing ring (the real check rejects them for the missing nut);
   G3 bearing pictures (no nut, no washer): NOT OK with "bearing ring visible ...", no longer than the worker;
   G4 the guard does not run for other states (top bearing picture in the top bearing state: OK);
-  G5 guard switched off (<vendor>.vision.nutwasher.bearing.ring.guard=False): OK;
+  G5 guard switched off (vision.<vendor>.nutwasher.bearing.ring.guard=False): OK;
   G6 in the worker process the check itself leaves the guard to the camera server (GUARD_DONE_BY_CALLER);
   G7 / G8 the guard cannot decide (ring finder fault / no answer in time): NOT OK with the reason (2026-11-15);
   G9 the same inside the check (thread mode).

@@ -158,7 +158,7 @@ NOMINAL_PINS = {
                               pin_mid=(643.62, 200.00)),
 }
 REF_SPINDLE = (642.2, 359.1)
-HUB_CENTRE = (645, 334)                 # siemens.vision.hub.segment.center, set with the spindle at REF_SPINDLE
+HUB_CENTRE = (645, 334)                 # vision.siemens.hub.segment.center, set with the spindle at REF_SPINDLE
 TYPE_AREA_RATIO = 34.5                  # boss area x 1000 / distance^2: DOST 29.5-31.2, DOSTPLUS 38.0-41.1
 TYPE_RADIUS_RATIO = 0.111               # boss radius / distance: DOST 0.104-0.107, DOSTPLUS 0.116-0.122
 TYPE_RADIUS_RATIO_PINS = 0.1095         # the same over the pin distance (grid): DOST 0.102-0.105, DOSTPLUS 0.114-0.124

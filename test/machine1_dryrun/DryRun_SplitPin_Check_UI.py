@@ -20,7 +20,7 @@ pictures, with this machine's settings, one picture at a time with the check's o
                     picture with an expected verdict matched, except the pictures named in KNOWN_DISAGREEMENTS (none
                     since CHANGES 163); 1 otherwise.
 
-Settings: <vendor>.vision.splitpin.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.splitpin.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). The hub's holes (where the washer is looked for) by YOLO + MobileSAM since
 CHANGES 164: the models (models/MobileSAM with the YOLO weights) as in production; --holes morphology = the dark-blob
 finder with its own offsets (no models needed). No Redis, PLC or camera needed. Without this cycle's hub check, the
@@ -108,7 +108,7 @@ def offsetLines() -> list:
         out.append(f"SPLITPIN OFFSET {model}: washer centre - hub hole circle centre = ({a[:, 0].mean():.2f}, "
                    f"{a[:, 1].mean():.2f}) sd ({a[:, 0].std():.2f}, {a[:, 1].std():.2f}), n {len(rows)} ({refined} "
                    f"refined holes); in the properties now ({float(now[0]):g}, {float(now[1]):g}) -> "
-                   f"vision.splitpin.hub.offset.{model.lower()}={a[:, 0].mean():.1f},{a[:, 1].mean():.1f}")
+                   f"vision.{model.lower()}.splitpin.hub.offset={a[:, 0].mean():.1f},{a[:, 1].mean():.1f}")
     return out
 
 

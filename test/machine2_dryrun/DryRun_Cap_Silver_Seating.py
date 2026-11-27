@@ -1,6 +1,6 @@
 """
 Dry run: silver cap seating by two rules (CHANGES 129), on the Machine 2 cap pictures. Since CHANGES 212 production
-uses the annulus method (camera/CapAnnulus.py); this run sets vision.cap.seating.silver.method to "colour" (kept).
+uses the annulus method (camera/CapAnnulus.py); this run sets vision.dost.cap.seating.method to "colour" (kept).
 
   Rule 1  no part of the hub centre may be left uncovered (hub circle from the hub + bottom bearing picture)
   Rule 2  the cap's top face edge must lie on one circle (share of the 360 angles >= cap.seating.silver.face.fit.min)

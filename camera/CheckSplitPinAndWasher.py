@@ -71,8 +71,8 @@ def _filled(mask: np.ndarray) -> np.ndarray:
 class CheckSplitPinAndWasher():
 
     CENTRE_SOURCE = vStr("vision.splitpin.centre.source", "hubholes")  # "hubholes": expected washer centre from the hub's holes; "fixed": CENTRE
-    HUB_OFFSET_DOST = vTuple("vision.splitpin.hub.offset.dost", (0.9, -3.6))  # washer centre - hub hole circle centre (SAM, CHANGES 165; 1.8,1.6 with the dark blobs)
-    HUB_OFFSET_DOSTPLUS = vTuple("vision.splitpin.hub.offset.dostplus", (1.9, 2.1))  # not measured on split pin pictures: the DOST washer offset + the DOSTPLUS SAM / dark-blob shift
+    HUB_OFFSET_DOST = vTuple("vision.dost.splitpin.hub.offset", (0.9, -3.6))  # washer centre - hub hole circle centre (SAM, CHANGES 165; 1.8,1.6 with the dark blobs)
+    HUB_OFFSET_DOSTPLUS = vTuple("vision.dostplus.splitpin.hub.offset", (1.9, 2.1))  # not measured on split pin pictures: the DOST washer offset + the DOSTPLUS SAM / dark-blob shift
     CENTRE = vTuple("vision.splitpin.centre", (644, 345))  # nominal centre of the nut in the 1280 x 720 picture (CENTRE_SOURCE "fixed")
     SEARCH_RADIUS = vInt("vision.splitpin.search.radius", 100)  # the washer is looked for within this distance of the expected centre
     WASHER_V_MIN = vInt("vision.splitpin.washer.v.min", 160)

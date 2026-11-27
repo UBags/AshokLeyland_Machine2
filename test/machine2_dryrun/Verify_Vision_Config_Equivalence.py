@@ -8,12 +8,15 @@ call in the live vision modules it verifies:
      commit instead, which has the hard-coded values and a deliberate later change to the check logic)
      configurable), with the same Python type; for parameters that were extracted from inline literals, the
      manifest (vision_config_manifest.json) must point at the baseline line, and that line must contain the literal;
-  2. ApplicationConfiguration.properties contains the key for each machine (allenbradley.<key> and siemens.<key>):
-     the Machine 1 (allenbradley.) value parses (VisionConfig rules) to exactly the default; the Machine 2 (siemens.)
-     value must be valid - if it differs from the default (re-tuned for Machine 2) that is reported, not an error;
+  2. ApplicationConfiguration.properties contains the key for each machine (vision.allenbradley.<rest> and
+     vision.siemens.<rest>, CHANGES 213): the Machine 1 (allenbradley) value parses (VisionConfig rules) to exactly the
+     default; the Machine 2 (siemens) value must be valid - if it differs from the default (re-tuned for Machine 2)
+     that is reported, not an error;
   3. a key used in more than one place always has the same default;
   4. the per-machine camera / image settings (CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS) exist for both
-     machines, and no <machine>.vision.* key is left that nothing reads.
+     machines, no vision.<machine>.* key is left that nothing reads, and no old-style <vendor>.vision.* key is left.
+Key renames (CHANGES 213, utils/VisionKeyNames.renameInText) are applied to the baseline's strings before comparing:
+a renamed key is not a change of logic.
 Exit code 0 = all equivalent.
 
 Usage (from the project root):
@@ -24,9 +27,10 @@ import argparse, ast, json, pathlib, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from utils.VisionKeyNames import VENDORS, newCodeKey, propertyKey, renameInText, isOldPropertyKey   # noqa: E402
 FUNCS = {"vInt", "vFloat", "vBool", "vStr", "vTuple", "vList", "vPoints"}
-MACHINE_PREFIXES = ("allenbradley.", "siemens.")     # Machine 1, Machine 2 (CosThetaConfigurator.getVisionKeyPrefix)
-EQUIVALENCE_PREFIX = "allenbradley."                  # must equal the pre-configurable (baseline) values
+MACHINE_VENDORS = ("allenbradley", "siemens")        # Machine 1, Machine 2: vision.<vendor>.<rest> (CHANGES 213)
+EQUIVALENCE_VENDOR = "allenbradley"                   # must equal the pre-configurable (baseline) values
 
 _ap = argparse.ArgumentParser()
 _ap.add_argument("--baseline", default=None)
@@ -134,8 +138,21 @@ class _Normalise(ast.NodeTransformer):
     VisionConfig import, drop the definitions of constants extracted from inline literals and put the literal
     back wherever such a constant is referenced."""
 
-    def __init__(self, extracted_consts):
+    def __init__(self, extracted_consts, renameKeys=False):
         self.consts = extracted_consts          # name -> literal value
+        self.renameKeys = renameKeys            # the baseline side: old vision key names -> new (CHANGES 213)
+
+    def visit_Constant(self, node):
+        if self.renameKeys and isinstance(node.value, str):
+            text = renameInText(node.value)
+            # a key name without "vision." (VisionFrame's centre / oval names: "bung.seating.reference.oval.dost")
+            if text == node.value and text and " " not in text and "." in text:
+                renamed = newCodeKey("vision." + text)
+                if renamed != "vision." + text:
+                    text = renamed[len("vision."):]
+            if text != node.value:
+                return ast.copy_location(ast.Constant(text), node)
+        return node
 
     def visit_Call(self, node):
         self.generic_visit(node)
@@ -219,7 +236,7 @@ def ast_equivalent(rel, old_src, new_src, extracted):
                 {n.attr for n in ast.walk(ast.parse(old_src)) if isinstance(n, ast.Attribute)}
     clash = [c for c in consts if c in old_names]
     norm_new = ast.fix_missing_locations(_Normalise(consts).visit(ast.parse(new_src)))
-    norm_old = ast.fix_missing_locations(_Normalise({}).visit(ast.parse(old_src)))   # same f-string folding on both sides
+    norm_old = ast.fix_missing_locations(_Normalise({}, renameKeys=True).visit(ast.parse(old_src)))   # same f-string folding on both sides
     a, b = ast.dump(norm_old), ast.dump(norm_new)
     if a == b:
         return clash, None
@@ -241,7 +258,7 @@ def load_properties():
         s = line.strip()
         if s and not s.startswith("#") and "=" in s:
             k, v = s.split("=", 1)
-            if k.strip() in props and ".vision." in k.strip():
+            if k.strip() in props and k.strip().startswith("vision."):
                 print("PROBLEM: duplicate properties key", k.strip())
             props[k.strip()] = v.strip()
     return props
@@ -295,9 +312,11 @@ def main() -> int:
                     problems.append(f"{where}: no baseline assignment for '{tgt}' and no manifest entry (extracted literal?)")
                 elif not any(same(c, default) for c in cand):
                     problems.append(f"{where}: default {default!r} != baseline value(s) {cand!r}")
-            # 2. per-machine properties: Machine 1 (allenbradley.) value == default; Machine 2 (siemens.) value valid
-            for prefix in MACHINE_PREFIXES:
-                pkey = prefix + key
+            # 2. per-machine properties: Machine 1 (allenbradley) value == default; Machine 2 (siemens) value valid
+            if newCodeKey(key) != key:
+                problems.append(f"{where}: {key} is an old-style name; the rule of CHANGES 213 gives {newCodeKey(key)}")
+            for vendor in MACHINE_VENDORS:
+                pkey = propertyKey(key, vendor)
                 if pkey not in props:
                     problems.append(f"{where}: {pkey} missing from ApplicationConfiguration.properties")
                     continue
@@ -305,29 +324,33 @@ def main() -> int:
                 if source != "config":
                     problems.append(f"{where}: {pkey}={props[pkey]!r} is not valid for {fn} (would fall back to default)")
                 elif not same(parsed if not isinstance(default, tuple) else tuple(parsed), default):
-                    if prefix == EQUIVALENCE_PREFIX:
+                    if vendor == EQUIVALENCE_VENDOR:
                         problems.append(f"{where}: {pkey}={props[pkey]!r} parses to {parsed!r}, default is {default!r}")
                     else:
                         retuned.add(pkey)
     # plc.vision.* are IOServer (PLC handshake) settings, not vision-check parameters
-    stray = sorted(k for k in props if ".vision." in k and not k.startswith("plc.")
-                   and not any(k.startswith(p) for p in MACHINE_PREFIXES))
-    stray += sorted(k for k in props if k.startswith("vision."))
+    old = sorted(k for k in props if isOldPropertyKey(k))
+    if old:
+        problems.append(f"{len(old)} old-style vision keys (not read since CHANGES 213): {old[:5]}")
+    stray = sorted(k for k in props if k.startswith("vision.") and k.split(".")[1] not in VENDORS)
     if stray:
-        problems.append(f"vision keys without a machine prefix (not read by VisionConfig): {stray[:5]}")
+        problems.append(f"vision keys without a machine (not read by VisionConfig): {stray[:5]}")
     from Configuration import CosThetaConfigurator
     cameraKeys = {f"vision.{k}" for k in CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS}   # read via getValue
-    for prefix in MACHINE_PREFIXES:
-        missing = sorted(prefix + k for k in cameraKeys if prefix + k not in props)
+    for vendor in MACHINE_VENDORS:
+        missing = sorted(propertyKey(k, vendor) for k in cameraKeys if propertyKey(k, vendor) not in props)
         if missing:
-            problems.append(f"camera / image settings missing for {prefix[:-1]}: {missing}")
-    unread = sorted(k for k in props if any(k.startswith(p + "vision.") and not k.startswith(p + "vision.unused.")
-                                              for p in MACHINE_PREFIXES)
-                    and k.split(".", 1)[1] not in seen and k.split(".", 1)[1] not in cameraKeys)
+            problems.append(f"camera / image settings missing for {vendor}: {missing}")
+
+    def codeKey(k):         # vision.<vendor>.<rest> -> vision.<rest>
+        return "vision." + k.split(".", 2)[2]
+    unread = sorted(k for k in props if any(k.startswith(f"vision.{v}.") and not k.startswith(f"vision.{v}.unused.")
+                                              for v in MACHINE_VENDORS)
+                    and codeKey(k) not in seen and codeKey(k) not in cameraKeys)
     if unread and not ARGS.files:          # only meaningful when every vision module was checked
         problems.append(f"{len(unread)} properties keys not read by any vision module: {unread[:5]}")
     if retuned:
-        print(f"INFO: {len(retuned)} Machine 2 (siemens.) value(s) differ from the built-in defaults (re-tuned): "
+        print(f"INFO: {len(retuned)} Machine 2 (siemens) value(s) differ from the built-in defaults (re-tuned): "
               + ", ".join(sorted(retuned)))
     print(f"Baseline {BASELINE}: {checked} parameters in {len(files)} files, {len(seen)} distinct keys")
     for p in problems:

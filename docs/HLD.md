@@ -110,8 +110,8 @@ QR read ─▶ settings to PLC ─▶ knuckle ─▶ hub+bottom bearing ─▶ t
 ## 5a. Vision checks
 
 All pictures are resized to 1280 × 720 before a check. The camera server takes three pictures per request; each check
-runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `<vendor>.vision.check.timeout.sec`
-(12 s). Check modules are in `camera/`; their parameters are the `<vendor>.vision.*` keys of the properties file.
+runs in the vision check worker process (`camera/VisionCheckWorker.py`) within `vision.<vendor>.check.timeout.sec`
+(12 s). Check modules are in `camera/`; their parameters are the `vision.<vendor>.*` keys of the properties file.
 
 | State | Check | Method (Machine 2) | Pictures used |
 |---|---|---|---|
@@ -138,8 +138,8 @@ as set. A camera movement over
 (Machine 1, or the regions knuckle method) the centres in the properties file are used. A camera server restarted
 by the supervisor during a cycle takes the frame back from its state file (§6). The frame is
 dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check and at a knuckle retake.
-The reference values (pins, spindles and centres per type: `<vendor>.vision.frame.*`; the locator's rules:
-`<vendor>.vision.knuckle.locator.*`) are in the properties file since CHANGES §105 (allenbradley carries the Machine 2
+The reference values (pins, spindles and centres per type: `vision.<vendor>.frame.*`; the locator's rules:
+`vision.<vendor>.knuckle.locator.*`) are in the properties file since CHANGES §105 (allenbradley carries the Machine 2
 values until Machine 1 is measured). Positions and offsets: `vision_positions_machine2.md`.
 
 No values or words are written on the pictures sent to the frontend (outlines only; a picture NOT OK without a check's verdict - timeout, stalled camera - gets a red border); the values and reasons go to the log.
@@ -179,8 +179,8 @@ No values or words are written on the pictures sent to the frontend (outlines on
 - **One live properties file**, `ApplicationConfiguration.properties`, read by `Configuration.py` (`CosThetaConfigurator`). Some keys apply live without a restart. In the repo it is a copy of the Machine 2 file.
 - **`ApplicationConfiguration.Machine1.properties` and `.Machine2.properties`** are build-time copies used by `runNuitka.bat allenbradley|siemens`, which copies the machine's file into the build as `ApplicationConfiguration.properties`. They differ only in `plc.vendor`; per-machine values are kept under `allenbradley.` / `siemens.` prefixes.
 - **`costhetaio/siemens/IOServerProperties.yaml`** holds the Siemens rack, slot and PDU size, and the tag addresses.
-- **Vision parameters** are the `<vendor>.vision.*` keys, read through `camera/VisionConfig.py` into each check module's constants (the module's defaults are the Machine 1 values). In the exe a changed vision value takes effect after a restart (live reload of vision values needs the .py sources). The knuckle frame's and locator's reference values are `<vendor>.vision.frame.*` / `.vision.knuckle.locator.*` keys (§5a).
-- **Tuning values** (retry counts and gaps, timeouts, poll intervals, ports, font sizes, debug switches) that were named constants in the code are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when their module is imported (block "TUNING VALUES", CHANGES 154); a missing key gives the code's default, which equals the value in the file. A missing key or a value outside its expected type / set / range (tuning and vision keys) is logged once per process, and the default used (CHANGES 157). The vision checks' debug switches and pipeline switches (top bearing, nut, bung, cap polar size, knuckle grid, hub hole spacing ranges) are `<vendor>.vision.*` keys like the other vision values.
+- **Vision parameters** are the `vision.<vendor>.*` keys, read through `camera/VisionConfig.py` into each check module's constants (the module's defaults are the Machine 1 values). In the exe a changed vision value takes effect after a restart (live reload of vision values needs the .py sources). The knuckle frame's and locator's reference values are `vision.<vendor>.frame.*` / `.vision.knuckle.locator.*` keys (§5a).
+- **Tuning values** (retry counts and gaps, timeouts, poll intervals, ports, font sizes, debug switches) that were named constants in the code are plain keys read through `CosThetaConfigurator.getTuning(key, default)` when their module is imported (block "TUNING VALUES", CHANGES 154); a missing key gives the code's default, which equals the value in the file. A missing key or a value outside its expected type / set / range (tuning and vision keys) is logged once per process, and the default used (CHANGES 157). The vision checks' debug switches and pipeline switches (top bearing, nut, bung, cap polar size, knuckle grid, hub hole spacing ranges) are `vision.<vendor>.*` keys like the other vision values.
 
 - **Frontend languages** (CHANGES 156): the main screen and its dialogs in English, Kannada, Tamil or Hindi, chosen in a dropdown on the main screen and kept in `Internal/frontend_language.txt` (per PC, not in git). Texts: gettext catalogues `Internal/locale/<kn|ta|hi>/LC_MESSAGES/frontend.po` (+ compiled `.mo`), read with Babel; English is the message id. Everything else stays English: the log, the database, result values, the other servers, the screens before the main screen. `frontend.indic.fonts` lists the Indic font fallbacks (Nirmala UI first).
 

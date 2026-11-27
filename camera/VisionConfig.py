@@ -11,9 +11,11 @@ Every parameter is declared where it is used, with its default equal to the valu
   (Logged once per process and key, printed and in the log file - CosThetaConfigurator.reportConfigurationProblem,
   CHANGES 157; a valid value logs nothing. expectOneOf() does the same for a text value outside its choices.)
 
-Keys are written here without the machine prefix ("vision.nut.detection.radius"); the value is read from the
-property for THIS machine: allenbradley.vision.<name> (Machine 1) or siemens.vision.<name> (Machine 2), chosen by
-the PLC vendor (CosThetaConfigurator.getVisionKeyPrefix / getVisionValue). Values:
+Keys are written here without the machine ("vision.nut.detection.radius", "vision.dost.cap.radius"); the value is
+read from the property for THIS machine, the vendor inserted after "vision." (CHANGES 213, utils/VisionKeyNames.py):
+vision.allenbradley.<rest> (Machine 1) or vision.siemens.<rest> (Machine 2), chosen by the PLC vendor
+(CosThetaConfigurator.visionPropertyKey / getVisionValue). A value of one model has the model next:
+vision.<vendor>.dost.<check>... / vision.<vendor>.dostplus.<check>...; a value both models use has none. Values:
     int / float / bool / str      ->  vision.x=80  |  0.55  |  True  |  text
     tuple of numbers (e.g. x,y)   ->  vision.x=632,360            (element count must match the default)
     list of numbers               ->  vision.x=7.75,6.5,4.0,2.0,1.0
@@ -32,12 +34,23 @@ _modules = set()                              # modules that declared parameters
 
 
 def machinePrefix() -> str:
-    """'allenbradley.' or 'siemens.' (the properties prefix of this machine's vision keys); '' standalone."""
+    """'allenbradley.' or 'siemens.' (this machine's vendor); '' standalone. Since CHANGES 213 not a prefix of the
+    property name - use propertyName()."""
     try:
         from Configuration import CosThetaConfigurator
         return CosThetaConfigurator.getVisionKeyPrefix()
     except Exception:
         return ""
+
+
+def propertyName(key: str) -> str:
+    """This machine's property for the code key: 'vision.dost.cap.radius' -> 'vision.siemens.dost.cap.radius'; the
+    key itself standalone (CHANGES 213)."""
+    try:
+        from Configuration import CosThetaConfigurator
+        return CosThetaConfigurator.visionPropertyKey(key)
+    except Exception:
+        return key
 
 
 def _noteCaller() -> None:
@@ -50,7 +63,7 @@ def _noteCaller() -> None:
 def _report(key: str, message: str) -> None:
     try:
         from Configuration import CosThetaConfigurator
-        CosThetaConfigurator.reportConfigurationProblem(f"{machinePrefix()}{key}", message)
+        CosThetaConfigurator.reportConfigurationProblem(propertyName(key), message)
     except Exception:
         print(f"[VisionConfig] WARNING: {message}")
 
@@ -64,7 +77,7 @@ def _raw(key: str):
         return None     # running standalone without Configuration: defaults apply
     value = None if value is None else str(value).strip()
     if not value:
-        _report(key, f"{machinePrefix()}{key} not found in the properties file; the default is used")
+        _report(key, f"{propertyName(key)} not found in the properties file; the default is used")
         return None
     return value
 
@@ -78,7 +91,7 @@ def _record(key: str, default: Any, value: Any, source: str) -> Any:
 
 
 def _warn(key: str, raw: str, default: Any, reason: str) -> None:
-    _report(key, f"invalid value {raw!r} for {machinePrefix()}{key} ({reason}); using default {default!r}")
+    _report(key, f"invalid value {raw!r} for {propertyName(key)} ({reason}); using default {default!r}")
 
 
 def expectOneOf(key: str, value: Any, choices: Sequence[str]) -> bool:
@@ -86,7 +99,7 @@ def expectOneOf(key: str, value: Any, choices: Sequence[str]) -> bool:
     vision keys that choose a method (e.g. vision.cap.seating.hub.source)."""
     if str(value).strip().lower() in tuple(str(c).lower() for c in choices):
         return True
-    _report(key, f"{machinePrefix()}{key}={value!r} is not one of {', '.join(map(str, choices))}")
+    _report(key, f"{propertyName(key)}={value!r} is not one of {', '.join(map(str, choices))}")
     return False
 
 
@@ -205,7 +218,6 @@ def vPoints(key: str, default: List) -> List:
 
 
 def describeVisionParameters(onlyChanged: bool = False) -> List[str]:
-    prefix = machinePrefix()
     lines = []
     for key in sorted(_registry):
         entry = _registry[key]
@@ -214,7 +226,7 @@ def describeVisionParameters(onlyChanged: bool = False) -> List[str]:
         if onlyChanged and not changed:
             continue
         flag = "  <-- differs from built-in default" if changed else ""
-        lines.append(f"{prefix}{key} = {entry['value']!r} [{entry['source']}]{flag}")
+        lines.append(f"{propertyName(key)} = {entry['value']!r} [{entry['source']}]{flag}")
     return lines
 
 
@@ -262,8 +274,8 @@ def _declarations(module):
 
 def reloadVisionParameters(changedKeys=None) -> List[str]:
     """Re-bind the vision constants to the values now in the properties file. Returns 'module.NAME: old -> new'."""
-    prefix = machinePrefix()
-    if changedKeys is not None and not any(k.startswith(f"{prefix}vision.") for k in changedKeys):
+    vendorPart = f"vision.{machinePrefix()}"          # this machine's properties: vision.<vendor>.... (CHANGES 213)
+    if changedKeys is not None and not any(k.startswith(vendorPart) for k in changedKeys):
         return []
     changes = []
     for name in sorted(m for m in _modules if m):
@@ -277,7 +289,7 @@ def reloadVisionParameters(changedKeys=None) -> List[str]:
             new = _FUNCS[fn](key, _registry[key]["default"])
             if new != old:
                 setattr(owner, attr, new)
-                changes.append(f"{getattr(owner, '__name__', name)}.{attr} [{prefix}{key}]: {old!r} -> {new!r}")
+                changes.append(f"{getattr(owner, '__name__', name)}.{attr} [{propertyName(key)}]: {old!r} -> {new!r}")
     if changes:
         message = "Vision parameters changed while running:\n  " + "\n  ".join(changes)
         print(message)

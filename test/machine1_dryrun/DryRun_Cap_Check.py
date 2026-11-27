@@ -1,9 +1,9 @@
 """
 DryRun_Cap_Check - the real cap check (CheckCap.checkCap) on this machine's cap pictures, with this machine's settings
-(<vendor>.vision.cap.* in ApplicationConfiguration.properties). Console only.
+(vision.<vendor>.cap.* in ApplicationConfiguration.properties). Console only.
 
 The check:
-  1. which cap: brass if mean R-B in the DOSTPLUS circle (<vendor>.vision.cap.radius.dostplus) is above
+  1. which cap: brass if mean R-B in the DOSTPLUS circle (vision.<vendor>.dostplus.cap.radius) is above
      rb.threshold.dostplus; else silver if mean R-B in the DOST circle is below rb.threshold.dost and the mean brightness
      within silver.brightness.radius reaches silver.brightness.min; else none;
   2. it must be the model's cap (DOST silver, DOSTPLUS brass - the model comes from the QR code);

@@ -37,7 +37,7 @@ class CheckKnuckle():
     the QR code scanned in the previous step.
 
     Every region, threshold and filter size below is read from ApplicationConfiguration.properties, per machine:
-    <vendor>.vision.knuckle.* (allenbradley.vision.knuckle.* for Machine 1, siemens.vision.knuckle.* for Machine 2).
+    vision.<vendor>.knuckle.* (vision.allenbradley.knuckle.* for Machine 1, vision.siemens.knuckle.* for Machine 2).
     The numbers in the code are only the defaults used when a key is missing.
 
     Validation steps:

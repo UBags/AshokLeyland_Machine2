@@ -111,7 +111,7 @@ Writes the handshake of spec §5.1 (steps 1–8). Each write is retried by `_wri
 
 - `_requestPicture(state)` creates the request id `<pid>.<cycle>-<n>` (the IOServer's pid, so a restarted IOServer's ids never match the old one's), sets `camera:activeRequest` and sends `io2camera.q`.
 - `_dropCameraRequest()` clears the request.
-- `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down. The timeout is at least `<vendor>.vision.check.timeout.sec` + 8 s (`getMinimumPlcCameraAnswerTimeout`); a smaller value is raised.
+- `_pictureNotOkWithoutAnswer(state, reason)` gives NOT OK after the 20 s timeout, or when the camera is down. The timeout is at least `vision.<vendor>.check.timeout.sec` + 8 s (`getMinimumPlcCameraAnswerTimeout`); a smaller value is raised.
 
 **Trigger after a NOT OK**
 
@@ -185,7 +185,7 @@ MonitorGetPicQueue ─▶ TakePictures ─▶ ConverterScalerAndProcessor ─▶
 
 1. `MonitorGetPicQueue` reads `io2camera.q`. It ignores any request whose id is not `camera:activeRequest`. An END_OF_CYCLE message is passed down the same queues as an item (`endOfCycleCommand`); `ConverterScalerAndProcessor` calls `ImageProcessor.endOfCycle()` when it reaches it, so after any check queued or running (CHANGES §110; before, `MonitorGetPicQueue` dropped the state at once and a check still running wrote the old cycle's state back).
 2. `TakePictures` takes three pictures with `RTSPCam.getFrameAfter`: each a frame that arrived after the request and after the previous picture, waiting at most `camera.frame.max.wait.sec` (1 s). None in time (stalled stream) or camera not connected: the answer carries `noPictureReason` (CHANGES §84).
-3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`<vendor>.vision.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check in the worker process (`VisionCheckWorker`; the only mode since 2026-11-15, CHANGES §105), within `<vendor>.vision.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
+3. `ConverterScalerAndProcessor` resizes each picture to the state's target size (`vision.<vendor>.machine.state.N.target.*`, 1280 × 720 for every state) and passes the six (each of the three twice) to the vision check in the worker process (`VisionCheckWorker`; the only mode since 2026-11-15, CHANGES §105), within `vision.<vendor>.check.timeout.sec`. Before the knuckle check, `ImageProcessor.prepareForKnuckleCheck()` decides between a new cycle (a new QR code on `qrcode2camera.q`: the cycle's state dropped) and a retake (the QR code kept, the knuckle picture and frame dropped). With a `noPictureReason`, or no picture, the check is not run: NOT OK with the reason. A NOT OK also sends `alarm.q`.
 4. The answer goes to `camera2io.q` with the request id and to `camera2fe.q` with both images and the reason.
 
 **`assessPictures(state, pictures)`** (`CameraProcessorServer.py`): first `VisionFrame.applyToChecks(ImageProcessor.visionFrame)`, then one of:
@@ -215,19 +215,19 @@ and writes an empty state. Either way it writes to the default file from then on
 1. `KnuckleLocator.locate(picture)`: one MobileSAM embedding (the shared predictor of `ModelManager`); the spindle by one point prompt at (642, 360); each boss from a 4 × 4 grid of 24 two-point prompts placed relative to the spindle (3 masks each; a boss = round mask with a bright machined ring round a dark core; the pin = the core's centre); a missing boss looked for again at the usual place or from the other pin; the lower arm by 4 points down each side. Type: mean boss area × 1000 / pin distance² ≥ 34.5 → DOSTPLUS, cross-checked by boss radius / pin distance (0.1095 ± 0.0025). Side: the one lower arm found.
 2. `VisionFrame.buildFrame(type, side, pins, spindleMask)`: rotation and scale from the pin line against `nominalPins()[type, side]` (`vision.frame.nominal.pins.*`), translation from the pin midpoint; anchor = where the pins put that type / side's usual spindle (the spindle mask is a cross-check, logged when over 6 px away).
 3. `CheckKnuckle.checkKnuckleBySegmentation`: OK when both pins, the lower arm and a clear type are found, type and side match the QR code, and `VisionFrame.withinLimits` (`vision.knuckle.frame.max.shift` 40 px, `.max.rotation` 3°, `.max.zoom.change` 0.05). The frame is returned only with OK.
-4. `VisionFrame.applyToChecks(frame)`: for each entry of `centres()` (`vision.frame.centre.*`) (hub segmentation, hub centre check, top bearing, nut / washer, no bung, bung disc, bung seated positions, cap) writes `anchor + scale · R(rotation) · (reference[type] − TYPE_SPINDLE[type])` into the check module's constant (and the hub segmenter instance's `annular_center`); with no frame, the properties values (from VisionConfig's registry). Radii are not scaled, except the bung seating reference ovals (`vision.bung.seating.reference.oval.dost/dostplus`): with a frame both axes × scale and the angle + rotation (`placeOval`, CHANGES §126).
+4. `VisionFrame.applyToChecks(frame)`: for each entry of `centres()` (`vision.frame.centre.*`) (hub segmentation, hub centre check, top bearing, nut / washer, no bung, bung disc, bung seated positions, cap) writes `anchor + scale · R(rotation) · (reference[type] − TYPE_SPINDLE[type])` into the check module's constant (and the hub segmenter instance's `annular_center`); with no frame, the properties values (from VisionConfig's registry). Radii are not scaled, except the bung seating reference ovals (`vision.dost.bung.seating.reference.oval/dostplus`): with a frame both axes × scale and the angle + rotation (`placeOval`, CHANGES §126).
 
-**Bearing-ring guard** (nut / washer, `<vendor>.vision.nutwasher.bearing.ring.guard`): in worker mode the camera
+**Bearing-ring guard** (nut / washer, `vision.<vendor>.nutwasher.bearing.ring.guard`): in worker mode the camera
 server runs `CheckTopBearing.findRing` on a copy of the nut picture in its own thread while the worker runs the check
 (`VisionCheckWorker._startBearingRingGuard`), waits at most 5 s after the verdict (`GUARD_MAX_WAIT_SECS`) and makes
 the verdict NOT OK when the ring is bearing-sized (`CheckNutAndPlateWasher.bearingRingVerdict`). If the guard has no
 answer in time or the ring finder fails, the verdict is NOT OK too, with the reason (since 2026-11-15; before, the
 guard was not applied). In the dry-run windows the check runs the guard itself (a failing ring finder: NOT OK).
 
-**Silver cap seating by the annulus (CHANGES §212, default: `vision.cap.seating.silver.method=annulus`;
+**Silver cap seating by the annulus (CHANGES §212, default: `vision.dost.cap.seating.method=annulus`;
 `colour` = the silver rules below, kept):** `CheckCap.silverSeatingByAnnulus` -> `camera/CapAnnulus.py`. In the cap
 picture: the hub's 4 holes (`FindHubHoles.findHoles`, check cap; not found -> NOT seated) give the hub centre H and the
-hole circle R; MobileSAM (picture at gamma `cap.annulus.mask.gamma` 2.0, one mask) with positive prompts every 5° on a
+hole circle R; MobileSAM (picture at gamma `vision.dost.cap.annulus.mask.gamma` 2.0, one mask) with positive prompts every 5° on a
 circle 5 px inside the hole circle (none within 28 px of a hole) and 17 negative prompts on the cap (H; r 30 / 60 every
 45°); annulus = that mask inside the hole circle, cap = the region it encloses round H. Inner ellipse = the ellipse with
 the most inner edge points within 2 px (1,500 RANSAC ellipses through 5 points, fixed seed, then a local search).
@@ -242,26 +242,26 @@ a tilted cap whose rim stays round and centred in the bore (old test picture `DO
 Marked picture: hole circle and annulus edges blue (thin), inner ellipse green / red, hub-centre cross.
 
 **Seating steps (Machine 2):** cap (`vision.cap.seating.check`): brass (CHANGES §128, no MobileSAM): the picture unwrapped
-round the cap centre, per angle the strongest fall of R-B in `seating.brass.edge.band` (55-112 px: the cap edge) and of
-grey in `seating.bore.edge.band` (106-140 px: the bore edge), a RANSAC circle fitted to each (fit share and radius
-checked); cap centre to bore centre ≤ `seating.brass.offset.max` (10.5 px); silver (CHANGES §129): the cap outline by
+round the cap centre, per angle the strongest fall of R-B in `vision.dostplus.cap.seating.edge.band` (55-112 px: the cap edge) and of
+grey in `vision.dostplus.cap.seating.bore.edge.band` (106-140 px: the bore edge), a RANSAC circle fitted to each (fit share and radius
+checked); cap centre to bore centre ≤ `vision.dostplus.cap.seating.offset.max` (10.5 px); silver (CHANGES §129): the cap outline by
 MobileSAM (point prompt at the cap centre, radius 95-112), then two rules - (1) the hub centre must not be left
 uncovered: the hub circle is found in this cycle's hub + bottom bearing picture (MobileSAM, 12 points on a ring of
-`seating.hub.ring.radius` 95 px plus a box of ±`seating.hub.box.half` 125 px, roundest mask of radius 100-125); the hub
-centre is that circle less `seating.hub.centre.inset` (12 px); in the cap picture its pixels darker than
-`seating.hub.dark.level` (HSV value 60), outside the cap mask, after an opening of `seating.hub.dark.open` (9 px, removes
-the shadow line round a seated cap), must be ≤ `seating.hub.visible.max` (400 px); no hub picture or no hub circle: rule
+`vision.dost.cap.seating.hub.ring.radius` 95 px plus a box of ±`vision.dost.cap.seating.hub.box.half` 125 px, roundest mask of radius 100-125); the hub
+centre is that circle less `vision.dost.cap.seating.hub.centre.inset` (12 px); in the cap picture its pixels darker than
+`vision.dost.cap.seating.hub.dark.level` (HSV value 60), outside the cap mask, after an opening of `vision.dost.cap.seating.hub.dark.open` (9 px, removes
+the shadow line round a seated cap), must be ≤ `vision.dost.cap.seating.hub.visible.max` (400 px); no hub picture or no hub circle: rule
 1 not applied, said in the reason; (2) the top face edge on one circle: round the outline centre, per angle the
-strongest fall of brightness outward between `seating.silver.face.band.min` (60) and the outline radius less
-`seating.silver.face.edge.margin` (6), a RANSAC circle fitted; the share of the 360 angles on it ≥
-`seating.silver.face.fit.min` (0.64) - a tilted cap shows its side wall on one side and its face edge stops being one
+strongest fall of brightness outward between `vision.dost.cap.seating.face.band.min` (60) and the outline radius less
+`vision.dost.cap.seating.face.edge.margin` (6), a RANSAC circle fitted; the share of the 360 angles on it ≥
+`vision.dost.cap.seating.face.fit.min` (0.64) - a tilted cap shows its side wall on one side and its face edge stops being one
 circle; and the outline centre ≤ 20 px from the cap centre. The face-centre offset is logged only (a seated cap's face
 already sits ~8 px from the outline centre: camera angle). Marked picture: hub circle blue, cap green / red, face circle
 yellow. Then, brass and silver (CHANGES §143, `vision.cap.seating.hub.distance.check`): the hub check's centre - the
 least-squares circle through the winning group's 4 / 5 mask centres (`CheckHubAndBottomBearing.hubCentreFromGroup`,
 cropped-picture centres moved by the segmenter's crop corner; circle radius ≥ `vision.hub.centre.bolt.min.distance` 165 px
 = bolts, else holes), kept as `ImageProcessor.hubCentre` (state attribute: sent to the worker, in the state file, dropped
-at the end of a cycle and at a hub check that fails) - plus `seating.hub.distance.offset.<holes|bolts>.<dost|dostplus>` (per hub kind and model, CHANGES 147; (0, 0)) must lie
+at the end of a cycle and at a hub check that fails) - plus `vision.<model>.cap.seating.hub.distance.offset.<holes|bolts>` (per hub kind and model, CHANGES 147; (0, 0)) must lie
 within `seating.hub.distance.max` (5 px) of the cap's centre: the stage-2 ellipse centre of the cap mask found by
 `camera/CapMaskFinder.py` (the method frozen in CHANGES §139-142: gamma 2.0, disc r 160 round `cap.center`, YOLO boxes
 conf 0.15 as box prompts, stability ≥ 0.70, predicted IoU ≥ 0.50, box merge 0.50, area 15000-50000 px after the disc's
@@ -281,16 +281,16 @@ passes is taken - a better-spaced set of wrong blobs cannot hide the holes (abou
 cap, hub and bung pictures of the dry-run folders); False = the most evenly spaced combination first, then checked
 (§152). Not found: the reason of the most informative percentile tried (a circle failing the fewest checks, then a
 circle, then the most blobs), not the last one's (§157). Holes not found -> NOT seated. Target = hole circle centre +
-`seating.hub.distance.offset.cap.<dost|dostplus>` (Machine 2 since §165, for the SAM centres: 0.4,-4.8 / -0.7,-4.4; with the dark blobs 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
+`vision.<model>.cap.seating.hub.distance.offset.cap` (Machine 2 since §165, for the SAM centres: 0.4,-4.8 / -0.7,-4.4; with the dark blobs 0.2,-0.1 / -0.6,-5.3: 27 seated silver, 99 seated brass
 caps); the hub check's centre is not used (`hubcheck` = the CHANGES §143 behaviour with the holes / bolts offsets). The
 hole circle is drawn thin blue. Hub and cap in one picture: where the part sat (DOST parts 12 px apart) and any camera
 move cancel. Bung (`vision.bung.seating.check`, after the hole pattern passed): hole-pattern centre ≤ 20 px from
 the model's seated position (CHANGES §153, `seating.position.source=hubholes`: `BungSegmenter.seated_position` = the
 hub's hole circle round the bung in the bung picture itself, `FindHubHoles.findHoles` (CHANGES §164) with the model's 4 / 5 holes, plus
-`seating.hub.offset.<dost|dostplus>` (Machine 2 since §165: 5.2,-17.9 / 4.5,-15.8; with the dark blobs 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
+`vision.<model>.bung.seating.hub.offset` (Machine 2 since §165: 5.2,-17.9 / 4.5,-15.8; with the dark blobs 4.9,-13.7 / 4.2,-16.0); holes not found -> NOT seated; `fixed` = the
 seated centres below, as before), the top-face mask's roundness ≥ 0.925 (DOST and DOSTPLUS; code defaults 0.952 / 0.96), the face mask a clean
 oval (area with holes filled / fitted ellipse area 0.98-1.02) and at most 6% of it outside the model's reference oval (code default 2%)
-(`seating.reference.oval.<model>`, centred on the seated position). On the bung picture: the face outline (green /
+(`vision.<model>.bung.seating.reference.oval`, centred on the seated position). On the bung picture: the face outline (green /
 red), the reference oval (thick yellow) and the hole-pattern centre (thick blue cross; CHANGES 119); when the seating
 step did not run (pattern failed or none), the hub's holes are not looked for and no oval is drawn (CHANGES §173; from
 §157 to §172 `drawSeatingMarks` looked for them on the camera picture only to draw the oval - up to 3 - 4 s with YOLO +
@@ -303,7 +303,7 @@ model, hubCentre=None)` runs `vision.hubholes.method`: `sam` (both machines, sin
 `sam_slow` = `findHolesWithSAM_Slow` (the thin-annulus finder of CHANGES 164 - 166, kept, not used); `morphology` = the
 dark-blob finder of §152 / §157 (`findHolesWithMorphology`, moved from `CheckCap.hubHoles` unchanged, keys
 `vision.cap.seating.hub.holes.*`; its offsets are the dark-blob ones of §152, 153, 163, not those in the properties since
-§165). `findHolesWithSAM`: (1) the centre - since CHANGES §182 (`vision.hubholes.centre.source=picture`, both machines) from the picture being checked itself: pass 1 = `_centreFromPicture`, checkHub()'s steps (`_candidateSets` on the per-thread object) in the wide annulus round `hub.segment.center` (moved by the knuckle frame), per gamma until sets come: of the model's count the best set of each group; one passing the holes' rule (circle r 135 - 165, area <= `holes.area.max.<model>`, the smallest area) gives the centre, else the bolts' set (circle r in `bolts.circle.radius` 165 - 210) + `sam.seed.bolts.offset.<model>` (a part off `hub.segment.center` by more than a few px splits the holes' distances over checkHub()'s 15 % groups, the bolts' less); kept per picture; the steps below then run round that centre; no set in pass 1 -> the hub-check centre as follows (`hubcheck` = straight to it): this cycle's hub-check centre as it is (`ImageProcessor.hubCentre`, checkHub()'s Since CHANGES §183 the checks named in `vision.hubholes.refine.checks` (`none` since §184: the laptop showed no gain and +0.25 s; was `splitpin`; the caller passes `check=`, `refineFor`) get the holes set refined (`_refinedSet`): each hole re-segmented on the picture by a MobileSAM box prompt (`_refine`, `sam.refine.half` / `area` / `iterations` of §166), the circle fitted again and gated (radius in `holes.circle.radius`, `sam.spread.max`, `sam.gap.max`); no outline mask or a move over `sam.refine.move.max` rejects the set (next holes set, else next gamma); the result carries `refined`, `refineMoved`, `unrefined`, and `describe()` names them. The cache key holds the refine flag.
+§165). `findHolesWithSAM`: (1) the centre - since CHANGES §182 (`vision.hubholes.centre.source=picture`, both machines) from the picture being checked itself: pass 1 = `_centreFromPicture`, checkHub()'s steps (`_candidateSets` on the per-thread object) in the wide annulus round `hub.segment.center` (moved by the knuckle frame), per gamma until sets come: of the model's count the best set of each group; one passing the holes' rule (circle r 135 - 165, area <= `vision.<model>.hubholes.holes.area.max`, the smallest area) gives the centre, else the bolts' set (circle r in `bolts.circle.radius` 165 - 210) + `vision.<model>.hubholes.sam.seed.bolts.offset` (a part off `hub.segment.center` by more than a few px splits the holes' distances over checkHub()'s 15 % groups, the bolts' less); kept per picture; the steps below then run round that centre; no set in pass 1 -> the hub-check centre as follows (`hubcheck` = straight to it): this cycle's hub-check centre as it is (`ImageProcessor.hubCentre`, checkHub()'s Since CHANGES §183 the checks named in `vision.hubholes.refine.checks` (`none` since §184: the laptop showed no gain and +0.25 s; was `splitpin`; the caller passes `check=`, `refineFor`) get the holes set refined (`_refinedSet`): each hole re-segmented on the picture by a MobileSAM box prompt (`_refine`, `sam.refine.half` / `area` / `iterations` of §166), the circle fitted again and gated (radius in `holes.circle.radius`, `sam.spread.max`, `sam.gap.max`); no outline mask or a move over `sam.refine.move.max` rejects the set (next holes set, else next gamma); the result carries `refined`, `refineMoved`, `unrefined`, and `describe()` names them. The cache key holds the refine flag.
 circle through 4 / 5 holes or bolts; passed by the cap check, otherwise `FindHubHoles.hubCentreProvider`, set by the camera
 server and fed by the worker's restored state; dry runs: `hubCentreFromPicture` = the real checkHub() on that picture);
 none -> not found. (2) The annulus `hubholes.annulus.inner` 116 - `.outer` 253 px round it (holes at r ~148 and bolts at
@@ -313,7 +313,7 @@ groups off the centre dropped, each group's 4- and 5-polygon candidates through 
 and equal-angle filters (`_candidateSets`, HubAndBearingSegmenter's functions on a per-thread object; checkHub() itself
 untouched). (3) Of the candidates with the model's count, the best (least distance variance) of each group, the
 `hubholes.candidates.max` (3) best of them; of those whose circle radius is in `hubholes.holes.circle.radius` 135 - 165
-and whose total mask area is <= `hubholes.holes.area.max.<model>` (Machine 2 4900 / 6000 since §170: laptop holes 1633 - 3005 / 2871 - 3896, bolts 6786 - 8029 / 8064 - 10260), the one with the smallest total mask
+and whose total mask area is <= `vision.<model>.hubholes.holes.area.max` (Machine 2 4900 / 6000 since §170: laptop holes 1633 - 3005 / 2871 - 3896, bolts 6786 - 8029 / 8064 - 10260), the one with the smallest total mask
 area is the holes; none -> the next gamma; no gamma -> not found (the holes most likely covered) -> the check NOT OK.
 Result: found, cx, cy, radius, spread, gap, count, points, gamma, area, candidates (per gamma each set's total area,
 radius, centre), seed, seedFrom, method, reason. The last `sam.cache.size` (12) results are kept (the split pin check's
@@ -351,7 +351,7 @@ One INFO line per gamma, `[Bung] <model> gamma <g>: masks ... candidates n: (x,y
 
 **Heartbeat** (`TakePictures.launchThreadForHeartbeat`): DEAD while the camera is not connected, or one of the three work threads (`cameraWorkers`, `utils/WorkerHealth.py`) is not running or has not gone round its loop for `heartbeat.work.loop.max.silence.sec`.
 
-**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBung` (bung for component press), `CheckNoBung`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBung` (bung for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BungSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `<vendor>.vision.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` too (`vision.knuckle.locator.*`, `vision.frame.*`, since CHANGES §105). The pictures sent to the frontend carry outlines only, no values or words; a picture NOT OK without a check's verdict (timeout, stalled camera, worker starting) gets a red border (`_withReason`), and the reason goes to the log, the answer's `reason` and the "check" notice.
+**Checks.** There is one module per check: `CheckKnuckle`, `CheckHubAndBottomBearing`, `CheckTopBearing`, `CheckNutAndPlateWasher`, `CheckNoCapBung` (bung for component press), `CheckNoBung`, `CheckSplitPinAndWasher`, `CheckCap` and `CheckBung` (bung for cap press); with the engines `HubAndBearingSegmenter`, `HexagonNutDetector`, `BungSegmenter`, `KnuckleLocator` and `ModelManager` (MobileSAM, YOLO). Their parameters are `vision.<vendor>.*` keys read through `VisionConfig.py` (`vInt`, `vFloat`, `vTuple`, ... with the Machine 1 value as default); `KnuckleLocator` and `VisionFrame` too (`vision.knuckle.locator.*`, `vision.frame.*`, since CHANGES §105). The pictures sent to the frontend carry outlines only, no values or words; a picture NOT OK without a check's verdict (timeout, stalled camera, worker starting) gets a red border (`_withReason`), and the reason goes to the log, the answer's `reason` and the "check" notice.
 
 ## 4. QR code server (`costhetaio/qrcodescanner/QRCodeScanningServer.py`)
 
@@ -520,7 +520,16 @@ The sending and reading functions for each queue are in `utils/RedisUtils.py` an
 
 ## 10. Configuration keys (selection)
 
-Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.bung.folder`, `plc.pc.check.bung.tagname`, `<vendor>.vision.bung.*`, ...). A properties file with the old spelling still works: at every load `CosThetaConfigurator._addLegacyBungKeys` adds each old key under its new spelling (a warning is printed). The PLC tag names themselves (`PLC_PC_CheckBunkForCapPress`, `PC_PLC_NoBunkCheckOK`, ... - the values of the `*.tagname` keys and the keys of `IOServerProperties.yaml`) are the PLC program's names and keep their spelling (CHANGES §125).
+**Vision key names (CHANGES §213):** `vision.<vendor>.<check>...` for a value both models use and
+`vision.<vendor>.<dost|dostplus>.<check>...` for a value of one model (`vendor` = `siemens` for Machine 2,
+`allenbradley` for Machine 1; the silver cap = DOST, the brass cap = DOSTPLUS). The code writes keys without the vendor
+(`vision.dost.cap.radius`). `CosThetaConfigurator.visionPropertyKey` inserts it (`vision.siemens.dost.cap.radius`),
+and VisionConfig reads only that name. The rule is `utils/VisionKeyNames.newCodeKey`. Old-style names
+(`siemens.vision.cap.radius.dost`) are not read; a file still holding them is reported once
+(`CosThetaConfigurator._oldVisionKeys` / `_reportOldVisionKeys`, sent after the load and singleton locks are released), and
+`python utils/VisionKeyNames.py <file>` converts it in place (original kept as `<file>.before213`).
+
+Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.bung.folder`, `plc.pc.check.bung.tagname`, `vision.<vendor>.bung.*`, ...). A properties file with the old spelling still works: at every load `CosThetaConfigurator._addLegacyBungKeys` adds each old key under its new spelling (a warning is printed). The PLC tag names themselves (`PLC_PC_CheckBunkForCapPress`, `PC_PLC_NoBunkCheckOK`, ... - the values of the `*.tagname` keys and the keys of `IOServerProperties.yaml`) are the PLC program's names and keep their spelling (CHANGES §125).
 
 | Key | Default | Section |
 |---|---|---|
@@ -546,21 +555,21 @@ Keys spelled with `bunk` before 2026-11-17 are now `bung` (`images.bung.and.no.b
 | `camera.state.file.max.age.sec` | 3600 | 3 |
 | `save.all.pictures.because.its.in.trial.mode` / `picture.saving.dir.for.mode.trial` | True / C:/Temp/TrialImages/ | 1, 3 |
 | `picture.retention.days.trial` / `picture.retention.days.main` | 30 / 60 (0 = no clean-up) | 1 |
-| `<vendor>.vision.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
+| `vision.<vendor>.check.timeout.sec` | 12 (the check always runs in the worker process) | 3 |
 | Tuning block (CHANGES 154, `getTuning`, read at import): `plc.settings.write.attempts` / `.frontend.abort.write.attempts` / `.vision.result.reset.attempts` / `.reset.write.attempts` / `.reference.read.attempts`, `plc.write.retry.interval.sec`, `plc.reset.float.tolerance`, `plc.trigger.held.warning.sec`; `qrcode.invalid.notice.sec`, `qrcode.line.quiet.sec`; `camera.worker.*` (ready / stop timeout, timeouts in a row, restart back-off base / max, transfer warning), `camera.bearing.ring.guard.max.wait.sec`; `db.idle.poll.sec`, `db.insert.max.attempts`, `db.insert.retry.gap.sec`, `db.day.check.interval.sec`, `db.statement.timeout.ms`; `frontend.status.stale.after.intervals`, `.abort.tiles.clear.msec`, `.state.sync.poll.interval.msec`, `.outcome.second.line.(min.)point.size`; `log.slave.queue.size` / `.pending.limit`, `log.master.file.batch` / `.stop.check.interval.sec`, `log.suppressed.repeat.every`; `redis.io.state.stream.maxlen`; `supervisor.grace.sec`; `endpoints.webservice.port`, `.mi.port`, `.showscreen.*`; `debug.print.checkbung.*` / `.checknocapbung.*` | 3 / 3 / 5 / 5 / 3, 0.2, 0.001, 3.0; 10.0, 0.3; 600 / 3 / 3 / 1 / 60 / 1.0, 5.0; 1.0, 3, 5.0, 60, 5000; 3, 750, 250, 13 / 8; 5000 / 20000, 200 / 0.5, 100; 500; 2.0; 8000, 8050, 8100 / 8099 / 1.0 / 0.6; False (success.evaluation True) | 1-7 |
 | `skip.splitpin.and.washer.check` (CHANGES 173; tuning block, read at every check): True = at state 20 the camera takes the pictures, `checkSplitPinAndWasher` returns OK without running the check (picture as taken, "check skipped" in the log); False = the check runs and decides | False | 3 |
 | `mainprogram.stop.min.wait.sec` / `mainprogram.db.drain.wait.max.sec` (CHANGES 157; replace `mainprogram.stop.wait.sec`): the wait after the stop command, until the DB server reports `fe2db.q` drained | 2.0 / 20.0 | 1-7 |
 | `language.<english\|kannada\|tamil\|hindi>.fontsize.adjustment` (CHANGES 157, 158): points added to every fitted main-screen font in that language (not the QR code line) | 0 / -2 / 0 / -2 | 5 |
 | `frontend.creator.fill.share` (CHANGES 158): share of its label the creator line is fitted to | 0.95 | 5 |
 | Reading the properties (CHANGES 157): a missing key, a value not of the expected type (True / False, a whole number, a number), a tuning value below its minimum, a vision value invalid for its type and a method choice outside its set are logged once per process (`CosThetaConfigurator.reportConfigurationProblem`: printed and in the log file; `getTuning`, `VisionConfig`, `expectOneOf`) and the default is used; a valid value logs nothing | - | all |
-| `<vendor>.vision.frame.*` (reference spindle, type spindles, nominal pins per type and side, 18 centres per type), `<vendor>.vision.knuckle.locator.*` (spindle, bosses, lower arm, type rule) | Machine 2 values, measured 13 Nov 2026 (allenbradley: the same, not measured for Machine 1) | 3 |
-| `<vendor>.vision.knuckle.method` | segmentation (Machine 1: regions) | 3 |
-| `<vendor>.vision.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
-| `<vendor>.vision.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
-| `<vendor>.vision.cap.seating.check` / `<vendor>.vision.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
-| `<vendor>.vision.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
-| `<vendor>.vision.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.3,-4.7 and -0.7,-4.5 (SAM centres, §170; Machine 1: 0,0) | 3 |
-| `<vendor>.vision.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
+| `vision.<vendor>.frame.*` (reference spindle, type spindles, nominal pins per type and side, 18 centres per type), `vision.<vendor>.knuckle.locator.*` (spindle, bosses, lower arm, type rule) | Machine 2 values, measured 13 Nov 2026 (allenbradley: the same, not measured for Machine 1) | 3 |
+| `vision.<vendor>.knuckle.method` | segmentation (Machine 1: regions) | 3 |
+| `vision.<vendor>.knuckle.frame.max.shift` / `.max.rotation` / `.max.zoom.change` | 40 / 3.0 / 0.05 | 3 |
+| `vision.<vendor>.nutwasher.bearing.ring.guard` | True (both machines) | 3 |
+| `vision.<vendor>.cap.seating.check` / `vision.<vendor>.bung.seating.check` | True / True (Machine 1: False / False) | 3 |
+| `vision.<vendor>.bung.seating.position.source` / `.hub.offset.<dost\|dostplus>` | hubholes / Machine 2 4.6,-16.8 and 4.7,-16.3 (SAM centres, §170; Machine 1: 0,0) | 3 |
+| `vision.<vendor>.cap.seating.hub.source` / `.hub.holes.*` / `.hub.distance.offset.cap.<dost\|dostplus>` | cap / band 128,168, percentiles 6,9,12, radius 140,160, spread 3, gap 15, count 4 / 5 / Machine 2: 0.3,-4.7 and -0.7,-4.5 (SAM centres, §170; Machine 1: 0,0) | 3 |
+| `vision.<vendor>.cap.seating.hub.distance.check` / `.max` / `.offset.<holes\|bolts>.<dost\|dostplus>` (hub source hubcheck) | True / 5.0 / Machine 2: holes 0.3,0.5 (DOST) and 0.1,-1.4 (DOSTPLUS), bolts -0.4,4.9 (DOST) and -0.6,2.2 (DOSTPLUS) (Machine 1: False, all 0,0) | 3 |
 | `*.tagname` | see the spec | Spec 3 |
 
 ## 11. Tests (`test/machine2_dryrun`, mirrored in `test/machine1_dryrun`)

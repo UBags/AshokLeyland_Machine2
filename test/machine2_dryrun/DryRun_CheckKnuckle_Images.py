@@ -15,11 +15,11 @@ must pass with its own QR code and fail with the other three. Also checked:
     NOT OK, over the brighter one -> OK; the rectangle A is not tested (not used);
   - the whole picture moved by +/-3 px in x and y (8 shifts): still OK with its own QR code (part or camera slightly off);
     a check on Machine 2, reported only on Machine 1 (not re-tuned).
-Settings: <vendor>.vision.knuckle.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.knuckle.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). No Redis, PLC or camera needed.
 
 Run from the project root:   python test/machine2_dryrun/DryRun_CheckKnuckle_Images.py
-After re-tuning siemens.vision.knuckle.* (or allenbradley.vision.knuckle.*), run it again.
+After re-tuning vision.siemens.knuckle.* (or vision.allenbradley.knuckle.*), run it again.
 """
 import glob, os, pathlib, sys
 
@@ -135,7 +135,7 @@ def measure(img):
 
 files = sorted(f for f in glob.glob(str(HERE / "knuckle_images" / "*.jpg")) if not os.path.basename(f).startswith("EMPTY"))
 empties = sorted(glob.glob(str(HERE / "knuckle_images" / "EMPTY_*.jpg")))
-print(f"{len(files)} pictures, settings {C.getVisionKeyPrefix()}vision.knuckle.*: common < {K.COMMON_CHECK_THRESHOLD}, "
+print(f"{len(files)} pictures, settings {C.visionPropertyKey("vision.knuckle")}.*: common < {K.COMMON_CHECK_THRESHOLD}, "
       + (f"side by differences > {K.SIDE_DIFFERENCE_THRESHOLD} (contours A / A', side boxes D1 / D2)" if DIFF else
          f"side < {K.LHS_RHS_DARKNESS_THRESHOLD}")
       + f", model < {K.COMPONENT_IDENTIFICATION_DARKNESS_THRESHOLD} = DOST\n")

@@ -2,7 +2,7 @@
 DryRun_Bung_Rotation - the bung check must not depend on how the bung is turned.
 
 Each seated bung picture of 13 Nov (bung_images_20261113, labels below) is turned about the model's seated bung centre
-(<vendor>.vision.bung.seating.seated.centre.<model>) in --step degree steps (default 15: 24 angles) and checked with
+(vision.<vendor>.<model>.bung.seating.seated.centre) in --step degree steps (default 15: 24 angles) and checked with
 the real CheckBung.checkBung (state 24; CheckNoCapBung runs the same hole detection and seating):
   - as its own model    -> the hole pattern must pass at every angle
   - as the other model  -> the hole pattern must fail at every angle (wrong bung)    (--own-only skips this)

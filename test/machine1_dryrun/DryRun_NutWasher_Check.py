@@ -3,11 +3,11 @@ DryRun_NutWasher_Check - the real nut and plate washer check (CheckNutAndPlateWa
 folder of nut pictures, with this machine's settings, shown one picture at a time.
 
 The check has two parts:
-  1. the nut: MobileSAMv2 + hexagon tests in a disc round <vendor>.vision.nutwasher.nut.detection.center (needs the
+  1. the nut: MobileSAMv2 + hexagon tests in a disc round vision.<vendor>.nutwasher.nut.detection.center (needs the
      models; a CUDA GPU makes it fast);
   2. the washer (when check.washers.presence.in.nutandplatewasher=True, or the tick box here): in the bearing ring
      found by the top bearing check, minus the nut, the top bearing picture of the same part must be brighter in red
-     (diff_R) and in red-minus-blue (diff_RB) than the nut picture, by more than <vendor>.vision.nutwasher.washer.
+     (diff_R) and in red-minus-blue (diff_RB) than the nut picture, by more than vision.<vendor>.nutwasher.washer.
      threshold.r / .rb. The washer covers the bright bearing race; without a washer the ring looks as it did.
 So each nut picture needs the top bearing picture of the same part:
   - Paired: for a nut picture X.jpg, X_bearing.jpg (same folder, same extension) is used if it exists. Pictures whose
@@ -18,7 +18,7 @@ The bearing ring is found in the bearing picture by the real top bearing check (
   Start: folder, bearing picture, model (DOST / DOSTPLUS), seconds per picture (default 3), "Check washer" (starts as
   the configuration says), "Save marked pictures" (<folder>/nut_washer_results/).
   Markings on the full picture: yellow circle and cross = the nut search area and its centre; magenta cross = the
-  nut reference centre (<vendor>.vision.nut.reference.center.* in the search area); blue ring = the bearing ring;
+  nut reference centre (vision.<vendor>.nut.reference.center.* in the search area); blue ring = the bearing ring;
   green = the nut found; inset (top right) = the check's own result picture; banner = OK / NOT OK with the reason
   (nut not found and why, or the two washer differences against their limits) and the time.
 

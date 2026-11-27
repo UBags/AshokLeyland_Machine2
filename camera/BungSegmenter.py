@@ -88,8 +88,8 @@ SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bung.square.side.length.tolerance"
 SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bung.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
 SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bung.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
 SQUARE_MAX_ANGLE_STD = vFloat("vision.bung.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
-DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.bung.dostplus.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
-DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.bung.dostplus.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
+DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.dostplus.bung.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
+DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.dostplus.bung.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
 # 3 holes found, one in the middle of the other two (e.g. the bung's centre punch mark taken for a hole): the middle one
 # is ignored and the other two are treated as the 2 holes, when the angle at the middle hole is within THREE_HOLE_MAX_BEND
 # of a straight line AND its distances to the other two differ by at most THREE_HOLE_MAX_DISTANCE_DIFFERENCE of their mean
@@ -101,11 +101,11 @@ THREE_HOLE_MAX_DISTANCE_DIFFERENCE = vFloat("vision.bung.three.hole.max.distance
 # the hole-pattern centre) is oval. Seated when the hole-pattern centre is within seating.hole.centre.offset.max of the
 # model's seated position AND the face mask's roundness (minor / major axis) reaches the model's minimum.
 SEATING_CHECK = vBool("vision.bung.seating.check", False)
-SEATING_SEATED_CENTRE_DOST = vTuple("vision.bung.seating.seated.centre.dost", (630, 350))       # full image px
-SEATING_SEATED_CENTRE_DOSTPLUS = vTuple("vision.bung.seating.seated.centre.dostplus", (630, 350))
+SEATING_SEATED_CENTRE_DOST = vTuple("vision.dost.bung.seating.seated.centre", (630, 350))       # full image px
+SEATING_SEATED_CENTRE_DOSTPLUS = vTuple("vision.dostplus.bung.seating.seated.centre", (630, 350))
 SEATING_HOLE_CENTRE_OFFSET_MAX = vFloat("vision.bung.seating.hole.centre.offset.max", 15.0)       # px
-SEATING_ROUNDNESS_MIN_DOST = vFloat("vision.bung.seating.roundness.min.dost", 0.952)
-SEATING_ROUNDNESS_MIN_DOSTPLUS = vFloat("vision.bung.seating.roundness.min.dostplus", 0.96)
+SEATING_ROUNDNESS_MIN_DOST = vFloat("vision.dost.bung.seating.roundness.min", 0.952)
+SEATING_ROUNDNESS_MIN_DOSTPLUS = vFloat("vision.dostplus.bung.seating.roundness.min", 0.96)
 SEATING_FACE_RADIUS_MIN = vFloat("vision.bung.seating.face.radius.min", 100.0)                    # face mask, px
 SEATING_FACE_RADIUS_MAX = vFloat("vision.bung.seating.face.radius.max", 145.0)
 # The face mask must be one clean oval: its area (holes filled) / the area of the ellipse fitted to its outline within
@@ -116,8 +116,8 @@ SEATING_FIT_AREA_RATIO_MAX = vFloat("vision.bung.seating.ellipse.fit.area.ratio.
 # the model's seated position: at most outside.reference.oval.max of the mask outside it. A bung lying flat but off
 # centre, or tilted (its face oval and shifted), has part of its face outside. Reference ovals = the seated faces of
 # 13 Nov (mean axes) + 3 px all round.
-SEATING_REFERENCE_OVAL_DOST = vTuple("vision.bung.seating.reference.oval.dost", (241, 249, 122))
-SEATING_REFERENCE_OVAL_DOSTPLUS = vTuple("vision.bung.seating.reference.oval.dostplus", (232, 230, 0))
+SEATING_REFERENCE_OVAL_DOST = vTuple("vision.dost.bung.seating.reference.oval", (241, 249, 122))
+SEATING_REFERENCE_OVAL_DOSTPLUS = vTuple("vision.dostplus.bung.seating.reference.oval", (232, 230, 0))
 SEATING_OUTSIDE_REFERENCE_OVAL_MAX = vFloat("vision.bung.seating.outside.reference.oval.max", 0.02)
 # Where the seated position comes from (CHANGES 153):
 #   "hubholes" - the circle through the hub's holes round the bung in the bung picture itself (FindHubHoles.findHoles, the
@@ -127,8 +127,8 @@ SEATING_OUTSIDE_REFERENCE_OVAL_MAX = vFloat("vision.bung.seating.outside.referen
 #   "fixed"    - seating.seated.centre.<model> (placed by the knuckle frame), as before.
 # The reference oval is centred on the seated position either way.
 SEATING_POSITION_SOURCE = vStr("vision.bung.seating.position.source", "hubholes")
-SEATING_HUB_OFFSET_DOST = vTuple("vision.bung.seating.hub.offset.dost", (0.0, 0.0))            # px added to the hub centre
-SEATING_HUB_OFFSET_DOSTPLUS = vTuple("vision.bung.seating.hub.offset.dostplus", (0.0, 0.0))
+SEATING_HUB_OFFSET_DOST = vTuple("vision.dost.bung.seating.hub.offset", (0.0, 0.0))            # px added to the hub centre
+SEATING_HUB_OFFSET_DOSTPLUS = vTuple("vision.dostplus.bung.seating.hub.offset", (0.0, 0.0))
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """

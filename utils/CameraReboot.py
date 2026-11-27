@@ -3,7 +3,7 @@ Camera reboot from the PC (CHANGES 177): the Hikvision ISAPI call
 
     PUT http://<vision.camera.ip>:<vision.camera.port>/ISAPI/System/reboot     (HTTP digest authentication)
 
-with the camera's own user and password (<vendor>.vision.camera.uid / .pwd) - the same authentication as the camera
+with the camera's own user and password (vision.<vendor>.camera.uid / .pwd) - the same authentication as the camera
 server's ISAPI keepalive (camera/RTSPCam.py, GET /ISAPI/System/deviceInfo). The camera answers at once with an XML
 ResponseStatus (statusCode 1 / statusString OK) and then restarts; the stream is back after about a minute or two, and
 the camera server's own reconnect thread (RTSPCam.launchMonitorCameraConnectionThread) picks it up - nothing in the

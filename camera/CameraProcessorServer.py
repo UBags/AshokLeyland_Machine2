@@ -274,7 +274,7 @@ class TakePictures(GenericQueueProcessor):
     def _applyLiveConfiguration(self, changedKeys) -> None:
         """Live configuration: the gap between pictures and the missing-frame limit apply at once; a change to the
         camera connection (IP, port, user, password, id) needs a restart of the camera server."""
-        prefix = CosThetaConfigurator.getVisionKeyPrefix()
+        cameraKeys = CosThetaConfigurator.visionPropertyKey("vision.camera.")      # vision.<vendor>.camera. (CHANGES 213)
         gap = CosThetaConfigurator.getInstance().getTimeBetweenPicturesInMs() * 1.0 / 1000
         if gap != self.gapBetweenPictures:
             self.gapBetweenPictures = gap
@@ -286,7 +286,7 @@ class TakePictures(GenericQueueProcessor):
                 logBoth('logWarning', logSource, f"Configuration applied while running: max allowed missing frames = {limit}", MessageType.RISK)
         except Exception:
             noteSuppressed()
-        connection = [k for k in changedKeys if k.startswith(f"{prefix}vision.camera.")]
+        connection = [k for k in changedKeys if k.startswith(cameraKeys)]
         if connection:
             logBoth('logError', logSource, f"Camera connection settings changed ({', '.join(connection)}): restart the "
                     f"camera server for them to take effect", MessageType.ISSUE)
@@ -497,7 +497,7 @@ class ConverterScalerAndProcessor(GenericQueueProcessor):
         return
 
     def runAssessment(self, currentMachineState: MachineState, imagesToBeProcessed: list):
-        """assessPictures with a deadline (<vendor>.vision.check.timeout.sec, read at each check):
+        """assessPictures with a deadline (vision.<vendor>.check.timeout.sec, read at each check):
         (allok, processed image, original image, reason). reason is None when the check itself gave the verdict, else
         why the result is NOT OK without one (check timed out, worker not ready, ...).
         The check runs in the vision check worker process (models loaded there); one that times out is stopped with
@@ -1668,11 +1668,11 @@ def CameraServer(mode : str = "Test", stateFile: str | None = None):
     # the camera server fetches the QR code before the knuckle check itself (ImageProcessor.prepareForKnuckleCheck)
     ImageProcessor.fetchQRCodeInChecks = False
     # the vision checks run in their own process (models loaded there), stopped and started again when a check
-    # takes longer than <vendor>.vision.check.timeout.sec; started now so that the models are ready for cycle 1
+    # takes longer than vision.<vendor>.check.timeout.sec; started now so that the models are ready for cycle 1
     from camera.VisionCheckWorker import getVisionCheckWorker
     getVisionCheckWorker()
 
-    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (<vendor>.vision.* keys), so a site
+    # Log which vision parameters were re-tuned in ApplicationConfiguration.properties (vision.<vendor>.* keys), so a site
     # re-tune is always visible in the logs. Purely informational - never stops the server.
     try:
         from camera.VisionConfig import describeVisionParameters, getRegistry

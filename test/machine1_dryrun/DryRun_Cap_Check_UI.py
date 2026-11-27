@@ -19,7 +19,7 @@ cap, comparisons failed, cap not seated).
      to the list at the bottom and to the terminal.
   6. At the end: OK / NOT OK counts. "Save marked pictures" writes the pictures to <folder>/cap_check_results/.
 
-Settings: <vendor>.vision.cap.* in ApplicationConfiguration.properties (vendor from the folder: machine1 = allenbradley,
+Settings: vision.<vendor>.cap.* in ApplicationConfiguration.properties (vendor from the folder: machine1 = allenbradley,
 machine2 = siemens). The seating step uses MobileSAM through ModelManager (models/MobileSAM), loaded in the background
 when the window opens; no Redis, PLC or camera needed (the check's log messages are collected by this window).
 

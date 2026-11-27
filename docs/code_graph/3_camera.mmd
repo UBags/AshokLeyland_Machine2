@@ -27,6 +27,6 @@ flowchart TB
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
   FH -.-> MM
   CP -.-> MM
-  ALLV["every check"] -.-> VC["VisionConfig<br/>vInt / vFloat / vTuple … ← &lt;vendor&gt;.vision.* keys"]
+  ALLV["every check"] -.-> VC["VisionConfig<br/>vInt / vFloat / vTuple … ← vision.&lt;vendor&gt;[.&lt;model&gt;].* keys (CHANGES 213)"]
   W -->|"result + images"| OUT1["camera2io.q"] & OUT2["camera2fe.q"]
   W -->|"NOT OK"| OUT3["alarm.q"]

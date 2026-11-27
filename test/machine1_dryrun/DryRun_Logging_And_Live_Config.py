@@ -220,7 +220,7 @@ check("L9 complete file applied again", wait_for(lambda: C.getValue("plc.vendor"
 print("\n=== L10 vision constants live ===", flush=True)
 from camera.CheckKnuckle import CheckKnuckle
 before = CheckKnuckle.LHS_CROP_X
-VKEY = f"{C.getVisionKeyPrefix()}vision.knuckle.lhs.crop.x"          # this machine's key (allenbradley. / siemens.)
+VKEY = C.visionPropertyKey("vision.knuckle.lhs.crop.x")          # this machine's key (vision.allenbradley. / vision.siemens.)
 set_props(**{VKEY.replace(".", "__"): "391"})
 check("L10 CheckKnuckle.LHS_CROP_X re-bound while running (380 -> 391)", wait_for(lambda: CheckKnuckle.LHS_CROP_X == 391, 4),
       CheckKnuckle.LHS_CROP_X)

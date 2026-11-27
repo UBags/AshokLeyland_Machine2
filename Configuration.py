@@ -75,8 +75,14 @@ class CosThetaConfigurator():
         if not CosThetaConfigurator.__singleton_instance:
             with CosThetaConfigurator.__singleton_lock:
                 if not CosThetaConfigurator.__singleton_instance:
-                    CosThetaConfigurator.__singleton_instance = CosThetaConfigurator()
-                    CosThetaConfigurator.__singleton_instance.checkIntegrity()
+                    CosThetaConfigurator._buildingInstance = True
+                    try:
+                        CosThetaConfigurator.__singleton_instance = CosThetaConfigurator()
+                        CosThetaConfigurator.__singleton_instance.checkIntegrity()
+                    finally:
+                        CosThetaConfigurator._buildingInstance = False
+            CosThetaConfigurator._reportOldVisionKeys(CosThetaConfigurator._oldVisionKeysPending)   # lock released
+            CosThetaConfigurator._oldVisionKeysPending = []
         return CosThetaConfigurator.__singleton_instance
 
     # =============================================================================
@@ -173,23 +179,56 @@ class CosThetaConfigurator():
                   f"(e.g. {added[0]}). Replace the file with the new build's to remove this message.")
         return added
 
+    @staticmethod
+    def _oldVisionKeys(props: Properties) -> list:
+        """CHANGES 213: the vision keys are vision.<vendor>[.<model>].<check>... (utils/VisionKeyNames.py). Keys of the
+        old form <vendor>.vision.<check>... are not read (one name per value). Returns those found in props (no
+        logging: called under _reloadLock; _reportOldVisionKeys reports them after it is released)."""
+        try:
+            from utils.VisionKeyNames import isOldPropertyKey
+            return sorted(k for k in props.getPropertyDict() if isOldPropertyKey(k))
+        except Exception as e:
+            print(f"Warning: could not check for old-style vision keys: {e}")
+            return []
+
+    _buildingInstance = False           # getInstance() holds its lock while __init__ loads the file
+    _oldVisionKeysPending: list = []
+
+    @staticmethod
+    def _reportOldVisionKeys(old: list) -> None:
+        """Reports the old-style vision keys once, with the command that converts the file. The report goes through the
+        logger, which reads the configuration: so never while _reloadLock is held, and while getInstance() is still
+        building the singleton (its lock held) the keys are kept and reported by getInstance() after it - both were
+        deadlocks, found in the CHANGES 213 dry run."""
+        if old and CosThetaConfigurator._buildingInstance:
+            CosThetaConfigurator._oldVisionKeysPending = list(old)
+            return
+        if old:
+            CosThetaConfigurator.reportConfigurationProblem(
+                "vision.old.keys", f"{configFilePath} has {len(old)} old-style vision key(s) (e.g. {old[0]}), which are "
+                f"not read since CHANGES 213: vision keys are vision.<vendor>[.<model>].<check>...; convert the file with "
+                f"'python utils/VisionKeyNames.py <file>' or replace it with the new build's")
+
     @classmethod
     def _loadConfig(cls) -> None:
         """Load the configuration file; afterwards re-load it whenever it changes (see above)."""
         import time as _time
         if not CosThetaConfigurator._loaded:
+            oldVisionKeys = []
             with CosThetaConfigurator._reloadLock:
                 if not CosThetaConfigurator._loaded:
                     try:
                         with open(configFilePath, 'r') as config_file:
                             CosThetaConfigurator._configs.load(config_file)
                             CosThetaConfigurator._addLegacyBungKeys(CosThetaConfigurator._configs)
+                            oldVisionKeys = CosThetaConfigurator._oldVisionKeys(CosThetaConfigurator._configs)
                             CosThetaConfigurator._loaded = True
                             CosThetaConfigurator._lastTimeLoaded = pathlib.Path(configFilePath).stat().st_mtime
                     except Exception as e:
                         print(f"Warning: Could not load config file: {e}")
                     CosThetaConfigurator._reloaded = False
                     CosThetaConfigurator._lastCheck = _time.time()
+            CosThetaConfigurator._reportOldVisionKeys(oldVisionKeys)     # after the lock: the logger reads the config
             return
         now = _time.time()
         if now - CosThetaConfigurator._lastCheck < CosThetaConfigurator._reloadCheckInterval():
@@ -198,6 +237,7 @@ class CosThetaConfigurator():
         if not CosThetaConfigurator._reloadLock.acquire(blocking=False):
             return                                    # another thread is reloading; it will notify
         changed = None
+        oldVisionKeys = []
         try:
             CosThetaConfigurator._lastCheck = now
             CosThetaConfigurator._reloaded = False
@@ -208,6 +248,7 @@ class CosThetaConfigurator():
             with open(configFilePath, 'r') as config_file:
                 fresh.load(config_file)
             CosThetaConfigurator._addLegacyBungKeys(fresh)
+            oldVisionKeys = CosThetaConfigurator._oldVisionKeys(fresh)
             old = dict(CosThetaConfigurator._configs.getPropertyDict())
             new = dict(fresh.getPropertyDict())
             if len(new) < CosThetaConfigurator.RELOAD_MIN_KEY_FRACTION * max(1, len(old)):
@@ -222,6 +263,7 @@ class CosThetaConfigurator():
             print(f"Warning: could not re-load {configFilePath}: {e}")
         finally:
             CosThetaConfigurator._reloadLock.release()
+        CosThetaConfigurator._reportOldVisionKeys(oldVisionKeys)
         if changed:
             CosThetaConfigurator._notifyReload(changed)
 
@@ -365,7 +407,7 @@ class CosThetaConfigurator():
 
     # Camera and image settings that are per machine (same camera model on both machines today, but either machine's
     # camera / camera settings can change). In ApplicationConfiguration.properties each is written as
-    # allenbradley.vision.<key> and siemens.vision.<key>; getValue(<key>) reads the one for this machine.
+    # vision.allenbradley.<key> and vision.siemens.<key>; getValue(<key>) reads the one for this machine.
     PER_MACHINE_CAMERA_AND_IMAGE_KEYS = frozenset(
         ["camera.id", "camera.ip", "camera.port", "camera.uid", "camera.pwd",
          "time.between.pictures.ms", "max.allowed.none.frame.counts.in.camera", "sleeptime.monitor.takepic",
@@ -374,16 +416,24 @@ class CosThetaConfigurator():
 
     @classmethod
     def getVisionKeyPrefix(cls) -> str:
-        """The vision-check parameters are per machine: 'allenbradley.' (Machine 1) or 'siemens.' (Machine 2), chosen
-        by the PLC vendor (plc.vendor / COSTHETA_PLC_VENDOR). Every vision key in ApplicationConfiguration.properties
-        is written with this prefix: allenbradley.vision.<name> and siemens.vision.<name>."""
+        """'allenbradley.' (Machine 1) or 'siemens.' (Machine 2), chosen by the PLC vendor (plc.vendor /
+        COSTHETA_PLC_VENDOR). Since CHANGES 213 the vendor is not a prefix of the vision keys but their second part:
+        vision.<vendor>[.<model>].<check>... - build a property name with visionPropertyKey()."""
         return f"{cls.getPlcVendor()}."
+
+    @classmethod
+    def visionPropertyKey(cls, key: str) -> str:
+        """This machine's property for the vision key `key` (as written in the code, without the vendor):
+        'vision.dost.cap.radius' -> 'vision.siemens.dost.cap.radius' (CHANGES 213, utils/VisionKeyNames.py)."""
+        from utils.VisionKeyNames import propertyKey
+        return propertyKey(key, cls.getPlcVendor())
 
     @classmethod
     def getVisionValue(cls, key: str, default: Any = None) -> Any:
         """Value of the vision parameter `key` (e.g. 'vision.nut.detection.radius') for this machine:
-        the property <vendor>.<key>. No fallback to another machine's value; `default` if absent."""
-        return cls.getValue(f"{cls.getVisionKeyPrefix()}{key}", default=default)
+        the property vision.<vendor>.<rest of key> (visionPropertyKey). No fallback to another machine's value;
+        `default` if absent."""
+        return cls.getValue(cls.visionPropertyKey(key), default=default)
 
     @classmethod
     def getValue(cls, key: str, default: str = '') -> Any:
@@ -400,11 +450,11 @@ class CosThetaConfigurator():
         key = str(key)
         l, r, c = CosThetaConfigurator._getConfig()
         value = None
-        # Camera and image settings are per machine: "camera.ip" is read from "<vendor>.vision.camera.ip"
-        # (allenbradley.vision.* = Machine 1, siemens.vision.* = Machine 2). No fallback to the other machine.
+        # Camera and image settings are per machine: "camera.ip" is read from "vision.<vendor>.camera.ip"
+        # (vision.allenbradley.* = Machine 1, vision.siemens.* = Machine 2). No fallback to the other machine.
         if key in CosThetaConfigurator.PER_MACHINE_CAMERA_AND_IMAGE_KEYS:
             try:
-                value = c[f"{CosThetaConfigurator.getVisionKeyPrefix()}vision.{key}"]
+                value = c[CosThetaConfigurator.visionPropertyKey(f"vision.{key}")]
             except Exception:
                 value = None
             return default if value is None else value
@@ -3134,7 +3184,7 @@ class CosThetaConfigurator():
     HEARTBEAT_SERVER_SILENCE_KEY = "ioserver.heartbeat.server.silence.sec"
     PC_PLC_CYCLE_ABORTED_KEY = "pc.plc.cycle.aborted.tagname"
     PC_PLC_SKIP_SECOND_TIGHTENING_KEY = "pc.plc.skip.second.tightening.tagname"
-    VISION_CHECK_TIMEOUT_KEY = "check.timeout.sec"                      # per machine: <vendor>.vision.check.timeout.sec
+    VISION_CHECK_TIMEOUT_KEY = "check.timeout.sec"                      # per machine: vision.<vendor>.check.timeout.sec
     SUPERVISOR_RESTART_KEY = "supervisor.restart.dead.processes"
     SUPERVISOR_CHECK_INTERVAL_KEY = "supervisor.check.interval.sec"
     SUPERVISOR_MAX_RESTARTS_PER_HOUR_KEY = "supervisor.max.restarts.per.hour"
@@ -3288,7 +3338,7 @@ class CosThetaConfigurator():
     @classmethod
     def getMinimumPlcCameraAnswerTimeout(cls) -> float:
         """The shortest camera answer timeout that still lets the camera server's own NOT OK (check timed out) arrive
-        first: <vendor>.vision.check.timeout.sec + CAMERA_ANSWER_TIMEOUT_MARGIN_SECS (12 + 8 = 20 s)."""
+        first: vision.<vendor>.check.timeout.sec + CAMERA_ANSWER_TIMEOUT_MARGIN_SECS (12 + 8 = 20 s)."""
         return cls.getVisionCheckTimeout() + cls.CAMERA_ANSWER_TIMEOUT_MARGIN_SECS
 
     @classmethod
@@ -3313,7 +3363,7 @@ class CosThetaConfigurator():
 
     @classmethod
     def getVisionCheckTimeout(cls) -> float:
-        """Seconds a vision check may take (<vendor>.vision.check.timeout.sec, 12); after that the check is NOT OK.
+        """Seconds a vision check may take (vision.<vendor>.check.timeout.sec, 12); after that the check is NOT OK.
         Read at each check."""
         return cls._floatValue(cls.VISION_CHECK_TIMEOUT_KEY, 12.0, minimum=1.0)
 
@@ -3543,7 +3593,7 @@ class CosThetaConfigurator():
         return CosThetaConfigurator.getValue(key, default="NO INSTRUCTION AVAILABLE")
 
     # *********************************** CAP CHECK PARAMETERS *********************************
-    # The cap check reads its settings per machine (allenbradley.vision.cap.* / siemens.vision.cap.*) through
+    # The cap check reads its settings per machine (vision.allenbradley.cap.* / vision.siemens.cap.*) through
     # camera/VisionConfig.py, like the other vision checks.
     # *********************************** CAP CHECK PARAMETERS DONE *********************************
 

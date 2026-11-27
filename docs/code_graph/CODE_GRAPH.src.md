@@ -38,7 +38,7 @@ zooming. The `.mmd` files are the sources.
 | `utils.RedisUtils` | 21 | 2,898 | **All** inter-process messaging: `send<What>From<A>To<B>` / `read<What>In<B>From<A>`, queue names, keys |
 | `utils.SuppressedExceptions` | 18 | 64 | Logged exception swallowing |
 | `utils.CosThetaPrintUtils` | 16 | 255 | Coloured console output |
-| `camera.VisionConfig` | 15 | 299 | `vInt` / `vFloat` / `vTuple` / `vPoints` ← `<vendor>.vision.*` keys |
+| `camera.VisionConfig` | 15 | 299 | `vInt` / `vFloat` / `vTuple` / `vPoints` ← `vision.<vendor>.*` keys |
 | `utils.QRCodeHelper` | 13 | 106 | QR parsing, model / side / tonnage mapping |
 | `logutils.LogSettings` | 11 | 211 | Log levels and process names |
 | `utils.CosThetaFileUtils` | 10 | 422 | Paths and folders |

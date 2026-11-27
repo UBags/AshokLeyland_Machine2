@@ -1,12 +1,12 @@
 """
 DryRun_Bung_Check_UI - the real bung check on a folder of bung pictures, with this machine's settings
-(<vendor>.vision.bung.* in ApplicationConfiguration.properties), shown one picture at a time. Needs the MobileSAM models
+(vision.<vendor>.bung.* in ApplicationConfiguration.properties), shown one picture at a time. Needs the MobileSAM models
 (as the camera server does); a CUDA GPU makes it fast.
 
 Both bung checks run the same hole detection (camera/BungSegmenter.py); choose which one in the window:
   - CheckBung.checkBung            - state 24, bung before the cap press
   - CheckNoCapBung.checkNoCapBung  - state 13, bung before the component press
-The r<outer.disc.radius> disc round <vendor>.vision.bung.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
+The r<outer.disc.radius> disc round vision.<vendor>.bung.outer.disc.center is segmented (gammas 2.0, 7.75, 4.0, 6.5, 1.0
 until a definite answer; YOLO boxes + a point every hole.grid.step px); holes count only inside r<inner.disc.radius>
 round the same centre. One "[Bung] ..." log line per gamma.
   DOST     : 4 holes forming a square (sides within square.side.length.tolerance of the median, corners

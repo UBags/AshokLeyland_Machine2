@@ -1,7 +1,7 @@
 # Machine 2 vision positions relative to the hub centre
 
 Recorded 2026-11-14 for the camera position of 13 Nov 2026 (CHANGES 95-100), branch `machine2-io-fe-db-cam`. Source:
-the `siemens.vision.*` keys in `ApplicationConfiguration.Machine2.properties` (the three properties files are identical
+the `vision.siemens.*` keys in `ApplicationConfiguration.Machine2.properties` (the three properties files are identical
 for these keys). Pictures are 1280 x 720 (every picture is resized to this before a check). Offsets are (dx, dy) in
 pixels from the **hub segmentation centre `hub.segment.center` = (645, 334)**; x to the right, y downwards.
 
@@ -11,7 +11,7 @@ image coordinates.
 
 ## Since CHANGES 102: the centres follow the knuckle (2026-11-15)
 
-With `siemens.vision.knuckle.method=segmentation` the knuckle check (state 3) finds the spindle, the two machined bosses
+With `vision.siemens.knuckle.method=segmentation` the knuckle check (state 3) finds the spindle, the two machined bosses
 with the fixture pins in them and the lower arm (`camera/KnuckleLocator.py`), and builds the cycle's frame
 (`camera/VisionFrame.py`): camera rotation and zoom from the pin line against its usual angle / length for the type and
 side, and the anchor = where the pins put the spindle of that type / side (the spindle mask is the cross-check). Every
@@ -21,9 +21,9 @@ is then placed for the cycle as
     centre = anchor + zoom * R(rotation) * (reference centre of the type - mean spindle of the type)
 
 where, since the follow-up of CHANGES 102, the reference centre and spindle are per type: DOST and DOSTPLUS each have
-their own reference centre (`siemens.vision.frame.centre.<name>.<dost|dostplus>`, since CHANGES §105; type spindles
-`siemens.vision.frame.type.spindle.*`, pins `siemens.vision.frame.nominal.pins.*`) and mean spindle (DOST (642.35, 358.45), DOSTPLUS
-(642.2, 359.7)), so each type has its own displacement of every centre from the spindle. The `siemens.vision.*.center`
+their own reference centre (`vision.siemens.<model>.frame.centre.<name>`, since CHANGES §105; type spindles
+`vision.siemens.<model>.frame.type.spindle`, pins `vision.siemens.<model>.frame.nominal.pins.<lhs|rhs>`) and mean spindle (DOST (642.35, 358.45), DOSTPLUS
+(642.2, 359.7)), so each type has its own displacement of every centre from the spindle. The `vision.siemens.*.center`
 keys below are used only when no knuckle frame exists in the cycle (method `regions`; a camera server restarted during a cycle takes the frame back from its state file, camera/CameraStateFile.py; or one restarted
 during a cycle). The frame is dropped at the end of every cycle (completed or aborted), at a new cycle's knuckle check
 and at a knuckle retake. A camera move beyond `vision.knuckle.frame.max.*` (40 px, 3 deg, 5 %) makes the knuckle check
@@ -60,8 +60,8 @@ is not known whether that was their spindles (side) or the hub's own seating.
 | Nut / washer nut search `nutwasher.nut.detection.center` | (644, 344) | (-1, +10) | disc r 80 | washer comparison uses the top bearing ring of the same cycle |
 | No-bung nut search `nobung.nut.detection.center` | (644, 344) | (-1, +10) | disc r 80 | same as nut / washer |
 | Bung (states 13, 24) `bung.outer.disc.center` | (643, 334) | (-2, +0) | segmented disc r 250, holes within r 135 (110 until 17 Nov, then 125) |  |
-| Bung seated position `bung.seating.seated.centre.dost` | (646, 325) | (+1, -9) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 241 x 249 at 122 deg | seating step |
-| Bung seated position `bung.seating.seated.centre.dostplus` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
+| Bung seated position `vision.dost.bung.seating.seated.centre` | (646, 325) | (+1, -9) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 241 x 249 at 122 deg | seating step |
+| Bung seated position `vision.dostplus.bung.seating.seated.centre` | (647, 330) | (+2, -4) | hole-pattern centre within 20.0 px (15.0 until 17 Nov); face r 100.0-145.0; face inside the reference oval 232 x 230 | seating step |
 | Cap (state 23) `cap.center` | (644, 340) | (-1, +6) | circles r 109 (DOST) / 76 (DOSTPLUS) / 25 (brightness) | seating: point prompt here; silver outline within 20 px of it; silver hub circle: prompt ring r 95 + box ±125 round it in the hub picture (CHANGES 129); cap mask: disc r 160 round it (CHANGES 143) |
 
 Hub holes in the cap, bung and split pin pictures (CHANGES 164, `camera/FindHubHoles.py`): YOLO + MobileSAM in the annulus
@@ -71,7 +71,7 @@ Their centres (the holes' outlines) differ from the dark-blob centres by a few p
 with the dark blobs) are to be replaced by the values `DryRun_Hub_Holes_SAM.py` prints on the laptop (CHANGES 164).
 
 The split pin + washer check (state 20, `camera/CheckSplitPinAndWasher.py`, CHANGES 162, 163): since CHANGES 163 the
-washer is looked for round the hub's hole circle centre in the same picture + `splitpin.hub.offset.dost` (0.9, -3.6 for the SAM centres since CHANGES 165; 1.8, 1.6 with the dark blobs)
+washer is looked for round the hub's hole circle centre in the same picture + `vision.dost.splitpin.hub.offset` (0.9, -3.6 for the SAM centres since CHANGES 165; 1.8, 1.6 with the dark blobs)
 (DOSTPLUS not measured: the same); `splitpin.centre` (644, 345) only with `centre.source=fixed`; washer looked for within 100 px (tip radius 44 - 56 px; the 19 OK pictures of 19 Nov: 49.2 - 51.4, centres
 (643 - 649, 339 - 346)), blue legs within 120 px of the washer centre. Not placed by the knuckle frame.
 

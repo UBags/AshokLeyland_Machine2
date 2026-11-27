@@ -202,8 +202,8 @@ def main():
                 "nutwasher.nut.detection.center": tuple(NW.CheckNutAndPlateWasher.NUT_DETECTION_CENTER),
                 "nobung.nut.detection.center": tuple(NB.CheckNoBung.NUT_DETECTION_CENTER),
                 "bung.outer.disc.center": tuple(BS.OUTER_DISC_CENTER),
-                "bung.seating.seated.centre.dost": tuple(BS.SEATING_SEATED_CENTRE_DOST),
-                "bung.seating.seated.centre.dostplus": tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS),
+                "dost.bung.seating.seated.centre": tuple(BS.SEATING_SEATED_CENTRE_DOST),
+                "dostplus.bung.seating.seated.centre": tuple(BS.SEATING_SEATED_CENTRE_DOSTPLUS),
                 "cap.center": tuple(CC.CheckCap.CENTER)}
 
     before = read()
@@ -218,7 +218,7 @@ def main():
     check("with the frame of a moved camera every check holds the placed centre", now == want,
           {n: (now[n], want[n]) for n in now if now[n] != want[n]})
     # CHANGES 126: the bung reference ovals are scaled by the frame's zoom and turned by its rotation
-    ovalProps = {t: tuple(registry[f"vision.bung.seating.reference.oval.{t}"]["value"]) for t in ("dost", "dostplus")}
+    ovalProps = {t: tuple(registry[f"vision.{t}.bung.seating.reference.oval"]["value"]) for t in ("dost", "dostplus")}
     ovalNow = {"dost": tuple(BS.SEATING_REFERENCE_OVAL_DOST), "dostplus": tuple(BS.SEATING_REFERENCE_OVAL_DOSTPLUS)}
     ovalWant = {t: VisionFrame.placeOval(frame, ovalProps[t]) for t in ovalProps}
     check(f"with the frame the bung reference ovals follow the zoom ({frame['scale']:.4f}) and turn "

@@ -18,7 +18,7 @@
     "camera/CapAnnulus.py": "2d5e7d0"
   },
   "extracted": {
-    "vision.bung.dostplus.hole.pair.distance.max": {
+    "vision.dostplus.bung.hole.pair.distance.max": {
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MAX",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",
@@ -26,7 +26,7 @@
       "old_literal": "100",
       "old_snippet": "distance <= 100:"
     },
-    "vision.bung.dostplus.hole.pair.distance.min": {
+    "vision.dostplus.bung.hole.pair.distance.min": {
       "const": "DOSTPLUS_HOLE_PAIR_DISTANCE_MIN",
       "file": "camera/BungSegmenter.py",
       "old_file": "camera/BungSegmenter.py",

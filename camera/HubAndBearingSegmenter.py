@@ -60,14 +60,14 @@ AREA_RATIO_THRESHOLD_FOR_OTHERS = vFloat("vision.hub.area.ratio.threshold.for.ot
 # Format: (distance1, distance2, tolerance_percentage)
 # Edge distances (px) between neighbouring holes / bolts of the winning group, per model: one range for each of the
 # two hole / bolt circles ("distances" and "tolerance" are not read by the live code)
-HUB_SPACING_DOST_1_MIN = vInt("vision.hub.spacing.dost.1.min", 215)
-HUB_SPACING_DOST_1_MAX = vInt("vision.hub.spacing.dost.1.max", 245)
-HUB_SPACING_DOST_2_MIN = vInt("vision.hub.spacing.dost.2.min", 175)
-HUB_SPACING_DOST_2_MAX = vInt("vision.hub.spacing.dost.2.max", 200)
-HUB_SPACING_DOSTPLUS_1_MIN = vInt("vision.hub.spacing.dostplus.1.min", 190)
-HUB_SPACING_DOSTPLUS_1_MAX = vInt("vision.hub.spacing.dostplus.1.max", 210)
-HUB_SPACING_DOSTPLUS_2_MIN = vInt("vision.hub.spacing.dostplus.2.min", 145)
-HUB_SPACING_DOSTPLUS_2_MAX = vInt("vision.hub.spacing.dostplus.2.max", 170)
+HUB_SPACING_DOST_1_MIN = vInt("vision.dost.hub.spacing.1.min", 215)
+HUB_SPACING_DOST_1_MAX = vInt("vision.dost.hub.spacing.1.max", 245)
+HUB_SPACING_DOST_2_MIN = vInt("vision.dost.hub.spacing.2.min", 175)
+HUB_SPACING_DOST_2_MAX = vInt("vision.dost.hub.spacing.2.max", 200)
+HUB_SPACING_DOSTPLUS_1_MIN = vInt("vision.dostplus.hub.spacing.1.min", 190)
+HUB_SPACING_DOSTPLUS_1_MAX = vInt("vision.dostplus.hub.spacing.1.max", 210)
+HUB_SPACING_DOSTPLUS_2_MIN = vInt("vision.dostplus.hub.spacing.2.min", 145)
+HUB_SPACING_DOSTPLUS_2_MAX = vInt("vision.dostplus.hub.spacing.2.max", 170)
 MODEL_DISTANCE_CONFIG = {
     "DOST": {
         "distances": [170, 135],

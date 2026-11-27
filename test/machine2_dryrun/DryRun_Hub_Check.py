@@ -10,14 +10,14 @@ pictures, with this machine's settings, shown one picture at a time.
      (default 3), then the next picture is checked.
   3. Markings: the painted holes/studs of the winning polygon and "COUNT: n" (from the check itself; red with
      "MISMATCH" if the other model was found), plus, drawn by this window:
-       yellow rings  = the area searched for holes/studs   (<vendor>.vision.hub.segment.*)
-       magenta rings = the "no bearing in centre" area     (<vendor>.vision.hub.centre.check.*) with its value;
+       yellow rings  = the area searched for holes/studs   (vision.<vendor>.hub.segment.*)
+       magenta rings = the "no bearing in centre" area     (vision.<vendor>.hub.centre.check.*) with its value;
                        red when the value is at or above the limit (a bearing in the bore)
        banner        = OK / NOT OK, the reason, the winning gamma and the time taken.
   4. At the end: number OK / NOT OK and the list of results. "Save marked pictures" writes each marked picture to
      <folder>/hub_check_results/.
 
-Settings: <vendor>.vision.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.hub.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). Needs the models (models/MobileSAM/...) and a CUDA GPU (runs on CPU too, slowly).
 
 Run from the project root:   python test/machine2_dryrun/DryRun_Hub_Check.py

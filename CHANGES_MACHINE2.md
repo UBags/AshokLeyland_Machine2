@@ -6164,3 +6164,69 @@ Run here (sandbox: dark-blob hole finder, `--holes morphology`; no YOLO weights;
 - `DryRun_Cap_Production_Path.py --holes morphology`: 11 / 12. P2 DOST fails on DOST_skewed_03.
 - `DryRun_Cap_Silver_Seating.py` (colour): 5 / 6, the same as at 7275b39. S1 fails in the sandbox because there is no
   YOLO for the hole finder.
+
+## 213. Vision key names: machine first, then the model - one name per value (2026-11-27)
+
+What changed (Uddi, 2026-11-27: "no ambiguities should remain"):
+- **Naming rule:** every vision key now reads `vision.<vendor>.<check>...` when both models use the value, and
+  `vision.<vendor>.<dost|dostplus>.<check>...` when it belongs to one model. `vendor` is `siemens` (Machine 2) or
+  `allenbradley` (Machine 1). Before, the keys were `<vendor>.vision.<check>...`, with the model at the end
+  (`cap.radius.dost`), in the middle (`frame.nominal.pins.dost.lhs`), or only implied.
+  - The model was implied by the cap's colour for 14 keys (`cap.seating.silver.*`, `cap.seating.brass.*`,
+    `cap.silver.brightness.*`; silver = DOST, brass = DOSTPLUS). These now carry the model.
+  - It was implied by the only method that reads them for 31 more keys. Checked in CheckCap / CapAnnulus:
+    - `cap.seating.bore.*`: the brass method → `dostplus`;
+    - `cap.seating.hub.ring/box/radius/centre.inset/dark/visible` and `cap.seating.face.box.scale`: the silver hub and
+      face rules → `dost`;
+    - `cap.annulus.*` → `dost`.
+  - Keys read by both methods stay without a model: `cap.seating.circle.fit.tolerance`, `cap.polar.*`, `cap.mask.*`,
+    `cap.seating.hub.distance/source/holes.*`, `cap.center`, `cap.seating.check`.
+  - 120 of the 461 keys per machine changed beyond the vendor move; there are no collisions. The full table is in
+    `docs/vision_key_renames_213.md`.
+- **One rule, in `utils/VisionKeyNames.py`:**
+  - `newCodeKey` is the rule; `propertyKey(codeKey, vendor)` inserts the vendor after `vision.`.
+  - `renameInText` renames keys in properties, code and docs, including the `<vendor>.vision.x` placeholders.
+  - `convertPropertiesFile` / `python utils/VisionKeyNames.py <file>` converts a properties file in place and keeps
+    the original as `<file>.before213`.
+- **Code:** keys are written without the vendor (`vision.dost.cap.radius`); the code text minus the vendor is the
+  properties text.
+  - `CosThetaConfigurator.visionPropertyKey` builds the property name, used by `getVisionValue` and the per-machine
+    camera / image keys.
+  - VisionConfig's messages, `describeVisionParameters` and the live-reload filter use `propertyName()`.
+  - The camera server's live check of the camera connection keys uses `vision.<vendor>.camera.`.
+  - VisionFrame's centre and oval names now carry the model first (`dost.bung.seating.seated.centre`,
+    `dost.bung.seating.reference.oval`).
+  - 18 code files were renamed by the rule; 38 docstrings and comments had their placeholders rewritten.
+- **Old names are not read** (zero ambiguity). A file that still has them is reported once:
+  `[Configuration] ... has N old-style vision key(s) ... convert the file with 'python utils/VisionKeyNames.py <file>'`.
+  Each value then falls back to its code default (the Machine 1 value) and is reported as missing.
+- **Properties:** the three example files were converted; each has 922 vision keys (461 × 2) and no old names left.
+  Machine1 = Machine2 apart from `plc.vendor`. The header now explains the scheme.
+- **Verifier** (both copies):
+  - The properties keys are `vision.<vendor>.<rest>`.
+  - It reports old-style keys, keys without a machine, and an old-style name in the code (`newCodeKey(key) != key`).
+  - The rule is applied to the baseline's strings before the AST comparison (`_Normalise(renameKeys=True)`, also for
+    VisionFrame's names without `vision.`), so a renamed key is not a logic change.
+  - The manifests' `extracted` keys were renamed (2 each).
+- **Docs:** CLAUDE.md §4 (the naming rule), the LLD §10 note, the HLD, the plant-pc and vision-positions docs, both
+  READMEs and the code graph were renamed by the same rule. Shorthand such as `seating.brass.offset.max` and the
+  `.<model>` placeholders were expanded to full new names. The CHANGES history keeps the old names.
+
+Found and fixed in the dry run: **a start-up deadlock with an old-style file.** The first version of the report logged
+from inside the configuration load. `getInstance()` holds its singleton lock (and `_loadConfig` its `_reloadLock`) while
+the file loads, and the logger import calls `getInstance()` again. The program hung after the first line (6.7 min wall
+time, 0.2 s CPU). Now `_oldVisionKeys` only collects under the locks; `_reportOldVisionKeys` runs after the reload lock
+is released, and during the first `getInstance()` the report is held back until its lock is released. Result: 0.28 s,
+one old-keys line, then the missing keys.
+
+Run here (sandbox):
+- `Verify_Vision_Config_Equivalence.py`, both machines: ALL EQUIVALENT, 434 parameters. Deliberate faults were caught:
+  an old name in CheckCap (4 problems) and a wrong model in a renamed key (AST difference plus missing keys).
+- All 19 vision modules imported: 434 keys read, every one from the properties file. CheckCap values as tuned
+  (`dost.cap.seating.hub.distance.offset.cap` 0.3,-4.7; method annulus); camera IP read.
+- The pre-213 Machine 2 file run through `utils/VisionKeyNames.py`: 922 keys renamed, identical (comments aside) to the
+  converted repo file.
+- `DryRun_Logging_And_Live_Config.py` 37/37 (live vision-key reload); `DryRun_Knuckle_Frame.py --quick` 88/88
+  (VisionFrame's centres and ovals under the new names); `DryRun_CameraServer_Heartbeat.py` 4/4;
+  `DryRun_Camera_State_File.py` 19/19; `DryRun_Tuning_Keys.py` 251/251.
+- `DryRun_Cap_Production_Path.py --holes morphology`: 11/12, as before (DOST_skewed_03, CHANGES 212).

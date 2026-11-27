@@ -63,7 +63,7 @@ tp.camera.connected = False; r.delete(camera2hbq); time.sleep(1.2)
 vals = [str(m[1]) for m in r.xrange(camera2hbq)]
 check("camera not connected -> heartbeat DEAD", bool(vals) and all('DEAD' in v.upper() for v in vals[-2:]), str(vals[-2:]))
 before = sum(1 for t in threading.enumerate() if t.name == "Camera Heartbeat Thread")
-tp._applyLiveConfiguration(["siemens.vision.time.between.pictures.ms"])
+tp._applyLiveConfiguration(["vision.siemens.time.between.pictures.ms"])
 time.sleep(0.3)
 after = sum(1 for t in threading.enumerate() if t.name == "Camera Heartbeat Thread")
 check(f"configuration reload does not start another heartbeat thread ({before} -> {after})", before == 1 and after == 1)

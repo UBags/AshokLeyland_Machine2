@@ -9,7 +9,7 @@ where no flag can stop it) can be stopped by stopping the process.
     keeps the cycle's state (QR code, earlier pictures,         loads the models once
     bearing ring) in ImageProcessor                             per check: takes the state sent with the job, runs
     sends a job: picture state, pictures, that state    --->    CameraProcessorServer.assessPictures (the same code
-    waits at most <vendor>.vision.check.timeout.sec      <---   as in the camera server), sends back the verdict, the
+    waits at most vision.<vendor>.check.timeout.sec      <---   as in the camera server), sends back the verdict, the
     applies the state the check changed                         pictures and the state it changed
 
   No answer in time: the check is NOT OK ("check timed out after N s"), the worker process is stopped and a new one

@@ -1,5 +1,5 @@
 """Plant PC check: how long each vision check takes on THIS PC, with the real models, through the vision check worker
-process (camera/VisionCheckWorker.py), against <vendor>.vision.check.timeout.sec (2026-11-07, CHANGES section 85;
+process (camera/VisionCheckWorker.py), against vision.<vendor>.check.timeout.sec (2026-11-07, CHANGES section 85;
 docs/plant-pc-verification.md, step 2).
 
 Runs every picture in this folder's knuckle / hub / top bearing / nut-washer / bung / cap image folders through

@@ -64,7 +64,16 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   keys apply live. `ApplicationConfiguration.Machine1.properties` / `.Machine2.properties` are the build copies
   (`runNuitka.bat <vendor>` copies one in). **Keep the three in step**: Machine1 and Machine2 differ only in
   `plc.vendor`; the live file equals Machine2.
-- Vision parameters: `<vendor>.vision.*`, declared in each check module through `camera/VisionConfig.py`
+- **Vision key names (CHANGES 213, Uddi 2026-11-27 - zero ambiguity, one name per value):** machine first, then the model
+  where the value belongs to one model: `vision.<vendor>.<check>...` (both models use it) or
+  `vision.<vendor>.<dost|dostplus>.<check>...` (`vendor` = `siemens` / `allenbradley`). The silver cap is DOST's, the
+  brass cap DOSTPLUS's, so their keys carry that model; so do keys read only by one model's method (brass bore, silver hub
+  rule, annulus). In the code a key is written without the vendor (`vision.dost.cap.radius`), and VisionConfig inserts it.
+  The rule is `utils/VisionKeyNames.py` (`newCodeKey`). Old names (`<vendor>.vision.<check>...<model>`) are **not
+  read**: a file with them is reported once ("old-style vision keys"), and its values fall back to the code defaults
+  (= Machine 1). Convert one with `python utils/VisionKeyNames.py <file>`. A new key follows the rule; the verifier
+  rejects an old-style name.
+- Vision parameters: `vision.<vendor>.*`, declared in each check module through `camera/VisionConfig.py`
   (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
   knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the
   allenbradley copies hold the Machine 2 values until Machine 1 is measured.
@@ -138,7 +147,7 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `hubcheck` = that centre first, as before); none -> NOT OK; (b) a wide annulus (116 - 253) round it holding
   holes and bolts, `checkHub()`'s steps up to the candidate sets passing its equidistant / equal-angle filters, the best
   set of each group, the top 3; the holes = the smallest total mask area among the sets with a hole-circle radius
-  (135 - 165) and area <= `holes.area.max.<model>`; none at any gamma -> NOT OK (holes covered); (b2) for the checks in `vision.hubholes.refine.checks` (`none` since CHANGES 184 -
+  (135 - 165) and area <= `vision.<model>.hubholes.holes.area.max`; none at any gamma -> NOT OK (holes covered); (b2) for the checks in `vision.hubholes.refine.checks` (`none` since CHANGES 184 -
   no more repeatable than unrefined on the laptop and slower; CHANGES 183; callers pass `check=`): each hole of that set re-segmented by a box prompt (the `sam.refine.*` values of 166), the
   circle fitted again and gated - the two outline modes (r ~149 / ~148, centre ~1.8 px apart in y) gone; cap and bung
   unrefined (their offsets were measured so); (c) everything after the
@@ -223,7 +232,7 @@ No per-check times were recorded with the report; when they are, put them in the
 - PLC programmer: an address for `PC_PLC_CycleAborted` (optional tag, not written until it exists).
   `PC_PLC_Skip_Second_Tightening` has `DB500,X48.0` (CHANGES 121).
 - **Silver (DOST) cap seating by the annulus** (CHANGES 212, Uddi 2026-11-27): `camera/CapAnnulus.py`, default
-  `vision.cap.seating.silver.method=annulus` (`colour` = the rules below, kept); Uddi's two-stage rule, islands NOT OK
+  `vision.dost.cap.seating.method=annulus` (`colour` = the rules below, kept); Uddi's two-stage rule, islands NOT OK
   limit 450; the AND alternative recorded in its docstring. Known miss: a tilted cap with a round, centred rim
   (`DOST_skewed_03`) passes. Brass unchanged.
 - **Cap seating by the hub-centre distance** (CHANGES 143, 152): the cap's centre (stage-2 ellipse of the cap mask,
@@ -249,7 +258,7 @@ No per-check times were recorded with the report; when they are, put them in the
   part, the r ~149 mode). A laptop re-run of `DryRun_Hub_Holes_SAM.py --wrong-model` gives the DOST offsets (its
   suggestion = dark-blob offset + mean since 166).
 - **Bung seated position from the hub's holes** (CHANGES 153): `BungSegmenter.seated_position` = `FindHubHoles.findHoles` in the
-  bung picture + `vision.bung.seating.hub.offset.<model>` (5.2,-17.9 / 4.5,-15.8 for the SAM centres, CHANGES 165); `position.source=fixed` = before. The
+  bung picture + `vision.<model>.bung.seating.hub.offset` (5.2,-17.9 / 4.5,-15.8 for the SAM centres, CHANGES 165); `position.source=fixed` = before. The
   user's good / bad labels of 2026-11-18 called A05, C14, C16 (and 3 new pictures) good although the bung sits 18 - 42 px
   off the hub centre like the bad ones. **Settled (Uddi, 2026-11-19):** on those pictures the hole is not visible or
   the label was wrong; NOT OK is right. The bung check is to be strict: the bung must sit straight so that it does not

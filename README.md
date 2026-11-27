@@ -392,7 +392,7 @@ copy ApplicationConfiguration.Machine2.example.properties ApplicationConfigurati
 :: then put in the camera, PostgreSQL and mail credentials
 ```
 
-- **Vision values** — `<vendor>.vision.*`, declared in each check through `camera/VisionConfig.py` (`vInt`, `vFloat`,
+- **Vision values** — `vision.<vendor>.*`, declared in each check through `camera/VisionConfig.py` (`vInt`, `vFloat`,
   `vTuple`, …). A change of a check's *logic* needs a reference commit, proved by
   `test/machine*_dryrun/Verify_Vision_Config_Equivalence.py` ("ALL EQUIVALENT").
 - **Tuning values** — retry counts, timeouts, ports, font sizes: plain keys through `CosThetaConfigurator.getTuning()`;
@@ -404,7 +404,7 @@ copy ApplicationConfiguration.Machine2.example.properties ApplicationConfigurati
 flowchart LR
   CODE["Check module<br/>vFloat('vision.x', default)"] --> VC["camera/VisionConfig"]
   VC --> CFG["Configuration.py<br/>CosThetaConfigurator"]
-  CFG --> PROP["ApplicationConfiguration.properties<br/>siemens.vision.x = …"]
+  CFG --> PROP["ApplicationConfiguration.properties<br/>vision.siemens.x = …"]
   VER["Verify_Vision_Config_Equivalence"] -. "AST vs reference commit" .-> CODE
 ```
 

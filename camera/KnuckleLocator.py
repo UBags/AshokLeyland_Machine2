@@ -43,7 +43,7 @@ from camera import VisionFrame
 from camera.VisionConfig import vFloat, vInt, vPoints, vTuple
 
 # --------------------------------------------------------------------------------------------------- reference values
-# Per machine: <vendor>.vision.knuckle.locator.* in ApplicationConfiguration.properties (2026-11-15; before, in this
+# Per machine: vision.<vendor>.knuckle.locator.* in ApplicationConfiguration.properties (2026-11-15; before, in this
 # file). Machine 2 values from the 13 Nov 2026 pictures; Machine 1 (regions method, does not use them) has the Machine 2
 # values until they are measured on Machine 1 pictures. Read where they are used, so a live reload applies.
 SPINDLE_EXPECTED = vTuple("vision.knuckle.locator.spindle.expected", (642, 360))      # point prompt for the spindle

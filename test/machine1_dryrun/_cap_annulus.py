@@ -60,7 +60,7 @@ DIAMETER_ANGLES = tuple(range(15, 181, 15))            # 15, 30, ..., 180: 12 di
 EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp")
 MODELS = ("DOST", "DOSTPLUS")
 MASK_METHODS = ("boxes", "points", "annulus")
-# Since CHANGES 212 the annulus method's values are camera/CapAnnulus.py's (vision.cap.annulus.* keys)
+# Since CHANGES 212 the annulus method's values are camera/CapAnnulus.py's (vision.dost.cap.annulus.* keys)
 ANNULUS_INSET = CapAnnulus.PROMPT_INSET            # px: the annulus prompts lie on a circle this far inside the hole circle
 ANNULUS_STEP_DEG = CapAnnulus.PROMPT_STEP_DEG      # one prompt every this many degrees on it ...
 ANNULUS_HOLE_CLEARANCE = CapAnnulus.HOLE_CLEARANCE # px: ... except within this distance of a hole centre

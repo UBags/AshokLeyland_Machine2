@@ -21,7 +21,7 @@ this machine's settings, shown one picture at a time: which knuckle it is (DOST 
   5. At the end: count per knuckle and the list of results. "Save marked pictures" writes each marked picture to
      <folder>/knuckle_check_results/.
 
-Settings: <vendor>.vision.knuckle.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
+Settings: vision.<vendor>.knuckle.* in ApplicationConfiguration.properties (vendor from the folder: machine1 =
 allenbradley, machine2 = siemens). No models, Redis, PLC or camera needed: the check's log messages are collected by
 this window (not sent to the logging server).
 
