@@ -201,6 +201,9 @@ class CheckNoCapBung:
                 traceback.print_exc()
             return _maybe_crop(anImage), False, None
 
+        # This model's bung values (vision.<vendor>.<dost|dostplus>.bung.*, CHANGES 215)
+        BS_MODULE.useModel(model)
+
         # Convert BGR to RGB (camera provides BGR, segmenter expects RGB)
         anImage_rgb = cv2.cvtColor(anImage, cv2.COLOR_BGR2RGB)
         if PRINT_IMAGE_PREPROCESSING:

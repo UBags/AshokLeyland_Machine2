@@ -42,93 +42,187 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # =============================================================================
 # PRINT CONTROL FLAGS
 # =============================================================================
-PRINT_PREPROCESSING = vBool("vision.bung.debug.print.preprocessing", False)
-PRINT_SAM_SEGMENTATION = vBool("vision.bung.debug.print.sam.segmentation", False)
-PRINT_MASK_FILTERING = vBool("vision.bung.debug.print.mask.filtering", False)
-PRINT_GEOMETRIC_VALIDATION = vBool("vision.bung.debug.print.geometric.validation", False)
-PRINT_BATCH_PROCESSING = vBool("vision.bung.debug.print.batch.processing", False)
+PRINT_PREPROCESSING = False
+PRINT_SAM_SEGMENTATION = False
+PRINT_MASK_FILTERING = False
+PRINT_GEOMETRIC_VALIDATION = False
+PRINT_BATCH_PROCESSING = False
 
 # =============================================================================
 # CONFIGURATION CONSTANTS (V0.7 PIPELINE)
 # =============================================================================
 
 # Two-stage cropping parameters
-OUTER_DISC_CENTER = vTuple("vision.bung.outer.disc.center", (630, 350))  # Center in full image
-OUTER_DISC_RADIUS = vInt("vision.bung.outer.disc.radius", 250)
+OUTER_DISC_CENTER_DOST = (630, 350)  # Center in full image
+OUTER_DISC_CENTER_DOSTPLUS = (630, 350)
+OUTER_DISC_CENTER = OUTER_DISC_CENTER_DOST
+OUTER_DISC_RADIUS_DOST = 250
+OUTER_DISC_RADIUS_DOSTPLUS = 250
+OUTER_DISC_RADIUS = OUTER_DISC_RADIUS_DOST
 
-INNER_DISC_RADIUS = vInt("vision.bung.inner.disc.radius", 110)  # Radius from center of outer disc
+INNER_DISC_RADIUS_DOST = 110  # Radius from center of outer disc
+INNER_DISC_RADIUS_DOSTPLUS = 110
+INNER_DISC_RADIUS = INNER_DISC_RADIUS_DOST
 
 # Gamma values - FIXED SEQUENCE (no brightness-based selection)
 # not configurable: _preprocess_image needs a LUT for every gamma of get_gamma_sequence_for_model (CHANGES 154)
 GAMMA_SEQUENCE = [7.75, 6.5, 4.0, 2.0, 1.0]
 
 # Area filtering (applied to masks in inner disc)
-MIN_MASK_AREA = vInt("vision.bung.min.mask.area", 325)
-MAX_MASK_AREA = vInt("vision.bung.max.mask.area", 1200)
+MIN_MASK_AREA_DOST = 325
+MIN_MASK_AREA_DOSTPLUS = 325
+MIN_MASK_AREA = MIN_MASK_AREA_DOST
+MAX_MASK_AREA_DOST = 1200
 # Point prompts every HOLE_GRID_STEP px inside the hole search disc (inner disc), always added to the YOLO box masks.
+MAX_MASK_AREA_DOSTPLUS = 1200
+MAX_MASK_AREA = MAX_MASK_AREA_DOST
 # A hole is about 36 px across on Machine 2 (area about 1000 px), so a 15 px grid puts about 4 points in every hole
 # wherever the bung is turned; the sparse 120 px grid used before put none on the hole ring.
-HOLE_GRID_STEP = vInt("vision.bung.hole.grid.step", 15)
+HOLE_GRID_STEP_DOST = 15
 # The grid covers only the band where hole pixels can be: hole centres sit 40-66 px from the disc centre on the 13 Nov
+HOLE_GRID_STEP_DOSTPLUS = 15
+HOLE_GRID_STEP = HOLE_GRID_STEP_DOST
 # pictures (a hole is about 36 px across; a bung off centre moves them more) - about 110 points instead of 220
-HOLE_GRID_RADIUS_MIN = vInt("vision.bung.hole.grid.radius.min", 20)
-HOLE_GRID_RADIUS_MAX = vInt("vision.bung.hole.grid.radius.max", 90)
+HOLE_GRID_RADIUS_MIN_DOST = 20
+HOLE_GRID_RADIUS_MIN_DOSTPLUS = 20
+HOLE_GRID_RADIUS_MIN = HOLE_GRID_RADIUS_MIN_DOST
+HOLE_GRID_RADIUS_MAX_DOST = 90
 # Masks found more than once (the same hole from several points): IoU above this counts as the same mask
-HOLE_DUPLICATE_IOU = vFloat("vision.bung.hole.duplicate.iou", 0.5)
+HOLE_GRID_RADIUS_MAX_DOSTPLUS = 90
+HOLE_GRID_RADIUS_MAX = HOLE_GRID_RADIUS_MAX_DOST
+HOLE_DUPLICATE_IOU_DOST = 0.5
 # Masks overlapping by more than this fraction of the smaller one belong to the same blob; one mask is kept per blob
-HOLE_BLOB_OVERLAP = vFloat("vision.bung.hole.blob.overlap", 0.15)
+HOLE_DUPLICATE_IOU_DOSTPLUS = 0.5
+HOLE_DUPLICATE_IOU = HOLE_DUPLICATE_IOU_DOST
+HOLE_BLOB_OVERLAP_DOST = 0.15
 
 # Geometric validation thresholds (retained from v1)
-EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = vFloat("vision.unused.bung.equidistant.distance.deviation.threshold", 0.25)  # 20% deviation  # UNUSED by live code
-MINIMUM_INTERIOR_ANGLE = vFloat("vision.unused.bung.minimum.interior.angle", 65.0)  # degrees  # UNUSED by live code
-ALLOWED_STD_DEVIATION_IN_ANGLES = vFloat("vision.unused.bung.allowed.std.deviation.in.angles", 20.0)  # degrees  # UNUSED by live code
+HOLE_BLOB_OVERLAP_DOSTPLUS = 0.15
+HOLE_BLOB_OVERLAP = HOLE_BLOB_OVERLAP_DOST
+EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD = 0.25  # 20% deviation  # UNUSED by live code
+MINIMUM_INTERIOR_ANGLE = 65.0  # degrees  # UNUSED by live code
+ALLOWED_STD_DEVIATION_IN_ANGLES = 20.0  # degrees  # UNUSED by live code
 # Expected radius of hole for morphological filtering
-EXPECTED_RADIUS_OF_HOLE = vInt("vision.bung.expected.radius.of.hole", 30)
-SQUARE_SIDE_LENGTH_TOLERANCE = vFloat("vision.bung.square.side.length.tolerance", 0.2)  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
-SQUARE_MIN_INTERIOR_ANGLE = vFloat("vision.bung.square.min.interior.angle", 65.0)  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
-SQUARE_MAX_INTERIOR_ANGLE = vFloat("vision.bung.square.max.interior.angle", 115.0)  # DOST 4-hole square: max interior angle, degrees
-SQUARE_MAX_ANGLE_STD = vFloat("vision.bung.square.max.angle.std", 20.0)  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
-DOSTPLUS_HOLE_PAIR_DISTANCE_MIN = vInt("vision.dostplus.bung.hole.pair.distance.min", 75)  # DOSTPLUS 2-hole: min centre-to-centre distance, px
-DOSTPLUS_HOLE_PAIR_DISTANCE_MAX = vInt("vision.dostplus.bung.hole.pair.distance.max", 100)  # DOSTPLUS 2-hole: max centre-to-centre distance, px
+EXPECTED_RADIUS_OF_HOLE_DOST = 30
+EXPECTED_RADIUS_OF_HOLE_DOSTPLUS = 30
+EXPECTED_RADIUS_OF_HOLE = EXPECTED_RADIUS_OF_HOLE_DOST
+SQUARE_SIDE_LENGTH_TOLERANCE_DOST = 0.2  # DOST 4-hole square: max relative side-length deviation (the value actually used; EQUIDISTANT_DISTANCE_DEVIATION_THRESHOLD is not referenced)
+SQUARE_SIDE_LENGTH_TOLERANCE_DOSTPLUS = 0.2
+SQUARE_MIN_INTERIOR_ANGLE_DOST = 65.0  # DOST 4-hole square: min interior angle, degrees (MINIMUM_INTERIOR_ANGLE is not referenced)
+SQUARE_MIN_INTERIOR_ANGLE_DOSTPLUS = 65.0
+SQUARE_MAX_INTERIOR_ANGLE_DOST = 115.0  # DOST 4-hole square: max interior angle, degrees
+SQUARE_MAX_INTERIOR_ANGLE_DOSTPLUS = 115.0
+SQUARE_MAX_ANGLE_STD_DOST = 20.0  # DOST 4-hole square: max std of interior angles and max |mean - 90|, degrees (ALLOWED_STD_DEVIATION_IN_ANGLES is not referenced)
+SQUARE_MAX_ANGLE_STD_DOSTPLUS = 20.0
 # 3 holes found, one in the middle of the other two (e.g. the bung's centre punch mark taken for a hole): the middle one
 # is ignored and the other two are treated as the 2 holes, when the angle at the middle hole is within THREE_HOLE_MAX_BEND
 # of a straight line AND its distances to the other two differ by at most THREE_HOLE_MAX_DISTANCE_DIFFERENCE of their mean
-THREE_HOLE_MAX_BEND = vFloat("vision.bung.three.hole.max.bend", 10.0)  # degrees
-THREE_HOLE_MAX_DISTANCE_DIFFERENCE = vFloat("vision.bung.three.hole.max.distance.difference", 0.25)  # fraction of the mean distance
+THREE_HOLE_MAX_BEND_DOST = 10.0  # degrees
+THREE_HOLE_MAX_BEND_DOSTPLUS = 10.0
+THREE_HOLE_MAX_BEND = THREE_HOLE_MAX_BEND_DOST
+THREE_HOLE_MAX_DISTANCE_DIFFERENCE_DOST = 0.25  # fraction of the mean distance
+THREE_HOLE_MAX_DISTANCE_DIFFERENCE_DOSTPLUS = 0.25
+THREE_HOLE_MAX_DISTANCE_DIFFERENCE = THREE_HOLE_MAX_DISTANCE_DIFFERENCE_DOST
 
 # Seating (after the hole pattern passes; off = the check as before, Machine 1). A bung that is tilted or not pushed home
 # shows its side wall: its hole pattern is away from the seated position and its top-face mask (MobileSAM, prompted at
 # the hole-pattern centre) is oval. Seated when the hole-pattern centre is within seating.hole.centre.offset.max of the
 # model's seated position AND the face mask's roundness (minor / major axis) reaches the model's minimum.
-SEATING_CHECK = vBool("vision.bung.seating.check", False)
-SEATING_SEATED_CENTRE_DOST = vTuple("vision.dost.bung.seating.seated.centre", (630, 350))       # full image px
-SEATING_SEATED_CENTRE_DOSTPLUS = vTuple("vision.dostplus.bung.seating.seated.centre", (630, 350))
-SEATING_HOLE_CENTRE_OFFSET_MAX = vFloat("vision.bung.seating.hole.centre.offset.max", 15.0)       # px
-SEATING_ROUNDNESS_MIN_DOST = vFloat("vision.dost.bung.seating.roundness.min", 0.952)
-SEATING_ROUNDNESS_MIN_DOSTPLUS = vFloat("vision.dostplus.bung.seating.roundness.min", 0.96)
-SEATING_FACE_RADIUS_MIN = vFloat("vision.bung.seating.face.radius.min", 100.0)                    # face mask, px
-SEATING_FACE_RADIUS_MAX = vFloat("vision.bung.seating.face.radius.max", 145.0)
+SEATING_CHECK_DOST = False
+SEATING_CHECK_DOSTPLUS = False
+SEATING_CHECK = SEATING_CHECK_DOST
+SEATING_SEATED_CENTRE_DOST = (630, 350)       # full image px
+SEATING_SEATED_CENTRE_DOSTPLUS = (630, 350)
+SEATING_HOLE_CENTRE_OFFSET_MAX_DOST = 15.0       # px
+SEATING_HOLE_CENTRE_OFFSET_MAX_DOSTPLUS = 15.0
+SEATING_HOLE_CENTRE_OFFSET_MAX = SEATING_HOLE_CENTRE_OFFSET_MAX_DOST
+SEATING_ROUNDNESS_MIN_DOST = 0.952
+SEATING_ROUNDNESS_MIN_DOSTPLUS = 0.96
+SEATING_FACE_RADIUS_MIN_DOST = 100.0                    # face mask, px
+SEATING_FACE_RADIUS_MIN_DOSTPLUS = 100.0
+SEATING_FACE_RADIUS_MIN = SEATING_FACE_RADIUS_MIN_DOST
+SEATING_FACE_RADIUS_MAX_DOST = 145.0
 # The face mask must be one clean oval: its area (holes filled) / the area of the ellipse fitted to its outline within
+SEATING_FACE_RADIUS_MAX_DOSTPLUS = 145.0
+SEATING_FACE_RADIUS_MAX = SEATING_FACE_RADIUS_MAX_DOST
 # ellipse.fit.area.ratio.min..max (a mask that took in part of the side wall or the hub, or lost a piece to glare, fails).
-SEATING_FIT_AREA_RATIO_MIN = vFloat("vision.bung.seating.ellipse.fit.area.ratio.min", 0.98)
-SEATING_FIT_AREA_RATIO_MAX = vFloat("vision.bung.seating.ellipse.fit.area.ratio.max", 1.02)
+SEATING_FIT_AREA_RATIO_MIN_DOST = 0.98
+SEATING_FIT_AREA_RATIO_MIN_DOSTPLUS = 0.98
+SEATING_FIT_AREA_RATIO_MIN = SEATING_FIT_AREA_RATIO_MIN_DOST
+SEATING_FIT_AREA_RATIO_MAX_DOST = 1.02
 # The face mask must lie inside the model's reference oval (cv2 rotated box: width, height, angle in degrees) centred on
+SEATING_FIT_AREA_RATIO_MAX_DOSTPLUS = 1.02
+SEATING_FIT_AREA_RATIO_MAX = SEATING_FIT_AREA_RATIO_MAX_DOST
 # the model's seated position: at most outside.reference.oval.max of the mask outside it. A bung lying flat but off
 # centre, or tilted (its face oval and shifted), has part of its face outside. Reference ovals = the seated faces of
 # 13 Nov (mean axes) + 3 px all round.
-SEATING_REFERENCE_OVAL_DOST = vTuple("vision.dost.bung.seating.reference.oval", (241, 249, 122))
-SEATING_REFERENCE_OVAL_DOSTPLUS = vTuple("vision.dostplus.bung.seating.reference.oval", (232, 230, 0))
-SEATING_OUTSIDE_REFERENCE_OVAL_MAX = vFloat("vision.bung.seating.outside.reference.oval.max", 0.02)
+SEATING_REFERENCE_OVAL_DOST = (241, 249, 122)
+SEATING_REFERENCE_OVAL_DOSTPLUS = (232, 230, 0)
+SEATING_OUTSIDE_REFERENCE_OVAL_MAX_DOST = 0.02
 # Where the seated position comes from (CHANGES 153):
+SEATING_OUTSIDE_REFERENCE_OVAL_MAX_DOSTPLUS = 0.02
+SEATING_OUTSIDE_REFERENCE_OVAL_MAX = SEATING_OUTSIDE_REFERENCE_OVAL_MAX_DOST
 #   "hubholes" - the circle through the hub's holes round the bung in the bung picture itself (FindHubHoles.findHoles, the
 #                cap check's method of CHANGES 152: dark blobs at r 128 - 168, 4 / 5 evenly spaced, circle r 140 - 160)
 #                plus seating.hub.offset.<model>: hub and bung in one picture, so where the part sits on the fixture and
 #                any camera move cancel. The hub's holes not found (a bung lying over them) -> NOT seated.
 #   "fixed"    - seating.seated.centre.<model> (placed by the knuckle frame), as before.
 # The reference oval is centred on the seated position either way.
-SEATING_POSITION_SOURCE = vStr("vision.bung.seating.position.source", "hubholes")
-SEATING_HUB_OFFSET_DOST = vTuple("vision.dost.bung.seating.hub.offset", (0.0, 0.0))            # px added to the hub centre
-SEATING_HUB_OFFSET_DOSTPLUS = vTuple("vision.dostplus.bung.seating.hub.offset", (0.0, 0.0))
+SEATING_POSITION_SOURCE_DOST = "hubholes"
+SEATING_POSITION_SOURCE_DOSTPLUS = "hubholes"
+SEATING_POSITION_SOURCE = SEATING_POSITION_SOURCE_DOST
+SEATING_HUB_OFFSET_DOST = (0.0, 0.0)            # px added to the hub centre
+SEATING_HUB_OFFSET_DOSTPLUS = (0.0, 0.0)
+
+# Per model (CHANGES 215, Uddi 2026-11-27): every bung value is vision.<vendor>.dost.bung.* / vision.<vendor>.dostplus.bung.*
+# (X_DOST / X_DOSTPLUS above). The checks use the plain names (X); useModel(model), called by CheckBung / CheckNoCapBung
+# once the model is known from the QR code, points them at that model's values (and the mask generator's grid). Before
+# the first call they hold DOST's. Live reloads re-bind X_DOST / X_DOSTPLUS; the next useModel takes them.
+PER_MODEL_NAMES = (
+    "OUTER_DISC_CENTER",
+    "OUTER_DISC_RADIUS",
+    "INNER_DISC_RADIUS",
+    "MIN_MASK_AREA",
+    "MAX_MASK_AREA",
+    "HOLE_GRID_STEP",
+    "HOLE_GRID_RADIUS_MIN",
+    "HOLE_GRID_RADIUS_MAX",
+    "HOLE_DUPLICATE_IOU",
+    "HOLE_BLOB_OVERLAP",
+    "EXPECTED_RADIUS_OF_HOLE",
+    "SQUARE_SIDE_LENGTH_TOLERANCE",
+    "SQUARE_MIN_INTERIOR_ANGLE",
+    "SQUARE_MAX_INTERIOR_ANGLE",
+    "SQUARE_MAX_ANGLE_STD",
+    "THREE_HOLE_MAX_BEND",
+    "THREE_HOLE_MAX_DISTANCE_DIFFERENCE",
+    "SEATING_CHECK",
+    "SEATING_HOLE_CENTRE_OFFSET_MAX",
+    "SEATING_FACE_RADIUS_MIN",
+    "SEATING_FACE_RADIUS_MAX",
+    "SEATING_FIT_AREA_RATIO_MIN",
+    "SEATING_FIT_AREA_RATIO_MAX",
+    "SEATING_OUTSIDE_REFERENCE_OVAL_MAX",
+    "SEATING_POSITION_SOURCE",
+)
+
+
+def useModel(model_type: str) -> None:
+    """Point the plain bung constants at this model's values (DOSTPLUS or else DOST) and set the mask generator's
+    hole grid from them."""
+    suffix = "DOSTPLUS" if model_type == "DOSTPLUS" else "DOST"
+    here = globals()
+    for name in PER_MODEL_NAMES:
+        here[name] = here[f"{name}_{suffix}"]
+    segmenter = BungSegmenter._instance
+    generator = getattr(segmenter, "mask_generator", None) if segmenter is not None else None
+    if generator is not None:
+        generator.min_mask_region_area = MIN_MASK_AREA
+        generator.max_mask_region_area = MAX_MASK_AREA
+        generator.grid_center = (OUTER_DISC_RADIUS, OUTER_DISC_RADIUS)
+        generator.grid_radius = min(INNER_DISC_RADIUS, HOLE_GRID_RADIUS_MAX)
+        generator.grid_step = HOLE_GRID_STEP
+        generator.grid_inner_radius = HOLE_GRID_RADIUS_MIN
 
 def get_gamma_sequence_for_model(expected_count: int) -> List[float]:
     """
@@ -454,10 +548,10 @@ def find_best_equidistant_subset_euclidean_robust(
         points: List[Tuple[float, float]],
         n: int,
         center: Tuple[float, float],  # Still provided but only for angular spacing check
-        tolerance: float = SQUARE_SIDE_LENGTH_TOLERANCE,
-        min_interior_angle: float = SQUARE_MIN_INTERIOR_ANGLE,
-        max_interior_angle: float = SQUARE_MAX_INTERIOR_ANGLE,
-        allowed_angle_std: float = SQUARE_MAX_ANGLE_STD
+        tolerance: float = 0.2,
+        min_interior_angle: float = 65.0,
+        max_interior_angle: float = 115.0,
+        allowed_angle_std: float = 20.0
 ) -> Tuple[Optional[List[int]], float, dict]:
     """
     ROBUST VERSION: Find best subset forming regular polygon.
@@ -1431,8 +1525,11 @@ class BungSegmenter:
 
         if count >= 4:
             centers = [center for center, contour in valid_components]
+            # the limits passed explicitly: the defaults are bound at import (DOST's, and no live reload) - CHANGES 215
             best_indices, best_score, diagnostics = find_best_equidistant_subset_euclidean_robust(
-                centers, 4, reference_center)
+                centers, 4, reference_center, tolerance=0.2,
+                min_interior_angle=65.0, max_interior_angle=115.0,
+                allowed_angle_std=20.0)
             if best_indices is not None:
                 square = [valid_components[i] for i in best_indices]
                 sides = self._square_sides([c for c, _ in square])
@@ -1450,7 +1547,7 @@ class BungSegmenter:
             for i, j in combinations(range(count), 2):
                 (x1, y1), (x2, y2) = valid_components[i][0], valid_components[j][0]
                 distance = float(np.hypot(x2 - x1, y2 - y1))
-                if not DOSTPLUS_HOLE_PAIR_DISTANCE_MIN <= distance <= DOSTPLUS_HOLE_PAIR_DISTANCE_MAX:
+                if not 75 <= distance <= 100:
                     continue
                 corner = self._third_square_corner(valid_components, i, j)
                 if corner is not None:
@@ -1461,15 +1558,15 @@ class BungSegmenter:
                     best = (mid_off, i, j, distance)
             if best is not None:
                 mid_off, i, j, distance = best
-                text = (f"2-hole pair {distance:.0f} px apart (range {DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}-"
-                        f"{DOSTPLUS_HOLE_PAIR_DISTANCE_MAX}), midpoint {mid_off:.0f} px from the disc centre -> OK")
+                text = (f"2-hole pair {distance:.0f} px apart (range {75}-"
+                        f"{100}), midpoint {mid_off:.0f} px from the disc centre -> OK")
                 self.last_decision_text = "; ".join(notes + [text])
                 return 2, [valid_components[i], valid_components[j]], True
             if rejected_corner:
                 notes.append(f"{len(rejected_corner)} pair(s) in range left out: a third candidate makes 3 corners "
                              f"of a square (DOST holes?)")
             else:
-                notes.append(f"no pair {DOSTPLUS_HOLE_PAIR_DISTANCE_MIN}-{DOSTPLUS_HOLE_PAIR_DISTANCE_MAX} px apart "
+                notes.append(f"no pair {75}-{100} px apart "
                              f"among {count}")
         elif count < expected_count:
             notes.append(f"{count} candidate(s), fewer than {expected_count}")
@@ -1504,11 +1601,11 @@ class BungSegmenter:
             da, db = np.linalg.norm(a - c), np.linalg.norm(b - c)
             if da == 0 or db == 0:
                 continue
-            if abs(da - db) / ((da + db) / 2.0) > SQUARE_SIDE_LENGTH_TOLERANCE:
+            if abs(da - db) / ((da + db) / 2.0) > 0.2:
                 continue
             cos_angle = np.dot(a - c, b - c) / (da * db)
             angle = float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0))))
-            if SQUARE_MIN_INTERIOR_ANGLE <= angle <= SQUARE_MAX_INTERIOR_ANGLE:
+            if 65.0 <= angle <= 115.0:
                 return k
         return None
 
@@ -1874,7 +1971,8 @@ def seated_position(image_rgb: np.ndarray, model_type: str) -> Dict[str, Any]:
     circle round the bung in the same picture (FindHubHoles.findHoles) + seating.hub.offset.<model>; "fixed":
     seating.seated.centre.<model>."""
     dostplus = model_type == "DOSTPLUS"
-    expectOneOf("vision.bung.seating.position.source", SEATING_POSITION_SOURCE, ("hubholes", "fixed"))
+    expectOneOf(f"vision.{'dostplus' if dostplus else 'dost'}.bung.seating.position.source", SEATING_POSITION_SOURCE,
+                ("hubholes", "fixed"))
     if str(SEATING_POSITION_SOURCE).strip().lower() != "hubholes":
         point = SEATING_SEATED_CENTRE_DOSTPLUS if dostplus else SEATING_SEATED_CENTRE_DOST
         return dict(found=True, point=(float(point[0]), float(point[1])), hub=None, reason="fixed seated position")

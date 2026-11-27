@@ -51,21 +51,21 @@ from camera.VisionConfig import vFloat, vTuple
 # The values are read where they are used (nominalPins(), typeSpindle(), centres()), so a live reload applies.
 
 # Mean spindle of the knuckles of all types: only used to state the camera shift (and its limit)
-REF_SPINDLE = vTuple("vision.frame.reference.spindle", (642.2, 359.1))
+REF_SPINDLE = (642.2, 359.1)
 # Mean usual spindle per type (LHS and RHS of the nominal pins below)
-TYPE_SPINDLE_DOST = vTuple("vision.dost.frame.type.spindle", (642.35, 358.45))
-TYPE_SPINDLE_DOSTPLUS = vTuple("vision.dostplus.frame.type.spindle", (642.2, 359.7))
+TYPE_SPINDLE_DOST = (642.35, 358.45)
+TYPE_SPINDLE_DOSTPLUS = (642.2, 359.7)
 
 # The pins (dark core = bore + fixture pin, inside each machined boss) per type and side at the reference camera position:
 # pin distance (px), angle of the line left pin -> right pin (deg), pin midpoint x, y, spindle x, y.
-NOMINAL_PINS_DOST_LHS = vTuple("vision.dost.frame.nominal.pins.lhs", (400.35, 0.65, 644.15, 194.93, 643.2, 359.8))
-NOMINAL_PINS_DOST_RHS = vTuple("vision.dost.frame.nominal.pins.rhs", (400.17, 0.68, 643.75, 192.95, 641.5, 357.1))
-NOMINAL_PINS_DOSTPLUS_LHS = vTuple("vision.dostplus.frame.nominal.pins.lhs", (394.26, 0.69, 643.7, 199.65, 642.1, 359.1))
-NOMINAL_PINS_DOSTPLUS_RHS = vTuple("vision.dostplus.frame.nominal.pins.rhs", (394.64, 0.77, 643.62, 200.0, 642.3, 360.3))
+NOMINAL_PINS_DOST_LHS = (400.35, 0.65, 644.15, 194.93, 643.2, 359.8)
+NOMINAL_PINS_DOST_RHS = (400.17, 0.68, 643.75, 192.95, 641.5, 357.1)
+NOMINAL_PINS_DOSTPLUS_LHS = (394.26, 0.69, 643.7, 199.65, 642.1, 359.1)
+NOMINAL_PINS_DOSTPLUS_RHS = (394.64, 0.77, 643.62, 200.0, 642.3, 360.3)
 
 # The spindle mask is expected within this of where the pins put the spindle (spread measured: +-1 px); further away
 # it is noted in the frame (spindleCheck) and logged; the pins' spindle is the anchor either way.
-ANCHOR_AGREEMENT_PX = vFloat("vision.frame.spindle.mask.agreement.px", 6.0)
+ANCHOR_AGREEMENT_PX = 6.0
 
 # The later checks' centres per type at the reference camera position.
 # How the Machine 2 values were set (13 Nov pictures, same parts through the stations; each type's mean over its parts,
@@ -78,22 +78,22 @@ ANCHOR_AGREEMENT_PX = vFloat("vision.frame.spindle.mask.agreement.px", 6.0)
 # type difference of its feature: DOST = centre + diff / 2, DOSTPLUS = centre - diff / 2 (the hub difference for the
 # hub centre check and the cap; the bung difference for the bung disc). The seated bung positions are per type already
 # (the same value under both types).
-CENTRE_HUB_SEGMENT_DOST = vTuple("vision.dost.frame.centre.hub.segment.center", (645.3, 332.05))
-CENTRE_HUB_SEGMENT_DOSTPLUS = vTuple("vision.dostplus.frame.centre.hub.segment.center", (644.7, 335.95))
-CENTRE_HUB_CHECK_DOST = vTuple("vision.dost.frame.centre.hub.centre.check", (644.3, 338.05))
-CENTRE_HUB_CHECK_DOSTPLUS = vTuple("vision.dostplus.frame.centre.hub.centre.check", (643.7, 341.95))
-CENTRE_TOP_BEARING_DOST = vTuple("vision.dost.frame.centre.topbearing.annular.center", (642.1, 342.55))
-CENTRE_TOP_BEARING_DOSTPLUS = vTuple("vision.dostplus.frame.centre.topbearing.annular.center", (641.9, 347.45))
-CENTRE_NUT_DOST = vTuple("vision.dost.frame.centre.nutwasher.nut.detection.center", (644.45, 341.8))
-CENTRE_NUT_DOSTPLUS = vTuple("vision.dostplus.frame.centre.nutwasher.nut.detection.center", (643.55, 346.2))
-CENTRE_NOBUNG_NUT_DOST = vTuple("vision.dost.frame.centre.nobung.nut.detection.center", (644.45, 341.8))
-CENTRE_NOBUNG_NUT_DOSTPLUS = vTuple("vision.dostplus.frame.centre.nobung.nut.detection.center", (643.55, 346.2))
-CENTRE_BUNG_DISC_DOST = vTuple("vision.dost.frame.centre.bung.outer.disc.center", (645.5, 325.5))
-CENTRE_BUNG_DISC_DOSTPLUS = vTuple("vision.dostplus.frame.centre.bung.outer.disc.center", (646.5, 330.5))
-CENTRE_BUNG_SEATED_DOST = vTuple("vision.dost.frame.centre.bung.seating.seated.centre", (646.0, 325.0))
-CENTRE_BUNG_SEATED_DOSTPLUS = vTuple("vision.dostplus.frame.centre.bung.seating.seated.centre", (647.0, 330.0))
-CENTRE_CAP_DOST = vTuple("vision.dost.frame.centre.cap.center", (644.3, 338.05))
-CENTRE_CAP_DOSTPLUS = vTuple("vision.dostplus.frame.centre.cap.center", (643.7, 341.95))
+CENTRE_HUB_SEGMENT_DOST = (645.3, 332.05)
+CENTRE_HUB_SEGMENT_DOSTPLUS = (644.7, 335.95)
+CENTRE_HUB_CHECK_DOST = (644.3, 338.05)
+CENTRE_HUB_CHECK_DOSTPLUS = (643.7, 341.95)
+CENTRE_TOP_BEARING_DOST = (642.1, 342.55)
+CENTRE_TOP_BEARING_DOSTPLUS = (641.9, 347.45)
+CENTRE_NUT_DOST = (644.45, 341.8)
+CENTRE_NUT_DOSTPLUS = (643.55, 346.2)
+CENTRE_NOBUNG_NUT_DOST = (644.45, 341.8)
+CENTRE_NOBUNG_NUT_DOSTPLUS = (643.55, 346.2)
+CENTRE_BUNG_DISC_DOST = (645.5, 325.5)
+CENTRE_BUNG_DISC_DOSTPLUS = (646.5, 330.5)
+CENTRE_BUNG_SEATED_DOST = (646.0, 325.0)
+CENTRE_BUNG_SEATED_DOSTPLUS = (647.0, 330.0)
+CENTRE_CAP_DOST = (644.3, 338.05)
+CENTRE_CAP_DOSTPLUS = (643.7, 341.95)
 
 # name: (module, class or None, attributes, (DOST constant, DOSTPLUS constant)). Attributes: one name holding an (x, y)
 # tuple, or two names holding x and y.
@@ -108,8 +108,12 @@ _TARGETS = {
                                        ("NUT_DETECTION_CENTER",), ("CENTRE_NUT_DOST", "CENTRE_NUT_DOSTPLUS")),
     "nobung.nut.detection.center": ("camera.CheckNoBung", "CheckNoBung", ("NUT_DETECTION_CENTER",),
                                     ("CENTRE_NOBUNG_NUT_DOST", "CENTRE_NOBUNG_NUT_DOSTPLUS")),
-    "bung.outer.disc.center": ("camera.BungSegmenter", None, ("OUTER_DISC_CENTER",),
-                               ("CENTRE_BUNG_DISC_DOST", "CENTRE_BUNG_DISC_DOSTPLUS")),
+    # per model since CHANGES 215 (vision.<vendor>.<model>.bung.outer.disc.center; BungSegmenter.useModel copies the
+    # checked model's into OUTER_DISC_CENTER), placed like the seated centres below
+    "dost.bung.outer.disc.center": ("camera.BungSegmenter", None, ("OUTER_DISC_CENTER_DOST",),
+                                    ("CENTRE_BUNG_DISC_DOST", "CENTRE_BUNG_DISC_DOST")),
+    "dostplus.bung.outer.disc.center": ("camera.BungSegmenter", None, ("OUTER_DISC_CENTER_DOSTPLUS",),
+                                        ("CENTRE_BUNG_DISC_DOSTPLUS", "CENTRE_BUNG_DISC_DOSTPLUS")),
     "dost.bung.seating.seated.centre": ("camera.BungSegmenter", None, ("SEATING_SEATED_CENTRE_DOST",),
                                         ("CENTRE_BUNG_SEATED_DOST", "CENTRE_BUNG_SEATED_DOST")),
     "dostplus.bung.seating.seated.centre": ("camera.BungSegmenter", None, ("SEATING_SEATED_CENTRE_DOSTPLUS",),
