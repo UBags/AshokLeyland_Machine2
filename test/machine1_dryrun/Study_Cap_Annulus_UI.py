@@ -10,6 +10,11 @@ Row 2, YOLO (YOLO boxes method): conf, iou (YOLO's NMS), max_det.
 Row 3, MobileSAM: multimask_output (3 masks per box), pred_iou_thresh, stability_score_thresh, box_nms_thresh (masks
 whose boxes overlap more than this are merged; 1.0 = none) - YOLO boxes method; "Production values" / "Over-detect".
 There is no crop_nms_thresh: this pipeline has no crop layers (one disc cut round the hub centre).
+Defaults (CHANGES 210, Uddi's values of 2026-11-27 11:00): Annulus only, 1 s; conf 0.05, iou 0.95, max_det 300,
+multimask_output on, pred_iou_thresh 0.15, stability_score_thresh 0.25, box_nms_thresh 0.90; gamma holes 1.0, masks 2.0
+("Study defaults" button; "Production values" = the cap check's). Annulus only draws and scores only the annulus: its
+edges (magenta) and the inner ellipse (yellow) - the ellipse with the most inner edge points within 2 px (not least
+squares) - and prints one "ANNULUS file=... key=value ..." line per picture on the terminal, to send back.
 Row 4, gamma: of the picture given to the hole finder (1 = as taken), and of the picture given to MobileSAM for the
 masks (every method; production cap mask 2.0).
 The values are taken at Start and apply in this window only (production and the properties file are not touched); the
@@ -91,6 +96,7 @@ class Window(QMainWindow):
         self.model.addItems(["DOST", "DOSTPLUS", "From file name"])
         self.maskMethod = QComboBox()
         self.maskMethod.addItems(["YOLO boxes (cap check)", "24 points", "Annulus only"])
+        self.maskMethod.setCurrentIndex(A.MASK_METHODS.index(A.STUDY_METHOD))
         mp = A.maskParameters()
 
         def spin(value, low, high, step, tip):
@@ -121,6 +127,10 @@ class Window(QMainWindow):
         self.multimask.setChecked(mp["multimask"])
         self.multimask.setToolTip("MobileSAM multimask_output: 3 nested masks per YOLO box (part, whole, context) "
                                   "instead of 1 (production: 1)")
+        self.studyButton = QPushButton("Study defaults")
+        self.studyButton.setToolTip("conf 0.05, iou 0.95, max_det 300, multimask_output on, pred_iou_thresh 0.15, "
+                                    "stability_score_thresh 0.25, box_nms_thresh 0.90 (Uddi, 2026-11-27)")
+        self.studyButton.clicked.connect(lambda: self.applyPreset(A.MASK_STUDY))
         self.productionButton = QPushButton("Production values")
         self.productionButton.clicked.connect(lambda: self.applyPreset(A.MASK_DEFAULTS))
         self.overButton = QPushButton("Over-detect")
@@ -129,10 +139,10 @@ class Window(QMainWindow):
         self.overButton.clicked.connect(lambda: self.applyPreset(A.MASK_OVERDETECT))
         self.seconds = QSpinBox()
         self.seconds.setRange(1, 10)
-        self.seconds.setValue(3)
-        self.holesGamma = spin(1.0, 0.2, 6.0, 0.1, "Gamma of the picture given to the hole finder (1 = as taken; "
+        self.seconds.setValue(1)
+        self.holesGamma = spin(A.STUDY_HOLES_GAMMA, 0.2, 6.0, 0.1, "Gamma of the picture given to the hole finder (1 = as taken; "
                                "the finder still tries its own gammas on it)")
-        self.maskGamma = spin(A.MASK_GAMMA_DEFAULT, 0.2, 6.0, 0.1, "Gamma of the picture given to MobileSAM for the "
+        self.maskGamma = spin(A.STUDY_MASK_GAMMA, 0.2, 6.0, 0.1, "Gamma of the picture given to MobileSAM for the "
                               "masks, every method (production cap mask 2.0)")
         self.save = QCheckBox("Save")
         self.startButton = QPushButton("Start")
@@ -166,7 +176,7 @@ class Window(QMainWindow):
         samRow = row("MobileSAM (boxes method):", (("", self.multimask), ("pred_iou_thresh", self.iou),
                                                    ("stability_score_thresh", self.stability),
                                                    ("box_nms_thresh", self.merge)),
-                     (self.productionButton, self.overButton))
+                     (self.studyButton, self.productionButton, self.overButton))
         gammaRow = row("Gamma:", (("picture for the holes", self.holesGamma),
                                   ("picture for the masks", self.maskGamma)))
 
@@ -291,6 +301,8 @@ class Window(QMainWindow):
                     if res.get("masksPicture") is not None:
                         cv2.imwrite(str(resultsDir / f"{p.stem}_masks.jpg"), res["masksPicture"])
                 rows.append(res)
+                if method == "annulus":
+                    print(A.annulusLine(p.name, res), flush=True)        # the terminal line to send back
                 self.bridge.picture.emit(i, p.name, picture, res)
                 end = time.monotonic() + self.seconds.value()
                 while time.monotonic() < end and not self.stopFlag.is_set():

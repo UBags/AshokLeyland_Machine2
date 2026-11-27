@@ -27,6 +27,7 @@ measure(picture, model) per cap picture:
 """
 import math
 import os
+from typing import Optional
 import pathlib
 import sys
 import time
@@ -63,7 +64,9 @@ ANNULUS_HOLE_CLEARANCE = 28        # px: ... except within this distance of a ho
 ANNULUS_NEGATIVE_RADII = (0, 30, 60)   # negative prompts on the cap: H, and r 30 / 60 x every 45 deg (17 points)
 MASK_GAMMA_DEFAULT = float(CapMaskFinder.GAMMA)        # production cap mask: 2.0
 
-HEADER = (["file", "model", "mask_method", "holes_gamma", "mask_gamma", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
+HEADER = (["file", "model", "mask_method", "prompts", "ann_area", "inner_points", "inliers", "inlier_share",
+           "inlier_mean_dist", "ell_angle", "axis_ratio", "ell_hub_dist", "islands", "width_min", "width_max",
+           "width_mean", "width_sd", "widths", "holes_gamma", "mask_gamma", "yolo_conf", "yolo_iou", "max_det", "multimask", "stability_min", "iou_min", "merge_iou", "stages",
            "masks_in_circle", "cap_found", "right_cap", "rb_brass", "rb_silver", "brightness", "holes_found", "hub_x",
            "hub_y", "hole_r", "sam_score", "mask_area", "ell_cx", "ell_cy", "ell_a", "ell_b", "ell_minus_hub_dx",
            "ell_minus_hub_dy", "score_ellipse", "score_mask", "max_ratio_ellipse", "max_ratio_mask", "seconds", "note"]
@@ -98,7 +101,15 @@ MASK_DEFAULTS = dict(conf=float(CapMaskFinder.YOLO_CONFIDENCE), yolo_iou=0.7, ma
                      merge=float(CapMaskFinder.MERGE_IOU))
 # Uddi's over-detection settings of 2026-11-27 09:09, as they map onto the box-prompt pipeline
 MASK_OVERDETECT = dict(conf=0.10, yolo_iou=0.80, max_det=1000, multimask=True, iou=0.72, stability=0.78, merge=0.88)
-_mask = dict(MASK_DEFAULTS)
+# The study's defaults since CHANGES 210: Uddi's window values of 2026-11-27 11:00 (his Not OK run)
+MASK_STUDY = dict(conf=0.05, yolo_iou=0.95, max_det=300, multimask=True, iou=0.15, stability=0.25, merge=0.90)
+STUDY_METHOD = "annulus"
+STUDY_HOLES_GAMMA = 1.0
+STUDY_MASK_GAMMA = 2.0
+INNER_TOLERANCE = 2.0              # px: an inner edge point this close to the inner ellipse is on it
+INNER_TRIES = 1500                 # RANSAC ellipses through 5 inner edge points (fixed seed)
+WIDTH_STEP_DEG = 10                # annulus width printed every this many degrees (36 values)
+_mask = dict(MASK_STUDY)
 
 
 def maskParameters() -> dict:
@@ -276,6 +287,75 @@ def annulusMask(img: np.ndarray, hx: float, hy: float, R: float, holePoints, gam
     return ann, lab == lab[iy, ix], float(scores[0]), np.vstack([pts, negatives])
 
 
+def innerEdgePoints(ann: np.ndarray, cap: np.ndarray) -> np.ndarray:
+    """The annulus pixels that touch the region it encloses (the inner edge; pieces of the mask lying inside the cap
+    give points too - they are outliers for the fit). -> N x 2 (x, y)."""
+    grown = cv2.dilate(cap.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    ys, xs = np.nonzero(ann & grown)
+    return np.c_[xs, ys].astype(np.float64)
+
+
+def maxInliersEllipse(points: np.ndarray, tolerance: float = INNER_TOLERANCE, tries: int = INNER_TRIES,
+                      seed: int = 0) -> Optional[dict]:
+    """CHANGES 210 (Uddi 2026-11-27): the ellipse on which the MOST points lie within `tolerance` px - a consensus fit,
+    not least squares (a least-squares ellipse is pulled by every stray point; this one ignores the points off it).
+      1. candidates: the least-squares ellipse of all points (start only) and `tries` ellipses through 5 random points
+         (fixed seed): the one with the most points within tolerance;
+      2. then a local search on (cx, cy, a, b, angle) - steps 1 px / 1 px / 1 px / 1 px / 2 deg, halved down to
+         0.05 px / 0.1 deg - taking any move that puts more points on the ellipse (equal count: a smaller mean distance
+         of those points).
+    -> dict(e=(cx, cy, a, b, angle deg), inliers, points, share, meanDist) or None."""
+    if len(points) < 10:
+        return None
+    dist = lambda e: CapMaskFinder.ellipseDistances(points, e)
+
+    def value(e):
+        d = dist(e)
+        on = d <= tolerance
+        return int(on.sum()), (-float(d[on].mean()) if on.any() else 0.0)
+
+    rng = np.random.default_rng(seed)
+    pts32 = points.astype(np.float32)
+    best = CapMaskFinder._cvToEllipse(cv2.fitEllipse(pts32))
+    bestV = value(best)
+    for _ in range(int(tries)):
+        try:
+            e = CapMaskFinder._cvToEllipse(cv2.fitEllipse(pts32[rng.choice(len(points), 5, replace=False)]))
+        except cv2.error:
+            continue
+        if not (np.isfinite(e).all() and 20 < e[3] <= e[2] < 400):
+            continue
+        v = value(e)
+        if v > bestV:
+            best, bestV = e, v
+    steps = np.array([1.0, 1.0, 1.0, 1.0, 2.0])
+    e = np.array(best, dtype=np.float64)
+    while steps[0] >= 0.05:
+        moved = False
+        for k in range(5):
+            for sign in (1, -1):
+                trial = e.copy()
+                trial[k] += sign * steps[k]
+                if trial[3] <= 0 or trial[2] <= 0:
+                    continue
+                v = value(tuple(trial))
+                if v > bestV:
+                    e, bestV, moved = trial, v, True
+        if not moved:
+            steps = steps / 2.0
+    cx, cy, a, b, ang = e
+    if b > a:
+        a, b, ang = b, a, ang + 90.0
+    e = (float(cx), float(cy), float(a), float(b), float(ang % 180.0))
+    n, neg = value(e)
+    return dict(e=e, inliers=n, points=len(points), share=n / len(points), meanDist=-neg)
+
+
+def annulusWidths(hx: float, hy: float, R: float, ann: np.ndarray, stepDeg: int = WIDTH_STEP_DEG) -> list:
+    """The ring's width along rays from H every stepDeg (see _ringWidthAt)."""
+    return [_ringWidthAt(hx, hy, R, ann, math.radians(deg)) for deg in range(0, 360, stepDeg)]
+
+
 def capMaskByBoxes(img: np.ndarray, hx: float, hy: float, gamma: float = MASK_GAMMA_DEFAULT):
     """The production cap mask's steps (CapMaskFinder.findCap) on a disc round H: (full-picture mask, info dict) or
     (None, info dict with reason). findCap returns no mask, so its steps are repeated here with its own functions and
@@ -411,7 +491,7 @@ def score(dist, R, floor: float = 1.0):
     return sum(ratios), ratios, lengths
 
 
-def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = "boxes", holesGamma: float = 1.0,
+def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = STUDY_METHOD, holesGamma: float = 1.0,
             maskGamma: float = MASK_GAMMA_DEFAULT, inCircleShare: float = 0.5) -> dict:
     """holesGamma: gamma of the picture given to the hole finder (1 = as taken; FindHubHoles still tries its own
     gammas on it). maskGamma: gamma of the picture given to MobileSAM for the masks (every method; production cap
@@ -445,16 +525,17 @@ def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = "
                 notes.append(samScore)
             inCircle = masksInCircle([mask], hx, hy, R, inCircleShare) if mask is not None else []
         elif maskMethod == "annulus":
-            ann, mask, samScore, res["pts"] = annulusMask(img, hx, hy, R, holes.get("points"), maskGamma)
+            ann, cap, samScore, res["pts"] = annulusMask(img, hx, hy, R, holes.get("points"), maskGamma)
             res["annulus"] = ann
-            if mask is None:
+            mask = None                                   # the annulus method draws and scores only the annulus
+            if ann is None:
                 notes.append(samScore)
                 inCircle = []
             else:
-                inCircle = [ann, mask]                    # annulus first (the larger), then the cap inside it
-                res["maskInfo"] = (f"annulus mask {int(ann.sum())} px from {len(res['pts']) - 17} prompts on r "
-                                   f"{R - ANNULUS_INSET:.1f} + 17 negative on the cap (r 0 / 30 / 60); cap = inside it, "
-                                   f"{int(mask.sum())} px")
+                inCircle = [ann]
+                measureAnnulus(res, hx, hy, R, ann, cap, samScore, floor)
+                if res.get("ellipse") is None:
+                    notes.append("no inner ellipse (too few inner edge points)")
         else:
             mask, info = capMaskByBoxes(img, hx, hy, maskGamma)
             inCircle = masksInCircle(info["allMasks"], hx, hy, R, inCircleShare)
@@ -488,6 +569,72 @@ def measure(img: np.ndarray, model: str, floor: float = 1.0, maskMethod: str = "
     res["seconds"] = f"{time.perf_counter() - t0:.2f}"
     res["note"] = "; ".join(notes)
     return res
+
+
+def measureAnnulus(res: dict, hx, hy, R, ann, cap, samScore, floor) -> None:
+    """Annulus method (CHANGES 210): inner ellipse by the most inner edge points on it; scores on it ("ellipse") and on
+    the ring's own inner edge along each ray ("mask" column = R minus the ring width); widths, islands; the ANNULUS
+    line for the terminal."""
+    inner = innerEdgePoints(ann, cap)
+    fit = maxInliersEllipse(inner)
+    widths = annulusWidths(hx, hy, R, ann)
+    res.update(sam_score=f"{samScore:.3f}", mask_area=int(ann.sum()), ann_area=int(ann.sum()), inner_points=len(inner),
+               width_min=f"{min(widths):.1f}", width_max=f"{max(widths):.1f}", width_mean=f"{np.mean(widths):.1f}",
+               width_sd=f"{np.std(widths):.2f}", widths=" ".join(f"{w:.0f}" for w in widths),
+               prompts=len(res["pts"]) - 17)
+    res["maskInfo"] = (f"annulus mask {int(ann.sum())} px from {len(res['pts']) - 17} prompts on r {R - ANNULUS_INSET:.1f}"
+                       f" + 17 negative on the cap; {len(inner)} inner edge points")
+    if fit is not None:
+        e = fit["e"]
+        res.update(ellipse=e, ell_cx=f"{e[0]:.1f}", ell_cy=f"{e[1]:.1f}", ell_a=f"{e[2]:.1f}", ell_b=f"{e[3]:.1f}",
+                   ell_angle=f"{e[4]:.1f}", ell_minus_hub_dx=f"{e[0] - hx:+.1f}", ell_minus_hub_dy=f"{e[1] - hy:+.1f}",
+                   ell_hub_dist=f"{math.hypot(e[0] - hx, e[1] - hy):.2f}", axis_ratio=f"{e[3] / e[2]:.3f}",
+                   inliers=fit["inliers"], inlier_share=f"{fit['share']:.3f}", inlier_mean_dist=f"{fit['meanDist']:.2f}")
+        h, w = ann.shape
+        yy, xx = np.mgrid[:h, :w]
+        c, s_ = math.cos(math.radians(e[4])), math.sin(math.radians(e[4]))
+        u, v = c * (xx - e[0]) + s_ * (yy - e[1]), -s_ * (xx - e[0]) + c * (yy - e[1])
+        m = INNER_TOLERANCE + 1.0                             # pixels on the edge (within tolerance) are not islands
+        insideEllipse = (u / max(e[2] - m, 1)) ** 2 + (v / max(e[3] - m, 1)) ** 2 < 1.0
+        res["islands"] = int((ann & insideEllipse).sum())     # mask pixels well inside the inner ellipse
+        sE, rE, lE = score(lambda phi: rayToEllipse(hx, hy, phi, e), R, floor)
+        res.update(ratiosE=rE, lengthsE=lE, score_ellipse=f"{sE:.3f}", max_ratio_ellipse=f"{max(rE):.3f}",
+                   **{f"ell_{d}": f"{r:.3f}" for d, r in zip(DIAMETER_ANGLES, rE)})
+    sM, rM, lM = score(lambda phi: R - _ringWidthAt(hx, hy, R, ann, phi), R, floor)
+    res.update(ratiosM=rM, lengthsM=lM, score_mask=f"{sM:.3f}", max_ratio_mask=f"{max(rM):.3f}",
+               **{f"mask_{d}": f"{r:.3f}" for d, r in zip(DIAMETER_ANGLES, rM)})
+
+
+HOLE_ZONE = 45.0                   # px inside the hole circle where gaps in the ring (the holes) are passed over
+
+
+def _ringWidthAt(hx, hy, R, ann, phi, holeZone: float = HOLE_ZONE) -> float:
+    """The ring's width along the ray from H at phi (rad): walking in from the hole circle, gaps in the mask within
+    holeZone px of the circle (a hole, the ring's thin edge round it) are passed over; after that the first pixel off
+    the mask ends the ring. Width = R minus the distance of the last mask pixel (so pieces of the mask inside the cap,
+    not joined to the ring, do not count)."""
+    h, w = ann.shape
+    c, s_ = math.cos(phi), math.sin(phi)
+    t, last = R - 0.5, None
+    while t > 0:
+        x, y = int(round(hx + t * c)), int(round(hy + t * s_))
+        if 0 <= x < w and 0 <= y < h and ann[y, x]:
+            last = t
+        elif R - t > holeZone:
+            break
+        t -= 0.25
+    return R - last if last is not None else 0.0
+
+
+def annulusLine(name: str, res: dict) -> str:
+    """One line per picture for the terminal (CHANGES 210): every annulus value, key=value, for Uddi to send back."""
+    keys = ("model", "rb_silver", "brightness", "hub_x", "hub_y", "hole_r", "prompts", "sam_score", "ann_area",
+            "inner_points", "inliers", "inlier_share", "inlier_mean_dist", "ell_cx", "ell_cy", "ell_a", "ell_b",
+            "ell_angle", "axis_ratio", "ell_minus_hub_dx", "ell_minus_hub_dy", "ell_hub_dist", "islands", "width_min",
+            "width_max", "width_mean", "width_sd", "score_ellipse", "max_ratio_ellipse", "score_mask", "max_ratio_mask",
+            "seconds")
+    parts = [f"{k}={res.get(k, '')}" for k in keys]
+    return f"ANNULUS file={name} " + " ".join(parts) + f" widths10=[{res.get('widths', '')}] note={res.get('note', '')!r}"
 
 
 def marked(img: np.ndarray, res: dict) -> np.ndarray:
@@ -537,11 +684,20 @@ def detailLines(name: str, res: dict) -> list:
         lines.append(f"  YOLO conf {res['yolo_conf']}, iou {res['yolo_iou']}, max_det {res['max_det']}; MobileSAM "
                      f"multimask_output {res['multimask']}, pred_iou_thresh {res['iou_min']}, stability_score_thresh "
                      f"{res['stability_min']}, box_nms_thresh {res['merge_iou']}")
+    if res.get("annulus") is not None and res.get("inliers") not in ("", None):
+        lines.append(f"  inner ellipse: {res['inliers']} of {res['inner_points']} inner edge points within "
+                     f"{INNER_TOLERANCE} px ({res['inlier_share']}), mean distance {res['inlier_mean_dist']} px; angle "
+                     f"{res['ell_angle']}, axis ratio {res['axis_ratio']}, centre - hub distance {res['ell_hub_dist']} px; "
+                     f"mask inside it {res['islands']} px")
+    if res.get("annulus") is not None:
+        lines.append(f"  ring width min / mean / max / sd {res['width_min']} / {res['width_mean']} / {res['width_max']} / "
+                     f"{res['width_sd']} px; every {WIDTH_STEP_DEG} deg from 0: {res['widths']}")
     if res.get("ellipse") is not None:
         lines.append(f"  ellipse centre ({res['ell_cx']}, {res['ell_cy']}), axes {res['ell_a']} / {res['ell_b']}, "
                      f"ellipse - hub {res['ell_minus_hub_dx']} / {res['ell_minus_hub_dy']} px")
+    maskLabel = "ring's inner edge" if res.get("annulus") is not None else "mask"
     for label, ratios, lengths, total in (("ellipse", res.get("ratiosE"), res.get("lengthsE"), res["score_ellipse"]),
-                                          ("mask", res.get("ratiosM"), res.get("lengthsM"), res["score_mask"])):
+                                          (maskLabel, res.get("ratiosM"), res.get("lengthsM"), res["score_mask"])):
         if ratios is None:
             continue
         lines.append(f"  score ({label}) {total} - per diameter (deg): L+ / L- (px) = longer / shorter")

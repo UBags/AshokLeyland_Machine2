@@ -6057,3 +6057,29 @@ in English, at the start and never change it; 40 characters instead of 30, so th
 - Run here (5 OK pictures, dark-blob holes, stand-in boxes): boxes at the defaults - the same scores as before (12.652,
   12.404, 12.561, 14.313, 14.536); annulus - annulus ~37,700 px, cap ~36,200 px, score (ellipse) 12.24 - 13.54, (mask)
   12.52 - 13.73, ~1 s a picture on CPU; the window driven offscreen with "Annulus only": 5 rows, the same scores.
+
+## 210. Study_Cap_Annulus: annulus only drawn, Uddi's values as defaults, inner ellipse by most points, ANNULUS lines (2026-11-27)
+
+- Uddi, 2026-11-27 11:00 (window on his Not OK folder): with Annulus chosen the other masks were still drawn; make the
+  values in his window the defaults; fit the annulus's inner perimeter as an ellipse with the most inner points of the
+  mask on it (not least squares); print the annulus details per picture on the terminal to send back.
+- Annulus only: the cap region is no longer drawn (green outline, third-panel fill) or scored - only the annulus (its
+  edges magenta, third panel the annulus alone) and its inner ellipse (yellow).
+- Defaults (window and no-window script): method annulus, 1 s, conf 0.05, iou 0.95, max_det 300, multimask on,
+  pred_iou_thresh 0.15, stability_score_thresh 0.25, box_nms_thresh 0.90, gamma holes 1.0 / masks 2.0 (`MASK_STUDY`;
+  window "Study defaults"; script `--production` for the cap check's values).
+- Inner ellipse (`maxInliersEllipse`): the annulus pixels touching the region it encloses are the inner edge points
+  (pieces of the mask inside the cap give points too - outliers); candidates the least-squares ellipse of all and 1,500
+  ellipses through 5 random points (fixed seed), the one with the most points within 2 px; then a local search on centre,
+  axes and angle (1 px / 2 deg steps halved to 0.05 px / 0.1 deg) taking any move that puts more points on it (ties: the
+  smaller mean distance). Scores: "ellipse" on it; "mask" now on the ring's inner edge along each ray (walking in from the
+  hole circle, gaps within 45 px of it - the holes - passed over, then the first pixel off the mask; first version stopped
+  at the ring's thin edge round a hole: widths of 3 px and ring scores of 26 - 46 on OK pictures - fixed).
+- `ANNULUS file=... key=value ...` per picture on the terminal (window and script): R-B, brightness, hub, R, prompts,
+  SAM score, annulus area, inner edge points, inliers / share / mean distance, ellipse centre / axes / angle / axis ratio,
+  ellipse - hub dx / dy / distance, mask pieces well inside the ellipse (> 3 px), ring width min / max / mean / sd and every
+  10 deg, both scores and largest ratios, time; the same in the csv.
+- Run here (39 OK pictures, dark-blob holes): inliers 65 - 79 % of 909 - 920 points, mean distance ~0.95 px; ellipse - hub
+  0.6 - 6.3 px; ring width 35 - 57 px, sd 1.8 - 4.9; score ellipse 12.22 - 14.54, ring 12.43 - 14.46 (the two agree within
+  ~0.3). Uddi's Not OK run of 11:00 (before this change): score ellipse 12.67 - 27.40, median 16.58. The window driven
+  offscreen at the new defaults: annulus only drawn, ANNULUS lines on the terminal.

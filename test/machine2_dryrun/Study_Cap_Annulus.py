@@ -8,12 +8,14 @@ the hole circle (12 = centred).
 Run on one folder at a time (all pictures in it, sub-folders not searched):
     python test\\machine2_dryrun\\Study_Cap_Annulus.py <folder> [--model DOST|DOSTPLUS|name] [--mask boxes|points|annulus]
                                      [--save] [--holes-gamma 1.0] [--mask-gamma 2.0] [--floor 1.0] [--sam <mobile_sam.pt>] [--holes morphology]
-  --mask       : boxes (default) = the production cap mask's steps on a disc round the hub centre; points = 24 points;
-                 annulus = a mask of only the annulus (prompts 5 px inside the hole circle, avoiding the holes).
+  --mask       : annulus (default since CHANGES 210) = a mask of only the annulus (prompts 5 px inside the hole circle,
+                 avoiding the holes), an ANNULUS line per picture; boxes = the production cap mask's steps on a disc
+                 round the hub centre; points = 24 points.
   --model name : DOSTPLUS if the file name contains it, else DOST (default DOST).
   --conf / --stability / --iou / --merge / --yolo-iou / --max-det / --multimask : the boxes method's YOLO
                  confidence, MobileSAM minimums, merge overlap, YOLO NMS IoU and maximum detections, 3 masks per box
-                 (else production's values); --overdetect: conf 0.10, NMS 0.80, max det 1000, 3 masks per box,
+                 (defaults since CHANGES 210: conf 0.05, iou 0.95, max_det 300, multimask on, pred_iou 0.15, stability
+                 0.25, box_nms 0.90; --production: the cap check's); --overdetect: conf 0.10, NMS 0.80, max det 1000, 3 masks per box,
                  predicted IoU 0.72, stability 0.78, merge 0.88.
   --holes-gamma / --mask-gamma : gamma of the picture for the hole finder / for MobileSAM's masks (every method).
   --save       : marked pictures (outlines only, no values) and the masks in the hole circle (coloured, largest
@@ -37,7 +39,7 @@ def main():
     ap = argparse.ArgumentParser(description="Cap seating by the annulus (study)")
     ap.add_argument("folder")
     ap.add_argument("--model", default="DOST", choices=["DOST", "DOSTPLUS", "name"])
-    ap.add_argument("--mask", default="boxes", choices=list(A.MASK_METHODS))
+    ap.add_argument("--mask", default=A.STUDY_METHOD, choices=list(A.MASK_METHODS))
     ap.add_argument("--save", action="store_true")
     ap.add_argument("--conf", type=float, default=None, help="YOLO confidence (boxes; else the properties value)")
     ap.add_argument("--stability", type=float, default=None, help="MobileSAM stability minimum (boxes)")
@@ -47,14 +49,17 @@ def main():
     ap.add_argument("--max-det", type=int, default=None, help="YOLO maximum detections (boxes; production 300)")
     ap.add_argument("--multimask", action="store_true", help="3 MobileSAM masks per box (boxes; production 1)")
     ap.add_argument("--overdetect", action="store_true", help="Uddi's over-detection values (then the options above)")
-    ap.add_argument("--holes-gamma", type=float, default=1.0, help="gamma of the picture for the hole finder (1 = none)")
-    ap.add_argument("--mask-gamma", type=float, default=A.MASK_GAMMA_DEFAULT,
+    ap.add_argument("--production", action="store_true", help="the cap check's mask values (then the options above)")
+    ap.add_argument("--holes-gamma", type=float, default=A.STUDY_HOLES_GAMMA, help="gamma of the picture for the hole finder (1 = none)")
+    ap.add_argument("--mask-gamma", type=float, default=A.STUDY_MASK_GAMMA,
                     help="gamma of the picture given to MobileSAM for the masks (production 2.0)")
     ap.add_argument("--floor", type=float, default=1.0, help="px; the shorter length is at least this in a ratio")
     ap.add_argument("--sam", default=None)
     ap.add_argument("--holes", default=None, choices=["morphology"])
     args = ap.parse_args()
     A.configure(args.sam, args.holes)
+    if args.production:
+        A.setMaskParameters(**A.MASK_DEFAULTS)
     if args.overdetect:
         A.setMaskParameters(**A.MASK_OVERDETECT)
     mp = A.setMaskParameters(args.conf, args.stability, args.iou, args.merge, args.yolo_iou, args.max_det,
@@ -80,6 +85,8 @@ def main():
         res = A.measure(img, A.modelFor(args.model, p.name), args.floor, args.mask, args.holes_gamma, args.mask_gamma)
         res["file"] = p.name
         rows.append(res)
+        if args.mask == "annulus":
+            print(A.annulusLine(p.name, res), flush=True)
         if args.save:
             cv2.imwrite(str(resultsDir / f"{p.stem}_annulus.jpg"), A.marked(img, res))
             if res.get("masksPicture") is not None:
