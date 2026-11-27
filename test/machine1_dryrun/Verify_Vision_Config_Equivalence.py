@@ -146,7 +146,7 @@ class _Normalise(ast.NodeTransformer):
         if self.renameKeys and isinstance(node.value, str):
             text = renameInText(node.value)
             # a key name without "vision." (VisionFrame's centre / oval names: "bung.seating.reference.oval.dost")
-            if text == node.value and text and " " not in text and "." in text:
+            if text == node.value and text and " " not in text and "." in text and not text.startswith("vision."):
                 renamed = newCodeKey("vision." + text)
                 if renamed != "vision." + text:
                     text = renamed[len("vision."):]

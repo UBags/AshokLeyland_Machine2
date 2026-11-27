@@ -6380,3 +6380,52 @@ ellipse is not an ellipse). Both dry-run folders. Stage-2 fraction (e < 0.7) unc
 **Effect on the 17 logged values:** verdicts as in 218 - 9 / 9 good OK, 5 / 5 bad NOT OK, "good?" 12-46-43 NOT OK
 (e 1.39), 153625563 OK. **153622275 ("bad?", dx -27.8, dy -2.8) now just outside (e 1.07, was 1.24)**: a little more
 east-west would let it in (e = 1 at east-west ~ 27.9).
+
+## 220. DOSTPLUS bung on the hub centre in production - every value a properties key (2026-11-27)
+
+**Asked (Uddi):** freeze the study at the settings of CHANGES 219 and take it to production, with the settings in the
+properties file, not in the code.
+
+**Changed:**
+- `camera/BungSegmenter.py`:
+  - new keys (all `vision.<vendor>.dostplus.bung.*`; code default = Machine 2 value except the method):
+    - `method` - `fixed` (as before; code default, Machine 1) / `hubcentre` (Machine 2), checked by `expectOneOf`;
+    - `hubcentre.region` - 27, 33, 11 (east-west, north, south half-axes, px);
+    - `hubcentre.region.notok.above` 1.0 / `region.ok.below` 0.7;
+    - `hubcentre.roundness.notok.below` 0.945 / `roundness.ok.above` 0.955;
+    - `hubcentre.outside.notok.above` 0.11 / `outside.ok.below` 0.07.
+  - `onHubCentre(model)`, `placeOnHubCentre(bgr, model)`: the hub's holes (`FindHubHoles.findHoles(..., check="bung")`);
+    found -> `OUTER_DISC_CENTER` / `OUTER_DISC_RADIUS` = the hub-hole circle and the mask grid with them (`_applyGrid`,
+    split out of `useModel`), until the next `useModel`.
+  - `hub_region_value(dx, dy)`, `check_bung_seating_on_hub_centre(rgb, components, hub)`: the study's measures and two
+    stages; returns `check_bung_seating`'s dict (`seated_at` = H, `offset` = |hole centre - H|) + dx, dy, region,
+    region_axes. Face radius and reference oval: the existing `seating.face.radius.*` / `seating.reference.oval` keys.
+  - Reference commit b977764 (values hard-coded); both manifests point `camera/BungSegmenter.py` at it; the extracted
+    pair-distance entries' `old_line` 1550 -> 1577.
+- `camera/CheckBung.py`, `CheckNoCapBung.py`: after `useModel`, with `onHubCentre`: hub holes first, not found -> NOT OK
+  ("the hub's holes not found ..., bung not checked"); the seating step (`seating.check`) calls
+  `check_bung_seating_on_hub_centre`. `drawSeatingMarks` draws the region (orange, two half ellipses) when the seating
+  dict has `region_axes`, and the hub-hole circle also when the hole pattern failed (already found). No text.
+- Properties (all three): the 8 keys for both vendors (allenbradley: `method=fixed`; siemens: `method=hubcentre`).
+  **A live `ApplicationConfiguration.properties` without them runs DOSTPLUS the old way (`fixed`, the code default)
+  and logs the missing keys once.**
+- Verifier (both copies): the rename normalisation of the baseline side no longer prefixes "vision." to a string that
+  already starts with "vision." (a new-style key in a reference commit came out as `dostplus.vision.bung.method`).
+- `DryRun_Bung_Check_UI.py` (both): production now does the method - the study checkbox ("(old)") off by default;
+  production's seating and the hub placement are recorded (times, `SEATING` line), labelled pictures give a
+  "SUMMARY (production)". `_bung_hubcentre_study.py` reads its region and limits from the BungSegmenter keys (no values
+  of its own).
+- Docs: CLAUDE.md, LLD, HLD, READMEs, CODE_GRAPH (3_camera, 6_modules, SVGs).
+
+**Time:** the hub's holes are now found before the bung's holes instead of in the seating step: the same work for a
+picture whose holes pass; a picture whose hole pattern fails now also pays for the hub holes (0.5 - 0.7 s on the laptop
+by CHANGES 170); a picture whose hub holes are not found stops at once. Check times to be reported against 1.5 s / 2 s.
+
+**Run (sandbox, no YOLO - hub holes by the dark-blob finder):**
+- Verify_Vision_Config_Equivalence: ALL EQUIVALENT on both machines (467 parameters).
+- DryRun_Import_Boundaries: PASS.
+- Study path vs production path on 3 DOSTPLUS pictures (A03, B18 OK; C14 NOT OK): the same dx, dy, e, roundness,
+  outside and verdicts.
+- Hub not found (stand-in): NOT OK, bung not checked. allenbradley: method fixed, `onHubCentre` False.
+- `bung_images/` (13 Nov): the dark-blob finder finds no hub holes in any of these pictures (DOST's seating fails the
+  same way, unchanged) - not judgeable here; the laptop run (YOLO + MobileSAM) decides.

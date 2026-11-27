@@ -31,13 +31,17 @@ round the same centre. One "[Bung] ..." log line per gamma.
   hole circle's centre a blue cross; the terminal line "HUBHOLES" gives centre, radius, spread, gap, method, gamma and
   seed (or why not found). --holes morphology = the dark-blob finder with its own offsets (no YOLO weights).
 
-  DOSTPLUS hub-centre study (CHANGES 215, Uddi 2026-11-27; "DOSTPLUS: hub-centre study", on by default; DOST is never
-  studied - its check is production's): the hub's 5 holes first; the segmented disc = the hub-hole circle (dark blue),
+  DOSTPLUS on the hub centre in production since CHANGES 220 (vision.<vendor>.dostplus.bung.method=hubcentre, the
+  region and limits are vision.<vendor>.dostplus.bung.hubcentre.* keys): the picture shows production's marks - the
+  hub-hole circle (thin blue), the reference oval on the hub centre (thick yellow), the allowed region of the hole
+  centre (orange), the top face green / red; the SEATING line gives dx, dy, e and the stage; labelled pictures (OK /
+  NOT_OK subfolders) give a "SUMMARY (production)" at the end like the study's.
+  DOSTPLUS hub-centre study (CHANGES 215 - 219, Uddi 2026-11-27; "DOSTPLUS: hub-centre study (old)", off by default;
+  its limits are read from the same keys; DOST is never studied - its check is production's): the hub's 5 holes first; the segmented disc = the hub-hole circle (dark blue),
   the hole search disc r135 round the hub centre (thin yellow, yellow cross); the production hole check runs on those
   discs; the seating measured with the reference oval centred on the hub centre (thick yellow); the hole-pattern centre
   must lie in the region round the hub centre (orange; east-west, north and south half-axes, HOLE_REGION; CHANGES 217:
-  the hub offset is ignored). Production
-  (camera/...) is not changed. One "STUDY" line per DOSTPLUS picture with every value; pictures in subfolders named
+  the hub offset is ignored). One "STUDY" line per DOSTPLUS picture with every value; pictures in subfolders named
   OK and NOT_OK (or GOOD / BAD) are labelled, and a "STUDY SUMMARY" at the end gives the OK / NOT OK range of each
   value and a limit midway where they separate. The study's limits: STUDY_LIMITS in _bung_hubcentre_study.py.
 
@@ -109,8 +113,8 @@ class BungCheckWindow:
         addHubPictureControl(bar, root, report=lambda line: self.status.set(line))
         self.save = tk.BooleanVar(value=False)
         ttk.Checkbutton(bar, text="Save marked pictures", variable=self.save).pack(side="left", padx=10)
-        self.studyOn = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="DOSTPLUS: hub-centre study", variable=self.studyOn).pack(side="left", padx=(0, 10))
+        self.studyOn = tk.BooleanVar(value=False)     # CHANGES 220: production checks DOSTPLUS on the hub centre itself
+        ttk.Checkbutton(bar, text="DOSTPLUS: hub-centre study (old)", variable=self.studyOn).pack(side="left", padx=(0, 10))
         self.study = None
         self.startButton = ttk.Button(bar, text="Start", command=self.start, state="disabled")
         self.startButton.pack(side="left")
@@ -174,6 +178,30 @@ class BungCheckWindow:
                 return result
 
             BS.check_bung_seating = recordingSeating
+            originalHubSeating = BS.check_bung_seating_on_hub_centre      # DOSTPLUS on the hub centre (CHANGES 220)
+
+            def recordingHubSeating(image_rgb, components, hub, model_type="DOSTPLUS"):
+                t = time.perf_counter()
+                try:
+                    result = originalHubSeating(image_rgb, components, hub, model_type)
+                finally:
+                    add("seating", time.perf_counter() - t)
+                self.last["seating"] = result
+                return result
+
+            BS.check_bung_seating_on_hub_centre = recordingHubSeating
+            originalPlace = BS.placeOnHubCentre
+
+            def timedPlace(image_bgr, model_type):
+                self.inPlace = True
+                try:
+                    hub = originalPlace(image_bgr, model_type)
+                finally:
+                    self.inPlace = False
+                self.last["hub"] = hub
+                return hub
+
+            BS.placeOnHubCentre = timedPlace
             # step times (CHANGES 172): the hub's holes in the seating step / only for the marks on a picture whose
             # seating did not run (CheckBung.drawSeatingMarks); the dry run's own hub check (production has state 5's)
             from camera.FindHubHoles import FindHubHoles
@@ -184,7 +212,7 @@ class BungCheckWindow:
                 try:
                     return originalFind(anImage, model, hubCentre, check=check)
                 finally:
-                    add("hub holes (study)" if getattr(self, "inStudy", False) else
+                    add("hub holes (study)" if getattr(self, "inStudy", False) or getattr(self, "inPlace", False) else
                         "hub holes (seating)" if self.inSeating else "hub holes (marks only)", time.perf_counter() - t)
 
             FindHubHoles.findHoles = staticmethod(timedFind)
@@ -326,6 +354,17 @@ class BungCheckWindow:
                     seatText = ("not run (hole check failed)" if seat is None else
                                 f"{'SEATED    ' if seat['seated'] else 'NOT SEATED'}  {seat['reason']}")
                     print(f"SEATING  {path.name:28s} as {asModel:8s}  {seatText}", flush=True)
+                if not studying and asModel == "DOSTPLUS" and self.BS.onHubCentre("DOSTPLUS") and self.study is not None:
+                    hub = self.last.get("hub")      # production on the hub centre (CHANGES 220): into the summary
+                    if hub is not None and not hub.get("found"):
+                        why = f"the hub's 5 holes not found ({hub.get('reason')})"
+                    elif seat is None:
+                        why = "hole pattern NOT OK"
+                    else:
+                        why = seat["reason"]
+                    self.study.record(self.labelOf(path), path.name,
+                                      seat if seat is not None and seat.get("region") is not None else None,
+                                      "OK" if ok else "NOT OK", why)
                 print(f"RESULT   {path.name:28s} as {asModel:8s}  {'OK' if ok else 'NOT OK'}  {seconds:5.2f} s",
                       flush=True)
                 if hubHoles:
@@ -347,6 +386,8 @@ class BungCheckWindow:
                     break
         if self.study is not None:
             lines = self.study.summaryLines()
+            if lines and not self.studyOn.get():
+                lines[0] = lines[0].replace("STUDY SUMMARY", "SUMMARY (production)", 1)
             for line in lines:
                 print(line, flush=True)
             if lines:
@@ -371,7 +412,7 @@ class BungCheckWindow:
         return (f"total {total:.2f} s = bung holes {t.get('bung holes', 0.0):.2f} s ({t.get('gammas', 0)} gammas)"
                 f" + hub holes {holesSeat:.2f} s + seating face {seatingRest:.2f} s"
                 f" + hub holes for the marks only {holesMarks:.2f} s"
-                + (f" + hub holes first (study) {t['hub holes (study)']:.2f} s" if "hub holes (study)" in t else "")
+                + (f" + hub holes first {t['hub holes (study)']:.2f} s" if "hub holes (study)" in t else "")
                 + f" + other {total - accounted - t.get('hub holes (study)', 0.0):.2f} s"
                 f"  [dry run's own hub check, not in production: {hubCheckSeat + hubCheckMarks:.2f} s]")
 

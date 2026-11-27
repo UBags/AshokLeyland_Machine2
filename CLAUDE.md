@@ -77,8 +77,15 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `vision.<vendor>.dostplus.bung.*` (only `bung.debug.print.*` shared). `BungSegmenter` holds `X_DOST` / `X_DOSTPLUS`;
   `useModel(model)` (CheckBung / CheckNoCapBung, after the QR code) points the plain `X` at the model's values. DOST is
   checked exactly as before. DOSTPLUS on the hub centre (hub holes first; segmented disc = hub-hole circle; hole search
-  r135 round the hub centre; reference oval on the hub centre) is a **study in `DryRun_Bung_Check_UI.py` only**
-  (`_bung_hubcentre_study.py`); hub offset ignored since CHANGES 217: the hole-pattern centre must lie in an egg-shaped region round H (`HOLE_REGION` east-west 27 / north 33 / south 11 px since CHANGES 219 (218: 25 / 33 / 11; 217: 22 / 30 / 8) - the good bungs are seen north of H); provisional verdict: NOT OK if region e > 1 / roundness < 0.945 / outside on H > 11 %; else OK if e < 0.7 / roundness > 0.955 / outside < 7 %; else NOT OK.
+  r135 round the hub centre; reference oval on the hub centre) is **in production since CHANGES 220** (Uddi froze the
+  study on 2026-11-27): `vision.<vendor>.dostplus.bung.method=hubcentre` on Machine 2 (`fixed` = before, the code default
+  and Machine 1); `BungSegmenter.placeOnHubCentre` (hub holes first, not found -> NOT OK) and
+  `check_bung_seating_on_hub_centre`: hub offset not used; the hole-pattern centre in an egg-shaped region round H
+  (`vision.<vendor>.dostplus.bung.hubcentre.region` = east-west 27 / north 33 / south 11 px - the good bungs are seen north
+  of H); verdict NOT OK if e > `region.notok.above` (1.0) / roundness < `roundness.notok.below` (0.945) / outside on H >
+  `outside.notok.above` (0.11); else OK if e < `region.ok.below` (0.7) / roundness > `roundness.ok.above` (0.955) / outside
+  < `outside.ok.below` (0.07); else NOT OK - every value a `hubcentre.*` key, none in the code (Uddi). The study
+  (`_bung_hubcentre_study.py`, CHANGES 215 - 219) stays in `DryRun_Bung_Check_UI.py`, off by default, reading the same keys.
 - Vision parameters: `vision.<vendor>.*`, declared in each check module through `camera/VisionConfig.py`
   (`vInt`, `vFloat`, `vTuple`, `vPoints`, ...) with the Machine 1 value as the code default. Since CHANGES 105 the
   knuckle frame and locator reference values are keys too (`vision.frame.*`, `vision.knuckle.locator.*`); the

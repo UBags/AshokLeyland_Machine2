@@ -209,7 +209,7 @@ flowchart TB
   CP -->|"silver seating (annulus, CHANGES 212)"| CAN["CapAnnulus"] --> CMF
   A -->|"S24 bung for cap press"| CB["CheckBung"] --> BS
   SP & CP --> FH["FindHubHoles<br/>sam (default, wide annulus; centre from the picture itself, CHANGES 182; holes refined for the split pin, 183) / sam_slow / morphology"]
-  BS -.->|"bung seated position"| FH
+  BS -.->|"bung seated position; DOSTPLUS hub centre first (CHANGES 220)"| FH
   FH -.->|"reuses checkHub() steps"| HS
   HS & HN & KL -.-> MM["ModelManager<br/>YOLO ObjectAwareModel + MobileSAM (lazy, CUDA if present)"]
   FH -.-> MM
@@ -377,17 +377,17 @@ flowchart LR
     OtherServices["OtherServices<br/><small>76 lines</small>"]
   end
   subgraph pkg_camera["camera"]
-    camera_BungSegmenter["BungSegmenter<br/><small>2048 lines</small>"]
+    camera_BungSegmenter["BungSegmenter<br/><small>2288 lines</small>"]
     camera_CameraProcessorServer["CameraProcessorServer<br/><small>1725 lines</small>"]
     camera_CameraStateFile["CameraStateFile<br/><small>97 lines</small>"]
     camera_CapAnnulus["CapAnnulus<br/><small>305 lines</small>"]
     camera_CapMaskFinder["CapMaskFinder<br/><small>289 lines</small>"]
-    camera_CheckBung["CheckBung<br/><small>502 lines</small>"]
+    camera_CheckBung["CheckBung<br/><small>524 lines</small>"]
     camera_CheckCap["CheckCap<br/><small>1088 lines</small>"]
     camera_CheckHubAndBottomBearing["CheckHubAndBottomBearing<br/><small>613 lines</small>"]
     camera_CheckKnuckle["CheckKnuckle<br/><small>1091 lines</small>"]
     camera_CheckNoBung["CheckNoBung<br/><small>202 lines</small>"]
-    camera_CheckNoCapBung["CheckNoCapBung<br/><small>487 lines</small>"]
+    camera_CheckNoCapBung["CheckNoCapBung<br/><small>502 lines</small>"]
     camera_CheckNutAndPlateWasher["CheckNutAndPlateWasher<br/><small>817 lines</small>"]
     camera_CheckSplitPinAndWasher["CheckSplitPinAndWasher<br/><small>250 lines</small>"]
     camera_CheckTopBearing["CheckTopBearing<br/><small>2216 lines</small>"]
@@ -398,7 +398,7 @@ flowchart LR
     camera_ModelManager["ModelManager<br/><small>447 lines</small>"]
     camera_RTSPCam["RTSPCam<br/><small>1239 lines</small>"]
     camera_VisionCheckWorker["VisionCheckWorker<br/><small>384 lines</small>"]
-    camera_VisionFrame["VisionFrame<br/><small>354 lines</small>"]
+    camera_VisionFrame["VisionFrame<br/><small>358 lines</small>"]
   end
   subgraph pkg_costhetaio_allenbradley["costhetaio.allenbradley"]
     costhetaio_allenbradley_AllenBradleyPLCDataIO["AllenBradleyPLCDataIO<br/><small>106 lines</small>"]

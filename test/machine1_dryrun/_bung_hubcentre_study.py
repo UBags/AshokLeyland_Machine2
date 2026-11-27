@@ -1,6 +1,7 @@
 """
 _bung_hubcentre_study - DOSTPLUS bung check placed on the hub centre (Uddi, 2026-11-27, CHANGES 215). A study: used only
-by DryRun_Bung_Check_UI.py; production (camera/BungSegmenter.py, CheckBung, CheckNoCapBung) is not changed. DOST is not
+by DryRun_Bung_Check_UI.py. Since CHANGES 220 production does the same (vision.<vendor>.dostplus.bung.method=hubcentre,
+BungSegmenter.placeOnHubCentre / check_bung_seating_on_hub_centre); the study is kept, off by default in the window. DOST is not
 studied: its check runs exactly as in production.
 
 For a DOSTPLUS picture:
@@ -23,7 +24,7 @@ For a DOSTPLUS picture:
        - the share of the face outside the reference oval (vision.<vendor>.dostplus.bung.seating.reference.oval) centred
          on H itself (Uddi: on the hub centre; the seated face sits ~17 px off H - the camera angle - so this share is
          larger than production's and its limit is to be recalibrated).
-     Verdict (STUDY_RULE_NOT_OK / STUDY_RULE_OK; CHANGES 217, provisional until recalibrated on Uddi's pictures):
+     Verdict (STUDY_RULE_NOT_OK / STUDY_RULE_OK; frozen in CHANGES 220, from production's keys):
      stage 1 - any -> NOT OK; stage 2 - any -> OK; else NOT OK. No hole pattern or no top-face mask -> NOT OK.
   4. Measure, then decide (Uddi): every value per picture on a "STUDY" line; with pictures in subfolders named OK and
      NOT_OK (or GOOD / BAD) the summary at the end gives, per value, the OK and NOT OK ranges, the worst OK and the closest
@@ -35,23 +36,21 @@ import time
 import cv2
 import numpy as np
 
-# Allowed region of the hole-pattern centre round the hub centre H (CHANGES 217, Uddi 2026-11-27: the hub offset
-# ignored; an ellipse longer on one side). Two half ellipses sharing the east-west half-axis, px in the picture (y down =
-# south). Start: from Uddi's 17 pictures of 26 / 27 Nov - the 9 good hole centres all lie NORTH of H (dy -9.5 .. -21.9,
-# dx -0.8 .. +14.5); the bad ones at 27.9 - 54.7 px, two of them south (+27.0, +9.9). south is a guess (no good bung
-# south of H yet). Recalibrate from the STUDY SUMMARY.
-HOLE_REGION = dict(east_west=27.0, north=33.0, south=11.0)   # CHANGES 219 (Uddi; 218: 25 / 33 / 11, 217: 22 / 30 / 8)
-# Rule (provisional, CHANGES 217) - Uddi's rule of CHANGES 216 with the two offset-based terms replaced by the region:
-#   NOT OK if region e > 1 or roundness < 0.945 or outside (oval on H) > 11 %;
-#   else OK if region e < 0.7 or roundness > 0.955 or outside (oval on H) < 7 %;
-#   else NOT OK.
-# (label, values key, operator, limit) - edit here to try other limits.
-STUDY_RULE_NOT_OK = (("hole centre outside the region round H (e)", "region", ">", 1.0),
-                     ("face roundness", "roundness", "<", 0.945),
-                     ("face outside the oval on H", "outside", ">", 0.11))
-STUDY_RULE_OK = (("hole centre well inside the region (e)", "region", "<", 0.7),
-                 ("face roundness", "roundness", ">", 0.955),
-                 ("face outside the oval on H", "outside", "<", 0.07))
+# Allowed region of the hole-pattern centre round the hub centre H and the two-stage rule: since CHANGES 220 (frozen by
+# Uddi on 2026-11-27 at east-west 27 / north 33 / south 11 px) production's keys vision.<vendor>.dostplus.bung.hubcentre.*,
+# read here from camera.BungSegmenter - no values of their own. Two half ellipses sharing the east-west half-axis, px
+# in the picture (y down = south); the good bungs are seen north of H.
+from camera import BungSegmenter as _BS
+HOLE_REGION = dict(zip(("east_west", "north", "south"), (float(v) for v in _BS.DOSTPLUS_HUBCENTRE_REGION)))
+#   NOT OK if region e > notok.above or roundness < notok.below or outside (oval on H) > notok.above;
+#   else OK if region e < ok.below or roundness > ok.above or outside (oval on H) < ok.below; else NOT OK.
+# (label, values key, operator, limit)
+STUDY_RULE_NOT_OK = (("hole centre outside the region round H (e)", "region", ">", _BS.DOSTPLUS_HUBCENTRE_REGION_NOTOK_ABOVE),
+                     ("face roundness", "roundness", "<", _BS.DOSTPLUS_HUBCENTRE_ROUNDNESS_NOTOK_BELOW),
+                     ("face outside the oval on H", "outside", ">", _BS.DOSTPLUS_HUBCENTRE_OUTSIDE_NOTOK_ABOVE))
+STUDY_RULE_OK = (("hole centre well inside the region (e)", "region", "<", _BS.DOSTPLUS_HUBCENTRE_REGION_OK_BELOW),
+                 ("face roundness", "roundness", ">", _BS.DOSTPLUS_HUBCENTRE_ROUNDNESS_OK_ABOVE),
+                 ("face outside the oval on H", "outside", "<", _BS.DOSTPLUS_HUBCENTRE_OUTSIDE_OK_BELOW))
 STUDY_LIMITS = {"region": HOLE_REGION, "NOT OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_NOT_OK],
                 "else OK if any": [f"{k} {op} {v:g}" for _, k, op, v in STUDY_RULE_OK]}
 # per value: (key, label, kind) - kind "max": OK when value <= limit; "min": OK when value >= limit; "range": both sides

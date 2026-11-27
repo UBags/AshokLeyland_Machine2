@@ -326,9 +326,22 @@ six pictures are three pictures twice). Offsets for this finder's centres (§170
 `CheckNoCapBung` once the QR code gives the model) points at that model's values, with the mask generator's hole grid.
 The knuckle frame places `OUTER_DISC_CENTER_DOST` / `_DOSTPLUS` (targets `dost.bung.outer.disc.center` /
 `dostplus.bung.outer.disc.center`, like the seated centres). Both models start with the values they had before, so the
-checks are unchanged. **DOSTPLUS hub-centre study** (dry-run window only, `_bung_hubcentre_study.py`): hub holes
-first, the segmented disc = the hub-hole circle, the hole-search disc r135 round the hub centre, the reference oval on
-the hub centre; values printed for recalibration, production not changed.
+checks are unchanged. **DOSTPLUS on the hub centre** (CHANGES §220, Uddi's study of 2026-11-27, §215 - §219, frozen):
+`vision.<vendor>.dostplus.bung.method` = `fixed` (code default, Machine 1: as above) or `hubcentre` (Machine 2). With
+`hubcentre`, `CheckBung` / `CheckNoCapBung` call `BungSegmenter.placeOnHubCentre` after `useModel`: the hub's 5 holes in
+the bung picture (`FindHubHoles.findHoles(..., check="bung")`; not found -> NOT OK, bung not checked), and the
+segmented disc = the hub-hole circle (`OUTER_DISC_CENTER` / `OUTER_DISC_RADIUS` and the grid, until the next
+`useModel`); holes searched within `inner.disc.radius` (135) of the hub centre H. Seating (`seating.check`) by
+`check_bung_seating_on_hub_centre` - the hub offset is not used: the hole-pattern centre (dx, dy from H, picture y down)
+must lie in an egg-shaped region round H, `e = (dx / east-west)^2 + (dy / north or south)^2`
+(`hubcentre.region` = 27, 33, 11 px - the good bungs are seen north of H: the camera's optical centre lies south of the
+hub); the top face (MobileSAM at the hole-pattern centre, face radius `seating.face.radius.min - max`): roundness and
+its share outside `seating.reference.oval` centred on H. Verdict: NOT OK if e > `hubcentre.region.notok.above` (1.0),
+roundness < `hubcentre.roundness.notok.below` (0.945) or outside > `hubcentre.outside.notok.above` (0.11); else OK if
+e < `hubcentre.region.ok.below` (0.7), roundness > `hubcentre.roundness.ok.above` (0.955) or outside <
+`hubcentre.outside.ok.below` (0.07); else NOT OK. All `vision.<vendor>.dostplus.bung.*` keys; the code defaults are
+the Machine 2 values except the method. Picture: hub-hole circle, the oval and the region (orange) round H, top face
+green / red; no text. The study (`_bung_hubcentre_study.py`) is kept in the dry-run window, off by default.
 
 **Bung holes (`BungSegmenter`, both bung checks; since CHANGES 115).** Per gamma (2.0, 7.75, 4.0, 6.5, 1.0, until a
 definite answer), on the r250 disc round `bung.outer.disc.center`:
