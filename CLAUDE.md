@@ -226,11 +226,12 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
 | 15 Start-up: the backup beside the mode / login dialogs, its time and any wait before the DB server; the launcher polling every 2 s (CHANGES 174) | Not reported yet |
 | 16 Model files checked at start: missing -> message on the screen for 5 s, MainProgram exits, nothing started (CHANGES 175) | Not reported yet |
 | 17 Camera reboot from Machine Settings: accepted, picture back, reconnect; refused when wrong password / during a cycle (CHANGES 177) | Not reported yet |
+| 18 DOSTPLUS bung on the hub centre: the 8 `dostplus.bung.method` / `hubcentre.*` keys in the properties; laptop SUMMARY (production) as labelled, check times; plant summary lines of a shift (CHANGES 220) | Study on the laptop (Uddi, 26 / 27 Nov): good / bad as labelled with the frozen limits; production run not reported yet |
 | 11.7 Frontend in Kannada / Hindi in the exe stays up (Qt messages to the log, CHANGES 176) | Cause **confirmed** (Uddi, 2026-11-20): the old exe with `QT_LOGGING_RULES=*=false` on the plant PC - no crash, all four languages. New exe (with the handler) not reported yet |
 
 No per-check times were recorded with the report; when they are, put them in the results table of the document.
 
-## 8. Open items (as of 2026-11-19)
+## 8. Open items (as of 2026-11-27)
 
 - **One source of truth for the cycle state** (`docs/state_sync.md`): **Plan A built** (CHANGES 108, 2026-11-15) -
   the IOServer publishes every state change (`io2festate.q`, `io:state`), the frontend compares it with its own state

@@ -6429,3 +6429,13 @@ by CHANGES 170); a picture whose hub holes are not found stops at once. Check ti
 - Hub not found (stand-in): NOT OK, bung not checked. allenbradley: method fixed, `onHubCentre` False.
 - `bung_images/` (13 Nov): the dark-blob finder finds no hub holes in any of these pictures (DOST's seating fails the
   same way, unchanged) - not judgeable here; the laptop run (YOLO + MobileSAM) decides.
+
+## 221. Docs brought up to date after CHANGES 220 (2026-11-27)
+
+- `docs/plant-pc-verification.md`: step 18 (DOSTPLUS bung on the hub centre: keys in the properties before the build,
+  laptop SUMMARY (production) and times, plant summary lines of a shift, DOST unchanged) and its results row; CLAUDE.md
+  §7 row 18; §8 dated 2026-11-27.
+- `docs/vision_positions_machine2.md`: the DOSTPLUS hub-centre row (region half-axes, oval on H).
+- The claude.ai Project copies refreshed (HLD, LLD, PLC interface, state sync, plant-PC verification, vision positions,
+  code graph, changes log from §81).
+No code changed.

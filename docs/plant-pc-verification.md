@@ -342,6 +342,20 @@ On the Machine 2 PC with the new exe:
 4. Should the camera refuse (HTTP 401 / 403): the reason is shown; check `vision.siemens.camera.uid` / `.pwd` and that
    the camera user may reboot (Hikvision: Configuration -> User Management, the admin user can).
 
+## 18. DOSTPLUS bung on the hub centre (CHANGES 220)
+Before the build: the live `ApplicationConfiguration.properties` and the build copies must hold the 8
+`vision.siemens.dostplus.bung.method` / `.hubcentre.*` keys (`method=hubcentre`); without them DOSTPLUS runs the old
+way and a `[Configuration]` line names the missing keys.
+1. Laptop: `DryRun_Bung_Check_UI.py` on the good / bad DOSTPLUS pictures in `OK` / `NOT_OK` subfolders: the
+   "SUMMARY (production)" line should give every picture as labelled (the study's verdicts of 27 Nov); the TIMES lines
+   give the check times (targets 1.5 s / 2 s average).
+2. Plant, DOSTPLUS parts: `[CheckBung]` / `[CheckNoCapBung]` summary lines with `hub (...) r ... (sam); holes centre ...
+   dx ... dy ... region e ...` and the deciding stage; a bung whose hub holes are not found: "the hub's holes not
+   found ..., bung not checked" (NOT OK). Picture: hub-hole circle, yellow oval and orange region round the hub
+   centre, top face green / red, no text.
+3. Send the summary lines of a shift (good and NOT OK) for a check of the limits.
+4. DOST parts: lines as before (unchanged).
+
 ## Results
 
 | Step | Date | Exe build | Result | Notes |
@@ -364,4 +378,5 @@ On the Machine 2 PC with the new exe:
 | 15 Start-up: backup in the background, its time; any wait before the DB server; launcher polling every 2 s (CHANGES 174) | | | | |
 | 16 Model files: present line at start; missing -> message 5 s, exit, nothing started (CHANGES 175) | | | | |
 | 17 Camera reboot from Machine Settings: accepted line, minutes until the picture is back, reconnect, next cycle OK; wrong password / during a cycle nothing sent (CHANGES 177) | | | | |
+| 18 DOSTPLUS bung on the hub centre: keys in the properties; laptop SUMMARY (production) as labelled, check times; plant summary lines of a shift (CHANGES 220) | | | | Study runs on the laptop of 26 / 27 Nov (Uddi): 9 good / 5 bad DOSTPLUS pictures as labelled with the frozen limits (CHANGES 216 - 219) |
 | 11.7 Frontend in Kannada / Hindi / Tamil in the exe: stays up; `Qt warning` lines once each (CHANGES 176) | 2026-11-20 | before 176 | Cause confirmed | Reported by Uddi: the old exe started with `QT_LOGGING_RULES=*=false` did not crash and switched through all four languages. The new exe (handler) still to be run |
