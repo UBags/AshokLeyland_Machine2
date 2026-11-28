@@ -113,3 +113,31 @@ Continues `claude/machine2-changes-log.md` (sections 1-73). Branch `machine2-fro
 - **Verifier:** reference a2bf819 (the previous reference 637ce4a with this logic, values hard-coded). ALL EQUIVALENT in both copies.
 - **Figure:** `knuckle_check_regions_machine2_with_alternates.png` (session output).
 - **Found on the way (not changed):** when Redis is down, every `logBoth` call blocks for about 1–3 s while it retries the connection (cycle-context lookup and log queue). One knuckle check then took about 26 s instead of a fraction of a second. If Redis goes down on the plant PC, the vision checks slow down the same way.
+
+## 232. Host route to the PLC (2026-11-28)
+
+- Fault (Uddi, 2026-11-28): after the machine was switched off and on, the IOServer never reconnected
+  ("Connection timeout to 192.168.1.10:102 after 5.0s", also from a freshly started MainProgram), while ping to
+  192.168.1.10 answered.
+- Cause: two ports of the PC on 192.168.1.0/24 with the same route metric (291) - Ethernet 7 (192.168.1.100, the
+  machine; 192.168.1.10 = the PLC, Siemens MAC 30-B8-51-AD-DE-D5) and Ethernet 5 (192.168.1.2, network "IAE", gateway
+  192.168.1.1, internet / TeamViewer; 192.168.1.10 there = an Intel-MAC computer, CC-15-31-46-B7-DE). After a link drop
+  Windows could send the PLC connection out of Ethernet 5, to the office computer, which has nothing on port 102.
+- Fix on the PC (persistent, survives a reboot - checked 2026-11-28):
+  ```powershell
+  New-NetRoute -DestinationPrefix 192.168.1.10/32 -InterfaceAlias "Ethernet 7" -NextHop 0.0.0.0 -RouteMetric 1
+  $if = (Get-NetAdapter -Name "Ethernet 7").ifIndex
+  route -p add 192.168.1.10 mask 255.255.255.255 192.168.1.100 if $if metric 1
+  ```
+  (`New-NetRoute ... -PolicyStore PersistentStore` alone is refused, Windows error 87; without `-PolicyStore` it goes
+  into both stores. The two saved routes are duplicates, both on Ethernet 7.) Check: `Test-NetConnection 192.168.1.10
+  -Port 102` -> TcpTestSucceeded True; after the reboot and after the machine was switched off and on, MainProgram
+  reconnected. Undo: `Remove-NetRoute -DestinationPrefix 192.168.1.10/32 -InterfaceAlias "Ethernet 7"` and
+  `route delete 192.168.1.10`.
+- Side effect: this PC cannot reach the office computer at 192.168.1.10. A replaced or rebuilt PC needs the route too.
+- Proper fix later: the machine network and the office network on different subnets (the PLC's address in TIA Portal
+  and in the properties / `costhetaio/siemens/IOServerProperties.yaml`, or the office port's subnet).
+- Same risk on the camera subnet: adapter "Ethernet" is set to 192.168.250.1 (camera network 192.168.250.0/24, camera
+  port Ethernet 8 = 192.168.250.100); it has no link now - clear its address or disable it.
+- MainProgram's start-up check "PLC is reachable ... OK" is a ping only (it said OK during the fault); a port-102 check
+  would show the real state - not changed yet.

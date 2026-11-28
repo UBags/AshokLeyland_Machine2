@@ -24,7 +24,11 @@ Then "Next Step" goes through, for A and then for B:
   5  optional bilateral filter;
   6  Otsu x the factor -> mask 2 (green), shown over mask 1 (blue) on the original;
   7  mask 3 = mask 1 AND mask 2 (each "in the AND" box can leave one out), painted red on the original;
-and last the result - since CHANGES 231 the A and B masks joined first: a white copy of the washer area, the masks
+and last the result - since CHANGES 232 first the bridges ("Bridge leg ends"), added pixels outlined magenta in "Final
+zoomed": "closest points" (default) - for each A piece and B piece whose closest pixels are at most 19 px apart, a 5 px
+wide bar between those pixels; "leg direction" - from each A piece's outer end along the direction of its last 12 px, a
+19 x 5 rectangle kept only up to the first B pixel it meets, and likewise from each B piece's inner end towards A. Either
+way nothing is drawn where no piece of the other region is within reach. Since CHANGES 231 the A and B masks joined first: a white copy of the washer area, the masks
 black, an open with a 5 x 5 kernel (on white a closing of the black: masks broken at the scallops' edge join), the black
 = the red mask shown ("Join the masks" box, kernel spin box). "Back" goes one step back, "Run all" to the result, "Reset" to step 0. Changing a value or a box
 redraws the step shown. The text box: each step's values (Otsu value, factor, threshold, pixels).
@@ -73,6 +77,9 @@ REGION_COLOUR = (255, 255, 0)
 SCALLOP_COLOUR, INNER_COLOUR = (139, 0, 0), (0, 255, 255)
 # Uddi's values of 2026-11-28 12:56 (CHANGES 231), the same for regions A and B
 DEFAULTS = dict(bil1=True, d1=9, sc1=75.0, ss1=50.0, pct1=100.0, bil2=True, d2=9, sc2=75.0, ss2=75.0, pct2=70.0)
+BRIDGE_LENGTH, BRIDGE_WIDTH = 19, 5   # px: the directed bridge at a leg's end (CHANGES 232)
+BRIDGE_END_PX = 12                    # px: the last part of a leg whose main axis gives the bridge's direction
+BRIDGE_MIN_AREA = 10                  # px: smaller pieces get no bridge
 JOIN_KERNEL = 5                      # px: the open on the white copy with the masks black (CHANGES 231)
 VIEW_HALF = 85                       # px round the washer centre in the three washer panels (head and straight legs in view)
 
@@ -169,6 +176,91 @@ def runRegion(crop, region, p):
     return res
 
 
+def radialPastOutline(geo):
+    """Per pixel of the crop: its distance from the washer centre minus the refined outline's radius in its direction
+    (> 0 beyond the washer)."""
+    crop, cc = geo["crop"], geo["cc"]
+    h, w = crop.shape[:2]
+    yy, xx = np.mgrid[:h, :w]
+    d = np.hypot(xx - cc[0], yy - cc[1])
+    a = np.degrees(np.arctan2(yy - cc[1], xx - cc[0])) % 360
+    return d - geo["outline"]["fr"][np.clip(a.astype(int), 0, 359)]
+
+
+def bridges(fromMask: np.ndarray, toMask: np.ndarray, past: np.ndarray, outward: bool, length: int, width: int):
+    """Uddi 14:42, built so that nothing is invented: for each piece of fromMask, its end towards the other region (the
+    outermost pixels when outward, else the innermost), the direction of its last BRIDGE_END_PX px (main axis, pointing
+    away from the rest of the piece); a length x width rectangle from that end along it, kept only up to the first pixel
+    of toMask it meets - no toMask pixel in it, no bridge. (mask of the bridges, [(end x, y, angle deg, px)])."""
+    out = np.zeros(fromMask.shape, bool)
+    info = []
+    n, lab = cv2.connectedComponents(fromMask.astype(np.uint8), connectivity=8)
+    for k in range(1, n):
+        ys, xs = np.nonzero(lab == k)
+        if len(xs) < BRIDGE_MIN_AREA:
+            continue
+        r = past[ys, xs]
+        i0 = int(np.argmax(r) if outward else np.argmin(r))
+        ex, ey = float(xs[i0]), float(ys[i0])
+        near = np.hypot(xs - ex, ys - ey) <= BRIDGE_END_PX
+        px, py = xs[near].astype(float), ys[near].astype(float)
+        if len(px) < 3:
+            continue
+        P = np.array([px.mean(), py.mean()])
+        cov = np.cov(np.vstack([px - P[0], py - P[1]]))
+        evals, evecs = np.linalg.eigh(cov)
+        axis = evecs[:, int(np.argmax(evals))]
+        away = np.array([ex, ey]) - np.array([xs.mean(), ys.mean()])     # from the rest of the piece to its end
+        if np.dot(axis, away) < 0:
+            axis = -axis
+        start = np.array([ex, ey])
+        centre = start + axis * length / 2.0
+        ang = float(np.degrees(np.arctan2(axis[1], axis[0])))
+        box = cv2.boxPoints(((float(centre[0]), float(centre[1])), (float(length), float(width)), ang))
+        rect = np.zeros(fromMask.shape, np.uint8)
+        cv2.fillPoly(rect, [np.round(box).astype(np.int32)], 1)
+        rect = rect.astype(bool)
+        hit = rect & toMask
+        if not hit.any():
+            continue
+        hy, hx = np.nonzero(hit)
+        tHit = float(((hx - start[0]) * axis[0] + (hy - start[1]) * axis[1]).min())
+        ry, rx = np.nonzero(rect)
+        t = (rx - start[0]) * axis[0] + (ry - start[1]) * axis[1]
+        keep = t <= tHit + 1
+        out[ry[keep], rx[keep]] = True
+        info.append((ex, ey, ang % 360, int(keep.sum())))
+    return out, info
+
+
+def bridgesClosest(maskA: np.ndarray, maskB: np.ndarray, length: int, width: int):
+    """CHANGES 232, the default: for each piece of maskA and each piece of maskB whose closest pixels are at most
+    length px apart, a bar width px wide between those two pixels. Only real pieces are joined: nothing is drawn
+    where no piece of the other region is within reach. (mask of the bars, [(ax, ay, bx, by, gap px)])."""
+    out = np.zeros(maskA.shape, np.uint8)
+    info = []
+    nA, labA = cv2.connectedComponents(maskA.astype(np.uint8), connectivity=8)
+    nB, labB = cv2.connectedComponents(maskB.astype(np.uint8), connectivity=8)
+    piecesB = [np.column_stack(np.nonzero(labB == j)[::-1]).astype(float) for j in range(1, nB)]
+    for i in range(1, nA):
+        a = np.column_stack(np.nonzero(labA == i)[::-1]).astype(float)
+        if len(a) < BRIDGE_MIN_AREA:
+            continue
+        for b in piecesB:
+            if len(b) < BRIDGE_MIN_AREA:
+                continue
+            d = np.hypot(a[:, None, 0] - b[None, :, 0], a[:, None, 1] - b[None, :, 1])
+            k = int(np.argmin(d))
+            ia, ib = divmod(k, d.shape[1])
+            gap = float(d[ia, ib])
+            if gap > length or gap < 1.5:
+                continue
+            pa, pb = tuple(int(v) for v in a[ia]), tuple(int(v) for v in b[ib])
+            cv2.line(out, pa, pb, 1, max(int(width), 1))
+            info.append((pa[0], pa[1], pb[0], pb[1], gap))
+    return out.astype(bool), info
+
+
 def joinMasks(mask: np.ndarray, k: int) -> np.ndarray:
     """Uddi 12:56: a white copy of the washer area, the masks' pixels black, an open with a k x k kernel - on white that
     is a closing of the black, so masks broken at the scallops' edge join; the black is the final mask."""
@@ -258,7 +350,7 @@ def main():
             super().__init__()
             self.setAlignment(Qt.AlignCenter)
             self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
-            self.setStyleSheet("background: black;")
+            self.setStyleSheet("QLabel { background: black; }")   # the label only: its tooltip keeps its own colours (CHANGES 232)
             self.setToolTip(title)
             self.bgr = None
 
@@ -340,6 +432,19 @@ def main():
             self.joinKernel.setRange(1, 15)
             self.joinKernel.setValue(JOIN_KERNEL)
             self.joinKernel.valueChanged.connect(lambda _: self.redraw())
+            self.bridgeBox = QCheckBox("Bridge leg ends (directed rectangle, only up to the other region's mask)")
+            self.bridgeBox.setChecked(True)
+            self.bridgeBox.stateChanged.connect(lambda _: self.redraw())
+            self.bridgeLength, self.bridgeWidth = QSpinBox(), QSpinBox()
+            for s, v in ((self.bridgeLength, BRIDGE_LENGTH), (self.bridgeWidth, BRIDGE_WIDTH)):
+                s.setRange(1, 60)
+                s.setValue(v)
+                s.valueChanged.connect(lambda _: self.redraw())
+            self.bridgeMode = QComboBox()
+            self.bridgeMode.addItems(["closest points", "leg direction"])
+            self.bridgeMode.currentIndexChanged.connect(lambda _: self.redraw())
+            for wdg in (self.bridgeBox, self.bridgeMode, QLabel("length px"), self.bridgeLength, QLabel("width px"), self.bridgeWidth):
+                row3.addWidget(wdg)
             for wdg in (self.joinBox, QLabel("kernel px"), self.joinKernel):
                 row3.addWidget(wdg)
             row3.addStretch(1)
@@ -516,13 +621,31 @@ def main():
             self.pics[1].show_(view(stepPicture(crop, self.res["A"], sA), geo))
             self.pics[2].show_(view(stepPicture(crop, self.res["B"], sB) if sB >= 0 else crop, geo))
             if self.step >= 16:
-                red = self.res["A"]["mask3"] | self.res["B"]["mask3"]
+                mA, mB = self.res["A"]["mask3"], self.res["B"]["mask3"]
+                red = mA | mB
                 self.redBefore = int(red.sum())
+                self.bridgeInfo = None
+                bridgeMask = np.zeros_like(red)
+                if self.bridgeBox.isChecked():
+                    past = radialPastOutline(geo)
+                    L, W = self.bridgeLength.value(), self.bridgeWidth.value()
+                    if self.bridgeMode.currentText() == "closest points":
+                        bridgeMask, iC = bridgesClosest(mA, mB, L, W)
+                        self.bridgeInfo = ("closest", iC, int((bridgeMask & ~(mA | mB)).sum()))
+                    else:
+                        bAB, iAB = bridges(mA, mB, past, True, L, W)       # washer legs' outer ends -> the seal's pieces
+                        bBA, iBA = bridges(mB, mA, past, False, L, W)      # seal pieces' inner ends -> the washer's legs
+                        bridgeMask = bAB | bBA
+                        self.bridgeInfo = ("direction", (iAB, iBA), int((bridgeMask & ~(mA | mB)).sum()))
+                    red = red | bridgeMask
                 if self.joinBox.isChecked():
                     red = joinMasks(red, self.joinKernel.value())
                 self.redAfter = int(red.sum())
                 if self.finalZoom.isChecked():
-                    final = view(fill(crop, red, MASK3_COLOUR, 0.55), geo)
+                    final = fill(crop, red, MASK3_COLOUR, 0.55)
+                    for c in cv2.findContours((bridgeMask & ~(mA | mB)).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
+                        cv2.polylines(final, [c], True, (255, 0, 255), 1)   # what the bridges added, magenta outline
+                    final = view(final, geo)
                 else:
                     full = np.zeros(geo["im"].shape[:2], bool)
                     full[geo["y0"]:geo["y0"] + crop.shape[0], geo["x0"]:geo["x0"] + crop.shape[1]] = red
@@ -538,6 +661,20 @@ def main():
             lines += stepLines("A", self.res["A"], sA, self.res["pa"])
             lines += stepLines("B", self.res["B"], sB, self.res["pb"])
             if self.step >= 16:
+                if self.bridgeInfo is not None:
+                    mode, info, px = self.bridgeInfo
+                    if mode == "closest":
+                        lines.append(f"bridges (closest points, up to {self.bridgeLength.value()} px, {self.bridgeWidth.value()} px wide): "
+                                     f"{len(info)}, {px} px added")
+                        for ax, ay, bx, by, gap in info:
+                            lines.append(f"   A ({ax}, {ay}) -> B ({bx}, {by}): gap {gap:.1f} px")
+                    else:
+                        iAB, iBA = info
+                        lines.append(f"bridges (leg direction, {self.bridgeLength.value()} x {self.bridgeWidth.value()}): {len(iAB)} from the "
+                                     f"washer's legs, {len(iBA)} from the seal's pieces, {px} px added")
+                        for tag, inf in (("A->B", iAB), ("B->A", iBA)):
+                            for ex, ey, ang, n in inf:
+                                lines.append(f"   {tag} end ({ex:.0f}, {ey:.0f}) direction {ang:.0f} deg: {n} px")
                 lines.append(f"result: A | B {self.redBefore} px; " + (f"joined (white copy, masks black, open {self.joinKernel.value()} x "
                              f"{self.joinKernel.value()}): {self.redAfter} px red" if self.joinBox.isChecked() else "not joined"))
             self.text.setPlainText("\n".join(lines))

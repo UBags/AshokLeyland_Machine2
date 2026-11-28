@@ -6609,3 +6609,30 @@ No code changed.
   of the result (`joinMasks`; "Join the masks" box and kernel spin box; text: px before / after).
 - Run: driven offscreen on the OK picture of 229 with the new defaults through all steps: A | B 570 px, joined 621 px;
   parses on Python 3.11.
+
+## 232. Study_SplitPin_Steps_UI: bridges between leg pieces; tooltip; plant PC route to the PLC (2026-11-28)
+
+- Uddi, 2026-11-28 14:42: the 5 x 5 open does not close larger gaps between the leg on the split pin washer (A) and
+  its continuation on the plate washer / seal (B) (picture 16:30:59.124); asked for a 19 x 5 rectangle along the leg's
+  direction at the leg's end, or an easier method to the same end.
+- Built (before the 5 x 5 join, "Bridge leg ends" box, length / width spin boxes, added pixels outlined magenta in
+  "Final zoomed", text: every bridge):
+  "closest points" (default) - for each A piece and B piece whose closest pixels are <= 19 px apart, a 5 px wide bar
+  between them (`bridgesClosest`); "leg direction" (Uddi's rectangle) - from each A piece's outer end along the main
+  axis of its last 12 px, away from the rest of the piece, a 19 x 5 rectangle kept only up to the first B pixel it
+  meets, and from each B piece's inner end towards A likewise (`bridges`). Either way nothing is drawn where no piece of
+  the other region is in reach (an OK leg bent onto the washer gets no invented extension).
+  Why "closest points" is the default: on 16:30:59.124 the A piece is a compact blob (both legs' stems), so the
+  direction of its last 12 px is not the leg's, and the B piece's innermost pixel lies on a side branch - "leg
+  direction" made no bridge although the gap was 7.2 px (A (140, 84) -> B (144, 78)); "closest points" joins it (49 px).
+- Seen with it (not changed, for Uddi): on OK pictures whose legs lie on the washer (17:16:58.256) region B's masks
+  hold false pieces (seal colour blocks; one piece further out) and the bars join the real legs to them (188 px). The
+  step window has none of the region (b) guards of `_legs_profile` (R-G Otsu floor 8, pieces must start at the washer).
+- The picture panels' style sheet scoped to the label (`QLabel { background: black; }`): the "Result" tooltip took the
+  black background and showed as a black box on the result (Uddi's screenshot).
+- Plant PC (no code): the PLC connection lost for good after the machine was switched off and on - two PC ports on
+  192.168.1.0/24, the internet one with another computer at 192.168.1.10; a persistent host route 192.168.1.10/32 via
+  Ethernet 7 set by Uddi, checked after a reboot and a machine power cycle. `docs/machine2-plant-pc-setup.md` section 232 has the
+  diagnosis, the commands and the undo.
+- Run: the window driven offscreen on 4 pictures (16:30:59.124 NOT OK: 1 bar, gap 7.2 px; 16:23:50.453 OK: none;
+  17:16:58.256 OK: 2 bars to false B pieces; 17:16:05.283 NOT OK: 1 bar); parses on Python 3.11.
