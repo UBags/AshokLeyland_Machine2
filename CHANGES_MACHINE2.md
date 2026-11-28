@@ -6783,3 +6783,25 @@ Uddi (21:14): (a) a drop-down choice B + 2G - 3R; (b) the first mask unticked by
 - `MARKER_PRESETS["red"]["and1"]` = False, as blue's: "Mask 1 in the AND" starts unticked in both regions for either
   marker (mask 3 = mask 2); tick it to bring mask 1 back into the AND.
 - Checked: offscreen screenshot (no `--marker`): both "Mask 1" boxes unticked; the open list shows all 13 sources.
+
+## 241. Study_SplitPin_Steps_UI: skipped steps, region B on the scallops, masked open first in region B (2026-11-28)
+
+Uddi (22:29): (a) Next Step skips the steps of an unticked mask; (b) region B coincident with the scallops; (c) region
+B's first step a morphological open done only within the region, keeping only its pixels in mind, kernel 5 x 5,
+changeable.
+- (a) Steps are per region (`STEPS`: A = region, channel 1, bilateral 1, Otsu 1, channel 2, bilateral 2, Otsu 2,
+  mask 3; B = region, open, then the same). `stepSkipped`: a mask's channel / bilateral / Otsu when its "in the AND"
+  box is unticked, and the open when it is off; Next Step and Back pass over them; the text box lists them as
+  "skipped". Run all / Reset as before. Steps are named A0 - A7, B0 - B8.
+- (b) `regions()` now uses the drawn scallop outline itself (the polygon of `outline["pts"]`): A = inside it, B =
+  outside it from `from` px (default 0, was 1) to `to` (30) px from it (distance transform). Before, both used the
+  per-degree radii `fr` with the angle rounded down, and B began 1 px out - up to a pixel or two off the drawn line.
+- (c) `maskedOpen(crop, mask, k)`: each colour channel eroded with the pixels outside the region taken as 255 and
+  dilated with them taken as 0, so only the region's pixels count; outside the region the picture is unchanged. Region B
+  row: "Open first" (on) and its kernel (5). The channels are taken from the opened picture.
+- Run: the window driven offscreen on Python 3.12 with the 8 blue pictures' geometry: Next walks A0, A4 - A7, B0, B1,
+  B5 - B8, result (mask 1 unticked); Back the reverse; with A's mask 1 ticked and the open off: A0 - A7, B0, B5 - B8.
+  Region B mask (B + G - 2R, Otsu 100 %, min 14), open off / 3 / 5: legs pictures 483 - 745 / 442 - 717 / 571 - 853 px;
+  15:54:30 512 / 494 / 0; 16:24:04 459 / 588 / 0. Seen: a 5 x 5 open removes the legs' thin stretches past the washer
+  (they are about 4 - 6 px wide), the mask keeps only blobs at the wider ends, and on 15:54:30 / 16:24:04 the Otsu value
+  falls below 14 (region B empty); 3 x 3 changes little.

@@ -14,6 +14,11 @@ MobileSAM washer outline (Study_Washer_SAM), the inner edge (_legs_length.ring),
 and the pin head on its fixed axis (_legs_profile, CHANGES 222); the legs axis = the head's end + 180 deg.
   region A: +- sector deg round the legs axis, inner edge .. outer outline (on the split pin washer);
   region B: +- sector deg, outline + from px .. outline + to px (on the plate washer / seal).
+Since CHANGES 241: region B starts with a morphological open of the picture inside the region only ("Open first",
+kernel 5 x 5, both changeable; the erosion and the dilation use only the region's pixels) - so B's steps are region,
+open, then 1 - 7 below; regions A and B follow the drawn scallop outline itself (A inside its polygon, B outside it from
+"px past outline" 0 = on the outline, to 30 px); Next Step / Back pass over the steps of a mask whose "in the AND" box
+is unticked (channel, bilateral and Otsu of that mask) and over the open when it is off.
 Then "Next Step" goes through, for A and then for B:
   0  the region (light fill on the original);
   1  channel 1 as a grey picture inside the region (its source chosen in the box; A: grey, dark = mask);
@@ -77,6 +82,14 @@ SOURCES = ("grey (dark = 1)", "grey (bright = 1)", "2R - G - B (bright = 1)", "m
            "R (bright = 1)", "R - G (bright = 1)", "2B - G - R (bright = 1)",
            "B + G - 2R (bright = 1)", "B - R (bright = 1)", "2B - 2R (bright = 1)", "2B + G - 3R (bright = 1)",
            "B + 2G - 3R (bright = 1)")
+# Steps per region (CHANGES 241: region B starts with the open; a step whose mask is out of the AND, or the open when
+# off, is skipped by Next Step / Back)
+STEPS = {"A": ("region", "chan1", "filt1", "otsu1", "chan2", "filt2", "otsu2", "mask3"),
+         "B": ("region", "open", "chan1", "filt1", "otsu1", "chan2", "filt2", "otsu2", "mask3")}
+STEP_TITLES = dict(region="region", open="open in the mask", chan1="channel 1", filt1="bilateral 1",
+                   otsu1="Otsu 1 -> mask 1", chan2="channel 2", filt2="bilateral 2", otsu2="Otsu 2 -> mask 2",
+                   mask3="mask 3 = mask 1 AND mask 2")
+OPEN_KERNEL = 5                      # px: region B's first step, a morphological open inside the mask only (CHANGES 241)
 STEP_NAMES = ("region", "channel 1", "bilateral 1", "Otsu 1 -> mask 1", "channel 2", "bilateral 2",
               "Otsu 2 -> mask 2", "mask 3 = mask 1 AND mask 2")
 MASK1_COLOUR, MASK2_COLOUR, MASK3_COLOUR = (255, 90, 0), (0, 220, 0), (0, 0, 255)
@@ -174,21 +187,46 @@ def geometry(path, label, model, models):
 
 
 def regions(geo, sector, fromPx, toPx):
+    """(region A, region B). Since CHANGES 241 both follow the drawn scallop outline itself (the polygon of
+    outline["pts"]): A = inside it, B = outside it, from fromPx to toPx px from it (fromPx 0 = on the outline)."""
     crop, cc = geo["crop"], geo["cc"]
     h, w = crop.shape[:2]
     yy, xx = np.mgrid[:h, :w]
-    d = np.hypot(xx - cc[0], yy - cc[1])
     a = np.degrees(np.arctan2(yy - cc[1], xx - cc[0])) % 360
-    FR = geo["outline"]["fr"][np.clip(a.astype(int), 0, 359)]
     rel = np.abs(((a - geo["axis"]) + 180) % 360 - 180)
     sec = rel <= sector
+    inside = np.zeros((h, w), np.uint8)
+    cv2.fillPoly(inside, [np.round(geo["outline"]["pts"]).astype(np.int32)], 1)
+    dist = cv2.distanceTransform((1 - inside).astype(np.uint8), cv2.DIST_L2, 5)     # px from the outline, outside it
     din = np.hypot(xx - geo["centroid"][0], yy - geo["centroid"][1])
-    return sec & (din >= geo["rInner"]) & (d <= FR), sec & (d > FR + fromPx) & (d <= FR + toPx)
+    out = inside == 0
+    return sec & (din >= geo["rInner"]) & (inside == 1), sec & out & (dist > fromPx - 0.5) & (dist <= toPx)
+
+
+def maskedOpen(crop, mask, k):
+    """Morphological open (k x k) of each colour channel using only the mask's pixels: the erosion sees pixels outside
+    the mask as 255 (they never lower a minimum), the dilation sees them as 0 (they never raise a maximum); outside
+    the mask the picture is unchanged (CHANGES 241)."""
+    if k < 2 or not mask.any():
+        return crop.copy()
+    kernel = np.ones((int(k), int(k)), np.uint8)
+    out = crop.copy()
+    for c in range(crop.shape[2]):
+        ch = crop[..., c].copy()
+        ch[~mask] = 255
+        er = cv2.erode(ch, kernel)
+        er[~mask] = 0
+        di = cv2.dilate(er, kernel)
+        out[..., c][mask] = di[mask]
+    return out
 
 
 def runRegion(crop, region, p):
     """Steps 1 - 7 on one region with the values p; every intermediate picture and value."""
     res = dict(region=region, px=int(region.sum()))
+    if p.get("open"):                                  # region B's first step (CHANGES 241)
+        crop = maskedOpen(crop, region, int(p.get("openK", OPEN_KERNEL)))
+    res["opened"] = crop
     for k in (1, 2):
         g, dark = channel(crop, p[f"src{k}"])
         res[f"chan{k}"] = g
@@ -331,43 +369,62 @@ def outlines(img, geo):
     return img
 
 
-def stepPicture(crop, res, step):
-    if step <= 0:
+def stepSkipped(tag, key, p):
+    """True when Next Step / Back pass over this step (CHANGES 241)."""
+    if key in ("chan1", "filt1", "otsu1"):
+        return not p["and1"]
+    if key in ("chan2", "filt2", "otsu2"):
+        return not p["and2"]
+    if key == "open":
+        return not p.get("open")
+    return False
+
+
+def stepPicture(crop, res, key, p):
+    if key == "region":
         return fill(crop, res["region"], REGION_COLOUR, 0.25)
-    if step in (1, 2, 4, 5):
-        k = 1 if step < 3 else 2
-        return greyInRegion(crop, res[f"chan{k}"] if step in (1, 4) else res[f"filt{k}"], res["region"])
-    if step == 3:
+    if key == "open":
+        out = crop.copy()
+        out[res["region"]] = res["opened"][res["region"]]
+        return out
+    if key in ("chan1", "filt1", "chan2", "filt2"):
+        return greyInRegion(crop, res[key], res["region"])
+    if key == "otsu1":
         return fill(crop, res["mask1"], MASK1_COLOUR)
-    if step == 6:
-        return fill(fill(crop, res["mask1"], MASK1_COLOUR, 0.35), res["mask2"], MASK2_COLOUR, 0.35)
+    if key == "otsu2":
+        base = fill(crop, res["mask1"], MASK1_COLOUR, 0.35) if p["and1"] else crop
+        return fill(base, res["mask2"], MASK2_COLOUR, 0.35)
     return fill(crop, res["mask3"], MASK3_COLOUR, 0.55)
 
 
-def stepLines(tag, res, step, p):
-    if step < 0:
+def stepLines(tag, res, upto, p):
+    """The text of the region's steps up to (and with) index upto of STEPS[tag]; skipped steps say so."""
+    if upto < 0:
         return []
     lines = []
-    for s in range(0, min(step, 7) + 1):
-        if s == 0:
-            lines.append(f"{tag}0 region: {res['px']} px")
-        elif s in (1, 4):
-            k = 1 if s == 1 else 2
-            lines.append(f"{tag}{s} channel {k}: {p[f'src{k}']}")
-        elif s in (2, 5):
-            k = 1 if s == 2 else 2
-            lines.append(f"{tag}{s} bilateral {k}: " + (f"d {p[f'd{k}']}, sigmaColor {p[f'sc{k}']}, sigmaSpace {p[f'ss{k}']}"
-                                                         if p[f"bil{k}"] else "bypassed"))
-        elif s in (3, 6):
-            k = 1 if s == 3 else 2
+    for i, key in enumerate(STEPS[tag][:upto + 1]):
+        head = f"{tag}{i} {STEP_TITLES[key]}"
+        if stepSkipped(tag, key, p):
+            lines.append(f"{head}: skipped" + (" (mask %s not in the AND)" % key[-1] if key != "open" else " (open off)"))
+        elif key == "region":
+            lines.append(f"{head}: {res['px']} px")
+        elif key == "open":
+            lines.append(f"{head}: {int(p.get('openK', OPEN_KERNEL))} x {int(p.get('openK', OPEN_KERNEL))}, only the region's pixels")
+        elif key in ("chan1", "chan2"):
+            lines.append(f"{head}: {p['src' + key[-1]]}")
+        elif key in ("filt1", "filt2"):
+            k = key[-1]
+            lines.append(f"{head}: " + (f"d {p['d' + k]}, sigmaColor {p['sc' + k]}, sigmaSpace {p['ss' + k]}" if p["bil" + k] else "bypassed"))
+        elif key in ("otsu1", "otsu2"):
+            k = int(key[-1])
             if res.get(f"below{k}"):
-                lines.append(f"{tag}{s} Otsu {k}: {res[f'otsu{k}']:.0f} < minimum {p[f'min{k}']} -> mask {k} empty")
+                lines.append(f"{head}: {res[f'otsu{k}']:.0f} < minimum {p[f'min{k}']} -> mask {k} empty")
             else:
-                lines.append(f"{tag}{s} Otsu {k}: {res[f'otsu{k}']:.0f} x {p[f'pct{k}']:.2f} % = {res[f'thr{k}']:.1f} -> mask {k} "
+                lines.append(f"{head}: {res[f'otsu{k}']:.0f} x {p[f'pct{k}']:.2f} % = {res[f'thr{k}']:.1f} "
                              f"({'dark' if res[f'dark{k}'] else 'bright'} = 1) {int(res[f'mask{k}'].sum())} px")
         else:
             used = " AND ".join(n for n, u in (("mask 1", p["and1"]), ("mask 2", p["and2"])) if u) or "nothing"
-            lines.append(f"{tag}7 mask 3 = {used}: {int(res['mask3'].sum())} px")
+            lines.append(f"{tag}{i} mask 3 = {used}: {int(res['mask3'].sum())} px")
     return lines
 
 
@@ -453,9 +510,9 @@ def main():
             self.model.setCurrentText(S.arg("--model", "DOST").upper())
             self.model.currentIndexChanged.connect(lambda i: self.load())
             self.nextButton, back, runAll, reset = QPushButton("Next Step"), QPushButton("Back"), QPushButton("Run all"), QPushButton("Reset")
-            self.nextButton.clicked.connect(lambda: self.goto(self.step + 1))
-            back.clicked.connect(lambda: self.goto(self.step - 1))
-            runAll.clicked.connect(lambda: self.goto(16))
+            self.nextButton.clicked.connect(lambda: self.goto(self.step + 1, +1))
+            back.clicked.connect(lambda: self.goto(self.step - 1, -1))
+            runAll.clicked.connect(lambda: self.goto(len(self.sequence()) - 1))
             reset.clicked.connect(lambda: self.goto(0))
             self.outlinesBox = QCheckBox("Outlines on original")
             self.outlinesBox.setChecked(True)
@@ -569,12 +626,18 @@ def main():
             g.addWidget(head, row0, 0)
             g.addWidget(QLabel("Sector +- deg"), row0, 1)
             g.addWidget(spin("sector", 10, 120, SECTOR), row0, 2)
-            if tag == "B":                      # B: outline + from px .. outline + to px
+            if tag == "B":                      # B: outline + from px .. outline + to px; the open first (CHANGES 241)
+                op = QWidget()
+                ol = QHBoxLayout(op)
+                ol.setContentsMargins(0, 0, 0, 0)
+                ol.addWidget(check("open", "Open first, kernel", True))
+                ol.addWidget(spin("openK", 1, 25, OPEN_KERNEL))
+                g.addWidget(op, row0 + 1, 0)
                 g.addWidget(QLabel("px past outline"), row0 + 1, 1)
                 ft = QWidget()
                 fl = QHBoxLayout(ft)
                 fl.setContentsMargins(0, 0, 0, 0)
-                fl.addWidget(spin("from", 0, 20, 1))
+                fl.addWidget(spin("from", 0, 20, 0))        # 0 = on the scallop outline (CHANGES 241; was 1)
                 fl.addWidget(QLabel("to"))
                 fl.addWidget(spin("to", 5, 80, 30))
                 g.addWidget(ft, row0 + 1, 2)
@@ -662,10 +725,22 @@ def main():
             _, regB = regions(geo, pb["sector"], pb["from"], pb["to"])
             self.res = dict(A=runRegion(geo["crop"], regA, pa), B=runRegion(geo["crop"], regB, pb), pa=pa, pb=pb)
 
-        def goto(self, step):
+        def sequence(self):
+            """[(region, step key)] for A, then B, then ("R", "result") - CHANGES 241."""
+            return [("A", k) for k in STEPS["A"]] + [("B", k) for k in STEPS["B"]] + [("R", "result")]
+
+        def goto(self, step, direction=0):
+            """Go to step; Next (+1) / Back (-1) pass over the steps of a mask out of the AND and the open when off."""
             if self.geo is None:
                 return
-            self.step = int(np.clip(step, 0, 16))
+            seq = self.sequence()
+            step = int(np.clip(step, 0, len(seq) - 1))
+            if direction:
+                p = {"A": self.params("A"), "B": self.params("B")}
+                while 0 <= step < len(seq) and seq[step][0] != "R" and stepSkipped(seq[step][0], seq[step][1], p[seq[step][0]]):
+                    step += direction
+                step = int(np.clip(step, 0, len(seq) - 1))
+            self.step = step
             self.redraw(recompute=True)
 
         def redraw(self, recompute=False):
@@ -686,11 +761,15 @@ def main():
             if self.outlinesBox.isChecked():
                 outlines(orig, geo)
             self.pics[0].show_(view(orig, geo))
-            sA = min(self.step, 7)                       # steps 0 - 7: A; 8 - 15: B; 16: the result
-            sB = self.step - 8 if self.step >= 8 else -1
-            self.pics[1].show_(view(stepPicture(crop, self.res["A"], sA), geo))
-            self.pics[2].show_(view(stepPicture(crop, self.res["B"], sB) if sB >= 0 else crop, geo))
-            if self.step >= 16:
+            seq = self.sequence()
+            tagNow, keyNow = seq[self.step]
+            nA, nB = len(STEPS["A"]), len(STEPS["B"])
+            sA = self.step if tagNow == "A" else nA - 1          # index in STEPS["A"] shown / reached
+            sB = self.step - nA if tagNow == "B" else (nB - 1 if tagNow == "R" else -1)
+            atResult = tagNow == "R"
+            self.pics[1].show_(view(stepPicture(crop, self.res["A"], STEPS["A"][sA], self.res["pa"]), geo))
+            self.pics[2].show_(view(stepPicture(crop, self.res["B"], STEPS["B"][sB], self.res["pb"]) if sB >= 0 else crop, geo))
+            if atResult:
                 mA, mB = self.res["A"]["mask3"], self.res["B"]["mask3"]
                 red = mA | mB
                 self.redBefore = int(red.sum())
@@ -723,14 +802,14 @@ def main():
                 self.pics[3].show_(final)
             else:
                 self.pics[3].show_(geo["im"])
-            name = (f"A{sA} {STEP_NAMES[sA]}" if self.step < 8 else f"B{sB} {STEP_NAMES[sB]}" if self.step < 16 else "result")
+            name = "result" if atResult else f"{tagNow}{sA if tagNow == 'A' else sB} {STEP_TITLES[keyNow]}"
             self.stepLabel.setText(f"Step: {name}")
             lines = [f"{geo['name']} ({geo['label'] or '-'})  head {'at %.0f deg' % geo['head']['end'] if geo['head']['found'] else 'not found'},"
                      f" legs axis {geo['axis']:.0f} deg; scallops placed from neighbours "
                      f"{sum(not s['found'] for s in geo['outline']['segs'])} of {len(geo['outline']['segs'])}"]
             lines += stepLines("A", self.res["A"], sA, self.res["pa"])
             lines += stepLines("B", self.res["B"], sB, self.res["pb"])
-            if self.step >= 16:
+            if atResult:
                 if self.bridgeInfo is not None:
                     mode, info, px = self.bridgeInfo
                     if mode == "closest":
