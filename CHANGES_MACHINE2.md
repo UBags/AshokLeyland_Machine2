@@ -6818,3 +6818,23 @@ Uddi (22:58): (a) Otsu % up to 300; (b) an absolute threshold that overrides the
   windows none).
 - Run: 16:15:12 region B, B + G - 2R: default 22.4 -> 660 px; 250 % -> 80.0, 67 px; absolute 40 -> 373 px; absolute 40
   with minimum 200 -> still 373 px (the minimum ignored). Window driven offscreen on Python 3.12: step skipping as in 241.
+
+## 243. Study_SplitPin_Steps_FluorescentBlue: region B's first step by grey, relative gamma, Otsu, open (2026-11-28)
+
+Uddi (23:40): a copy of the steps window for the fluorescent blue marker. In region B (over the grey plate washer /
+seal), step 1: deep copy inside the mask, grey, mean in the mask x 2, relative gamma (below gamma 0.5, above 2.0),
+Otsu, then a morphological open of the Otsu mask = the step's mask; no bilateral. Step 2 unchanged.
+- New `test/machine*_dryrun/Study_SplitPin_Steps_FluorescentBlue.py` (asked for as "Stdy - SplitPin_Steps_FluoresentBlue.py";
+  named like the other study tools, no spaces). `--marker blue` by default. Region B steps: B0 region, B1 grey, B2
+  relative gamma (pivot = "Gamma pivot x mean" 2.0 x the region's mean grey; pivot * (v / pivot) ** 2.0 above,
+  pivot * (v / pivot) ** (1 / 0.5) below - the convention of `_legs_profile.relativeGamma`; clamped), B3 Otsu 1 (bright =
+  1; the row's Otsu %, minimum and absolute), B4 binary open of that mask ("Open Otsu 1, kernel" 5; only the region's
+  pixels) = mask 1, B5 - B7 channel 2 / bilateral / Otsu 2 = mask 2, B8 mask 3 = mask 1 AND mask 2 (both ticked for B).
+  B's channel 1 drop-down and bilateral 1 are disabled (not used). The colour open of 241 is not used here. The open
+  kernel and the pivot factor sit on their own row under region B.
+- Run on the 8 blue pictures (offscreen window on Python 3.12, and headless): Next / Back walk A0, A4 - A7, B0 - B8,
+  result; B's mask 1 unticked skips B1 - B4. Region B: mean grey 24 - 28, pivot 48 - 55; Otsu 1 either 16 - 18 (mask
+  2,091 - 2,327 px of ~4,620: the outer, lighter half of the seal band) or 96 - 122 (a specular highlight, 60 - 124 px);
+  after the open 0 - 2,195 px; mask 3 (AND with B + G - 2R) 0 - 848 px. Why: in grey the marked legs are no brighter
+  than the seal (legs median 22 - 35, rest of the region median 25 - 30, p75 38 - 41), and with the pivot at 2 x the mean
+  (above the region's p95, 46 - 48) almost every pixel is below the pivot, so the transform only darkens.
