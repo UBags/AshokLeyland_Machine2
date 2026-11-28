@@ -6741,3 +6741,23 @@ Uddi (20:17): the blue channel is B + G - 2R, not 2B - G - R. New source `B + G 
   rises too (33 - 52). At 100 %: region B a clean band along each straight leg on the 5 pictures with legs past the
   washer; region A narrower along the legs than with 2B - G - R on those 5, still the washer's inner band on 155430,
   162404, 162420. At 70 % both regions too wide, as before.
+
+## 238. Study_SplitPin_Steps_UI: 150 deg sector; blue channels compared (2026-11-28)
+
+Uddi (20:31): (a) 120 deg -> 150 deg; (b) compare B + G - 2R with B - R, 2B - 2R and 2B + G - 3R, find the best.
+- `SECTOR` = 75 (+- 75 deg round the legs axis, both regions; was 60). New sources `B - R`, `2B - 2R`, `2B + G - 3R`
+  (bright = 1, clamped 0 .. 255). Fixed on the way: `2B - G - R` was matched by the prefix "2B", which would have taken
+  the two new 2B sources too - now matched in full.
+- Compared on Uddi's 8 blue pictures (sandbox: holes by morphology; blue preset: Otsu 1 out, bilateral 2 on, Otsu 2
+  100 %, region B minimum 14). eta = Otsu's between-class / total variance; d = (bright mean - dark mean) / dark sd.
+  | channel | A eta | A d | B eta (5 straight-leg pictures) | B d | B Otsu legs / others | ratio |
+  | B + G - 2R | 0.719 | 4.07 | 0.753 | 6.69 | 29 - 35 / 13 - 17 | 1.71 |
+  | B - R | 0.720 | 3.85 | 0.741 | 6.07 | 15 - 18 / 8 - 9 | 1.67 |
+  | 2B - 2R | 0.717 | 3.85 | 0.740 | 6.09 | 30 - 37 / 17 - 21 | 1.43 |
+  | 2B + G - 3R | 0.713 | 3.96 | 0.746 | 6.56 | 45 - 54 / 23 - 28 | 1.61 |
+  B + G - 2R best on every measure but A eta (0.001 behind); 2B + G - 3R second. 2B - 2R = B - R scaled (same Otsu split
+  up to whole-number steps); the minimum 14 is in channel units, so on the doubled channels it no longer empties region B
+  on the pictures without straight legs (seal ring marked). Differences are small on 8 pictures. With 150 deg region A
+  follows both legs on the 5 straight-leg pictures for every channel, and region B now reaches the legs leaving at about
+  10 o'clock on 162404 / 162420 (B + G - 2R: 352 / 821 px).
+- The preset stays B + G - 2R.

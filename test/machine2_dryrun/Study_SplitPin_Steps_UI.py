@@ -9,7 +9,7 @@ pictures (right 75 %).
   bottom left   the steps over the plate washer / seal beyond it (region B);
   bottom right  the result: the red masks of A and B on the whole picture ("Final zoomed" shows the washer only).
 
-Load (or a new picture) runs, without stopping, everything up to the two 120 deg regions: the hub's holes and the
+Load (or a new picture) runs, without stopping, everything up to the two 150 deg regions (120 before CHANGES 238): the hub's holes and the
 MobileSAM washer outline (Study_Washer_SAM), the inner edge (_legs_length.ring), the outer outline scallop by scallop
 and the pin head on its fixed axis (_legs_profile, CHANGES 222); the legs axis = the head's end + 180 deg.
   region A: +- sector deg round the legs axis, inner edge .. outer outline (on the split pin washer);
@@ -37,7 +37,7 @@ Channel sources: grey (dark = 1), grey (bright = 1), 2R - G - B (bright = 1), ma
 R - G (bright = 1), 2B - G - R (bright = 1), B + G - 2R (bright = 1); all but grey and R clamped to 0 .. 255.
 --marker blue (CHANGES 236, 237; fluorescent blue marker): in both regions Otsu 1 left out (its "in the AND" box
 unticked, mask 3 = mask 2) and channel 2 = B + G - 2R (2B - G - R in 236); everything else as for red. Default --marker red.
-Defaults: A - grey (dark), 2R - G - B; B - max(R - B, 0), 2R - G - B (the last choices of CHANGES 223 - 225); sector +- 60
+Defaults: A - grey (dark), 2R - G - B; B - max(R - B, 0), 2R - G - B (the last choices of CHANGES 223 - 225); sector +- 75 (CHANGES 238; was +- 60)
 deg, B from 1 to 30 px; since CHANGES 231 (Uddi 12:56), for A and B: bilateral 1 on (d 9, sigmaColor 75, sigmaSpace 50),
 Otsu 1 100 %; bilateral 2 on (d 9, sigmaColor 75, sigmaSpace 75), Otsu 2 70 %.
 
@@ -73,7 +73,7 @@ except Exception:                                   # the same steps, if the pro
 
 SOURCES = ("grey (dark = 1)", "grey (bright = 1)", "2R - G - B (bright = 1)", "max(R - B, 0) (bright = 1)",
            "R (bright = 1)", "R - G (bright = 1)", "2B - G - R (bright = 1)",
-           "B + G - 2R (bright = 1)")
+           "B + G - 2R (bright = 1)", "B - R (bright = 1)", "2B - 2R (bright = 1)", "2B + G - 3R (bright = 1)")
 STEP_NAMES = ("region", "channel 1", "bilateral 1", "Otsu 1 -> mask 1", "channel 2", "bilateral 2",
               "Otsu 2 -> mask 2", "mask 3 = mask 1 AND mask 2")
 MASK1_COLOUR, MASK2_COLOUR, MASK3_COLOUR = (255, 90, 0), (0, 220, 0), (0, 0, 255)
@@ -95,6 +95,7 @@ MARKER_PRESETS = {
 BRIDGE_LENGTH, BRIDGE_WIDTH = 19, 5   # px: the directed bridge at a leg's end (CHANGES 232)
 BRIDGE_END_PX = 12                    # px: the last part of a leg whose main axis gives the bridge's direction
 BRIDGE_MIN_AREA = 10                  # px: smaller pieces get no bridge
+SECTOR = 75                          # deg either side of the legs axis: 150 deg (Uddi 20:31, CHANGES 238; was 60 = 120 deg)
 JOIN_KERNEL = 5                      # px: the open on the white copy with the masks black (CHANGES 231)
 VIEW_HALF = 85                       # px round the washer centre in the three washer panels (head and straight legs in view)
 
@@ -113,10 +114,16 @@ def channel(crop: np.ndarray, source: str):
         return cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), "dark" in source
     if source.startswith("2R"):
         v = 2 * R - G - B
-    elif source.startswith("2B"):                    # CHANGES 236 (kept; not the preset since CHANGES 237)
+    elif source.startswith("2B - G - R"):            # CHANGES 236 (kept; not the preset since CHANGES 237)
         v = 2 * B - G - R
     elif source.startswith("B + G"):                 # fluorescent blue marker, seen cyan (CHANGES 237)
         v = B + G - 2 * R
+    elif source.startswith("B - R"):                 # CHANGES 238: candidates compared with B + G - 2R
+        v = B - R
+    elif source.startswith("2B - 2R"):
+        v = 2 * B - 2 * R
+    elif source.startswith("2B + G"):
+        v = 2 * B + G - 3 * R
     elif source.startswith("max(R - B"):
         v = R - B
     elif source.startswith("R - G"):
@@ -529,7 +536,7 @@ def main():
                 return c
 
             g.addWidget(QLabel("Sector +- deg"), 0, 0)
-            g.addWidget(spin("sector", 10, 120, 60), 0, 1)
+            g.addWidget(spin("sector", 10, 120, SECTOR), 0, 1)
             if tag == "B":
                 g.addWidget(QLabel("From px past outline"), 0, 2)
                 g.addWidget(spin("from", 0, 20, 1), 0, 3)
