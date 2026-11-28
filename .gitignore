@@ -70,3 +70,6 @@ models/
 # Real configs stay local; commit *.example.properties
 ApplicationConfiguration*.properties
 !ApplicationConfiguration*.example.properties
+
+# sandbox clone of MobileSAM (weights for the dry runs; not part of the repo)
+src/mobile-sam/
