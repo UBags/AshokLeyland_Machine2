@@ -6848,3 +6848,23 @@ Uddi (23:47): "deep copy the image inside the mask; use only the blue channel of
   (rest p25 5 - 8, p95 47 - 53). Otsu 1 again either 16 - 18 (2,300 - 2,620 px: the outer half of the seal band) or
   119 - 130 (a highlight, 60 - 124 px); mask 3 0 - 1,119 px (was 0 - 848). Window offscreen: B1 named "grey = blue
   channel (deep copy)", steps and skipping unchanged.
+
+## 245. Study_SplitPin_Steps_FluorescentBlue: optional MobileSAM step in region A (2026-11-29)
+
+Uddi (00:39): after the 150 deg mask, as region A's first step, MobileSAM gets as many masks as it can; YOLO boxes or
+MobileSAM alone - offer both; draw the masks in the region; optional.
+- Step A1 "MobileSAM masks (look only)" (box "MobileSAM masks first", on): `samMasks` - mode "MobileSAM points" (a point
+  every grid px inside region A, multimask: 3 masks each), "YOLO boxes -> MobileSAM" (ModelManager's object-aware YOLO =
+  production's MobileSAMv2 detector, boxes centred in the region, conf 0.05), or "both". Each mask clipped to the
+  region; kept: predicted IoU >= 0.60, stability >= 0.60, >= 12 px, <= 0.60 of the region (larger = the washer);
+  duplicates (IoU > 0.7) dropped. Drawn as fills and 1 px outlines in their own colours, no text; listed in the text box
+  with why masks were dropped. Display only: the later steps do not use them. Cached per picture and values. All the
+  values on their own row under region A; the top part 30 % of the window (was 25 %). Next Step / Back skip A1 when off.
+- First defaults (IoU 0.70, stability 0.80, mask at least half inside the region) kept 0 - 2 masks a picture. Measured
+  on 16:15:12: a point on the washer gives the washer (median 4,630 px, region 1,150 px) or larger; only the first
+  multimask output has leg-sized pieces (p10 124 px), at stability median 0.58 - hence the clip + share rule and 0.60.
+- Run on the 8 blue pictures (sandbox: MobileSAM on CPU, 7 - 10 s a picture; YOLO weights not here, so the YOLO mode
+  gives "no boxes"): points mode 37 - 53 points, 111 - 159 masks, 3 - 10 kept (14 - 686 px). What they are: patches of
+  the washer surface bounded by the legs and the scallops, not the legs - the legs are 2 - 3 px wide in the 240 x 240
+  crop and MobileSAM does not return them as objects; they show as the borders between patches. Window driven offscreen
+  on Python 3.12 (no MobileSAM there: "not run"); steps A0, A1, A5 - A8, B0 - B8 with mask 1 unticked.

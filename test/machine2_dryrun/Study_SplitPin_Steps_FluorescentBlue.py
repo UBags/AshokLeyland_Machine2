@@ -7,6 +7,12 @@ Study_SplitPin_Steps_FluorescentBlue - a copy of Study_SplitPin_Steps_UI for the
               (v / pivot) ** 2.0), clamped to 0 .. 255 (the convention of _legs_profile.relativeGamma); no bilateral;
   B3 Otsu 1   Otsu of the transformed region (with the row's Otsu %, minimum and absolute threshold), bright = 1;
   B4 open     binary open of that Otsu mask (kernel 5 x 5, changeable; only the region's pixels) = mask 1.
+Region A's step 1 (CHANGES 245, optional, "MobileSAM masks first", on): every mask MobileSAM gives inside region A,
+from a point every "grid px" (5) inside the region (3 masks each), from the object-aware YOLO's boxes centred in it
+(production's MobileSAMv2 detector, ModelManager; YOLO conf 0.05), or both. Each mask clipped to the region; kept with
+predicted IoU >= 0.60, stability >= 0.60, at least 12 px and at most "max share of region" (0.60; larger = the washer);
+near-duplicates (IoU > 0.7) dropped. Drawn (fill + outline, a colour each, no text), listed in the text box; not used
+by the later steps. Cached per picture and values.
 Then B's second step as before (a channel of the drop-down, bilateral, Otsu with % / minimum / absolute) = mask 2,
 and mask 3 = mask 1 AND mask 2 (both in the AND by default for B). Region A, the bridges, the join and the result as
 in Study_SplitPin_Steps_UI (blue preset: channel 2 = B + G - 2R, mask 1 out of the AND). The colour open of CHANGES
@@ -99,12 +105,18 @@ SOURCES = ("grey (dark = 1)", "grey (bright = 1)", "2R - G - B (bright = 1)", "m
            "B + 2G - 3R (bright = 1)")
 # Steps per region (CHANGES 241: region B starts with the open; a step whose mask is out of the AND, or the open when
 # off, is skipped by Next Step / Back)
-STEPS = {"A": ("region", "chan1", "filt1", "otsu1", "chan2", "filt2", "otsu2", "mask3"),
+STEPS = {"A": ("region", "sam", "chan1", "filt1", "otsu1", "chan2", "filt2", "otsu2", "mask3"),
          "B": ("region", "grey", "gamma", "otsu1", "open1", "chan2", "filt2", "otsu2", "mask3")}   # CHANGES 243
 STEP_TITLES = dict(region="region", open="open in the mask", chan1="channel 1", filt1="bilateral 1",
                    otsu1="Otsu 1 -> mask 1", chan2="channel 2", filt2="bilateral 2", otsu2="Otsu 2 -> mask 2",
                    mask3="mask 3 = mask 1 AND mask 2", grey="grey = blue channel (deep copy)", gamma="relative gamma",
-                   open1="open of the Otsu mask -> mask 1")
+                   open1="open of the Otsu mask -> mask 1", sam="MobileSAM masks (look only)")
+# Region A's step 1 (CHANGES 245): every mask MobileSAM gives inside the region - from a grid of point prompts, from the
+# object-aware YOLO's boxes (production's MobileSAMv2 detector, ModelManager), or both. Drawn only; not used further.
+SAM_MODES = ("MobileSAM points", "YOLO boxes -> MobileSAM", "both")
+SAM_GRID, SAM_IOU_MIN, SAM_STAB_MIN, SAM_YOLO_CONF = 5, 0.60, 0.60, 0.05
+SAM_MIN_AREA, SAM_MAX_SHARE, SAM_DUP_IOU, SAM_BATCH = 12, 0.60, 0.7, 64
+# SAM_MAX_SHARE: a mask covering more of the region than this (after clipping to it) is the washer, not a leg - dropped
 GAMMA_PIVOT_FACTOR = 2.0             # region B: pivot = this x the region's mean grey (CHANGES 243)
 GAMMA_BELOW, GAMMA_ABOVE = 0.5, 2.0  # darker below the pivot, brighter above it
 OPEN_KERNEL = 5                      # px: region B's first step, a morphological open inside the mask only (CHANGES 241)
@@ -239,9 +251,109 @@ def maskedOpen(crop, mask, k):
     return out
 
 
+_SAM_CACHE = {}
+
+
+def samMasks(crop, region, predictor, yolo, mode, grid, iouMin, stabMin, yoloConf, cacheKey=None, maxShare=SAM_MAX_SHARE):
+    """CHANGES 245. Masks MobileSAM gives inside region: prompts = a point every grid px inside the region (3 masks
+    each) and / or the YOLO boxes whose centre lies in the region (1 mask each). Each mask clipped to the region; kept:
+    predicted IoU >= iouMin, stability >= stabMin, at least SAM_MIN_AREA px and at most maxShare of the region (larger =
+    the washer); a mask overlapping a better one by IoU > SAM_DUP_IOU dropped. -> (list of dict(mask, iou, stab,
+    source, area), info dict)."""
+    if cacheKey is not None and cacheKey in _SAM_CACHE:
+        return _SAM_CACHE[cacheKey]
+    import torch
+    from mobile_sam.utils.amg import calculate_stability_score
+    rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+    info = dict(points=0, boxes=0, raw=0, kept=0, note="", lowScore=0, small=0, large=0)
+    regionPx = max(int(region.sum()), 1)
+    cands = []
+    predictor.set_image(rgb)
+    model = predictor.model
+    thr = model.mask_threshold
+
+    def collect(logits, iou, source):
+        stab = calculate_stability_score(logits, thr, 1.0)
+        masks = (logits > thr).cpu().numpy()
+        for m, q, st in zip(masks, iou.cpu().numpy(), stab.cpu().numpy()):
+            info["raw"] += 1
+            if q < iouMin or st < stabMin:
+                info["lowScore"] += 1
+                continue
+            inside = m & region
+            ai = int(inside.sum())
+            if ai < SAM_MIN_AREA:
+                info["small"] += 1
+                continue
+            if ai > maxShare * regionPx:
+                info["large"] += 1
+                continue
+            cands.append(dict(mask=inside, iou=float(q), stab=float(st), source=source, area=ai))
+
+    with torch.inference_mode():
+        if mode in ("MobileSAM points", "both"):
+            ys, xs = np.nonzero(region)
+            pts = np.array([(x, y) for y in range(ys.min() if len(ys) else 0, (ys.max() + 1) if len(ys) else 0, grid)
+                            for x in range(xs.min() if len(xs) else 0, (xs.max() + 1) if len(xs) else 0, grid)
+                            if region[y, x]], float)
+            info["points"] = len(pts)
+            for i in range(0, len(pts), SAM_BATCH):
+                c = torch.as_tensor(pts[i:i + SAM_BATCH], dtype=torch.float, device=predictor.device)[:, None, :]
+                c = predictor.transform.apply_coords_torch(c, rgb.shape[:2])
+                lab = torch.ones(c.shape[:2], dtype=torch.int, device=predictor.device)
+                logits, iou, _ = predictor.predict_torch(point_coords=c, point_labels=lab, boxes=None,
+                                                         multimask_output=True, return_logits=True)
+                collect(logits.flatten(0, 1), iou.flatten(0, 1), "points")
+        if mode in ("YOLO boxes -> MobileSAM", "both"):
+            if yolo is None:
+                info["note"] = "YOLO weights not available here: no boxes"
+            else:
+                res = yolo.predict(rgb, conf=float(yoloConf), iou=0.7, verbose=False)
+                boxes = res[0].boxes.xyxy.cpu().numpy() if len(res) and res[0].boxes is not None else np.zeros((0, 4))
+                h, w = region.shape
+                if len(boxes):
+                    cx = np.clip(((boxes[:, 0] + boxes[:, 2]) / 2).astype(int), 0, w - 1)
+                    cy = np.clip(((boxes[:, 1] + boxes[:, 3]) / 2).astype(int), 0, h - 1)
+                    boxes = boxes[region[cy, cx]]
+                info["boxes"] = len(boxes)
+                for i in range(0, len(boxes), SAM_BATCH):
+                    b = torch.as_tensor(boxes[i:i + SAM_BATCH], dtype=torch.float, device=predictor.device)
+                    b = predictor.transform.apply_boxes_torch(b, rgb.shape[:2])
+                    logits, iou, _ = predictor.predict_torch(point_coords=None, point_labels=None, boxes=b,
+                                                             multimask_output=False, return_logits=True)
+                    collect(logits[:, 0], iou[:, 0], "YOLO")
+    cands.sort(key=lambda d: -(d["iou"] + d["stab"]))
+    kept = []
+    for c in cands:
+        if all((c["mask"] & k["mask"]).sum() / max((c["mask"] | k["mask"]).sum(), 1) <= SAM_DUP_IOU for k in kept):
+            kept.append(c)
+    info["kept"] = len(kept)
+    out = (kept, info)
+    if cacheKey is not None:
+        _SAM_CACHE[cacheKey] = out
+    return out
+
+
+SAM_COLOURS = [(255, 0, 255), (0, 255, 255), (255, 128, 0), (0, 255, 0), (255, 255, 0), (128, 0, 255), (0, 128, 255),
+               (255, 0, 128), (128, 255, 0), (0, 0, 255), (255, 255, 255), (0, 200, 128)]
+
+
+def drawSamMasks(crop, region, masks):
+    """Each mask a light fill and a 1 px outline in its own colour, inside the region; no text (CHANGES 245)."""
+    out = fill(crop, region, REGION_COLOUR, 0.12)
+    for i, d in enumerate(masks):
+        col = SAM_COLOURS[i % len(SAM_COLOURS)]
+        out = fill(out, d["mask"], col, 0.25)
+        for c in cv2.findContours(d["mask"].astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
+            cv2.polylines(out, [c], True, col, 1)
+    return out
+
+
 def runRegion(crop, region, p):
     """Steps 1 - 7 on one region with the values p; every intermediate picture and value."""
     res = dict(region=region, px=int(region.sum()))
+    if p.get("samResult") is not None:                 # CHANGES 245: region A's MobileSAM masks (drawn only)
+        res["samMasks"], res["samInfo"] = p["samResult"]
     if p.get("open"):                                  # region B's first step (CHANGES 241)
         crop = maskedOpen(crop, region, int(p.get("openK", OPEN_KERNEL)))
     res["opened"] = crop
@@ -418,12 +530,16 @@ def stepSkipped(tag, key, p):
         return not p["and2"]
     if key == "open":
         return not p.get("open")
+    if key == "sam":
+        return not p.get("sam")
     return False
 
 
 def stepPicture(crop, res, key, p):
     if key == "region":
         return fill(crop, res["region"], REGION_COLOUR, 0.25)
+    if key == "sam":
+        return drawSamMasks(crop, res["region"], res.get("samMasks") or [])
     if key == "open":
         out = crop.copy()
         out[res["region"]] = res["opened"][res["region"]]
@@ -451,6 +567,18 @@ def stepLines(tag, res, upto, p):
             lines.append(f"{head}: skipped" + (" (mask %s not in the AND)" % key[-1] if key != "open" else " (open off)"))
         elif key == "region":
             lines.append(f"{head}: {res['px']} px")
+        elif key == "sam":
+            inf, ms = res.get("samInfo") or {}, res.get("samMasks") or []
+            if not inf:
+                lines.append(f"{head}: not run (MobileSAM not loaded)")
+            else:
+                lines.append(f"{head}: {p['samMode']}; {inf['points']} points every {p['samGrid']} px, {inf['boxes']} YOLO boxes; "
+                             f"{inf['raw']} masks: {inf.get('lowScore', 0)} below IoU {p['samIou']:.2f} / stability {p['samStab']:.2f}, "
+                             f"{inf.get('small', 0)} under {SAM_MIN_AREA} px, {inf.get('large', 0)} over {p['samShare']:.2f} of the region (washer); "
+                             f"{inf['kept']} kept"
+                             + (f"; {inf['note']}" if inf["note"] else ""))
+                for i, d in enumerate(ms):
+                    lines.append(f"   mask {i + 1}: {d['source']}, {d['area']} px, IoU {d['iou']:.2f}, stability {d['stab']:.2f}")
         elif key == "grey":
             lines.append(f"{head}: mean in the region {res['mean']:.1f}")
         elif key == "gamma":
@@ -593,7 +721,7 @@ def main():
             marker = S.arg("--marker", "blue").lower()      # this copy: blue by default
             preset = MARKER_PRESETS.get(marker, MARKER_PRESETS["red"])
             self.regionBox(rg, 0, "A", "A  split pin washer", preset["A"], preset["and1"])
-            self.regionBox(rg, 2, "B", "B  plate washer / seal", preset["B"], preset["and1"])     # rows 2 - 4
+            self.regionBox(rg, 3, "B", "B  plate washer / seal", preset["B"], preset["and1"])     # rows 3 - 5 (A: 0 - 2)
             rg.setColumnStretch(rg.columnCount(), 1)
             boxes = QVBoxLayout()
             boxes.addWidget(regionsBox)
@@ -652,8 +780,8 @@ def main():
             topScroll = QScrollArea()       # CHANGES 239: the values scroll if the top 25 % is too low for them
             topScroll.setWidgetResizable(True)
             topScroll.setWidget(top)
-            lay.addWidget(topScroll, 25)
-            lay.addWidget(lower, 75)
+            lay.addWidget(topScroll, 30)          # CHANGES 245: 30 / 70 (the MobileSAM row)
+            lay.addWidget(lower, 70)
             self.setCentralWidget(central)
             if folder:
                 self.setFolder(pathlib.Path(folder))
@@ -684,6 +812,25 @@ def main():
             g.addWidget(head, row0, 0)
             g.addWidget(QLabel("Sector +- deg"), row0, 1)
             g.addWidget(spin("sector", 10, 120, SECTOR), row0, 2)
+            if tag == "A":                      # CHANGES 245: the MobileSAM step, its own row
+                sw = QWidget()
+                sl = QHBoxLayout(sw)
+                sl.setContentsMargins(0, 0, 0, 0)
+                sl.addWidget(check("sam", "MobileSAM masks first", True))
+                mode = QComboBox()
+                mode.addItems(SAM_MODES)
+                mode.currentIndexChanged.connect(lambda _: self.redraw(recompute=True))
+                w["samMode"] = mode
+                sl.addWidget(readable(mode))
+                for lab, key, lo, hi, val, st, dec in (("grid px", "samGrid", 2, 30, SAM_GRID, 1, 0),
+                                                       ("IoU min", "samIou", 0.0, 1.0, SAM_IOU_MIN, 0.05, 2),
+                                                       ("stability min", "samStab", 0.0, 1.0, SAM_STAB_MIN, 0.05, 2),
+                                                       ("YOLO conf", "samConf", 0.01, 0.9, SAM_YOLO_CONF, 0.01, 2),
+                                                       ("max share of region", "samShare", 0.05, 1.0, SAM_MAX_SHARE, 0.05, 2)):
+                    sl.addWidget(QLabel(lab))
+                    sl.addWidget(spin(key, lo, hi, val, st, dec))
+                sl.addStretch(1)
+                g.addWidget(sw, row0 + 2, 0, 1, -1)     # the whole width, so no value column is widened
             if tag == "B":                      # B: outline + from px .. outline + to px; the open first (CHANGES 241)
                 op = QWidget()
                 ol = QHBoxLayout(op)
@@ -692,7 +839,8 @@ def main():
                 ol.addWidget(spin("openK", 1, 25, OPEN_KERNEL))
                 ol.addWidget(QLabel("Gamma pivot x mean"))
                 ol.addWidget(spin("pivotF", 0.1, 5.0, GAMMA_PIVOT_FACTOR, 0.1, 2))
-                g.addWidget(op, row0 + 2, 0, 1, 4)     # CHANGES 243: own row, so the value columns keep their width
+                ol.addStretch(1)
+                g.addWidget(op, row0 + 2, 0, 1, -1)    # CHANGES 243: own row, so the value columns keep their width
                 ft = QWidget()
                 fl = QHBoxLayout(ft)
                 fl.setContentsMargins(0, 0, 0, 0)
@@ -791,6 +939,21 @@ def main():
             regA, _ = regions(geo, pa["sector"], 0, 0)
             _, regB = regions(geo, pb["sector"], pb["from"], pb["to"])
             pb["blueB"] = True                          # CHANGES 243: B's first step = grey, relative gamma, Otsu, open
+            pa["samResult"] = None
+            if pa.get("sam"):                           # CHANGES 245: region A's MobileSAM masks
+                if self.models is None:
+                    pa["samResult"] = ([], {})
+                else:
+                    try:
+                        key = (geo["name"], pa["samMode"], pa["samGrid"], pa["samIou"], pa["samStab"], pa["samConf"],
+                               pa["sector"])
+                        key = key + (pa["samShare"],)
+                        pa["samResult"] = samMasks(geo["crop"], regA, self.models[0], S.yoloModel() if pa["samMode"] != SAM_MODES[0] else None,
+                                                   pa["samMode"], int(pa["samGrid"]), pa["samIou"], pa["samStab"], pa["samConf"], key,
+                                                   pa["samShare"])
+                    except Exception as e:
+                        traceback.print_exc()
+                        pa["samResult"] = ([], dict(points=0, boxes=0, raw=0, kept=0, note=f"failed: {e}"))
             self.res = dict(A=runRegion(geo["crop"], regA, pa), B=runRegion(geo["crop"], regB, pb), pa=pa, pb=pb)
 
         def sequence(self):
