@@ -6774,3 +6774,12 @@ only their first character, also when open.
   to, on the region's rows), the columns no longer stretched; the top part scrolls if it is ever too low.
 - Checked: offscreen screenshot at 1600 x 1000 on Python 3.12 - every value and every item readable, the open list
   shows the whole names, the four region rows and the buttons in the top 25 % without scrolling.
+
+## 240. Study_SplitPin_Steps_UI: source B + 2G - 3R; mask 1 out of the AND by default (2026-11-28)
+
+Uddi (21:14): (a) a drop-down choice B + 2G - 3R; (b) the first mask unticked by default in both regions.
+- New source `B + 2G - 3R (bright = 1)` (clamped 0 .. 255; matched in full, after `B + G - 2R`, which it does not
+  match). Checked on a pixel B 100, G 90, R 40: 160.
+- `MARKER_PRESETS["red"]["and1"]` = False, as blue's: "Mask 1 in the AND" starts unticked in both regions for either
+  marker (mask 3 = mask 2); tick it to bring mask 1 back into the AND.
+- Checked: offscreen screenshot (no `--marker`): both "Mask 1" boxes unticked; the open list shows all 13 sources.

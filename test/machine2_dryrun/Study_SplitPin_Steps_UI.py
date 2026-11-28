@@ -37,6 +37,8 @@ Channel sources: grey (dark = 1), grey (bright = 1), 2R - G - B (bright = 1), ma
 R - G (bright = 1), 2B - G - R (bright = 1), B + G - 2R (bright = 1); all but grey and R clamped to 0 .. 255.
 --marker blue (CHANGES 236, 237; fluorescent blue marker): in both regions Otsu 1 left out (its "in the AND" box
 unticked, mask 3 = mask 2) and channel 2 = B + G - 2R (2B - G - R in 236); everything else as for red. Default --marker red.
+Since CHANGES 240 "Mask 1 in the AND" starts unticked for both markers (mask 3 = mask 2; tick it to AND mask 1 in);
+source B + 2G - 3R added.
 Defaults: A - grey (dark), 2R - G - B; B - max(R - B, 0), 2R - G - B (the last choices of CHANGES 223 - 225); sector +- 75 (CHANGES 238; was +- 60)
 deg, B from 1 to 30 px; since CHANGES 231 (Uddi 12:56), for A and B: bilateral 1 on (d 9, sigmaColor 75, sigmaSpace 50),
 Otsu 1 100 %; bilateral 2 on (d 9, sigmaColor 75, sigmaSpace 75), Otsu 2 70 %.
@@ -73,7 +75,8 @@ except Exception:                                   # the same steps, if the pro
 
 SOURCES = ("grey (dark = 1)", "grey (bright = 1)", "2R - G - B (bright = 1)", "max(R - B, 0) (bright = 1)",
            "R (bright = 1)", "R - G (bright = 1)", "2B - G - R (bright = 1)",
-           "B + G - 2R (bright = 1)", "B - R (bright = 1)", "2B - 2R (bright = 1)", "2B + G - 3R (bright = 1)")
+           "B + G - 2R (bright = 1)", "B - R (bright = 1)", "2B - 2R (bright = 1)", "2B + G - 3R (bright = 1)",
+           "B + 2G - 3R (bright = 1)")
 STEP_NAMES = ("region", "channel 1", "bilateral 1", "Otsu 1 -> mask 1", "channel 2", "bilateral 2",
               "Otsu 2 -> mask 2", "mask 3 = mask 1 AND mask 2")
 MASK1_COLOUR, MASK2_COLOUR, MASK3_COLOUR = (255, 90, 0), (0, 220, 0), (0, 0, 255)
@@ -88,7 +91,7 @@ OTSU_MIN = {"A": (0, 0), "B": (0, 14)}
 # the AND (mask 3 = mask 2) and channel 2 = clamped B + G - 2R in both regions (CHANGES 237; 2B - G - R in 236). --marker blue|red, and the Marker box.
 MARKER_PRESETS = {
     "red": dict(A=("grey (dark = 1)", "2R - G - B (bright = 1)"), B=("max(R - B, 0) (bright = 1)", "2R - G - B (bright = 1)"),
-                and1=True),
+                and1=False),      # CHANGES 240: mask 1 out of the AND by default (was True)
     "blue": dict(A=("grey (dark = 1)", "B + G - 2R (bright = 1)"), B=("max(R - B, 0) (bright = 1)", "B + G - 2R (bright = 1)"),
                  and1=False),
 }
@@ -124,6 +127,8 @@ def channel(crop: np.ndarray, source: str):
         v = 2 * B - 2 * R
     elif source.startswith("2B + G"):
         v = 2 * B + G - 3 * R
+    elif source.startswith("B + 2G"):                # CHANGES 240
+        v = B + 2 * G - 3 * R
     elif source.startswith("max(R - B"):
         v = R - B
     elif source.startswith("R - G"):
