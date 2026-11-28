@@ -6838,3 +6838,13 @@ Otsu, then a morphological open of the Otsu mask = the step's mask; no bilateral
   after the open 0 - 2,195 px; mask 3 (AND with B + G - 2R) 0 - 848 px. Why: in grey the marked legs are no brighter
   than the seal (legs median 22 - 35, rest of the region median 25 - 30, p75 38 - 41), and with the pivot at 2 x the mean
   (above the region's p95, 46 - 48) almost every pixel is below the pivot, so the transform only darkens.
+
+## 244. Study_SplitPin_Steps_FluorescentBlue: region B step 1 on the blue channel (2026-11-28)
+
+Uddi (23:47): "deep copy the image inside the mask; use only the blue channel of the image to convert it to grey".
+- B1: grey = the deep copy's blue channel (was OpenCV's BGR -> grey mix); the rest of step 1 unchanged.
+- Run on the 8 blue pictures: region B mean 26.6 - 31.8, pivot 53 - 64. In the blue channel the legs are a little
+  brighter than the rest of the region (median 33 - 41 vs 30 - 34; p75 39 - 54 vs 41 - 45), still inside its spread
+  (rest p25 5 - 8, p95 47 - 53). Otsu 1 again either 16 - 18 (2,300 - 2,620 px: the outer half of the seal band) or
+  119 - 130 (a highlight, 60 - 124 px); mask 3 0 - 1,119 px (was 0 - 848). Window offscreen: B1 named "grey = blue
+  channel (deep copy)", steps and skipping unchanged.

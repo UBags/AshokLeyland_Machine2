@@ -1,7 +1,7 @@
 """
 Study_SplitPin_Steps_FluorescentBlue - a copy of Study_SplitPin_Steps_UI for the fluorescent blue marker (Uddi,
 2026-11-28 23:40; CHANGES 243). Region B (over the grey plate washer / seal) has a different first step:
-  B1 grey     the picture inside the region, deep-copied, to grey;
+  B1 grey     the picture inside the region, deep-copied; grey = its blue channel only (CHANGES 244; was BGR -> grey);
   B2 gamma    relative gamma round pivot = factor x the region's mean grey (factor 2.0, "Gamma pivot x mean"): below the
               pivot gamma 0.5 (darker: pivot * (v / pivot) ** (1 / 0.5)), above it gamma 2.0 (brighter: pivot *
               (v / pivot) ** 2.0), clamped to 0 .. 255 (the convention of _legs_profile.relativeGamma); no bilateral;
@@ -103,7 +103,7 @@ STEPS = {"A": ("region", "chan1", "filt1", "otsu1", "chan2", "filt2", "otsu2", "
          "B": ("region", "grey", "gamma", "otsu1", "open1", "chan2", "filt2", "otsu2", "mask3")}   # CHANGES 243
 STEP_TITLES = dict(region="region", open="open in the mask", chan1="channel 1", filt1="bilateral 1",
                    otsu1="Otsu 1 -> mask 1", chan2="channel 2", filt2="bilateral 2", otsu2="Otsu 2 -> mask 2",
-                   mask3="mask 3 = mask 1 AND mask 2", grey="grey (deep copy)", gamma="relative gamma",
+                   mask3="mask 3 = mask 1 AND mask 2", grey="grey = blue channel (deep copy)", gamma="relative gamma",
                    open1="open of the Otsu mask -> mask 1")
 GAMMA_PIVOT_FACTOR = 2.0             # region B: pivot = this x the region's mean grey (CHANGES 243)
 GAMMA_BELOW, GAMMA_ABOVE = 0.5, 2.0  # darker below the pivot, brighter above it
@@ -247,7 +247,7 @@ def runRegion(crop, region, p):
     res["opened"] = crop
     blueB = bool(p.get("blueB"))
     if blueB:                                          # CHANGES 243: region B's first step
-        grey = cv2.cvtColor(crop.copy(), cv2.COLOR_BGR2GRAY)
+        grey = crop.copy()[..., 0].copy()             # CHANGES 244: the blue channel only (was the BGR -> grey mix)
         mean = float(grey[region].mean()) if region.any() else 0.0
         pivot = max(mean * float(p.get("pivotF", GAMMA_PIVOT_FACTOR)), 1.0)
         r = grey.astype(float) / pivot
