@@ -6570,3 +6570,26 @@ No code changed.
   edge - 30 kept (Uddi's "much less red"), the spin box sets it; where none is found the mask's own width is used. On
   12 pictures the profile covers less than half of the masks. Steps 1 - 5 0.04 - 0.10 s per picture (CPU). Contact
   sheets checked by eye; the window driven offscreen (18 pictures); both files parse on Python 3.11.
+
+## 229. Study_SplitPin_Steps_UI: the split pin legs step by step (2026-11-28)
+
+- Uddi, 2026-11-28 12:10: a window to see each step of the split pin processing, change some steps' values and do or
+  bypass steps with choice boxes. Screen 25 % values / 60 % four pictures / 15 % text; pictures: original round the
+  washer (top left), steps over the split pin washer (top right), steps over the plate washer / seal (bottom left),
+  result (bottom right).
+- `Study_SplitPin_Steps_UI.py` (new; both dry-run folders, identical): Load runs, without stopping, up to the two 120 deg
+  regions - hub holes and MobileSAM washer outline (`Study_Washer_SAM`), inner edge (`_legs_length.ring`), outline
+  scallop by scallop and pin head on its fixed axis (`_legs_profile`, 222); region A = +-sector round the legs axis,
+  inner edge .. outline; region B = +-sector, outline + from .. + to px. Then "Next Step" through A and B: 0 region,
+  1 channel 1 as grey inside the region, 2 optional bilateral (`utils/ImageNormalisationWithMask.bilateral_filter_masked`,
+  the region's own pixels; d, sigmaColor, sigmaSpace), 3 Otsu over the region x factor % (50 - 150, step 0.05, typed or
+  spun) -> mask 1 (blue), 4 channel 2, 5 optional bilateral, 6 Otsu x factor -> mask 2 (green, over mask 1), 7 mask 3 =
+  mask 1 AND mask 2 ("in the AND" boxes can leave either out), red; then the result (A | B red on the whole picture,
+  "Final zoomed" for the washer only). "Back", "Run all", "Reset". Each channel from a box: grey (dark = 1), grey
+  (bright = 1), 2R - G - B, max(R - B, 0), R, R - G (bright = 1; clamped 0 .. 255). Defaults: A grey (dark) and
+  2R - G - B (Uddi's steps); B max(R - B, 0) and 2R - G - B (the last choices of 223 - 225, "likewise"); sector +-60,
+  B 1 .. 30 px, bilateral off (9 / 75 / 75), factors 100 %. Every value redraws the step shown; the text box lists each
+  step's values (Otsu value, factor, threshold, pixels). Washer panels: +-85 px round the washer centre, x3.
+- Run: driven offscreen (sandbox, dark-blob holes, MobileSAM on the CPU) on an OK picture of 24 Nov through all 17 steps,
+  then bilateral 1 on and Otsu 2 at 80 % - the masks and lines followed (A3 Otsu 119 -> mask 1 441 px; A6 Otsu 16 x 80 %
+  = 12.8 -> mask 2 459 px); parses on Python 3.11.
