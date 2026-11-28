@@ -6593,3 +6593,8 @@ No code changed.
 - Run: driven offscreen (sandbox, dark-blob holes, MobileSAM on the CPU) on an OK picture of 24 Nov through all 17 steps,
   then bilateral 1 on and Otsu 2 at 80 % - the masks and lines followed (A3 Otsu 119 -> mask 1 441 px; A6 Otsu 16 x 80 %
   = 12.8 -> mask 2 459 px); parses on Python 3.11.
+
+## 230. Study_SplitPin_Steps_UI: text beside the pictures (2026-11-28)
+
+- Uddi, 2026-11-28 12:30: the window in two parts - top 25 % the values and choice boxes, bottom 75 % split into the text
+  (left 25 %) and the four pictures (right 75 %). Layout only. Run: driven offscreen through all steps (as 229).

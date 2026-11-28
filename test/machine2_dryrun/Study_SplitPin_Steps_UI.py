@@ -2,7 +2,8 @@
 Study_SplitPin_Steps_UI - the split pin legs step by step, with the steps' values and choice boxes to do or bypass a
 step (Uddi, 2026-11-28 12:10; CHANGES 229). Study only: production and the properties file are not touched.
 
-Screen: top 25 % the values and choice boxes, middle 60 % four pictures, bottom 15 % the text.
+Screen (CHANGES 230): top 25 % the values and choice boxes; bottom 75 % split into the text (left 25 %) and the four
+pictures (right 75 %).
   top left      the original picture round the washer (+- VIEW_HALF px round its centre, x3: the whole split pin in view);
   top right     the steps over the split pin washer (region A);
   bottom left   the steps over the plate washer / seal beyond it (region B);
@@ -318,7 +319,7 @@ def main():
             boxes.addWidget(self.regionBox("B", "Plate washer / seal (region B)", ("max(R - B, 0) (bright = 1)", "2R - G - B (bright = 1)")))
             tl.addLayout(boxes)
 
-            # ---- middle 60 %: four pictures
+            # ---- four pictures
             mid = QWidget()
             grid = QGridLayout(mid)
             grid.setContentsMargins(0, 0, 0, 0)
@@ -326,7 +327,7 @@ def main():
             for i, pic in enumerate(self.pics):
                 grid.addWidget(pic, i // 2, i % 2)
 
-            # ---- bottom 15 %: the text
+            # ---- the text (left of the pictures since CHANGES 230)
             self.text = QPlainTextEdit()
             self.text.setReadOnly(True)
             self.status = QLabel("")
@@ -335,9 +336,14 @@ def main():
             bl.setContentsMargins(0, 0, 0, 0)
             bl.addWidget(self.text, 1)
             bl.addWidget(self.status)
+            # top 25 %: the values; bottom 75 %: the text (left 25 %) and the pictures (right 75 %) - CHANGES 230
+            lower = QWidget()
+            ll = QHBoxLayout(lower)
+            ll.setContentsMargins(0, 0, 0, 0)
+            ll.addWidget(bottom, 25)
+            ll.addWidget(mid, 75)
             lay.addWidget(top, 25)
-            lay.addWidget(mid, 60)
-            lay.addWidget(bottom, 15)
+            lay.addWidget(lower, 75)
             self.setCentralWidget(central)
             if folder:
                 self.setFolder(pathlib.Path(folder))
