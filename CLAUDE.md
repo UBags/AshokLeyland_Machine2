@@ -203,6 +203,9 @@ supervised by `utils/ProcessSupervisor.py` (restart on death, rate-limited):
   `claude/PLC_Interface_Spec.md`, `claude/state_sync.md`, `claude/plant-pc-verification.md`,
   `claude/vision_positions_machine2.md`,
   `claude/machine2-changes-log-81-onwards.md` = CHANGES from §81 with a two-line header). Refresh them after a push.
+  `python docs/tools/make_project_copies.py` writes all seven into `ProjectCopies/` (not in git) for upload; the
+  Project tool in a Claude session replaces a doc only after reading the whole file at once, which the LLD and the
+  change log are too large for.
 - Commits end with the attribution lines the session asks for; push to `main`.
 
 ## 7. Plant PC verification (`docs/plant-pc-verification.md`)

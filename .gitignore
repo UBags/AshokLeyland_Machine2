@@ -73,3 +73,6 @@ ApplicationConfiguration*.properties
 
 # sandbox clone of MobileSAM (weights for the dry runs; not part of the repo)
 src/mobile-sam/
+
+# Project copies written by docs/tools/make_project_copies.py (uploaded to the claude.ai Project, not kept in git)
+ProjectCopies/

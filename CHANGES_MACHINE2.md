@@ -6702,3 +6702,12 @@ Run (sandbox; both dry-run folders updated, identical apart from paths):
 - Machine 1 copy of `DryRun_DBServer_And_Persistence.py`: 70 / 70. Not run: the Machine 1 (Allen-Bradley) fault
   scenarios, the laptop / plant PC. On the plant PC the migration runs at the first start of the new exe; until the
   supervisor changes them, every model has rounds = its old CW / CCW counts and both orders CW.CCW.
+
+## 235. Project copies of the docs built by a script (2026-11-28)
+
+- `docs/tools/make_project_copies.py` writes the seven Project copies (HLD, LLD, PLC_Interface_Spec, state_sync,
+  plant-pc-verification, vision_positions_machine2, and `machine2-changes-log-81-onwards.md` = CHANGES from §81 with
+  the two-line header naming the last section) into `ProjectCopies/` (in `.gitignore`), for upload to the Project.
+- Why: after §234 the Project tool refused to replace `claude/LLD.md` (77 KB) and the change log (457 KB, stale at
+  §216) from the session - it replaces a doc only after reading the whole file at once. PLC_Interface_Spec was replaced.
+- CLAUDE.md §6 names the script. Run in the sandbox: seven files written, change log sections 81 - 235.
