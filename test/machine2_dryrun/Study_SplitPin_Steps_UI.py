@@ -34,7 +34,9 @@ black, an open with a 5 x 5 kernel (on white a closing of the black: masks broke
 = the red mask shown ("Join the masks" box, kernel spin box). "Back" goes one step back, "Run all" to the result, "Reset" to step 0. Changing a value or a box
 redraws the step shown. The text box: each step's values (Otsu value, factor, threshold, pixels).
 Channel sources: grey (dark = 1), grey (bright = 1), 2R - G - B (bright = 1), max(R - B, 0) (bright = 1), R (bright = 1),
-R - G (bright = 1); 2R - G - B, R - B and R - G clamped to 0 .. 255.
+R - G (bright = 1), 2B - G - R (bright = 1); 2R - G - B, R - B, R - G and 2B - G - R clamped to 0 .. 255.
+--marker blue (CHANGES 236; fluorescent blue marker): in both regions Otsu 1 left out (its "in the AND" box unticked,
+mask 3 = mask 2) and channel 2 = 2B - G - R; everything else as for red. Default --marker red.
 Defaults: A - grey (dark), 2R - G - B; B - max(R - B, 0), 2R - G - B (the last choices of CHANGES 223 - 225); sector +- 60
 deg, B from 1 to 30 px; since CHANGES 231 (Uddi 12:56), for A and B: bilateral 1 on (d 9, sigmaColor 75, sigmaSpace 50),
 Otsu 1 100 %; bilateral 2 on (d 9, sigmaColor 75, sigmaSpace 75), Otsu 2 70 %.
@@ -70,7 +72,7 @@ except Exception:                                   # the same steps, if the pro
         return out
 
 SOURCES = ("grey (dark = 1)", "grey (bright = 1)", "2R - G - B (bright = 1)", "max(R - B, 0) (bright = 1)",
-           "R (bright = 1)", "R - G (bright = 1)")
+           "R (bright = 1)", "R - G (bright = 1)", "2B - G - R (bright = 1)")
 STEP_NAMES = ("region", "channel 1", "bilateral 1", "Otsu 1 -> mask 1", "channel 2", "bilateral 2",
               "Otsu 2 -> mask 2", "mask 3 = mask 1 AND mask 2")
 MASK1_COLOUR, MASK2_COLOUR, MASK3_COLOUR = (255, 90, 0), (0, 220, 0), (0, 0, 255)
@@ -81,6 +83,14 @@ DEFAULTS = dict(bil1=True, d1=9, sc1=75.0, ss1=50.0, pct1=100.0, bil2=True, d2=9
 # Otsu minimum (Uddi 16:27, CHANGES 233): a raw Otsu value below it -> the mask is empty (0 = off). Defaults from the
 # 24 Nov pictures: only region B's channel 2 (2R - G - B) separates - OK 1 - 24 (median 4), NOT OK 4 - 50 (median 21)
 OTSU_MIN = {"A": (0, 0), "B": (0, 14)}
+# Marker colour (CHANGES 236, Uddi 19:02): red = the steps above; blue (fluorescent blue marker) = Otsu 1 left out of
+# the AND (mask 3 = mask 2) and channel 2 = clamped 2B - G - R in both regions. --marker blue|red, and the Marker box.
+MARKER_PRESETS = {
+    "red": dict(A=("grey (dark = 1)", "2R - G - B (bright = 1)"), B=("max(R - B, 0) (bright = 1)", "2R - G - B (bright = 1)"),
+                and1=True),
+    "blue": dict(A=("grey (dark = 1)", "2B - G - R (bright = 1)"), B=("max(R - B, 0) (bright = 1)", "2B - G - R (bright = 1)"),
+                 and1=False),
+}
 BRIDGE_LENGTH, BRIDGE_WIDTH = 19, 5   # px: the directed bridge at a leg's end (CHANGES 232)
 BRIDGE_END_PX = 12                    # px: the last part of a leg whose main axis gives the bridge's direction
 BRIDGE_MIN_AREA = 10                  # px: smaller pieces get no bridge
@@ -102,6 +112,8 @@ def channel(crop: np.ndarray, source: str):
         return cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), "dark" in source
     if source.startswith("2R"):
         v = 2 * R - G - B
+    elif source.startswith("2B"):                    # blue marker (CHANGES 236)
+        v = 2 * B - G - R
     elif source.startswith("max(R - B"):
         v = R - B
     elif source.startswith("R - G"):
@@ -430,8 +442,10 @@ def main():
             self.p = {"A": {}, "B": {}}
             self.widgets = {"A": {}, "B": {}}
             boxes = QHBoxLayout()
-            boxes.addWidget(self.regionBox("A", "Split pin washer (region A)", ("grey (dark = 1)", "2R - G - B (bright = 1)")))
-            boxes.addWidget(self.regionBox("B", "Plate washer / seal (region B)", ("max(R - B, 0) (bright = 1)", "2R - G - B (bright = 1)")))
+            marker = S.arg("--marker", "red").lower()
+            preset = MARKER_PRESETS.get(marker, MARKER_PRESETS["red"])
+            boxes.addWidget(self.regionBox("A", "Split pin washer (region A)", preset["A"], preset["and1"]))
+            boxes.addWidget(self.regionBox("B", "Plate washer / seal (region B)", preset["B"], preset["and1"]))
             row3 = QHBoxLayout()
             self.joinBox = QCheckBox("Join the masks before the result (white copy, masks black, open)")
             self.joinBox.setChecked(True)
@@ -488,7 +502,7 @@ def main():
             if folder:
                 self.setFolder(pathlib.Path(folder))
 
-        def regionBox(self, tag, title, sources):
+        def regionBox(self, tag, title, sources, and1=True):
             box = QGroupBox(title)
             g = QGridLayout(box)
             w = self.widgets[tag]
@@ -538,7 +552,7 @@ def main():
                 g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, 10)
                 g.addWidget(QLabel("Otsu min"), r, 11)
                 g.addWidget(spin(f"min{k}", 0, 255, OTSU_MIN[tag][k - 1]), r, 12)
-                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", True), r, 13)
+                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", and1 if k == 1 else True), r, 13)
             return box
 
         def params(self, tag):
@@ -695,7 +709,7 @@ def main():
         installQtMessageHandler()
     except Exception:
         pass
-    flagsWithValue = {S.arg(f) for f in ("--model", "--holes", "--sam")}
+    flagsWithValue = {S.arg(f) for f in ("--model", "--holes", "--sam", "--marker")}
     folder = next((a for a in sys.argv[1:] if not a.startswith("--") and a not in flagsWithValue), None)
     w = Window(folder)
     w.resize(1600, 1000)

@@ -6711,3 +6711,22 @@ Run (sandbox; both dry-run folders updated, identical apart from paths):
 - Why: after §234 the Project tool refused to replace `claude/LLD.md` (77 KB) and the change log (457 KB, stale at
   §216) from the session - it replaces a doc only after reading the whole file at once. PLC_Interface_Spec was replaced.
 - CLAUDE.md §6 names the script. Run in the sandbox: seven files written, change log sections 81 - 235.
+
+## 236. Study_SplitPin_Steps_UI: fluorescent blue marker (2026-11-28)
+
+Uddi (19:02): new pictures with a fluorescent blue marker (yellow did not work). Same steps as for red, with Otsu 1
+skipped in both regions and only the second step, its grey picture = 2B - G - R.
+- New channel source `2B - G - R (bright = 1)` (clamped 0 .. 255). `--marker blue` (`MARKER_PRESETS`): both regions'
+  "Mask 1 in the AND" unticked (mask 3 = mask 2) and channel 2 = 2B - G - R; the rest (bilateral 2 d 9 / 75 / 75, Otsu 2
+  70 %, Otsu min 14 on region B's channel 2, sector +- 60, B 1 - 30 px, closest-point bridges, 5 x 5 join) as for red.
+  Default `--marker red` = unchanged.
+- Run headless on Uddi's 8 pictures of 28 Nov 15:54 - 16:24 (sandbox: holes by morphology, MobileSAM on CPU; all
+  DOSTPLUS, washer, outline and head found on all 8, legs axis 117 deg). Otsu 2: region A 25 - 41, region B 10 - 22.
+  At 70 %: region A masks cover a wide band of the washer, region B blobs much wider than the legs. At 100 %: region B
+  follows the straight legs past the washer on 5 pictures (161424 - 162329); region A takes the washer's inner band
+  more than the legs. Region B empty (Otsu below 14) on 155430, 162404, 162420; on the last two the legs leave the washer
+  at about 10 o'clock, outside the +- 60 deg sector round 117 deg. Measured: over the washer 2B - G - R has median 23 - 41
+  (the washer itself is bluish) and p99 only 46 - 67; past the washer median 5 - 11, p99 45 - 63 where legs are.
+  Bilateral off (100 %): no better (the channel shows the JPEG 8 x 8 blocks).
+- The window itself was not run (Python 3.12 here has no torch; 3.13 no PySide6); the steps ran through the module's
+  functions.
