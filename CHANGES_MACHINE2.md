@@ -6730,3 +6730,14 @@ skipped in both regions and only the second step, its grey picture = 2B - G - R.
   Bilateral off (100 %): no better (the channel shows the JPEG 8 x 8 blocks).
 - The window itself was not run (Python 3.12 here has no torch; 3.13 no PySide6); the steps ran through the module's
   functions.
+
+## 237. Study_SplitPin_Steps_UI: blue marker channel B + G - 2R (2026-11-28)
+
+Uddi (20:17): the blue channel is B + G - 2R, not 2B - G - R. New source `B + G - 2R (bright = 1)` (clamped); the
+`--marker blue` preset uses it for channel 2 in both regions; `2B - G - R` stays as a source.
+- Same 8 pictures, same run as 236. Otsu 2: region A 36 - 56, region B 30 - 37 where legs leave the washer in the sector,
+  9 - 14 where not (empty by the minimum 14 on 162404, 162420; 155430 at exactly 14 is kept). Contrast about twice
+  2B - G - R's: p99 past the washer 91 - 119 (was 45 - 63), median 4 - 12; over the washer p99 68 - 135, but the median
+  rises too (33 - 52). At 100 %: region B a clean band along each straight leg on the 5 pictures with legs past the
+  washer; region A narrower along the legs than with 2B - G - R on those 5, still the washer's inner band on 155430,
+  162404, 162420. At 70 % both regions too wide, as before.
