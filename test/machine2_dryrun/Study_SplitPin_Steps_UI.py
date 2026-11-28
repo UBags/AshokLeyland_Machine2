@@ -19,7 +19,8 @@ Then "Next Step" goes through, for A and then for B:
   1  channel 1 as a grey picture inside the region (its source chosen in the box; A: grey, dark = mask);
   2  optional bilateral filter (check box; d, sigmaColor, sigmaSpace; utils/ImageNormalisationWithMask.
      bilateral_filter_masked - only the region's own pixels);
-  3  Otsu over the region x the factor (%, 50 - 150) -> mask 1 (blue);
+  3  Otsu over the region x the factor (%, 50 - 150) -> mask 1 (blue); since CHANGES 233 a raw Otsu value below the
+     channel's "Otsu min" (0 = off; default 14 for region B's channel 2, else 0) leaves the mask empty;
   4  channel 2 as a grey picture (A: clamped 2R - G - B);
   5  optional bilateral filter;
   6  Otsu x the factor -> mask 2 (green), shown over mask 1 (blue) on the original;
@@ -77,6 +78,9 @@ REGION_COLOUR = (255, 255, 0)
 SCALLOP_COLOUR, INNER_COLOUR = (139, 0, 0), (0, 255, 255)
 # Uddi's values of 2026-11-28 12:56 (CHANGES 231), the same for regions A and B
 DEFAULTS = dict(bil1=True, d1=9, sc1=75.0, ss1=50.0, pct1=100.0, bil2=True, d2=9, sc2=75.0, ss2=75.0, pct2=70.0)
+# Otsu minimum (Uddi 16:27, CHANGES 233): a raw Otsu value below it -> the mask is empty (0 = off). Defaults from the
+# 24 Nov pictures: only region B's channel 2 (2R - G - B) separates - OK 1 - 24 (median 4), NOT OK 4 - 50 (median 21)
+OTSU_MIN = {"A": (0, 0), "B": (0, 14)}
 BRIDGE_LENGTH, BRIDGE_WIDTH = 19, 5   # px: the directed bridge at a leg's end (CHANGES 232)
 BRIDGE_END_PX = 12                    # px: the last part of a leg whose main axis gives the bridge's direction
 BRIDGE_MIN_AREA = 10                  # px: smaller pieces get no bridge
@@ -166,8 +170,9 @@ def runRegion(crop, region, p):
         res[f"filt{k}"] = g
         t0 = otsu(g[region]) if region.any() else 0.0
         t = t0 * p[f"pct{k}"] / 100.0
-        m = region & ((g <= t) if dark else (g > t))
-        res.update({f"otsu{k}": t0, f"thr{k}": t, f"mask{k}": m, f"dark{k}": dark})
+        below = p.get(f"min{k}", 0) > 0 and t0 < p[f"min{k}"]
+        m = np.zeros_like(region) if below else region & ((g <= t) if dark else (g > t))
+        res.update({f"otsu{k}": t0, f"thr{k}": t, f"mask{k}": m, f"dark{k}": dark, f"below{k}": below})
     use1, use2 = p["and1"], p["and2"]
     m3 = (res["mask1"] if use1 else region) & (res["mask2"] if use2 else region)
     if not use1 and not use2:
@@ -328,8 +333,11 @@ def stepLines(tag, res, step, p):
                                                          if p[f"bil{k}"] else "bypassed"))
         elif s in (3, 6):
             k = 1 if s == 3 else 2
-            lines.append(f"{tag}{s} Otsu {k}: {res[f'otsu{k}']:.0f} x {p[f'pct{k}']:.2f} % = {res[f'thr{k}']:.1f} -> mask {k} "
-                         f"({'dark' if res[f'dark{k}'] else 'bright'} = 1) {int(res[f'mask{k}'].sum())} px")
+            if res.get(f"below{k}"):
+                lines.append(f"{tag}{s} Otsu {k}: {res[f'otsu{k}']:.0f} < minimum {p[f'min{k}']} -> mask {k} empty")
+            else:
+                lines.append(f"{tag}{s} Otsu {k}: {res[f'otsu{k}']:.0f} x {p[f'pct{k}']:.2f} % = {res[f'thr{k}']:.1f} -> mask {k} "
+                             f"({'dark' if res[f'dark{k}'] else 'bright'} = 1) {int(res[f'mask{k}'].sum())} px")
         else:
             used = " AND ".join(n for n, u in (("mask 1", p["and1"]), ("mask 2", p["and2"])) if u) or "nothing"
             lines.append(f"{tag}7 mask 3 = {used}: {int(res['mask3'].sum())} px")
@@ -528,7 +536,9 @@ def main():
                 g.addWidget(spin(f"ss{k}", 1, 300, DEFAULTS[f"ss{k}"], 5, 1), r, 8)
                 g.addWidget(QLabel("Otsu %"), r, 9)
                 g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, 10)
-                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", True), r, 11)
+                g.addWidget(QLabel("Otsu min"), r, 11)
+                g.addWidget(spin(f"min{k}", 0, 255, OTSU_MIN[tag][k - 1]), r, 12)
+                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", True), r, 13)
             return box
 
         def params(self, tag):

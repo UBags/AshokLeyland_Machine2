@@ -6636,3 +6636,20 @@ No code changed.
   diagnosis, the commands and the undo.
 - Run: the window driven offscreen on 4 pictures (16:30:59.124 NOT OK: 1 bar, gap 7.2 px; 16:23:50.453 OK: none;
   17:16:58.256 OK: 2 bars to false B pieces; 17:16:05.283 NOT OK: 1 bar); parses on Python 3.11.
+
+## 233. Study_SplitPin_Steps_UI: Otsu minimum per channel (2026-11-28)
+
+- Uddi, 2026-11-28 16:27: if the initial Otsu value is below 14, the whole mask is 0.
+- Measured first (sandbox, the 139 pictures of 24 Nov with a pin, the window's defaults), the raw Otsu values: region A
+  grey 103 - 155 (never below 14); region A 2R - G - B OK 5 - 18 (median 14), NOT OK 1 - 49 (median 15) - below 14: 17 OK,
+  45 NOT OK; region B max(R - B, 0) OK 0 - 10 (median 1), NOT OK 1 - 22 (median 9) - below 14: 38 OK, 85 NOT OK; region B
+  2R - G - B OK 1 - 24 (median 4), NOT OK 4 - 50 (median 21) - below 14: 28 OK, 10 NOT OK. Applied everywhere, the rule
+  would empty the legs of most NOT OK pictures (Uddi's 16:30:59.124 included: A 2R - G - B 10, B R - B 7); on region B's
+  2R - G - B it separates.
+- Built: an "Otsu min" spin box per channel and region (0 = off); a raw Otsu value (before the % factor) below it leaves
+  that mask empty; defaults 14 for region B's channel 2 (2R - G - B), 0 elsewhere (`OTSU_MIN`). Text: "Otsu n: v < minimum
+  m -> mask n empty".
+- Run (window offscreen, 4 pictures): 17:16:58.256 OK - region B empty, the false seal pieces and their bridges gone
+  (result 1332 -> 329 px); 16:30:59.124 NOT OK unchanged (B 2R - G - B 15, bridge kept); 16:23:50.453 OK unchanged;
+  17:16:05.283 NOT OK - region B emptied (B 2R - G - B below 14; a short standing stub), result 487 -> 213 px - one of the
+  10 NOT OK pictures below 14. Parses on Python 3.11.
