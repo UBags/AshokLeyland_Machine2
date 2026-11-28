@@ -44,7 +44,8 @@ from Configuration import CosThetaConfigurator
 from statemachine.StateMachine import MachineState, MachineStateMachine
 from processors.GenericQueueProcessor import GenericQueueProcessor
 from utils.QRCodeHelper import getModel_LHSRHS_AndTonnage
-from persistence.Persistence import getDatabaseName, setDatabaseName, getMachineSettings
+from persistence.Persistence import getDatabaseName, setDatabaseName, getMachineSettings, rotationCountsForSide, \
+    MACHINE_SETTINGS_KEYS, MACHINE_SETTINGS_CHOICE_KEYS
 from costhetaio.commonplc.PLCDataIO import PLCDataIO
 from costhetaio.commonplc.PLCDataIOFactory import createPLCDataIO, plcDataIOClass, plcVendor
 
@@ -620,7 +621,7 @@ class PLCIOServer:
         self.cameraTimeouts: int = 0
         # The cycle settings last written to the PLC ({setting key: value}): the settings the PLC holds when a later
         # cycle's settings cannot be written (the cycle then goes ahead with them)
-        self._lastWrittenSettings: Dict[str, float] = {}
+        self._lastWrittenSettings: Dict[str, object] = {}     # floats; rotation_order a str (CW.CCW / CCW.CW)
 
         # Current QR Code for this cycle
         self.currentQRCode: str = ""
@@ -788,7 +789,10 @@ class PLCIOServer:
           ModelSelection              INT   1 = DOST, 2 = DOSTPLUS        (from the QR code; only if its tag is set)
         cycle.settings.source = database (both PLCs): the settings in force in machine_settings for the QR code's model
         (frontend: Machine Settings, per model), all REAL:
-          TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CCW, NoOfRotation1CW
+          TighteningTorque1/2Setpoint, RotationRPM, NoOfRotation1CW, NoOfRotation1CCW
+        The two rotation counts (CHANGES 234): the model's rounds 1 / 2 and the order of the component's side
+        (rotation_order_lhs / _rhs): CW.CCW -> CW = round 1, CCW = round 2; CCW.CW -> CCW = round 1, CW = round 2
+        (rotationCountsForSide). The tags and addresses are as before.
         cycle.settings.source = properties (the earlier Allen-Bradley set-up, not used now):
           TighteningTorque1/2Setpoint REAL, RotationRPM1/2 INT          (properties; -1 = do not write)
         Each write is retried (SETTINGS_WRITE_ATTEMPTS). The side must be written: an unknown side / model or a side
@@ -828,10 +832,12 @@ class PLCIOServer:
 
             config = CosThetaConfigurator.getInstance()
             used = {"rotation_rpm": None, "tightening_torque1_setpoint": None, "tightening_torque2_setpoint": None,
-                    "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None}
+                    "no_of_rotation1_ccw": None, "no_of_rotation1_cw": None,      # the counts written to the CCW / CW tags
+                    "rotation_order": None}                                       # the side's order they came from
             keyOfTag = {}                   # settings tag -> its key in `used`
             problems = []                   # settings not written this cycle (the cycle goes ahead with the PLC's)
             bypassWanted = False            # the model's "Bypass Component Press and Second Tightening"
+            rotationOrder = None            # the side's order of rotations (CW.CCW / CCW.CW), database settings only
             if config.getCycleSettingsSource() == "database":
                 settings = None
                 try:
@@ -839,17 +845,28 @@ class PLCIOServer:
                 except Exception as e:
                     problems.append(f"machine settings could not be read from the database ({e})")
                 bypassWanted = bool(settings.get("bypass_press_and_tightening2")) if settings else False
-                missing = [k for k in used if settings.get(k) is None] if settings else list(used)
+                required = MACHINE_SETTINGS_KEYS + MACHINE_SETTINGS_CHOICE_KEYS
+                missing = [k for k in required if settings.get(k) is None] if settings else list(required)
                 if missing and not problems:
                     problems.append(f"machine settings not available from the database ({', '.join(missing)})")
+                values = {}
                 if not missing:
+                    try:
+                        # this side's order picks which round is clockwise (CHANGES 234)
+                        cw, ccw, rotationOrder = rotationCountsForSide(settings, side)
+                        values = {k: float(settings[k]) for k in ("tightening_torque1_setpoint",
+                                                                  "tightening_torque2_setpoint", "rotation_rpm")}
+                        values.update(no_of_rotation1_cw=cw, no_of_rotation1_ccw=ccw)
+                    except (ValueError, KeyError, TypeError) as e:
+                        problems.append(f"machine settings not usable ({e})")
+                if values:
                     for tag, key in ((PLCIOServer.PC_PLC_TighteningTorque1Setpoint, "tightening_torque1_setpoint"),
                                      (PLCIOServer.PC_PLC_TighteningTorque2Setpoint, "tightening_torque2_setpoint"),
                                      (PLCIOServer.PC_PLC_RotationRPM, "rotation_rpm"),
-                                     (PLCIOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
-                                     (PLCIOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw")):
+                                     (PLCIOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw"),
+                                     (PLCIOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw")):
                         if tag:
-                            writes.append((tag, float(settings[key]), float))
+                            writes.append((tag, values[key], float))
                             keyOfTag[tag] = key
             else:
                 skip = CosThetaConfigurator.SETPOINT_NOT_TO_BE_WRITTEN
@@ -891,6 +908,12 @@ class PLCIOServer:
                         self._lastWrittenSettings[key] = float(value)
                 else:
                     problems.append(f"{tag}={value} not written after {PLCIOServer.SETTINGS_WRITE_ATTEMPTS} attempts")
+            if rotationOrder is not None and used["no_of_rotation1_cw"] is not None \
+                    and used["no_of_rotation1_ccw"] is not None \
+                    and all(t in keyOfTag for t in (PLCIOServer.PC_PLC_NoOfRotation1CW, PLCIOServer.PC_PLC_NoOfRotation1CCW)):
+                # both counts written this cycle: the order they came from is the one the PLC now holds
+                used["rotation_order"] = rotationOrder
+                self._lastWrittenSettings["rotation_order"] = rotationOrder
             for key in used:                # not written this cycle: the PLC holds the value last written, if known
                 if used[key] is None and key in self._lastWrittenSettings:
                     used[key] = self._lastWrittenSettings[key]
@@ -915,7 +938,8 @@ class PLCIOServer:
                                               if self._skipSecondTighteningThisCycle else used)
             except Exception as e:
                 printBoldRed(f"Could not publish the cycle settings for the DB record: {e}")
-            printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}: {written}")
+            orderNote = f" (order of rotations {rotationOrder})" if rotationOrder else ""
+            printBoldGreen(f"Wrote cycle settings to PLC for {model} {side}{orderNote}: {written}")
             return True
         except Exception as e:
             printBoldRed(f"Exception writing cycle settings to PLC: {e}")

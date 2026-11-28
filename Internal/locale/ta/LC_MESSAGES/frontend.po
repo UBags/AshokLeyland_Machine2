@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 00:00+0553\n"
+"POT-Creation-Date: 2026-11-19 00:00+0530\n"
 "PO-Revision-Date: 2026-11-19 00:00+0000\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ta\n"
@@ -153,8 +153,8 @@ msgstr "அறிக்கை"
 msgid "Information"
 msgstr "தகவல்"
 
-#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:813 frontend/SimplePopups.py:2002
-#: frontend/SimplePopups.py:2010
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:813 frontend/SimplePopups.py:2027
+#: frontend/SimplePopups.py:2035
 msgid "Machine Settings"
 msgstr "இயந்திர அமைப்புகள்"
 
@@ -226,7 +226,7 @@ msgstr ""
 msgid "Wrong password - nothing aborted"
 msgstr "தவறான கடவுச்சொல் - எதுவும் ரத்து செய்யப்படவில்லை"
 
-#: frontend/AshokLeylandFrontEnd.py:1331
+#: frontend/AshokLeylandFrontEnd.py:1331 frontend/AshokLeylandFrontEnd.py:1335
 msgid "QR CODE : "
 msgstr "QR குறியீடு : "
 
@@ -287,11 +287,11 @@ msgstr "சூப்பர்வைசர்"
 msgid "Administrator"
 msgstr "நிர்வாகி"
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1829 frontend/SimplePopups.py:1859
 msgid "Yes"
 msgstr "ஆம்"
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1829 frontend/SimplePopups.py:1859
 msgid "No"
 msgstr "இல்லை"
 
@@ -454,7 +454,7 @@ msgstr "Redis தரவைச் சேமிக்கவில்லை: PC-ஐ
 #: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
 #: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
 #: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
-#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:2031
 msgid "Cancel"
 msgstr "ரத்து"
 
@@ -851,30 +851,38 @@ msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
 msgstr "இறுக்கும் டார்க் 2 செட்பாயிண்ட், Nm (0.01 - 19.99)"
 
 #: frontend/SimplePopups.py:1787
-msgid "No. of Rotations 1 CCW (1 - 4)"
-msgstr "சுழற்சிகளின் எண்ணிக்கை 1 CCW (1 - 4)"
+msgid "No. of Rotations in 1st Round (1 - 4)"
+msgstr "1வது சுற்றில் சுழற்சிகளின் எண்ணிக்கை (1 - 4)"
 
 #: frontend/SimplePopups.py:1788
-msgid "No. of Rotations 1 CW (1 - 4)"
-msgstr "சுழற்சிகளின் எண்ணிக்கை 1 CW (1 - 4)"
+msgid "No. of Rotations in 2nd Round (1 - 4)"
+msgstr "2வது சுற்றில் சுழற்சிகளின் எண்ணிக்கை (1 - 4)"
+
+#: frontend/SimplePopups.py:1793
+msgid "Order of Rotations for LHS"
+msgstr "LHS க்கான சுழற்சிகளின் வரிசை"
 
 #: frontend/SimplePopups.py:1794
+msgid "Order of Rotations for RHS"
+msgstr "RHS க்கான சுழற்சிகளின் வரிசை"
+
+#: frontend/SimplePopups.py:1800
 msgid "Bypass Component Press and Second Tightening"
 msgstr "காம்போனென்ட் பிரஸ் மற்றும் இரண்டாவது இறுக்குதலைத் தவிர்"
 
-#: frontend/SimplePopups.py:1825
+#: frontend/SimplePopups.py:1835
 msgid "Enter the password to open the machine settings"
 msgstr "இயந்திர அமைப்புகளைத் திறக்க கடவுச்சொல்லை உள்ளிடவும்"
 
-#: frontend/SimplePopups.py:1829
+#: frontend/SimplePopups.py:1839
 msgid "Wrong password: machine settings not opened"
 msgstr "தவறான கடவுச்சொல்: இயந்திர அமைப்புகள் திறக்கப்படவில்லை"
 
-#: frontend/SimplePopups.py:1838
+#: frontend/SimplePopups.py:1848
 msgid "(no change)"
 msgstr "(மாற்றம் இல்லை)"
 
-#: frontend/SimplePopups.py:1839
+#: frontend/SimplePopups.py:1849
 #, python-brace-format
 msgid ""
 "Change the machine settings for {model}:\n"
@@ -891,11 +899,11 @@ msgstr ""
 "கடவுச்சொல்லை உள்ளிடுவது இந்த மாற்றத்தை உறுதிப்படுத்தும்.\n"
 "இயந்திர அமைப்புகளின் கடவுச்சொல்லை உள்ளிடவும்:"
 
-#: frontend/SimplePopups.py:1844
+#: frontend/SimplePopups.py:1854
 msgid "Wrong password: machine settings not changed"
 msgstr "தவறான கடவுச்சொல்: இயந்திர அமைப்புகள் மாற்றப்படவில்லை"
 
-#: frontend/SimplePopups.py:1850
+#: frontend/SimplePopups.py:1860
 #, python-brace-format
 msgid ""
 "'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
@@ -908,17 +916,17 @@ msgstr ""
 "கடவுச்சொல்லை உள்ளிடுவது இந்த மாற்றத்தை உறுதிப்படுத்தும்.\n"
 "தவிர்ப்புக் கடவுச்சொல்லை உள்ளிடவும்:"
 
-#: frontend/SimplePopups.py:1855
+#: frontend/SimplePopups.py:1865
 msgid "Wrong bypass password: machine settings not changed"
 msgstr "தவறான தவிர்ப்புக் கடவுச்சொல்: இயந்திர அமைப்புகள் மாற்றப்படவில்லை"
 
-#: frontend/SimplePopups.py:1872
+#: frontend/SimplePopups.py:1882
 msgid "A component is in the cycle: reboot the camera only between components (while the QR code is awaited)"
 msgstr ""
 "ஒரு பாகம் சுழற்சியில் உள்ளது: பாகங்களுக்கு இடையில் மட்டும் (QR குறியீடு எதிர்பார்க்கப்படும் போது) கேமராவை மறுதொடக்கம்"
 " செய்யவும்"
 
-#: frontend/SimplePopups.py:1879
+#: frontend/SimplePopups.py:1889
 #, python-brace-format
 msgid ""
 "Reboot the camera ({ip}).\n"
@@ -935,77 +943,82 @@ msgstr ""
 "கடவுச்சொல்லை உள்ளிடுவது கேமராவை மறுதொடக்கம் செய்வதற்கான இறுதி உறுதிப்படுத்தல்.\n"
 "இயந்திர அமைப்புகளின் கடவுச்சொல்லை உள்ளிடவும்:"
 
-#: frontend/SimplePopups.py:1885
+#: frontend/SimplePopups.py:1895
 msgid "Wrong password: the camera was not rebooted"
 msgstr "தவறான கடவுச்சொல்: கேமரா மறுதொடக்கம் செய்யப்படவில்லை"
 
-#: frontend/SimplePopups.py:1913
+#: frontend/SimplePopups.py:1923
 msgid "The camera is rebooting. Its picture is back after about one to two minutes."
 msgstr "கேமரா மறுதொடக்கம் ஆகிறது. சுமார் ஒன்று முதல் இரண்டு நிமிடங்களில் அதன் படம் திரும்பும்."
 
-#: frontend/SimplePopups.py:1915
+#: frontend/SimplePopups.py:1925
 #, python-brace-format
 msgid "The camera could not be rebooted: {reason}"
 msgstr "கேமராவை மறுதொடக்கம் செய்ய முடியவில்லை: {reason}"
 
-#: frontend/SimplePopups.py:1940
+#: frontend/SimplePopups.py:1950
 #, python-brace-format
 msgid "{name}: at most 2 decimals"
 msgstr "{name}: அதிகபட்சம் 2 தசம இடங்கள்"
 
-#: frontend/SimplePopups.py:1944
+#: frontend/SimplePopups.py:1954
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid whole number"
 msgstr "{name}: '{text}' சரியான முழு எண் அல்ல"
 
-#: frontend/SimplePopups.py:1944
+#: frontend/SimplePopups.py:1954
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid number"
 msgstr "{name}: '{text}' சரியான எண் அல்ல"
 
-#: frontend/SimplePopups.py:1962
+#: frontend/SimplePopups.py:1961
+#, python-brace-format
+msgid "{name}: '{text}' is not one of {allowed}"
+msgstr "{name}: '{text}' என்பது {allowed} இல் ஒன்று அல்ல"
+
+#: frontend/SimplePopups.py:1980
 msgid "Only an Administrator or a Supervisor can change the machine settings"
 msgstr "நிர்வாகி அல்லது சூப்பர்வைசர் மட்டுமே இயந்திர அமைப்புகளை மாற்ற முடியும்"
 
-#: frontend/SimplePopups.py:1972
+#: frontend/SimplePopups.py:1990
 msgid "No models found in qrcode.partmapping.N of the properties file"
 msgstr "properties கோப்பின் qrcode.partmapping.N-இல் மாடல்கள் இல்லை"
 
-#: frontend/SimplePopups.py:1983
+#: frontend/SimplePopups.py:2004
 #, python-brace-format
 msgid "In force for {model} since {since} (set by {user})"
 msgstr "{model}-க்கு {since} முதல் நடைமுறையில் ({user} அமைத்தது)"
 
-#: frontend/SimplePopups.py:1985
+#: frontend/SimplePopups.py:2006
 #, python-brace-format
 msgid "Default settings for {model}"
 msgstr "{model}-க்கான இயல்புநிலை அமைப்புகள்"
 
-#: frontend/SimplePopups.py:1988
+#: frontend/SimplePopups.py:2009
 msgid "Model"
 msgstr "மாடல்"
 
-#: frontend/SimplePopups.py:2005
+#: frontend/SimplePopups.py:2030
 msgid "New settings apply from the next component of the chosen model."
 msgstr "புதிய அமைப்புகள் தேர்ந்தெடுத்த மாடலின் அடுத்த பாகத்திலிருந்து பொருந்தும்."
 
-#: frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:2031
 msgid "Save"
 msgstr "சேமி"
 
-#: frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:2031
 msgid "Reset"
 msgstr "மீட்டமை"
 
-#: frontend/SimplePopups.py:2008
+#: frontend/SimplePopups.py:2033
 msgid "Reboot Camera"
 msgstr "கேமராவை மறுதொடக்கம் செய்"
 
-#: frontend/SimplePopups.py:2009
+#: frontend/SimplePopups.py:2034
 msgid "Only between components; the password is asked again as the final confirmation."
 msgstr "பாகங்களுக்கு இடையில் மட்டும்; இறுதி உறுதிப்படுத்தலாக கடவுச்சொல் மீண்டும் கேட்கப்படும்."
 
-#: frontend/SimplePopups.py:2040
+#: frontend/SimplePopups.py:2067
 #, python-brace-format
 msgid ""
 "Machine settings for {model} saved.\n"
@@ -1014,11 +1027,11 @@ msgstr ""
 "{model}-க்கான இயந்திர அமைப்புகள் சேமிக்கப்பட்டன.\n"
 "அவை அடுத்த {model} பாகத்திலிருந்து பொருந்தும்."
 
-#: frontend/SimplePopups.py:2042
+#: frontend/SimplePopups.py:2069
 msgid "Could not save the machine settings"
 msgstr "இயந்திர அமைப்புகளைச் சேமிக்க முடியவில்லை"
 
-#: frontend/SimplePopups.py:2045
+#: frontend/SimplePopups.py:2072
 #, python-brace-format
 msgid "Machine settings: {error}"
 msgstr "இயந்திர அமைப்புகள்: {error}"

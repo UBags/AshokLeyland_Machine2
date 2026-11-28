@@ -427,14 +427,22 @@ def driver():
               refused and shown and "Administrator or a Supervisor" in shown[0]
               and P.getMachineSettings(P.getDatabaseName()).get("setting_id") == before.get("setting_id"), str(shown))
         good, errors = SP.parseMachineSettingsInputs(dict(rotation_rpm="32", tightening_torque1_setpoint="18.5",
-                       tightening_torque2_setpoint="19.99", no_of_rotation1_ccw="2", no_of_rotation1_cw="1"))
-        check("F6 valid entries accepted as floats", errors == [] and good == dict(rotation_rpm=32.0,
-              tightening_torque1_setpoint=18.5, tightening_torque2_setpoint=19.99, no_of_rotation1_ccw=2.0,
-              no_of_rotation1_cw=1.0), str((good, errors)))
+                       tightening_torque2_setpoint="19.99", no_of_rotations_round1="2", no_of_rotations_round2="1",
+                       rotation_order_lhs="CW.CCW", rotation_order_rhs="CCW.CW"))
+        check("F6 valid entries accepted (numbers as floats, the orders as given)", errors == [] and good == dict(
+              rotation_rpm=32.0, tightening_torque1_setpoint=18.5, tightening_torque2_setpoint=19.99,
+              no_of_rotations_round1=2.0, no_of_rotations_round2=1.0, rotation_order_lhs="CW.CCW",
+              rotation_order_rhs="CCW.CW"), str((good, errors)))
         _, errors = SP.parseMachineSettingsInputs(dict(rotation_rpm="30.5", tightening_torque1_setpoint="20",
-                    tightening_torque2_setpoint="1.234", no_of_rotation1_ccw="5", no_of_rotation1_cw="x"))
-        check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 5 (1 - 4 allowed), not a number)",
-              len(errors) == 5, str(errors))
+                    tightening_torque2_setpoint="1.234", no_of_rotations_round1="5", no_of_rotations_round2="x",
+                    rotation_order_lhs="CW", rotation_order_rhs=""))
+        check("F6 invalid entries: one message per field (RPM not whole, torque 20, 3 decimals, count 5 (1 - 4 allowed), "
+              "not a number, two orders not CW.CCW / CCW.CW)", len(errors) == 7, str(errors))
+        _cur = dict(P.DEFAULT_MACHINE_SETTINGS)
+        _lines = SP.machineSettingsChanges(dict(_cur, rotation_order_rhs="CCW.CW", no_of_rotations_round2=3.0), _cur)
+        check("F6 the changes listed at Save include a changed order and round", len(_lines) == 2
+              and any("RHS" in x and "CW.CCW -> CCW.CW" in x for x in _lines) and any("2nd Round" in x for x in _lines),
+              str(_lines))
         # ---------------- F7 ----------------
         print("\n=== F7. GUI thread never blocked by Redis reads ===", flush=True)
         GUI_GAPS["max"] = 0.0; GUI_GAPS["last"] = time.monotonic()

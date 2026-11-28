@@ -462,6 +462,7 @@ class DataPersistence():
                             setting_tightening_torque2_setpoint = cycleSettings.get("tightening_torque2_setpoint"),
                             setting_no_of_rotation1_ccw = cycleSettings.get("no_of_rotation1_ccw"),
                             setting_no_of_rotation1_cw = cycleSettings.get("no_of_rotation1_cw"),
+                            setting_rotation_order = cycleSettings.get("rotation_order"),
                             nut_tightening_torque_1_rotation_done = tighteningTorque1RotationDone,
                             nut_tightening_torque_2_rotation_done = tighteningTorque2RotationDone,
                             aborted = aborted, abort_reason = abortReason,

@@ -41,8 +41,8 @@ tags:
   PC_PLC_TighteningTorque1Setpoint:          { address: "DB101,R200",  type: float,  dir: w }   # Nm, > 0 and < 20
   PC_PLC_TighteningTorque2Setpoint:          { address: "DB101,R204",  type: float,  dir: w }   # Nm, > 0 and < 20
   PC_PLC_RotationRPM:                        { address: "DB101,LR96",  type: float,  dir: w }   # 20 - 40 rpm (LREAL)
-  PC_PLC_NoOfRotation1CCW:                   { address: "DB101,LR144", type: float,  dir: w }   # 1 or 2 (LREAL)
-  PC_PLC_NoOfRotation1CW:                    { address: "DB101,LR120", type: float,  dir: w }   # 1 or 2 (LREAL)
+  PC_PLC_NoOfRotation1CCW:                   { address: "DB101,LR144", type: float,  dir: w }   # 1 to 4 (LREAL)
+  PC_PLC_NoOfRotation1CW:                    { address: "DB101,LR120", type: float,  dir: w }   # 1 to 4 (LREAL)
 
   # --- Step 3: knuckle ---------------------------------------------------------------------------------------------
   PLC_PC_CheckKnuckle:                       { address: "DB500,X3.3", type: bool,  dir: r }

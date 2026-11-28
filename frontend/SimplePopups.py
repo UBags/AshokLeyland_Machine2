@@ -1774,7 +1774,7 @@ def writeReportToFile(csv_data: str, reportType: str):
 
 # ****************************************** Start - Machine Settings *************************************
 # Settings written to the PLC at the start of each cycle (state 2): rotation RPM, tightening torque setpoints 1 and 2,
-# number of rotations 1 CCW and 1 CW - per model (the models of qrcode.partmapping.N). Stored in machine_settings (a new
+# number of rotations of rounds 1 and 2 and the order of the rounds for LHS and RHS (CHANGES 234) - per model (the models of qrcode.partmapping.N). Stored in machine_settings (a new
 # row per change, with the model and who changed it); the IOServer reads the latest row of the QR code's model at the
 # start of each component, so a change applies from that model's next component.
 
@@ -1784,8 +1784,14 @@ MACHINE_SETTINGS_FIELDS = (
     ("rotation_rpm", N_("Rotation RPM (20 - 40)"), "int"),
     ("tightening_torque1_setpoint", N_("Tightening Torque 1 Setpoint, Nm (0.01 - 19.99)"), "torque"),
     ("tightening_torque2_setpoint", N_("Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"), "torque"),
-    ("no_of_rotation1_ccw", N_("No. of Rotations 1 CCW (1 - 4)"), "count"),
-    ("no_of_rotation1_cw", N_("No. of Rotations 1 CW (1 - 4)"), "count"),
+    ("no_of_rotations_round1", N_("No. of Rotations in 1st Round (1 - 4)"), "count"),
+    ("no_of_rotations_round2", N_("No. of Rotations in 2nd Round (1 - 4)"), "count"),
+)
+# per-model choices (drop-downs; CHANGES 234): key, label. Values: ROTATION_ORDERS (CW.CCW / CCW.CW), shown as stored.
+# The side's order picks which round the PLC is given as clockwise and which as counter-clockwise.
+MACHINE_SETTINGS_CHOICE_FIELDS = (
+    ("rotation_order_lhs", N_("Order of Rotations for LHS")),
+    ("rotation_order_rhs", N_("Order of Rotations for RHS")),
 )
 
 
@@ -1814,6 +1820,10 @@ def machineSettingsChanges(settings: dict, current: dict) -> list:
         if old is None or abs(float(old) - float(new)) > 1e-9:
             fmt = (lambda v: f"{float(v):.2f}") if kind == "torque" else (lambda v: str(int(round(float(v)))))
             lines.append(f"{tr(label).split(' (')[0]}: {fmt(old) if old is not None else '-'} -> {fmt(new)}")
+    for key, label in MACHINE_SETTINGS_CHOICE_FIELDS:
+        old, new = current.get(key), settings.get(key)
+        if old != new:
+            lines.append(f"{tr(label)}: {old if old is not None else '-'} -> {new}")
     for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
         if bool(current.get(key, False)) != bool(settings.get(key, False)):
             lines.append(f"{tr(label)}: {tr('Yes') if settings.get(key) else tr('No')}")
@@ -1942,6 +1952,14 @@ def parseMachineSettingsInputs(values: dict):
                 settings[key] = round(float(text), 2)
         except ValueError:
             errors.append((trf("{name}: '{text}' is not a valid whole number", name=name, text=text) if kind != 'torque' else trf("{name}: '{text}' is not a valid number", name=name, text=text)))
+    for key, label in MACHINE_SETTINGS_CHOICE_FIELDS:
+        labels[key] = label
+        text = str(values.get(key, "")).strip().upper()
+        if text in MACHINE_SETTINGS_CHOICES[key]:
+            settings[key] = text
+        else:
+            errors.append(trf("{name}: '{text}' is not one of {allowed}", name=tr(label), text=text,
+                              allowed=", ".join(MACHINE_SETTINGS_CHOICES[key])))
     for problem in validateMachineSettings(settings):
         key = problem.split(":")[0]
         if key in settings:                       # unparsable entries are already reported
@@ -1978,6 +1996,9 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
             v = float(current.get(key, DEFAULT_MACHINE_SETTINGS[key]))
             return f"{v:.2f}" if kind == "torque" else str(int(round(v)))
 
+        def shownChoice(key):
+            return str(current.get(key) or DEFAULT_MACHINE_SETTINGS[key])
+
         def infoText():
             changed = current.get("updated_on_date")
             return (trf("In force for {model} since {since} (set by {user})", model=model, since=f"{changed:%d-%m-%Y %H:%M}",
@@ -1997,6 +2018,10 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
             else:
                 field = sg.Input(shown(key, kind), size=(10, 1), font=16, k=key)
             rows.append([sg.Text(tr(label), size=(44, 1), font=16), field])
+        for key, label in MACHINE_SETTINGS_CHOICE_FIELDS:
+            rows.append([sg.Text(tr(label), size=(44, 1), font=16),
+                         sg.Combo(list(MACHINE_SETTINGS_CHOICES[key]), default_value=shownChoice(key), readonly=True,
+                                  size=(8, 1), font=16, k=key)])
         for key, label in MACHINE_SETTINGS_FLAG_FIELDS:
             rows.append([sg.Checkbox(tr(label), default=bool(current.get(key, False)), font=16, k=key)])
         layout = ([[sg.Text(tr("Machine Settings"), font=("Helvetica", 16, "bold"))],
@@ -2023,6 +2048,8 @@ def updateMachineSettingsDialog(currentUser: str, currentRole: str, modal: bool 
                     window["info"].update(infoText())
                 for key, _, kind in MACHINE_SETTINGS_FIELDS:
                     window[key].update(shown(key, kind))
+                for key, _ in MACHINE_SETTINGS_CHOICE_FIELDS:
+                    window[key].update(shownChoice(key))
                 for key, _ in MACHINE_SETTINGS_FLAG_FIELDS:
                     window[key].update(bool(current.get(key, False)))
                 continue

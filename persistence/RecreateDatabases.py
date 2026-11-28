@@ -59,7 +59,8 @@ def main() -> int:
         setDatabaseName(mode, createDB=True)
         settings = getMachineSettings(getDatabaseName())
         shown = {k: settings.get(k) for k in ("rotation_rpm", "tightening_torque1_setpoint", "tightening_torque2_setpoint",
-                                              "no_of_rotation1_ccw", "no_of_rotation1_cw")} if settings else settings
+                                              "no_of_rotations_round1", "no_of_rotations_round2",
+                                              "rotation_order_lhs", "rotation_order_rhs")} if settings else settings
         print(f"Created {name}: schema, tables, roles, default users; machine settings {shown}")
     return 0
 

@@ -495,7 +495,7 @@ One row per component. Primary key `record_id`, a sequence.
 | Abort | `aborted` (bool, default false), `abort_reason` (varchar 255): emergency button on the machine or manual abort (Ctrl+Alt+Z); no record for an abort while waiting for the QR code |
 | Bypass | `bypassed_press_and_tightening2` (bool, default false). When true: the 4 skipped steps have result `Bypassed`, NULL datetimes, no picture file, `nut_tightening_torque_2` = -1.0, rotation done NULL; they do not count against the overall result |
 | Presses | `component_press_done`, `cap_press_done`, each with `_datetime` |
-| Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` |
+| Settings used | `setting_rotation_rpm`, `setting_tightening_torque1_setpoint`, `setting_tightening_torque2_setpoint`, `setting_no_of_rotation1_ccw`, `setting_no_of_rotation1_cw` (the counts written to the CCW / CW tags), `setting_rotation_order` (the side's order they came from, CW.CCW / CCW.CW; CHANGES §234) |
 | Overall | `ok_notok_result`, `username` (FK to `users`), `remarks`, `created_on` |
 
 An aborted cycle's record has, for every step not reached, result NOT OK, time 1970-01-01 00:00:00 and torque 0.0; the MI dashboard leaves such torques out of its torque charts (as it leaves out -1.0, not measured; CHANGES §127).
@@ -508,11 +508,18 @@ Append-only, per model (index `idx_machine_settings_model`): the latest `setting
 in force for it. Rows without a model (before 2026-11-08) are copied to every model that has none when the database
 is set up; a model with no row falls back to the latest such row.
 
+State 2 gives the PLC the rotation counts by the component's side (`rotationCountsForSide`): order `CW.CCW` ->
+`PC_PLC_NoOfRotation1CW` = round 1, `PC_PLC_NoOfRotation1CCW` = round 2; `CCW.CW` -> CCW = round 1, CW = round 2.
+Rows from before CHANGES §234 were migrated at set-up with round 1 = the CW count, round 2 = the CCW count and both
+orders `CW.CCW`, so the PLC is given the same values as before.
+
 | Column | Check |
 |---|---|
 | `rotation_rpm` | 20–40 |
 | `tightening_torque1_setpoint`, `tightening_torque2_setpoint` | > 0 and < 20 |
-| `no_of_rotation1_ccw`, `no_of_rotation1_cw` | 1 to 4 |
+| `no_of_rotations_round1`, `no_of_rotations_round2` | 1 to 4: rotations of the 1st and 2nd round |
+| `rotation_order_lhs`, `rotation_order_rhs` | `CW.CCW` or `CCW.CW`: the order of the rounds for an LHS / RHS component (CHANGES §234) |
+| `no_of_rotation1_ccw`, `no_of_rotation1_cw` | 1 to 4 or NULL: rows from before CHANGES §234 only (kept, no longer written) |
 | `bypass_press_and_tightening2` | boolean, default false: skip the bung check, component press, bung removal and second tightening |
 | `model_name` | the model (NULL: the one set for all models used before 2026-11-08) |
 | `updated_by`, `updated_on_date` | — |

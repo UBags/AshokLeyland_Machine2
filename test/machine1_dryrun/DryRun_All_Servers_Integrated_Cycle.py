@@ -132,7 +132,7 @@ cur.execute("""select model_name, lhs_rhs, model_tonnage, nut_tightening_torque_
                check_knuckle_result, check_bung_for_component_press_result, component_press_done, check_no_bung_result,
                check_splitpin_and_washer_result, check_cap_result, check_bung_cap_press_result, cap_press_done,
                ok_notok_result, username, setting_rotation_rpm, setting_tightening_torque1_setpoint,
-               setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+               setting_tightening_torque2_setpoint, setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw, setting_rotation_order,
                nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done from al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data
                where qr_code = %s order by record_id desc limit 1""", (QR,))
 print("RESULT plc sequence completed:", RESULT.get('plc_done'))

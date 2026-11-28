@@ -6653,3 +6653,52 @@ No code changed.
   (result 1332 -> 329 px); 16:30:59.124 NOT OK unchanged (B 2R - G - B 15, bridge kept); 16:23:50.453 OK unchanged;
   17:16:05.283 NOT OK - region B emptied (B 2R - G - B below 14; a short standing stub), result 487 -> 213 px - one of the
   10 NOT OK pictures below 14. Parses on Python 3.11.
+
+## 234. Machine settings: rotations per round and the order of rotations per side (2026-11-28)
+
+Uddi: the database stores (a) the rotations of the 1st round, (b) of the 2nd round, (c) the order of rotations for LHS
+and (d) for RHS (CW.CCW or CCW.CW). In state 2 the component's side picks its order, and the order says which round
+goes to the clockwise tag and which to the counter-clockwise tag. LHS, CW.CCW, round 1 = 1, round 2 = 2 -> CW 1, CCW 2.
+The tags (`PC_PLC_NoOfRotation1CW` DB101,LR120, `PC_PLC_NoOfRotation1CCW` DB101,LR144) and their addresses are unchanged.
+
+- Before: `machine_settings.no_of_rotation1_ccw` / `no_of_rotation1_cw` (per model) were written as they were to the
+  CCW / CW tags, for both sides.
+- `machine_settings` (per model, as before): new columns `no_of_rotations_round1`, `no_of_rotations_round2` (real,
+  NOT NULL, 1 - 4), `rotation_order_lhs`, `rotation_order_rhs` (varchar(10), NOT NULL, `CW.CCW` / `CCW.CW`).
+  Migration in `createAllTables` (every start, idempotent): rows without them get round 1 = the old CW count, round 2 =
+  the old CCW count, both orders CW.CCW - the PLC is given exactly the values it was given before, on both sides,
+  until a supervisor changes them. The old two columns stay (history, NOT NULL dropped), no longer written.
+- `Persistence`: `MACHINE_SETTINGS_KEYS` = rpm, torques 1 / 2, rounds 1 / 2; `MACHINE_SETTINGS_CHOICES` (the two
+  orders, `ROTATION_ORDERS`); `validateMachineSettings` also checks the orders; defaults rounds 1 / 1, orders CW.CCW;
+  `insertNewMachineSettings(..., no_of_rotations_round1, no_of_rotations_round2, rotation_order_lhs, rotation_order_rhs)`;
+  `getMachineSettings` returns them; new `rotationCountsForSide(settings, side)` -> (CW, CCW, order), ValueError on an
+  unknown side or order.
+- IOServer (`writeCycleSettingsToPLC`, state 2, `cycle.settings.source=database`): the counts by
+  `rotationCountsForSide` for the QR code's side; written and read back as before (CW first, then CCW). All 7 settings
+  (rpm, torques, rounds, orders) must be in the database, else none but the side is written (as before for the 5). The
+  log line names the order. Published for the record: the counts written (`no_of_rotation1_cw` / `_ccw`, as before)
+  and `rotation_order` (only when both counts were written this cycle; else the last written, as for the others).
+- Component record (`hub_and_disc_assembly_data`): new `setting_rotation_order` (varchar(10)) beside
+  `setting_no_of_rotation1_ccw` / `_cw` (still the counts written to the CCW / CW tags); in the reports' column lists.
+- Frontend Machine Settings: "No. of Rotations in 1st Round (1 - 4)", "... 2nd Round", "Order of Rotations for LHS" /
+  "for RHS" (drop-downs CW.CCW / CCW.CW); the changes listed at Save include the orders. Catalogues updated; the 5 new
+  texts translated (kn / ta / hi drafts, for the native-speaker review).
+- `RecreateDatabases` prints the new keys. Properties comments and `IOServerProperties.yaml`: "1 or 2" -> "1 to 4".
+- Docs: LLD (`machine_settings`, record columns), PLC_Interface_Spec §3.2.
+- Not changed: the Allen-Bradley properties set-up (`cycle.settings.source=properties`), the rotation 2 tags (unused).
+
+Run (sandbox; both dry-run folders updated, identical apart from paths):
+- `DryRun_DBServer_And_Persistence.py`: 70 / 70 (twice: new database, then existing). New: 12 bad settings rejected
+  (rounds 0 / 5 / 1.5, orders CW / CW.CW / missing); database constraints reject round 5, order CW.CW, no order;
+  `rotationCountsForSide` both sides and orders, errors; 9b: a `machine_settings` table as before 234 (DOST 2 CCW /
+  1 CW, DOSTPLUS 3 / 4) migrated -> DOST rounds 1 / 2, DOSTPLUS 4 / 3, orders CW.CCW, the PLC values unchanged on both
+  sides, a second set-up changes nothing, a new row saves without the old columns.
+- `DryRun_IOServer_Fault_Scenarios.py` (Siemens simulator): 213 / 213. D: RHS CCW.CW, rounds 1 / 2 -> CCW 1, CW 2;
+  D6: DOST LHS CCW.CW 3 / 4 -> CCW 3, CW 4; DOST RHS CW.CCW -> CW 3, CCW 4; DOSTPLUS RHS CW.CCW 1 / 2 -> CW 1, CCW 2;
+  the LREAL bytes in the PLC memory as written; the order published for the record.
+- `DryRun_FEServer_Cycles.py` (Python 3.12, offscreen): 172 / 173. F6: entries with rounds and orders accepted, 7
+  messages for 7 bad entries (two bad orders), the Save list shows a changed round and order. The one failure, F1
+  ('Rotation Not Done' fits its tile), is the sandbox's fonts: it fails the same way on the commit before (171 / 172).
+- Machine 1 copy of `DryRun_DBServer_And_Persistence.py`: 70 / 70. Not run: the Machine 1 (Allen-Bradley) fault
+  scenarios, the laptop / plant PC. On the plant PC the migration runs at the first start of the new exe; until the
+  supervisor changes them, every model has rounds = its old CW / CCW counts and both orders CW.CCW.

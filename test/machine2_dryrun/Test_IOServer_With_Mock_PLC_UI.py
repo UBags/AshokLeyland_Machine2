@@ -433,13 +433,20 @@ class TestIOServerGUI:
         source = config.getCycleSettingsSource()
         info += f"  Source of the setpoints: {source}\n"
         if source == "database":
-            from persistence.Persistence import getMachineSettings, getDatabaseName
+            from persistence.Persistence import getMachineSettings, getDatabaseName, rotationCountsForSide
             configured = getMachineSettings(getDatabaseName(), model_name=self.model_var.get())   # the selected model's
+
+            def counts(i):      # CW / CCW by the side's order (CHANGES 234), for LHS / RHS
+                try:
+                    return " / ".join(f"{side} {rotationCountsForSide(configured, side)[i]:g} "
+                                      f"({configured.get(f'rotation_order_{side.lower()}')})" for side in ("LHS", "RHS"))
+                except Exception:
+                    return None
             values = {"PC_PLC_TighteningTorque1Setpoint": configured.get("tightening_torque1_setpoint"),
                       "PC_PLC_TighteningTorque2Setpoint": configured.get("tightening_torque2_setpoint"),
                       "PC_PLC_RotationRPM": configured.get("rotation_rpm"),
-                      "PC_PLC_NoOfRotation1CCW": configured.get("no_of_rotation1_ccw"),
-                      "PC_PLC_NoOfRotation1CW": configured.get("no_of_rotation1_cw")}
+                      "PC_PLC_NoOfRotation1CW": counts(0),
+                      "PC_PLC_NoOfRotation1CCW": counts(1)}
         else:
             values = {"PC_PLC_TighteningTorque1Setpoint": config.getTighteningTorque1Setpoint(),
                       "PC_PLC_TighteningTorque2Setpoint": config.getTighteningTorque2Setpoint(),

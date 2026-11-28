@@ -49,6 +49,10 @@ Out of scope: the vision algorithms, the database, and the frontend. See `HLD.md
 | `PC_PLC_NoOfRotation1CW` | DB101,LR120 | lreal | 1 to 4 | Clockwise rotations |
 | `PC_PLC_NoOfRotation1CCW` | DB101,LR144 | lreal | 1 to 4 | Counter-clockwise rotations |
 
+The two rotation counts come from the model's rounds 1 and 2 and the order set for the component's side
+(`rotation_order_lhs` / `_rhs`, CHANGES §234): `CW.CCW` -> CW = round 1, CCW = round 2; `CCW.CW` -> CCW = round 1,
+CW = round 2. Example: LHS, `CW.CCW`, round 1 = 1, round 2 = 2 -> CW 1, CCW 2. Tags and addresses are unchanged.
+
 The settings come from the latest `machine_settings` row of the QR code's model (settings are kept per model).
 
 - Each setting is written and then read back (`_settingReadBack`).

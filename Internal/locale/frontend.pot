@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: AshokLeyland_Machine2 VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-11-19 00:00+0553\n"
+"POT-Creation-Date: 2026-11-19 00:00+0530\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -151,8 +151,8 @@ msgstr ""
 msgid "Information"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:813 frontend/SimplePopups.py:2002
-#: frontend/SimplePopups.py:2010
+#: frontend/AshokLeylandFrontEnd.py:809 frontend/AshokLeylandFrontEnd.py:813 frontend/SimplePopups.py:2027
+#: frontend/SimplePopups.py:2035
 msgid "Machine Settings"
 msgstr ""
 
@@ -206,7 +206,7 @@ msgstr ""
 msgid "Wrong password - nothing aborted"
 msgstr ""
 
-#: frontend/AshokLeylandFrontEnd.py:1331
+#: frontend/AshokLeylandFrontEnd.py:1331 frontend/AshokLeylandFrontEnd.py:1335
 msgid "QR CODE : "
 msgstr ""
 
@@ -267,11 +267,11 @@ msgstr ""
 msgid "Administrator"
 msgstr ""
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1829 frontend/SimplePopups.py:1859
 msgid "Yes"
 msgstr ""
 
-#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1849
+#: frontend/FrontendI18n.py:267 frontend/SimplePopups.py:1829 frontend/SimplePopups.py:1859
 msgid "No"
 msgstr ""
 
@@ -432,7 +432,7 @@ msgstr ""
 #: frontend/SimplePopups.py:159 frontend/SimplePopups.py:209 frontend/SimplePopups.py:265 frontend/SimplePopups.py:515
 #: frontend/SimplePopups.py:604 frontend/SimplePopups.py:902 frontend/SimplePopups.py:1007 frontend/SimplePopups.py:1023
 #: frontend/SimplePopups.py:1126 frontend/SimplePopups.py:1138 frontend/SimplePopups.py:1206 frontend/SimplePopups.py:1333
-#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:1347 frontend/SimplePopups.py:2031
 msgid "Cancel"
 msgstr ""
 
@@ -812,30 +812,38 @@ msgid "Tightening Torque 2 Setpoint, Nm (0.01 - 19.99)"
 msgstr ""
 
 #: frontend/SimplePopups.py:1787
-msgid "No. of Rotations 1 CCW (1 - 4)"
+msgid "No. of Rotations in 1st Round (1 - 4)"
 msgstr ""
 
 #: frontend/SimplePopups.py:1788
-msgid "No. of Rotations 1 CW (1 - 4)"
+msgid "No. of Rotations in 2nd Round (1 - 4)"
+msgstr ""
+
+#: frontend/SimplePopups.py:1793
+msgid "Order of Rotations for LHS"
 msgstr ""
 
 #: frontend/SimplePopups.py:1794
+msgid "Order of Rotations for RHS"
+msgstr ""
+
+#: frontend/SimplePopups.py:1800
 msgid "Bypass Component Press and Second Tightening"
 msgstr ""
 
-#: frontend/SimplePopups.py:1825
+#: frontend/SimplePopups.py:1835
 msgid "Enter the password to open the machine settings"
 msgstr ""
 
-#: frontend/SimplePopups.py:1829
+#: frontend/SimplePopups.py:1839
 msgid "Wrong password: machine settings not opened"
 msgstr ""
 
-#: frontend/SimplePopups.py:1838
+#: frontend/SimplePopups.py:1848
 msgid "(no change)"
 msgstr ""
 
-#: frontend/SimplePopups.py:1839
+#: frontend/SimplePopups.py:1849
 #, python-brace-format
 msgid ""
 "Change the machine settings for {model}:\n"
@@ -846,11 +854,11 @@ msgid ""
 "Enter the machine settings password:"
 msgstr ""
 
-#: frontend/SimplePopups.py:1844
+#: frontend/SimplePopups.py:1854
 msgid "Wrong password: machine settings not changed"
 msgstr ""
 
-#: frontend/SimplePopups.py:1850
+#: frontend/SimplePopups.py:1860
 #, python-brace-format
 msgid ""
 "'Bypass Component Press and Second Tightening' -> {value} for {model}.\n"
@@ -859,15 +867,15 @@ msgid ""
 "Enter the bypass password:"
 msgstr ""
 
-#: frontend/SimplePopups.py:1855
+#: frontend/SimplePopups.py:1865
 msgid "Wrong bypass password: machine settings not changed"
 msgstr ""
 
-#: frontend/SimplePopups.py:1872
+#: frontend/SimplePopups.py:1882
 msgid "A component is in the cycle: reboot the camera only between components (while the QR code is awaited)"
 msgstr ""
 
-#: frontend/SimplePopups.py:1879
+#: frontend/SimplePopups.py:1889
 #, python-brace-format
 msgid ""
 "Reboot the camera ({ip}).\n"
@@ -878,88 +886,93 @@ msgid ""
 "Enter the machine settings password:"
 msgstr ""
 
-#: frontend/SimplePopups.py:1885
+#: frontend/SimplePopups.py:1895
 msgid "Wrong password: the camera was not rebooted"
 msgstr ""
 
-#: frontend/SimplePopups.py:1913
+#: frontend/SimplePopups.py:1923
 msgid "The camera is rebooting. Its picture is back after about one to two minutes."
 msgstr ""
 
-#: frontend/SimplePopups.py:1915
+#: frontend/SimplePopups.py:1925
 #, python-brace-format
 msgid "The camera could not be rebooted: {reason}"
 msgstr ""
 
-#: frontend/SimplePopups.py:1940
+#: frontend/SimplePopups.py:1950
 #, python-brace-format
 msgid "{name}: at most 2 decimals"
 msgstr ""
 
-#: frontend/SimplePopups.py:1944
+#: frontend/SimplePopups.py:1954
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid whole number"
 msgstr ""
 
-#: frontend/SimplePopups.py:1944
+#: frontend/SimplePopups.py:1954
 #, python-brace-format
 msgid "{name}: '{text}' is not a valid number"
 msgstr ""
 
-#: frontend/SimplePopups.py:1962
+#: frontend/SimplePopups.py:1961
+#, python-brace-format
+msgid "{name}: '{text}' is not one of {allowed}"
+msgstr ""
+
+#: frontend/SimplePopups.py:1980
 msgid "Only an Administrator or a Supervisor can change the machine settings"
 msgstr ""
 
-#: frontend/SimplePopups.py:1972
+#: frontend/SimplePopups.py:1990
 msgid "No models found in qrcode.partmapping.N of the properties file"
 msgstr ""
 
-#: frontend/SimplePopups.py:1983
+#: frontend/SimplePopups.py:2004
 #, python-brace-format
 msgid "In force for {model} since {since} (set by {user})"
 msgstr ""
 
-#: frontend/SimplePopups.py:1985
+#: frontend/SimplePopups.py:2006
 #, python-brace-format
 msgid "Default settings for {model}"
 msgstr ""
 
-#: frontend/SimplePopups.py:1988
+#: frontend/SimplePopups.py:2009
 msgid "Model"
 msgstr ""
 
-#: frontend/SimplePopups.py:2005
+#: frontend/SimplePopups.py:2030
 msgid "New settings apply from the next component of the chosen model."
 msgstr ""
 
-#: frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:2031
 msgid "Save"
 msgstr ""
 
-#: frontend/SimplePopups.py:2006
+#: frontend/SimplePopups.py:2031
 msgid "Reset"
 msgstr ""
 
-#: frontend/SimplePopups.py:2008
+#: frontend/SimplePopups.py:2033
 msgid "Reboot Camera"
 msgstr ""
 
-#: frontend/SimplePopups.py:2009
+#: frontend/SimplePopups.py:2034
 msgid "Only between components; the password is asked again as the final confirmation."
 msgstr ""
 
-#: frontend/SimplePopups.py:2040
+#: frontend/SimplePopups.py:2067
 #, python-brace-format
 msgid ""
 "Machine settings for {model} saved.\n"
 "They apply from the next {model} component."
 msgstr ""
 
-#: frontend/SimplePopups.py:2042
+#: frontend/SimplePopups.py:2069
 msgid "Could not save the machine settings"
 msgstr ""
 
-#: frontend/SimplePopups.py:2045
+#: frontend/SimplePopups.py:2072
 #, python-brace-format
 msgid "Machine settings: {error}"
 msgstr ""

@@ -517,6 +517,8 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.hub_and_disc_assembly
     setting_tightening_torque2_setpoint real,
     setting_no_of_rotation1_ccw real,
     setting_no_of_rotation1_cw real,
+    -- the order of rotations of the component's side (CW.CCW / CCW.CW) in machine_settings (CHANGES 234); NULL if not known
+    setting_rotation_order character varying(10) COLLATE pg_catalog."default",
     -- PLC_PC_Station2RotationDuringTighteningDone read with each Station 2 torque (NULL if the PLC does not provide it)
     nut_tightening_torque_1_rotation_done boolean,
     nut_tightening_torque_2_rotation_done boolean,
@@ -579,6 +581,7 @@ ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUM
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_tightening_torque2_setpoint real;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_ccw real;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_no_of_rotation1_cw real;
+ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS setting_rotation_order character varying(10);
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS nut_tightening_torque_1_rotation_done boolean;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS nut_tightening_torque_2_rotation_done boolean;
 ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUMN IF NOT EXISTS aborted boolean NOT NULL DEFAULT false;
@@ -588,9 +591,10 @@ ALTER TABLE al_hub_and_disc_assembly_schema.hub_and_disc_assembly_data ADD COLUM
 -- Machine 2 settings, edited in the frontend (Machine Settings menu, Administrator / Supervisor) and written by the
 -- IOServer to the PLC in state 2 of every cycle. Append-only: every save adds a row; the latest row is in force.
 -- Limits (also checked by the frontend): rotation RPM 20-40, tightening torque setpoints > 0 and < 20 Nm,
--- rotation counts 1 to 4. All REAL, as the PLC takes them. Per model (model_name; the models of
+-- rotation counts of rounds 1 and 2: 1 to 4. All REAL, as the PLC takes them. Per model (model_name; the models of
 -- qrcode.partmapping.N): the latest row of a model is in force for it. Rows without a model are from before
--- 2026-11-08 (one set for all models); they are copied to every model that has none.
+-- 2026-11-08 (one set for all models); they are copied to every model that has none. The order of the two rounds per
+-- side (rotation_order_lhs / _rhs, CW.CCW or CCW.CW) says which round goes to the CW tag and which to the CCW tag.
 -- A machine_settings table from Machine 1 (rotation counts 1/2 CW/CCW, RotationUnitRPM) is replaced.
 DO $$
 BEGIN
@@ -606,8 +610,15 @@ CREATE TABLE IF NOT EXISTS al_hub_and_disc_assembly_schema.machine_settings
     rotation_rpm real NOT NULL CHECK (rotation_rpm BETWEEN 20 AND 40),
     tightening_torque1_setpoint real NOT NULL CHECK (tightening_torque1_setpoint > 0 AND tightening_torque1_setpoint < 20),
     tightening_torque2_setpoint real NOT NULL CHECK (tightening_torque2_setpoint > 0 AND tightening_torque2_setpoint < 20),
-    no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4),
-    no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw BETWEEN 1 AND 4),
+    -- rows from before 2026-11-28 (CHANGES 234) only; since then NULL (see the rounds and orders below)
+    no_of_rotation1_ccw real CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4),
+    no_of_rotation1_cw real CHECK (no_of_rotation1_cw BETWEEN 1 AND 4),
+    -- 2026-11-28 (CHANGES 234): rotations of the 1st and 2nd round, and the order of the rounds per side:
+    -- CW.CCW = 1st round clockwise, 2nd round counter-clockwise; CCW.CW = the other way round
+    no_of_rotations_round1 real NOT NULL CHECK (no_of_rotations_round1 BETWEEN 1 AND 4),
+    no_of_rotations_round2 real NOT NULL CHECK (no_of_rotations_round2 BETWEEN 1 AND 4),
+    rotation_order_lhs character varying(10) COLLATE pg_catalog."default" NOT NULL CHECK (rotation_order_lhs IN ('CW.CCW', 'CCW.CW')),
+    rotation_order_rhs character varying(10) COLLATE pg_catalog."default" NOT NULL CHECK (rotation_order_rhs IN ('CW.CCW', 'CCW.CW')),
     model_name character varying(50) COLLATE pg_catalog."default",
     bypass_press_and_tightening2 boolean NOT NULL DEFAULT false,
     updated_by character varying(100) COLLATE pg_catalog."default" NOT NULL DEFAULT 'system',
@@ -624,6 +635,32 @@ ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT mach
 CREATE INDEX IF NOT EXISTS idx_machine_settings_model ON al_hub_and_disc_assembly_schema.machine_settings (model_name, setting_id);
 -- 2026-11-13: per model, skip the bung, component press, bung removal and second tightening (PC_PLC_Skip_Second_Tightening)
 ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS bypass_press_and_tightening2 boolean NOT NULL DEFAULT false;
+-- 2026-11-28 (CHANGES 234): rounds 1 / 2 and the order per side replace the CW / CCW counts. Rows from before get
+-- round 1 = the CW count, round 2 = the CCW count, both orders CW.CCW: the PLC is given the same CW / CCW values as
+-- before. The old columns stay (history), no longer written.
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS no_of_rotations_round1 real;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS no_of_rotations_round2 real;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS rotation_order_lhs character varying(10);
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD COLUMN IF NOT EXISTS rotation_order_rhs character varying(10);
+UPDATE al_hub_and_disc_assembly_schema.machine_settings
+   SET no_of_rotations_round1 = no_of_rotation1_cw, no_of_rotations_round2 = no_of_rotation1_ccw
+ WHERE no_of_rotations_round1 IS NULL OR no_of_rotations_round2 IS NULL;
+UPDATE al_hub_and_disc_assembly_schema.machine_settings SET rotation_order_lhs = 'CW.CCW' WHERE rotation_order_lhs IS NULL;
+UPDATE al_hub_and_disc_assembly_schema.machine_settings SET rotation_order_rhs = 'CW.CCW' WHERE rotation_order_rhs IS NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN no_of_rotation1_ccw DROP NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN no_of_rotation1_cw DROP NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN no_of_rotations_round1 SET NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN no_of_rotations_round2 SET NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN rotation_order_lhs SET NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ALTER COLUMN rotation_order_rhs SET NOT NULL;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_no_of_rotations_round1_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_no_of_rotations_round2_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_rotation_order_lhs_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings DROP CONSTRAINT IF EXISTS machine_settings_rotation_order_rhs_check;
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotations_round1_check CHECK (no_of_rotations_round1 BETWEEN 1 AND 4);
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_no_of_rotations_round2_check CHECK (no_of_rotations_round2 BETWEEN 1 AND 4);
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_rotation_order_lhs_check CHECK (rotation_order_lhs IN ('CW.CCW', 'CCW.CW'));
+ALTER TABLE al_hub_and_disc_assembly_schema.machine_settings ADD CONSTRAINT machine_settings_rotation_order_rhs_check CHECK (rotation_order_rhs IN ('CW.CCW', 'CCW.CW'));
 '''
 
 
@@ -1427,6 +1464,7 @@ def insertData(
         setting_tightening_torque2_setpoint: Optional[float] = None,
         setting_no_of_rotation1_ccw: Optional[float] = None,
         setting_no_of_rotation1_cw: Optional[float] = None,
+        setting_rotation_order: Optional[str] = None,
         # rotation during tightening done (PLC_PC_Station2RotationDuringTighteningDone) at torque 1 / torque 2
         nut_tightening_torque_1_rotation_done: Optional[bool] = None,
         nut_tightening_torque_2_rotation_done: Optional[bool] = None,
@@ -1601,6 +1639,8 @@ def insertData(
                   setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw):
             params.append(None if v is None else float(v))
             placeholders.append("%s")
+        params.append(str(setting_rotation_order)[:10] if setting_rotation_order else None)     # CW.CCW / CCW.CW
+        placeholders.append("%s")
         # Rotation during tightening done at torque 1 / 2 (NULL when not provided by the PLC)
         for v in (nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done):
             params.append(None if v is None else bool(v))
@@ -1635,7 +1675,7 @@ def insertData(
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
-                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw, setting_rotation_order,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
@@ -1717,6 +1757,7 @@ all_columns_record_header = [
     "setting_tightening_torque2_setpoint",
     "setting_no_of_rotation1_ccw",
     "setting_no_of_rotation1_cw",
+    "setting_rotation_order",
     "nut_tightening_torque_1_rotation_done",
     "nut_tightening_torque_2_rotation_done",
     "aborted",
@@ -1781,6 +1822,7 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    setting_rotation_order,
     nut_tightening_torque_1_rotation_done,
     nut_tightening_torque_2_rotation_done,
     aborted,
@@ -1943,6 +1985,7 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    setting_rotation_order,
     nut_tightening_torque_1_rotation_done,
     nut_tightening_torque_2_rotation_done,
     aborted,
@@ -2053,7 +2096,7 @@ def getDataByModelNameAndDateLimits(
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
-                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw, setting_rotation_order,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
@@ -2410,6 +2453,7 @@ SELECT
     setting_tightening_torque2_setpoint,
     setting_no_of_rotation1_ccw,
     setting_no_of_rotation1_cw,
+    setting_rotation_order,
     nut_tightening_torque_1_rotation_done,
     nut_tightening_torque_2_rotation_done,
     aborted,
@@ -2510,7 +2554,7 @@ def getDataByDateLimits(
                 cap_press_done, cap_press_datetime,
                 free_rotation_torque_1, free_rotation_torque_1_result, free_rotation_torque_1_datetime,
                 setting_rotation_rpm, setting_tightening_torque1_setpoint, setting_tightening_torque2_setpoint,
-                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw,
+                setting_no_of_rotation1_ccw, setting_no_of_rotation1_cw, setting_rotation_order,
                 nut_tightening_torque_1_rotation_done, nut_tightening_torque_2_rotation_done,
                 aborted, abort_reason, bypassed_press_and_tightening2,
                 ok_notok_result, username, remarks, created_on
@@ -2760,22 +2804,55 @@ MACHINE_SETTINGS_LIMITS = {
     "rotation_rpm": (20.0, 40.0, True, True, 0),
     "tightening_torque1_setpoint": (0.0, 20.0, False, False, 2),
     "tightening_torque2_setpoint": (0.0, 20.0, False, False, 2),
-    "no_of_rotation1_ccw": (1.0, 4.0, True, True, 0),
-    "no_of_rotation1_cw": (1.0, 4.0, True, True, 0),
+    "no_of_rotations_round1": (1.0, 4.0, True, True, 0),
+    "no_of_rotations_round2": (1.0, 4.0, True, True, 0),
 }
 MACHINE_SETTINGS_KEYS = tuple(MACHINE_SETTINGS_LIMITS)
+# Order of the two rounds of rotations, per side (CHANGES 234): CW.CCW = round 1 clockwise, round 2 counter-clockwise;
+# CCW.CW = round 1 counter-clockwise, round 2 clockwise. Picks which round goes to PC_PLC_NoOfRotation1CW and which to
+# PC_PLC_NoOfRotation1CCW (rotationCountsForSide); the tags and their addresses are the same as before.
+ROTATION_ORDER_CW_FIRST = "CW.CCW"
+ROTATION_ORDER_CCW_FIRST = "CCW.CW"
+ROTATION_ORDERS = (ROTATION_ORDER_CW_FIRST, ROTATION_ORDER_CCW_FIRST)
+MACHINE_SETTINGS_CHOICES = {"rotation_order_lhs": ROTATION_ORDERS, "rotation_order_rhs": ROTATION_ORDERS}
+MACHINE_SETTINGS_CHOICE_KEYS = tuple(MACHINE_SETTINGS_CHOICES)
+DEFAULT_MACHINE_SETTINGS_CHOICES = {"rotation_order_lhs": ROTATION_ORDER_CW_FIRST,
+                                    "rotation_order_rhs": ROTATION_ORDER_CW_FIRST}
 # On / off settings (per model, like the others; not range-checked). bypass_press_and_tightening2: skip the bung, the
 # component press, the bung removal and the second tightening (written to the PLC as PC_PLC_Skip_Second_Tightening).
 MACHINE_SETTINGS_FLAGS = ("bypass_press_and_tightening2",)
 DEFAULT_MACHINE_SETTINGS_FLAGS = {"bypass_press_and_tightening2": False}
 DEFAULT_MACHINE_SETTINGS = {"rotation_rpm": 30.0, "tightening_torque1_setpoint": 15.0,
-                            "tightening_torque2_setpoint": 19.0, "no_of_rotation1_ccw": 1.0, "no_of_rotation1_cw": 1.0}
+                            "tightening_torque2_setpoint": 19.0, "no_of_rotations_round1": 1.0,
+                            "no_of_rotations_round2": 1.0, **DEFAULT_MACHINE_SETTINGS_CHOICES}
+
+
+def rotationCountsForSide(settings: dict, side: str) -> tuple:
+    """(clockwise count, counter-clockwise count, order) to write to PC_PLC_NoOfRotation1CW / PC_PLC_NoOfRotation1CCW
+    for a component of side "LHS" / "RHS", from a model's machine settings: the side's order picks which round is
+    clockwise. LHS with CW.CCW, round 1 = 1, round 2 = 2 -> CW 1, CCW 2; with CCW.CW -> CW 2, CCW 1. Raises
+    ValueError for an unknown side or order."""
+    side = str(side or "").strip().upper()
+    if side not in ("LHS", "RHS"):
+        raise ValueError(f"unknown side {side!r}")
+    order = str(settings.get(f"rotation_order_{side.lower()}") or "").strip().upper()
+    round1, round2 = float(settings["no_of_rotations_round1"]), float(settings["no_of_rotations_round2"])
+    if order == ROTATION_ORDER_CW_FIRST:
+        return round1, round2, order
+    if order == ROTATION_ORDER_CCW_FIRST:
+        return round2, round1, order
+    raise ValueError(f"unknown order of rotations {order!r} for {side}")
 
 
 def validateMachineSettings(settings: dict) -> List[str]:
     """Returns a list of problems (empty = valid). Rotation RPM and the rotation counts must be whole numbers; the
-    counts must be 1 to 4; the torque setpoints must have at most 2 decimals."""
+    counts must be 1 to 4; the torque setpoints must have at most 2 decimals; the orders CW.CCW or CCW.CW."""
     problems = []
+    for key, allowed in MACHINE_SETTINGS_CHOICES.items():
+        if key not in settings or settings[key] is None:
+            problems.append(f"{key}: missing")
+        elif str(settings[key]).strip().upper() not in allowed:
+            problems.append(f"{key}: {settings[key]!r} is not one of {', '.join(allowed)}")
     for key, (lo, hi, lo_incl, hi_incl, decimals) in MACHINE_SETTINGS_LIMITS.items():
         if key not in settings or settings[key] is None:
             problems.append(f"{key}: missing")
@@ -2812,20 +2889,21 @@ def settingsModelNames() -> List[str]:
 def insertDefaultMachineSettings(db_name: str) -> bool:
     """Give every model (settingsModelNames) a settings row if it has none: a copy of the latest row without a model
     (the one set for all models used before 2026-11-08), else the defaults (RPM 30, torque setpoints 15.0 / 19.0,
-    rotation counts 1 / 1). Called from setDatabaseName()."""
+    rotations 1 / 1, both orders CW.CCW). Called from setDatabaseName()."""
     global schema_name
     aConnection = None
     try:
         aConnection = _settingsConnection(db_name)
         aCursor = aConnection.cursor()
-        aCursor.execute(f"SELECT rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, "
-                        f"no_of_rotation1_ccw, no_of_rotation1_cw FROM {schema_name}.machine_settings "
+        aCursor.execute(f"SELECT {', '.join(MACHINE_SETTINGS_KEYS + MACHINE_SETTINGS_CHOICE_KEYS)} "
+                        f"FROM {schema_name}.machine_settings "
                         f"WHERE model_name IS NULL ORDER BY setting_id DESC LIMIT 1;")
         legacy = aCursor.fetchone()
         flags = dict(DEFAULT_MACHINE_SETTINGS_FLAGS)          # a new model: no bypass
         if legacy is not None:
-            values = dict(zip(MACHINE_SETTINGS_KEYS, (float(v) for v in legacy)))
-            for k in ("no_of_rotation1_ccw", "no_of_rotation1_cw"):        # stored before the 1 - 4 range: keep in range
+            values = dict(zip(MACHINE_SETTINGS_KEYS, (float(v) for v in legacy[:len(MACHINE_SETTINGS_KEYS)])))
+            values.update(zip(MACHINE_SETTINGS_CHOICE_KEYS, legacy[len(MACHINE_SETTINGS_KEYS):]))
+            for k in ("no_of_rotations_round1", "no_of_rotations_round2"):  # stored before the 1 - 4 range: keep in range
                 values[k] = min(4.0, max(1.0, values[k]))
             source = "system (copied from the settings for all models)"
         else:
@@ -2839,10 +2917,12 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
             if aCursor.fetchone()[0] == 0:
                 aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
                                         (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                         no_of_rotation1_ccw, no_of_rotation1_cw, bypass_press_and_tightening2,
+                                         no_of_rotations_round1, no_of_rotations_round2,
+                                         rotation_order_lhs, rotation_order_rhs, bypass_press_and_tightening2,
                                          model_name, updated_by)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
                                 tuple(values[k] for k in MACHINE_SETTINGS_KEYS)
+                                + tuple(values[k] for k in MACHINE_SETTINGS_CHOICE_KEYS)
                                 + tuple(bool(flags[k]) for k in MACHINE_SETTINGS_FLAGS) + (model, source))
                 if reportMajorDatabaseActions:
                     printBoldGreen(f"Machine settings for {model or 'all models'} in {schema_name}: {source}")
@@ -2860,25 +2940,28 @@ def insertDefaultMachineSettings(db_name: str) -> bool:
 
 
 _SETTINGS_COLUMNS = "setting_id, rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, " \
-                    "no_of_rotation1_ccw, no_of_rotation1_cw, updated_by, updated_on_date, model_name, " \
-                    "bypass_press_and_tightening2"
+                    "no_of_rotations_round1, no_of_rotations_round2, updated_by, updated_on_date, model_name, " \
+                    "bypass_press_and_tightening2, rotation_order_lhs, rotation_order_rhs"
 
 
 def _settingsRowToDict(row) -> dict:
     keys = ("setting_id",) + MACHINE_SETTINGS_KEYS + ("updated_by", "updated_on_date", "model_name") \
-           + MACHINE_SETTINGS_FLAGS
+           + MACHINE_SETTINGS_FLAGS + MACHINE_SETTINGS_CHOICE_KEYS
     d = dict(zip(keys, row))
     for k in MACHINE_SETTINGS_KEYS:
         d[k] = float(d[k])
     for k in MACHINE_SETTINGS_FLAGS:
         d[k] = bool(d[k])
+    for k in MACHINE_SETTINGS_CHOICE_KEYS:
+        d[k] = str(d[k]).strip().upper()
     return d
 
 
 def getMachineSettings(db_name: str, model_name: Optional[str] = None) -> dict:
     """The settings in force for model_name (its latest row; if it has none, the latest row without a model) as a
-    dict with keys rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotation1_ccw,
-    no_of_rotation1_cw (floats), setting_id, updated_by, updated_on_date, model_name. model_name None: the latest row
+    dict with keys rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotations_round1,
+    no_of_rotations_round2 (floats), rotation_order_lhs, rotation_order_rhs (CW.CCW / CCW.CW),
+    bypass_press_and_tightening2, setting_id, updated_by, updated_on_date, model_name. model_name None: the latest row
     of any model. Empty dict on error / no row."""
     global schema_name
     aConnection = None
@@ -2912,16 +2995,18 @@ def getMachineSettings(db_name: str, model_name: Optional[str] = None) -> dict:
 
 
 def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torque1_setpoint: float,
-                             tightening_torque2_setpoint: float, no_of_rotation1_ccw: float,
-                             no_of_rotation1_cw: float, updated_by: str = "unknown",
+                             tightening_torque2_setpoint: float, no_of_rotations_round1: float,
+                             no_of_rotations_round2: float, rotation_order_lhs: str = ROTATION_ORDER_CW_FIRST,
+                             rotation_order_rhs: str = ROTATION_ORDER_CW_FIRST, updated_by: str = "unknown",
                              model_name: Optional[str] = None,
                              bypass_press_and_tightening2: bool = False) -> bool:
     """Save new settings for model_name (in force for it from its next component); model_name None: for every model
     (settingsModelNames). Validated first; returns False and prints the problems if any value is out of range."""
     global schema_name
     values = {"rotation_rpm": rotation_rpm, "tightening_torque1_setpoint": tightening_torque1_setpoint,
-              "tightening_torque2_setpoint": tightening_torque2_setpoint, "no_of_rotation1_ccw": no_of_rotation1_ccw,
-              "no_of_rotation1_cw": no_of_rotation1_cw}
+              "tightening_torque2_setpoint": tightening_torque2_setpoint,
+              "no_of_rotations_round1": no_of_rotations_round1, "no_of_rotations_round2": no_of_rotations_round2,
+              "rotation_order_lhs": rotation_order_lhs, "rotation_order_rhs": rotation_order_rhs}
     problems = validateMachineSettings(values)
     if problems:
         printBoldRed(f"Machine settings not saved: {'; '.join(problems)}")
@@ -2934,10 +3019,12 @@ def insertNewMachineSettings(db_name: str, rotation_rpm: float, tightening_torqu
         for model in models:
             aCursor.execute(f"""INSERT INTO {schema_name}.machine_settings
                                     (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint,
-                                     no_of_rotation1_ccw, no_of_rotation1_cw, bypass_press_and_tightening2,
+                                     no_of_rotations_round1, no_of_rotations_round2,
+                                     rotation_order_lhs, rotation_order_rhs, bypass_press_and_tightening2,
                                      model_name, updated_by)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);""",
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);""",
                             tuple(float(values[k]) for k in MACHINE_SETTINGS_KEYS)
+                            + tuple(str(values[k]).strip().upper() for k in MACHINE_SETTINGS_CHOICE_KEYS)
                             + (bool(bypass_press_and_tightening2), model, str(updated_by)[:100]))
         aCursor.close()
         aConnection.close()

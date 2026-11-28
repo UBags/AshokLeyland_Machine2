@@ -16,9 +16,11 @@ with field-by-field checks:
      getDataByModelNameAndDateLimits, getUniqueModelNames, getComponentsProducedToday (counts OK rows only).
   8. Clean-up of every row and image file this script created.
   9. Machine settings (machine_settings table, frontend Machine Settings dialog): the default row (30 rpm, 15 / 19 Nm,
-     1 / 1 rotations) exists; validateMachineSettings / insertNewMachineSettings reject out-of-range values (RPM
-     outside 20-40 or not whole, torques not in (0, 20) or > 2 decimals, counts not 1 / 2); the database CHECK
-     constraints reject them too; a valid change becomes the settings in force, with updated_by, and is in the history.
+     rounds 1 / 1, orders CW.CCW) exists; validateMachineSettings / insertNewMachineSettings reject out-of-range values
+     (RPM outside 20-40 or not whole, torques not in (0, 20) or > 2 decimals, counts not 1 - 4, an order not CW.CCW /
+     CCW.CW); the database CHECK constraints reject them too; a valid change becomes the settings in force, with
+     updated_by, and is in the history; rotationCountsForSide maps the side's order to the CW / CCW counts (CHANGES
+     234); a machine_settings table from before 234 (CW / CCW counts) is migrated so the PLC gets the same values.
      Section 4 also checks that the settings the IOServer published for a QR code (cycleSettings:<QR>) are stored in
      that component's record (setting_* columns), and section 6 that a record without them stores NULL.
 
@@ -180,7 +182,7 @@ time.sleep(2)
 code4 = qr(QR_LHS, 4); CREATED_QRS.append(code4)
 kw, expected, images = full_record(code4, seed=4)
 SETTINGS4 = {"rotation_rpm": 33.0, "tightening_torque1_setpoint": 18.75, "tightening_torque2_setpoint": 17.5,
-             "no_of_rotation1_ccw": 2.0, "no_of_rotation1_cw": 1.0}
+             "no_of_rotation1_ccw": 2.0, "no_of_rotation1_cw": 1.0, "rotation_order": "CCW.CW"}
 publishCycleSettingsForQRCode(r, code4, SETTINGS4)          # as the IOServer does in state 2
 check("4 FE record sent", sendDataFromFEServerToDatabaseServer(r, **kw))
 rs = wait_rows(code4, 1)
@@ -232,7 +234,7 @@ if rs:
     check("6 aborted before the tightening steps -> rotation-done columns NULL",
           (row["nut_tightening_torque_1_rotation_done"], row["nut_tightening_torque_2_rotation_done"]) == (None, None))
     check("6 no settings published for this QR -> setting_* columns NULL",
-          all(row[f"setting_{k}"] is None for k in P.MACHINE_SETTINGS_KEYS))
+          all(row[f"setting_{k}"] is None for k in SETTINGS4))
     unreached_files = {s[0]: row[f"{s[0]}_imagefile"] for s in STEPS[4:] if s[1]}
     check("6 no image file for the unreached picture steps", all(not v for v in unreached_files.values()), str(unreached_files))
     CREATED_FILES += [row[f"{s}_imagefile"] for s in images if row[f"{s}_imagefile"]]
@@ -300,20 +302,24 @@ check("8 test image files removed", not any(os.path.exists(f) for f in CREATED_F
 # =====================================================================================================
 print("\n=== 9. Machine settings ===", flush=True)
 c = conn(); cur = c.cursor()
-cur.execute(f"select rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotation1_ccw, "
-            f"no_of_rotation1_cw, updated_by from {SCHEMA}.machine_settings order by setting_id limit 1")
+cur.execute(f"select rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, no_of_rotations_round1, "
+            f"no_of_rotations_round2, rotation_order_lhs, rotation_order_rhs, updated_by from {SCHEMA}.machine_settings "
+            f"order by setting_id limit 1")
 first = cur.fetchone()
 _d = P.DEFAULT_MACHINE_SETTINGS
-check(f"9 default settings row ({_d['rotation_rpm']:g}, {_d['tightening_torque1_setpoint']:g}, {_d['tightening_torque2_setpoint']:g}, "
-      f"{_d['no_of_rotation1_ccw']:g}, {_d['no_of_rotation1_cw']:g}, 'system (default)'); a database created before 2026-11-01 "
-      f"has the earlier default 19 / 19 Nm: drop and recreate it",
-      first == tuple(float(_d[k]) for k in P.MACHINE_SETTINGS_KEYS) + ("system (default)",), str(first))
+check(f"9 first settings row: the defaults ({_d['rotation_rpm']:g}, {_d['tightening_torque1_setpoint']:g}, {_d['tightening_torque2_setpoint']:g}, "
+      f"rounds {_d['no_of_rotations_round1']:g} / {_d['no_of_rotations_round2']:g}, {_d['rotation_order_lhs']} / {_d['rotation_order_rhs']}, "
+      f"'system (default)'); a database created before 2026-11-01 has the earlier default 19 / 19 Nm: drop and recreate it",
+      first == tuple(float(_d[k]) for k in P.MACHINE_SETTINGS_KEYS)
+      + tuple(_d[k] for k in P.MACHINE_SETTINGS_CHOICE_KEYS) + ("system (default)",), str(first))
 before = P.getMachineSettings(DB)
-check("9 getMachineSettings returns the 5 settings as floats", set(P.MACHINE_SETTINGS_KEYS) <= set(before)
-      and all(isinstance(before[k], float) for k in P.MACHINE_SETTINGS_KEYS), str(before))
+check("9 getMachineSettings returns the 5 numeric settings as floats and the 2 orders",
+      set(P.MACHINE_SETTINGS_KEYS) <= set(before) and all(isinstance(before[k], float) for k in P.MACHINE_SETTINGS_KEYS)
+      and all(before.get(k) in P.ROTATION_ORDERS for k in P.MACHINE_SETTINGS_CHOICE_KEYS), str(before))
 BAD = [dict(rotation_rpm=19), dict(rotation_rpm=41), dict(rotation_rpm=30.5),
        dict(tightening_torque1_setpoint=0), dict(tightening_torque1_setpoint=20), dict(tightening_torque2_setpoint=12.345),
-       dict(no_of_rotation1_ccw=0), dict(no_of_rotation1_ccw=5), dict(no_of_rotation1_cw=1.5)]
+       dict(no_of_rotations_round1=0), dict(no_of_rotations_round1=5), dict(no_of_rotations_round2=1.5),
+       dict(rotation_order_lhs="CW"), dict(rotation_order_rhs="CW.CW"), dict(rotation_order_rhs=None)]
 rejected = []
 for change in BAD:
     candidate = dict(P.DEFAULT_MACHINE_SETTINGS); candidate.update(change)
@@ -322,19 +328,20 @@ for change in BAD:
 check(f"9 {len(BAD)} out-of-range settings rejected by validateMachineSettings / insertNewMachineSettings", all(rejected), str(rejected))
 check("9 nothing stored by the rejected attempts", P.getMachineSettings(DB)["setting_id"] == before["setting_id"])
 db_rejects = []
-for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("no_of_rotation1_cw", 5)):
+for col, value in (("rotation_rpm", 45), ("tightening_torque1_setpoint", 20), ("no_of_rotations_round2", 5),
+                   ("rotation_order_lhs", "CW.CW"), ("rotation_order_rhs", None)):
     vals = dict(P.DEFAULT_MACHINE_SETTINGS); vals[col] = value
     try:
         cur.execute(f"insert into {SCHEMA}.machine_settings (rotation_rpm, tightening_torque1_setpoint, "
-                    f"tightening_torque2_setpoint, no_of_rotation1_ccw, no_of_rotation1_cw, updated_by) "
-                    f"values (%s, %s, %s, %s, %s, 'dryrun-db')",
-                    tuple(vals[k] for k in P.MACHINE_SETTINGS_KEYS))
+                    f"tightening_torque2_setpoint, no_of_rotations_round1, no_of_rotations_round2, rotation_order_lhs, "
+                    f"rotation_order_rhs, updated_by) values (%s, %s, %s, %s, %s, %s, %s, 'dryrun-db')",
+                    tuple(vals[k] for k in P.MACHINE_SETTINGS_KEYS + P.MACHINE_SETTINGS_CHOICE_KEYS))
         db_rejects.append(False)
-    except psycopg2.errors.CheckViolation:
+    except (psycopg2.errors.CheckViolation, psycopg2.errors.NotNullViolation):
         db_rejects.append(True)
-check("9 database CHECK constraints reject RPM 45, torque 20, count 5", all(db_rejects), str(db_rejects))
+check("9 database constraints reject RPM 45, torque 20, round count 5, order CW.CW, no order", all(db_rejects), str(db_rejects))
 NEW = dict(rotation_rpm=25.0, tightening_torque1_setpoint=15.25, tightening_torque2_setpoint=16.5,
-           no_of_rotation1_ccw=2.0, no_of_rotation1_cw=2.0)
+           no_of_rotations_round1=2.0, no_of_rotations_round2=2.0, rotation_order_lhs="CW.CCW", rotation_order_rhs="CCW.CW")
 check("9 valid change saved", P.insertNewMachineSettings(DB, updated_by="dryrun-db", **NEW))
 now = P.getMachineSettings(DB)
 check("9 the change is the settings in force, with updated_by", {k: now[k] for k in NEW} == NEW and now["updated_by"] == "dryrun-db", str(now))
@@ -344,8 +351,9 @@ perModel = {mdl: P.getMachineSettings(DB, model_name=mdl) for mdl in MODELS}
 check("9 a change saved without a model applies to every model",
       all({k: perModel[mdl][k] for k in NEW} == NEW and perModel[mdl]["model_name"] == mdl for mdl in MODELS), str(perModel))
 DOST_ONLY = dict(rotation_rpm=35.0, tightening_torque1_setpoint=12.5, tightening_torque2_setpoint=18.0,
-                 no_of_rotation1_ccw=3.0, no_of_rotation1_cw=4.0)
-check("9 per model: DOST saved with rotation counts 3 / 4 (1 - 4 allowed)",
+                 no_of_rotations_round1=3.0, no_of_rotations_round2=4.0, rotation_order_lhs="CCW.CW",
+                 rotation_order_rhs="CW.CCW")
+check("9 per model: DOST saved with rounds 3 / 4 (1 - 4 allowed), LHS CCW.CW, RHS CW.CCW",
       P.insertNewMachineSettings(DB, updated_by="dryrun-db", model_name="DOST", **DOST_ONLY))
 d, dp = P.getMachineSettings(DB, model_name="DOST"), P.getMachineSettings(DB, model_name="DOSTPLUS")
 check("9 per model: DOST has its new settings, DOSTPLUS keeps its own",
@@ -367,7 +375,65 @@ cur.execute(f"select count(*) from {SCHEMA}.machine_settings where model_name is
 legacy = cur.fetchone()[0]
 check("9 every model has settings after the clean-up (copied / defaults when the database is set up)",
       all(P.getMachineSettings(DB, model_name=mdl) for mdl in MODELS), str(legacy))
+# rotationCountsForSide (CHANGES 234): the side's order picks the round given to the CW tag
+_s = dict(no_of_rotations_round1=1.0, no_of_rotations_round2=2.0, rotation_order_lhs="CW.CCW", rotation_order_rhs="CCW.CW")
+_cases = {("LHS", "CW.CCW"): (1.0, 2.0), ("RHS", "CCW.CW"): (2.0, 1.0)}
+_got = {(side, _s[f"rotation_order_{side.lower()}"]): P.rotationCountsForSide(_s, side)[:2] for side in ("LHS", "RHS")}
+_s2 = dict(_s, rotation_order_lhs="CCW.CW", rotation_order_rhs="CW.CCW")
+_got2 = {side: P.rotationCountsForSide(_s2, side)[:2] for side in ("LHS", "RHS")}
+_raised = []
+for bad_side, bad_settings in (("XHS", _s), ("LHS", dict(_s, rotation_order_lhs="CW"))):
+    try:
+        P.rotationCountsForSide(bad_settings, bad_side); _raised.append(False)
+    except ValueError:
+        _raised.append(True)
+check("9 rotationCountsForSide: LHS CW.CCW 1 / 2 -> CW 1, CCW 2; RHS CCW.CW -> CW 2, CCW 1; swapped orders swap them; "
+      "unknown side / order raise", _got == _cases and _got2 == {"LHS": (2.0, 1.0), "RHS": (1.0, 2.0)} and all(_raised),
+      f"{_got} {_got2} {_raised}")
 c.close()
+
+# ---------------- 9b. machine_settings from before CHANGES 234 (CW / CCW counts) migrated at set-up ----------------
+print("\n=== 9b. machine_settings with CW / CCW counts (before 2026-11-28): rounds and orders filled at set-up ===", flush=True)
+OLD_DB = "ashok_leyland_rotation_order_migration_dryrun"
+_admin = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", port="5432", database="postgres")
+_admin.autocommit = True
+_admin.cursor().execute(f"DROP DATABASE IF EXISTS {OLD_DB}"); _admin.cursor().execute(f"CREATE DATABASE {OLD_DB}")
+_old = psycopg2.connect(user="postgres", password="postgres", host="127.0.0.1", port="5432", database=OLD_DB)
+_old.autocommit = True; _oc = _old.cursor()
+_oc.execute(f"CREATE SCHEMA {SCHEMA}")
+_oc.execute(f"""CREATE TABLE {SCHEMA}.machine_settings (
+    setting_id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
+    rotation_rpm real NOT NULL CHECK (rotation_rpm BETWEEN 20 AND 40),
+    tightening_torque1_setpoint real NOT NULL, tightening_torque2_setpoint real NOT NULL,
+    no_of_rotation1_ccw real NOT NULL CHECK (no_of_rotation1_ccw BETWEEN 1 AND 4),
+    no_of_rotation1_cw real NOT NULL CHECK (no_of_rotation1_cw BETWEEN 1 AND 4),
+    model_name character varying(50), bypass_press_and_tightening2 boolean NOT NULL DEFAULT false,
+    updated_by character varying(100) NOT NULL DEFAULT 'system',
+    updated_on_date timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT machine_settings_pkey PRIMARY KEY (setting_id))""")
+for _m, _ccw, _cw in (("DOST", 2.0, 1.0), ("DOSTPLUS", 3.0, 4.0)):
+    _oc.execute(f"INSERT INTO {SCHEMA}.machine_settings (rotation_rpm, tightening_torque1_setpoint, tightening_torque2_setpoint, "
+                f"no_of_rotation1_ccw, no_of_rotation1_cw, model_name, updated_by) VALUES (30, 15, 19, %s, %s, %s, 'old')",
+                (_ccw, _cw, _m))
+_old.close()
+try:
+    P.createAllTables(OLD_DB)
+    P.createAllTables(OLD_DB)                    # the set-up runs at every start: a second run changes nothing
+    _mig = {m: P.getMachineSettings(OLD_DB, model_name=m) for m in ("DOST", "DOSTPLUS")}
+    _plc = {m: {side: P.rotationCountsForSide(_mig[m], side)[:2] for side in ("LHS", "RHS")} for m in _mig}
+    check("9b old rows: round 1 = CW count, round 2 = CCW count, both orders CW.CCW",
+          {m: (_mig[m]["no_of_rotations_round1"], _mig[m]["no_of_rotations_round2"], _mig[m]["rotation_order_lhs"],
+               _mig[m]["rotation_order_rhs"]) for m in _mig}
+          == {"DOST": (1.0, 2.0, "CW.CCW", "CW.CCW"), "DOSTPLUS": (4.0, 3.0, "CW.CCW", "CW.CCW")}, str(_mig))
+    check("9b the PLC is given the same CW / CCW counts as before, on both sides",
+          _plc == {"DOST": {"LHS": (1.0, 2.0), "RHS": (1.0, 2.0)}, "DOSTPLUS": {"LHS": (4.0, 3.0), "RHS": (4.0, 3.0)}}, str(_plc))
+    check("9b a new row can be saved without the old CW / CCW counts",
+          P.insertNewMachineSettings(OLD_DB, updated_by="dryrun-db", model_name="DOST",
+                                     **dict(P.DEFAULT_MACHINE_SETTINGS, rotation_order_rhs="CCW.CW"))
+          and P.getMachineSettings(OLD_DB, model_name="DOST")["rotation_order_rhs"] == "CCW.CW")
+finally:
+    _admin.cursor().execute(f"DROP DATABASE IF EXISTS {OLD_DB} WITH (FORCE)")
+    _admin.close()
 
 # ---------------- 10. Bunk -> Bung column rename (CHANGES 125) ----------------
 print("\n=== 10. A database made before 2026-11-17 (columns named 'bunk'): renamed at set-up, data kept ===", flush=True)

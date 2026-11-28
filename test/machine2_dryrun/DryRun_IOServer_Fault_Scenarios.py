@@ -119,6 +119,7 @@ from utils.RedisUtils import *
 r = Redis('localhost', 6379); clearQueues(r)
 QR_DOST_LHS = "7204838$400112VA1D$11770$09.03.2025$C5211701$MEK$40cR4-B$1$SPDL ASSY-KNULH$SNPL-MAT$"
 QR_DOSTPLUS_RHS = "8201206$400102VA1C$22881$15.10.2026$C5211702$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"
+QR_DOST_RHS = "7204838$400102VA1D$11771$09.03.2025$C5211703$MEK$40cR4-B$1$SPDL ASSY-KNURH$SNPL-MAT$"
 TAGS[IOServer.PLC_PC_WatchTag] = 1234
 
 RESULTS = []
@@ -424,12 +425,14 @@ def run_scenarios():
                    (IOServer.PC_PLC_NoOfRotation1CCW, "no_of_rotation1_ccw"),
                    (IOServer.PC_PLC_NoOfRotation1CW, "no_of_rotation1_cw"))
 
-    def published_matches(code, written):
+    def published_matches(code, written, order=None):
+        """order: the side's order of rotations the CW / CCW counts came from (database settings; CHANGES 234)"""
         published = readCycleSettingsForQRCode(r, code)
         expected = {key: None for tag, key in KEY_FOR_TAG}
         for tag, key in KEY_FOR_TAG:
             if tag and tag in written:
                 expected[key] = written[tag]
+        expected["rotation_order"] = order
         return published == expected, f"published {published}, expected {expected}"
 
     TRACE.clear(); mark = len(WRITES)
@@ -461,11 +464,12 @@ def run_scenarios():
         t1 = cfg.getTighteningTorque1Setpoint()
         check("D: torque setpoint 1 from the properties (-1 = not written)",
               first.get(IOServer.PC_PLC_TighteningTorque1Setpoint) == (None if t1 == -1 else float(t1)), str(first))
-    ok_, detail = published_matches(QR_DOST_LHS, first)
-    check("D: the settings written are published for the DB record (cycleSettings:<QR>)", ok_, detail)
+    ok_, detail = published_matches(QR_DOST_LHS, first, "CW.CCW" if fromDatabase else None)
+    check("D: the settings written are published for the DB record (cycleSettings:<QR>, with the side's order)", ok_, detail)
     if fromDatabase:          # Supervisor changes the settings while this cycle runs: the next cycle uses them
         use_machine_settings("Test", rotation_rpm=35, tightening_torque1_setpoint=17.5, tightening_torque2_setpoint=18.25,
-                             no_of_rotation1_ccw=2, no_of_rotation1_cw=1)
+                             no_of_rotations_round1=1, no_of_rotations_round2=2, rotation_order_lhs="CW.CCW",
+                             rotation_order_rhs="CCW.CW")
     run_steps()
     check("D: cycle completed", wrapped())
     if fromDatabase:
@@ -475,27 +479,32 @@ def run_scenarios():
         expected = {IOServer.PC_PLC_LH_RH_Selection: 2, IOServer.PC_PLC_TighteningTorque1Setpoint: 17.5,
                     IOServer.PC_PLC_TighteningTorque2Setpoint: 18.25, IOServer.PC_PLC_RotationRPM: 35.0,
                     IOServer.PC_PLC_NoOfRotation1CCW: 2.0, IOServer.PC_PLC_NoOfRotation1CW: 1.0}
-        check("D: settings changed mid-cycle are written in the NEXT cycle (35 rpm, 17.5 / 18.25 Nm, 2 / 1)",
-              second == expected, str(second))
-        ok_, detail = published_matches(QR_DOSTPLUS_RHS, second)
+        check("D: settings changed mid-cycle are written in the NEXT cycle (35 rpm, 17.5 / 18.25 Nm; RHS CCW.CW, rounds "
+              "1 / 2 -> CCW 1, CW 2)", second == {**expected, IOServer.PC_PLC_NoOfRotation1CCW: 1.0,
+                                                 IOServer.PC_PLC_NoOfRotation1CW: 2.0}, str(second))
+        ok_, detail = published_matches(QR_DOSTPLUS_RHS, second, "CCW.CW")
         check("D: the new settings are published for that component's record", ok_, detail)
         run_steps()
         check("D: that cycle completed", wrapped())
         # D6 (2026-11-08): settings per model: each model's cycle gets its own settings
+        # (CHANGES 234) DOST: LHS CCW.CW, rounds 3 / 4 -> CCW 3, CW 4; DOSTPLUS: RHS CW.CCW, rounds 1 / 2 -> CW 1, CCW 2
         use_machine_settings("Test", model_name="DOST", rotation_rpm=22, tightening_torque1_setpoint=11.5,
-                             tightening_torque2_setpoint=12.75, no_of_rotation1_ccw=3, no_of_rotation1_cw=4)
+                             tightening_torque2_setpoint=12.75, no_of_rotations_round1=3, no_of_rotations_round2=4,
+                             rotation_order_lhs="CCW.CW", rotation_order_rhs="CW.CCW")
         use_machine_settings("Test", model_name="DOSTPLUS", rotation_rpm=38, tightening_torque1_setpoint=16.25,
-                             tightening_torque2_setpoint=17.5, no_of_rotation1_ccw=2, no_of_rotation1_cw=1)
+                             tightening_torque2_setpoint=17.5, no_of_rotations_round1=1, no_of_rotations_round2=2,
+                             rotation_order_lhs="CCW.CW", rotation_order_rhs="CW.CCW")
         for code, side, want in ((QR_DOST_LHS, 1, (11.5, 12.75, 22.0, 3.0, 4.0)),
-                                 (QR_DOSTPLUS_RHS, 2, (16.25, 17.5, 38.0, 2.0, 1.0))):
+                                 (QR_DOSTPLUS_RHS, 2, (16.25, 17.5, 38.0, 2.0, 1.0)),
+                                 (QR_DOST_RHS, 2, (11.5, 12.75, 22.0, 4.0, 3.0))):     # same DOST, RHS CW.CCW: CW 3, CCW 4
             TRACE.clear(); mark = len(WRITES)
             plc_start_cycle(code); SCAN.set(); finish_qr_handshake()
             got = dict(writes_of(SETTING_TAGS, mark))
             expected = {IOServer.PC_PLC_LH_RH_Selection: side, IOServer.PC_PLC_TighteningTorque1Setpoint: want[0],
                         IOServer.PC_PLC_TighteningTorque2Setpoint: want[1], IOServer.PC_PLC_RotationRPM: want[2],
                         IOServer.PC_PLC_NoOfRotation1CCW: want[3], IOServer.PC_PLC_NoOfRotation1CW: want[4]}
-            check(f"D6 per model: {'DOST' if side == 1 else 'DOSTPLUS'} cycle writes that model's settings {want}",
-                  got == expected, str(got))
+            check(f"D6 per model and side: {code.split('$')[1]} cycle writes that model's settings, the CW / CCW "
+                  f"counts by the side's order (torques, rpm, CCW, CW) {want}", got == expected, str(got))
             run_steps()
             check("D6 cycle completed", wrapped())
         use_machine_settings("Test")          # back to the defaults
