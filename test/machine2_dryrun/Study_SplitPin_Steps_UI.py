@@ -371,8 +371,22 @@ def main():
     from PySide6.QtCore import Qt, QObject, Signal
     from PySide6.QtGui import QImage, QPixmap
     from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QGridLayout,
-                                   QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPlainTextEdit, QPushButton, QSizePolicy,
-                                   QSpinBox, QVBoxLayout, QWidget)
+                                   QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPlainTextEdit, QPushButton, QScrollArea,
+                                   QSizePolicy, QSpinBox, QVBoxLayout, QWidget, QAbstractSpinBox)
+
+    def readable(wdg):
+        """CHANGES 239: never squeezed below the width that shows its whole value (spin box) or its longest item
+        (combo box, also in the open list)."""
+        if isinstance(wdg, QComboBox):
+            wdg.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+            fm = wdg.fontMetrics()
+            longest = max((fm.horizontalAdvance(wdg.itemText(i)) for i in range(wdg.count())), default=40)
+            wdg.setMinimumWidth(longest + 40)
+            wdg.view().setMinimumWidth(longest + 40)
+        elif isinstance(wdg, QAbstractSpinBox):
+            wdg.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.UpDownArrows)
+            wdg.setMinimumWidth(wdg.sizeHint().width() + 8)
+        return wdg
 
     class Picture(QLabel):
         """A picture that keeps its aspect when the panel is resized."""
@@ -451,11 +465,18 @@ def main():
             tl.addLayout(row)
             self.p = {"A": {}, "B": {}}
             self.widgets = {"A": {}, "B": {}}
-            boxes = QHBoxLayout()
+            # CHANGES 239: both regions in one grid, a row per channel (were two boxes side by side, squeezed)
+            regionsBox = QGroupBox("Regions")
+            rg = QGridLayout(regionsBox)
+            rg.setContentsMargins(6, 4, 6, 4)
+            rg.setVerticalSpacing(2)
             marker = S.arg("--marker", "red").lower()
             preset = MARKER_PRESETS.get(marker, MARKER_PRESETS["red"])
-            boxes.addWidget(self.regionBox("A", "Split pin washer (region A)", preset["A"], preset["and1"]))
-            boxes.addWidget(self.regionBox("B", "Plate washer / seal (region B)", preset["B"], preset["and1"]))
+            self.regionBox(rg, 0, "A", "A  split pin washer", preset["A"], preset["and1"])
+            self.regionBox(rg, 2, "B", "B  plate washer / seal", preset["B"], preset["and1"])
+            rg.setColumnStretch(rg.columnCount(), 1)
+            boxes = QVBoxLayout()
+            boxes.addWidget(regionsBox)
             row3 = QHBoxLayout()
             self.joinBox = QCheckBox("Join the masks before the result (white copy, masks black, open)")
             self.joinBox.setChecked(True)
@@ -475,6 +496,8 @@ def main():
             self.bridgeMode = QComboBox()
             self.bridgeMode.addItems(["closest points", "leg direction"])
             self.bridgeMode.currentIndexChanged.connect(lambda _: self.redraw())
+            for wdg in (self.joinKernel, self.bridgeLength, self.bridgeWidth, self.bridgeMode, self.model):
+                readable(wdg)
             for wdg in (self.bridgeBox, self.bridgeMode, QLabel("length px"), self.bridgeLength, QLabel("width px"), self.bridgeWidth):
                 row3.addWidget(wdg)
             for wdg in (self.joinBox, QLabel("kernel px"), self.joinKernel):
@@ -506,15 +529,17 @@ def main():
             ll.setContentsMargins(0, 0, 0, 0)
             ll.addWidget(bottom, 25)
             ll.addWidget(mid, 75)
-            lay.addWidget(top, 25)
+            topScroll = QScrollArea()       # CHANGES 239: the values scroll if the top 25 % is too low for them
+            topScroll.setWidgetResizable(True)
+            topScroll.setWidget(top)
+            lay.addWidget(topScroll, 25)
             lay.addWidget(lower, 75)
             self.setCentralWidget(central)
             if folder:
                 self.setFolder(pathlib.Path(folder))
 
-        def regionBox(self, tag, title, sources, and1=True):
-            box = QGroupBox(title)
-            g = QGridLayout(box)
+        def regionBox(self, g, row0, tag, title, sources, and1=True):
+            """The region's two rows in the shared grid g from row row0 (CHANGES 239)."""
             w = self.widgets[tag]
 
             def spin(key, low, high, value, step=1.0, dec=0):
@@ -526,7 +551,7 @@ def main():
                 s.setValue(value)
                 s.valueChanged.connect(lambda _: self.redraw(recompute=True))
                 w[key] = s
-                return s
+                return readable(s)
 
             def check(key, text, value):
                 c = QCheckBox(text)
@@ -535,35 +560,41 @@ def main():
                 w[key] = c
                 return c
 
-            g.addWidget(QLabel("Sector +- deg"), 0, 0)
-            g.addWidget(spin("sector", 10, 120, SECTOR), 0, 1)
-            if tag == "B":
-                g.addWidget(QLabel("From px past outline"), 0, 2)
-                g.addWidget(spin("from", 0, 20, 1), 0, 3)
-                g.addWidget(QLabel("To px"), 0, 4)
-                g.addWidget(spin("to", 5, 80, 30), 0, 5)
+            head = QLabel(f"<b>{title}</b>")
+            g.addWidget(head, row0, 0)
+            g.addWidget(QLabel("Sector +- deg"), row0, 1)
+            g.addWidget(spin("sector", 10, 120, SECTOR), row0, 2)
+            if tag == "B":                      # B: outline + from px .. outline + to px
+                g.addWidget(QLabel("px past outline"), row0 + 1, 1)
+                ft = QWidget()
+                fl = QHBoxLayout(ft)
+                fl.setContentsMargins(0, 0, 0, 0)
+                fl.addWidget(spin("from", 0, 20, 1))
+                fl.addWidget(QLabel("to"))
+                fl.addWidget(spin("to", 5, 80, 30))
+                g.addWidget(ft, row0 + 1, 2)
+            C = 3                               # first column of the channel values
             for k in (1, 2):
-                r = k
+                r = row0 + k - 1
                 src = QComboBox()
                 src.addItems(SOURCES)
                 src.setCurrentText(sources[k - 1])
                 src.currentIndexChanged.connect(lambda _: self.redraw(recompute=True))
                 w[f"src{k}"] = src
-                g.addWidget(QLabel(f"Channel {k}"), r, 0)
-                g.addWidget(src, r, 1)
-                g.addWidget(check(f"bil{k}", "Bilateral", DEFAULTS[f"bil{k}"]), r, 2)
-                g.addWidget(QLabel("d"), r, 3)
-                g.addWidget(spin(f"d{k}", -1, 25, DEFAULTS[f"d{k}"]), r, 4)
-                g.addWidget(QLabel("sigmaColor"), r, 5)
-                g.addWidget(spin(f"sc{k}", 1, 300, DEFAULTS[f"sc{k}"], 5, 1), r, 6)
-                g.addWidget(QLabel("sigmaSpace"), r, 7)
-                g.addWidget(spin(f"ss{k}", 1, 300, DEFAULTS[f"ss{k}"], 5, 1), r, 8)
-                g.addWidget(QLabel("Otsu %"), r, 9)
-                g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, 10)
-                g.addWidget(QLabel("Otsu min"), r, 11)
-                g.addWidget(spin(f"min{k}", 0, 255, OTSU_MIN[tag][k - 1]), r, 12)
-                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", and1 if k == 1 else True), r, 13)
-            return box
+                g.addWidget(QLabel(f"Channel {k}"), r, C)
+                g.addWidget(readable(src), r, C + 1)
+                g.addWidget(check(f"bil{k}", "Bilateral", DEFAULTS[f"bil{k}"]), r, C + 2)
+                g.addWidget(QLabel("d"), r, C + 3)
+                g.addWidget(spin(f"d{k}", -1, 25, DEFAULTS[f"d{k}"]), r, C + 4)
+                g.addWidget(QLabel("sigmaColor"), r, C + 5)
+                g.addWidget(spin(f"sc{k}", 1, 300, DEFAULTS[f"sc{k}"], 5, 1), r, C + 6)
+                g.addWidget(QLabel("sigmaSpace"), r, C + 7)
+                g.addWidget(spin(f"ss{k}", 1, 300, DEFAULTS[f"ss{k}"], 5, 1), r, C + 8)
+                g.addWidget(QLabel("Otsu %"), r, C + 9)
+                g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, C + 10)
+                g.addWidget(QLabel("Otsu min"), r, C + 11)
+                g.addWidget(spin(f"min{k}", 0, 255, OTSU_MIN[tag][k - 1]), r, C + 12)
+                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", and1 if k == 1 else True), r, C + 13)
 
         def params(self, tag):
             p = {}
@@ -714,6 +745,7 @@ def main():
             self.text.setPlainText("\n".join(lines))
 
     app = QApplication.instance() or QApplication(sys.argv)
+    app.setStyle("Fusion")       # CHANGES 239: spin boxes with the up / down arrows stacked at the right (Windows 11 style: side by side)
     try:
         from frontend.QtMessages import installQtMessageHandler   # Qt's own messages to the log, not the C stderr
         installQtMessageHandler()

@@ -6761,3 +6761,16 @@ Uddi (20:31): (a) 120 deg -> 150 deg; (b) compare B + G - 2R with B - R, 2B - 2R
   follows both legs on the 5 straight-leg pictures for every channel, and region B now reaches the legs leaving at about
   10 o'clock on 162404 / 162420 (B + G - 2R: 352 / 821 px).
 - The preset stays B + G - 2R.
+
+## 239. Study_SplitPin_Steps_UI: readable spin boxes and drop-downs (2026-11-28)
+
+Uddi (20:48): on the laptop the spin boxes showed side-by-side up / down buttons and no value; the drop-downs showed
+only their first character, also when open.
+- Cause: the two region boxes sat side by side with 14 columns each, so every field was squeezed to nothing; Qt's
+  Windows 11 style draws a spin box's buttons side by side, which takes the rest of the width.
+- Fusion style for the window (`app.setStyle("Fusion")`: the up / down arrows stacked at the right of each spin box);
+  `readable()` gives each spin box at least the width its value needs, and each combo box (and its open list) the width
+  of its longest item; both regions in one "Regions" grid, a row per channel (sector, and for B "px past outline" from /
+  to, on the region's rows), the columns no longer stretched; the top part scrolls if it is ever too low.
+- Checked: offscreen screenshot at 1600 x 1000 on Python 3.12 - every value and every item readable, the open list
+  shows the whole names, the four region rows and the buttons in the top 25 % without scrolling.
