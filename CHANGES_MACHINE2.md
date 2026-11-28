@@ -6805,3 +6805,16 @@ changeable.
   15:54:30 512 / 494 / 0; 16:24:04 459 / 588 / 0. Seen: a 5 x 5 open removes the legs' thin stretches past the washer
   (they are about 4 - 6 px wide), the mask keeps only blobs at the wider ends, and on 15:54:30 / 16:24:04 the Otsu value
   falls below 14 (region B empty); 3 x 3 changes little.
+
+## 242. Study_SplitPin_Steps_UI: Otsu factor to 300 %; absolute threshold (2026-11-28)
+
+Uddi (22:58): (a) Otsu % up to 300; (b) an absolute threshold that overrides the Otsu value and the percentage.
+- "Otsu %" range 50 - 300 (was 50 - 150), every channel of both regions.
+- New "Absolute" spin box per channel (0 - 255, default 0 = off). Above 0 it is the threshold: Otsu (still computed and
+  shown), the factor and the Otsu minimum are not used. Text line: "absolute threshold T (Otsu would be O; % and
+  minimum not used) ... px".
+- Layout: region B's "px past outline" from / to moved under the sector (columns 1 - 2), "Mask k in the AND" ->
+  "Mask k in AND", so the row with the new boxes fits a 1600 px window (a few px of horizontal scroll left; wider
+  windows none).
+- Run: 16:15:12 region B, B + G - 2R: default 22.4 -> 660 px; 250 % -> 80.0, 67 px; absolute 40 -> 373 px; absolute 40
+  with minimum 200 -> still 373 px (the minimum ignored). Window driven offscreen on Python 3.12: step skipping as in 241.

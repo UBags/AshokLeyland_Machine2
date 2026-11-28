@@ -24,7 +24,8 @@ Then "Next Step" goes through, for A and then for B:
   1  channel 1 as a grey picture inside the region (its source chosen in the box; A: grey, dark = mask);
   2  optional bilateral filter (check box; d, sigmaColor, sigmaSpace; utils/ImageNormalisationWithMask.
      bilateral_filter_masked - only the region's own pixels);
-  3  Otsu over the region x the factor (%, 50 - 150) -> mask 1 (blue); since CHANGES 233 a raw Otsu value below the
+  3  Otsu over the region x the factor (%, 50 - 300 since CHANGES 242; was 150) -> mask 1 (blue); "Absolute" > 0
+     (CHANGES 242) = that fixed threshold instead, Otsu, factor and minimum not used; since CHANGES 233 a raw Otsu value below the
      channel's "Otsu min" (0 = off; default 14 for region B's channel 2, else 0) leaves the mask empty;
   4  channel 2 as a grey picture (A: clamped 2R - G - B);
   5  optional bilateral filter;
@@ -234,10 +235,11 @@ def runRegion(crop, region, p):
             g = bilateral_filter_masked(g, region, int(p[f"d{k}"]), float(p[f"sc{k}"]), float(p[f"ss{k}"]))
         res[f"filt{k}"] = g
         t0 = otsu(g[region]) if region.any() else 0.0
-        t = t0 * p[f"pct{k}"] / 100.0
-        below = p.get(f"min{k}", 0) > 0 and t0 < p[f"min{k}"]
+        absolute = p.get(f"abs{k}", 0) > 0                 # CHANGES 242: a fixed threshold overrides Otsu, % and minimum
+        t = float(p[f"abs{k}"]) if absolute else t0 * p[f"pct{k}"] / 100.0
+        below = (not absolute) and p.get(f"min{k}", 0) > 0 and t0 < p[f"min{k}"]
         m = np.zeros_like(region) if below else region & ((g <= t) if dark else (g > t))
-        res.update({f"otsu{k}": t0, f"thr{k}": t, f"mask{k}": m, f"dark{k}": dark, f"below{k}": below})
+        res.update({f"otsu{k}": t0, f"thr{k}": t, f"mask{k}": m, f"dark{k}": dark, f"below{k}": below, f"abs{k}": absolute})
     use1, use2 = p["and1"], p["and2"]
     m3 = (res["mask1"] if use1 else region) & (res["mask2"] if use2 else region)
     if not use1 and not use2:
@@ -417,7 +419,10 @@ def stepLines(tag, res, upto, p):
             lines.append(f"{head}: " + (f"d {p['d' + k]}, sigmaColor {p['sc' + k]}, sigmaSpace {p['ss' + k]}" if p["bil" + k] else "bypassed"))
         elif key in ("otsu1", "otsu2"):
             k = int(key[-1])
-            if res.get(f"below{k}"):
+            if res.get(f"abs{k}"):
+                lines.append(f"{head}: absolute threshold {res[f'thr{k}']:.0f} (Otsu would be {res[f'otsu{k}']:.0f}; % and minimum not used) "
+                             f"({'dark' if res[f'dark{k}'] else 'bright'} = 1) {int(res[f'mask{k}'].sum())} px")
+            elif res.get(f"below{k}"):
                 lines.append(f"{head}: {res[f'otsu{k}']:.0f} < minimum {p[f'min{k}']} -> mask {k} empty")
             else:
                 lines.append(f"{head}: {res[f'otsu{k}']:.0f} x {p[f'pct{k}']:.2f} % = {res[f'thr{k}']:.1f} "
@@ -633,14 +638,15 @@ def main():
                 ol.addWidget(check("open", "Open first, kernel", True))
                 ol.addWidget(spin("openK", 1, 25, OPEN_KERNEL))
                 g.addWidget(op, row0 + 1, 0)
-                g.addWidget(QLabel("px past outline"), row0 + 1, 1)
                 ft = QWidget()
                 fl = QHBoxLayout(ft)
                 fl.setContentsMargins(0, 0, 0, 0)
+                fl.addWidget(QLabel("px past outline"))
                 fl.addWidget(spin("from", 0, 20, 0))        # 0 = on the scallop outline (CHANGES 241; was 1)
                 fl.addWidget(QLabel("to"))
                 fl.addWidget(spin("to", 5, 80, 30))
-                g.addWidget(ft, row0 + 1, 2)
+                fl.addStretch(1)
+                g.addWidget(ft, row0 + 1, 1, 1, 2)
             C = 3                               # first column of the channel values
             for k in (1, 2):
                 r = row0 + k - 1
@@ -659,10 +665,12 @@ def main():
                 g.addWidget(QLabel("sigmaSpace"), r, C + 7)
                 g.addWidget(spin(f"ss{k}", 1, 300, DEFAULTS[f"ss{k}"], 5, 1), r, C + 8)
                 g.addWidget(QLabel("Otsu %"), r, C + 9)
-                g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, C + 10)
+                g.addWidget(spin(f"pct{k}", 50, 300, DEFAULTS[f"pct{k}"], 0.05, 2), r, C + 10)
                 g.addWidget(QLabel("Otsu min"), r, C + 11)
                 g.addWidget(spin(f"min{k}", 0, 255, OTSU_MIN[tag][k - 1]), r, C + 12)
-                g.addWidget(check(f"and{k}", f"Mask {k} in the AND", and1 if k == 1 else True), r, C + 13)
+                g.addWidget(QLabel("Absolute"), r, C + 13)        # CHANGES 242: > 0 = this threshold, Otsu / % / min not used
+                g.addWidget(spin(f"abs{k}", 0, 255, 0), r, C + 14)
+                g.addWidget(check(f"and{k}", f"Mask {k} in AND", and1 if k == 1 else True), r, C + 15)
 
         def params(self, tag):
             p = {}
