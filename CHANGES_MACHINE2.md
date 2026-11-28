@@ -6598,3 +6598,14 @@ No code changed.
 
 - Uddi, 2026-11-28 12:30: the window in two parts - top 25 % the values and choice boxes, bottom 75 % split into the text
   (left 25 %) and the four pictures (right 75 %). Layout only. Run: driven offscreen through all steps (as 229).
+
+## 231. Study_SplitPin_Steps_UI: Uddi's values as defaults; the masks joined before the result (2026-11-28)
+
+- Uddi, 2026-11-28 12:56: the values that worked on his pictures become the defaults, the same for regions A and B:
+  bilateral 1 on (d 9, sigmaColor 75, sigmaSpace 50), Otsu 1 100 %; bilateral 2 on (d 9, sigmaColor 75, sigmaSpace 75),
+  Otsu 2 70 % (`DEFAULTS`); channels, sector and region B 1 .. 30 px unchanged.
+- Before the result: a white copy of the washer area, the A and B masks' pixels black, an open with a 5 x 5 kernel (on
+  the white picture that is a closing of the black: masks broken at the scallops' edge join); the black is the red mask
+  of the result (`joinMasks`; "Join the masks" box and kernel spin box; text: px before / after).
+- Run: driven offscreen on the OK picture of 229 with the new defaults through all steps: A | B 570 px, joined 621 px;
+  parses on Python 3.11.

@@ -24,12 +24,15 @@ Then "Next Step" goes through, for A and then for B:
   5  optional bilateral filter;
   6  Otsu x the factor -> mask 2 (green), shown over mask 1 (blue) on the original;
   7  mask 3 = mask 1 AND mask 2 (each "in the AND" box can leave one out), painted red on the original;
-and last the result. "Back" goes one step back, "Run all" to the result, "Reset" to step 0. Changing a value or a box
+and last the result - since CHANGES 231 the A and B masks joined first: a white copy of the washer area, the masks
+black, an open with a 5 x 5 kernel (on white a closing of the black: masks broken at the scallops' edge join), the black
+= the red mask shown ("Join the masks" box, kernel spin box). "Back" goes one step back, "Run all" to the result, "Reset" to step 0. Changing a value or a box
 redraws the step shown. The text box: each step's values (Otsu value, factor, threshold, pixels).
 Channel sources: grey (dark = 1), grey (bright = 1), 2R - G - B (bright = 1), max(R - B, 0) (bright = 1), R (bright = 1),
 R - G (bright = 1); 2R - G - B, R - B and R - G clamped to 0 .. 255.
 Defaults: A - grey (dark), 2R - G - B; B - max(R - B, 0), 2R - G - B (the last choices of CHANGES 223 - 225); sector +- 60
-deg, B from 1 to 30 px, bilateral off (d 9, sigmaColor 75, sigmaSpace 75), Otsu factors 100 %.
+deg, B from 1 to 30 px; since CHANGES 231 (Uddi 12:56), for A and B: bilateral 1 on (d 9, sigmaColor 75, sigmaSpace 50),
+Otsu 1 100 %; bilateral 2 on (d 9, sigmaColor 75, sigmaSpace 75), Otsu 2 70 %.
 
 Run from the project root (laptop: GPU and the YOLO weights):
     python test\\machine2_dryrun\\Study_SplitPin_Steps_UI.py [<folder>] [--model DOST] [--holes morphology] [--sam <pt>]
@@ -68,6 +71,9 @@ STEP_NAMES = ("region", "channel 1", "bilateral 1", "Otsu 1 -> mask 1", "channel
 MASK1_COLOUR, MASK2_COLOUR, MASK3_COLOUR = (255, 90, 0), (0, 220, 0), (0, 0, 255)
 REGION_COLOUR = (255, 255, 0)
 SCALLOP_COLOUR, INNER_COLOUR = (139, 0, 0), (0, 255, 255)
+# Uddi's values of 2026-11-28 12:56 (CHANGES 231), the same for regions A and B
+DEFAULTS = dict(bil1=True, d1=9, sc1=75.0, ss1=50.0, pct1=100.0, bil2=True, d2=9, sc2=75.0, ss2=75.0, pct2=70.0)
+JOIN_KERNEL = 5                      # px: the open on the white copy with the masks black (CHANGES 231)
 VIEW_HALF = 85                       # px round the washer centre in the three washer panels (head and straight legs in view)
 
 
@@ -161,6 +167,15 @@ def runRegion(crop, region, p):
         m3 = np.zeros_like(region)
     res["mask3"] = m3
     return res
+
+
+def joinMasks(mask: np.ndarray, k: int) -> np.ndarray:
+    """Uddi 12:56: a white copy of the washer area, the masks' pixels black, an open with a k x k kernel - on white that
+    is a closing of the black, so masks broken at the scallops' edge join; the black is the final mask."""
+    white = np.full(mask.shape, 255, np.uint8)
+    white[mask] = 0
+    opened = cv2.morphologyEx(white, cv2.MORPH_OPEN, np.ones((k, k), np.uint8))
+    return opened == 0
 
 
 def fill(img, mask, colour, alpha=0.45):
@@ -317,6 +332,18 @@ def main():
             boxes = QHBoxLayout()
             boxes.addWidget(self.regionBox("A", "Split pin washer (region A)", ("grey (dark = 1)", "2R - G - B (bright = 1)")))
             boxes.addWidget(self.regionBox("B", "Plate washer / seal (region B)", ("max(R - B, 0) (bright = 1)", "2R - G - B (bright = 1)")))
+            row3 = QHBoxLayout()
+            self.joinBox = QCheckBox("Join the masks before the result (white copy, masks black, open)")
+            self.joinBox.setChecked(True)
+            self.joinBox.stateChanged.connect(lambda _: self.redraw())
+            self.joinKernel = QSpinBox()
+            self.joinKernel.setRange(1, 15)
+            self.joinKernel.setValue(JOIN_KERNEL)
+            self.joinKernel.valueChanged.connect(lambda _: self.redraw())
+            for wdg in (self.joinBox, QLabel("kernel px"), self.joinKernel):
+                row3.addWidget(wdg)
+            row3.addStretch(1)
+            tl.addLayout(row3)
             tl.addLayout(boxes)
 
             # ---- four pictures
@@ -387,15 +414,15 @@ def main():
                 w[f"src{k}"] = src
                 g.addWidget(QLabel(f"Channel {k}"), r, 0)
                 g.addWidget(src, r, 1)
-                g.addWidget(check(f"bil{k}", "Bilateral", False), r, 2)
+                g.addWidget(check(f"bil{k}", "Bilateral", DEFAULTS[f"bil{k}"]), r, 2)
                 g.addWidget(QLabel("d"), r, 3)
-                g.addWidget(spin(f"d{k}", -1, 25, 9), r, 4)
+                g.addWidget(spin(f"d{k}", -1, 25, DEFAULTS[f"d{k}"]), r, 4)
                 g.addWidget(QLabel("sigmaColor"), r, 5)
-                g.addWidget(spin(f"sc{k}", 1, 300, 75, 5, 1), r, 6)
+                g.addWidget(spin(f"sc{k}", 1, 300, DEFAULTS[f"sc{k}"], 5, 1), r, 6)
                 g.addWidget(QLabel("sigmaSpace"), r, 7)
-                g.addWidget(spin(f"ss{k}", 1, 300, 75, 5, 1), r, 8)
+                g.addWidget(spin(f"ss{k}", 1, 300, DEFAULTS[f"ss{k}"], 5, 1), r, 8)
                 g.addWidget(QLabel("Otsu %"), r, 9)
-                g.addWidget(spin(f"pct{k}", 50, 150, 100, 0.05, 2), r, 10)
+                g.addWidget(spin(f"pct{k}", 50, 150, DEFAULTS[f"pct{k}"], 0.05, 2), r, 10)
                 g.addWidget(check(f"and{k}", f"Mask {k} in the AND", True), r, 11)
             return box
 
@@ -490,6 +517,10 @@ def main():
             self.pics[2].show_(view(stepPicture(crop, self.res["B"], sB) if sB >= 0 else crop, geo))
             if self.step >= 16:
                 red = self.res["A"]["mask3"] | self.res["B"]["mask3"]
+                self.redBefore = int(red.sum())
+                if self.joinBox.isChecked():
+                    red = joinMasks(red, self.joinKernel.value())
+                self.redAfter = int(red.sum())
                 if self.finalZoom.isChecked():
                     final = view(fill(crop, red, MASK3_COLOUR, 0.55), geo)
                 else:
@@ -507,7 +538,8 @@ def main():
             lines += stepLines("A", self.res["A"], sA, self.res["pa"])
             lines += stepLines("B", self.res["B"], sB, self.res["pb"])
             if self.step >= 16:
-                lines.append(f"result: {int((self.res['A']['mask3'] | self.res['B']['mask3']).sum())} px red")
+                lines.append(f"result: A | B {self.redBefore} px; " + (f"joined (white copy, masks black, open {self.joinKernel.value()} x "
+                             f"{self.joinKernel.value()}): {self.redAfter} px red" if self.joinBox.isChecked() else "not joined"))
             self.text.setPlainText("\n".join(lines))
 
     app = QApplication.instance() or QApplication(sys.argv)
